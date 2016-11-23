@@ -1,4 +1,9 @@
-# think.datatype
+# think.datatype ![TravisCI](https://travis-ci.org/thinktopic/think.datatype.svg?branch=master)
+
+
+```clojure
+[thinktopic/think.datatype "0.1.0"]
+```
 
 Efficient manipulation of contiguous mutable containers of primitive datatypes.
 
@@ -13,6 +18,14 @@ efficient full typed copy functions when the types can be ascertained.
   3. Construction.
   4. Efficient mutable copy from one sequence to another.
 
+
+
+## Examples
+
+
+```clojure
+
+```
 
 ## License
 

@@ -8,4 +8,5 @@
                  [net.mikera/core.matrix "0.56.0"]]
 
   :java-source-paths ["java"]
-  )
+
+  :think/meta {:type :library :tags [:low-level]})

@@ -123,6 +123,10 @@ The function signature will be:
 (copy-fn! item item-offset elem-count)."
   (get-direct-copy-fn [dest dest-offset]))
 
+(defprotocol PCopyQueryIndirect
+  "Copy protocol when the types do not match"
+  (get-indirect-copy-fn [dest destoffset]))
+
 (defmacro copy-array-to-array-impl
   [item item-offset dest dest-offset elem-count]
   `(let [~item-offset (long ~item-offset)
@@ -749,12 +753,15 @@ The function signature will be:
   PBufferInfo
   (is-nio-buffer? [item] false)
   PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset] nil)
+  (get-direct-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset dest dest-offset elem-count]
     (generic-copy! item item-offset dest dest-offset elem-count))
   (copy-to-buffer-direct! [item item-offset dest dest-offset elem-count]
     (generic-copy! item item-offset dest dest-offset elem-count)))
+
 
 (defn ecount
   ^long [item]
@@ -767,12 +774,10 @@ The function signature will be:
          src-offset (long src-offset)
          dest-dtype (get-datatype dest)
          dest-offset (long dest-offset)
-         elem-count (long elem-count)
-         direct-copy-fn (get-direct-copy-fn dest dest-offset)]
-     (if (and (= src-dtype dest-dtype)
-              direct-copy-fn)
-       (direct-copy-fn src src-offset elem-count)
-       (generic-copy! src src-offset dest dest-offset elem-count))
+         elem-count (long elem-count)]
+     (if (and (= src-dtype dest-dtype))
+       ((get-direct-copy-fn dest dest-offset) src src-offset elem-count)
+       ((get-indirect-copy-fn dest dest-offset) src src-offset elem-count))
      dest))
   ([src dest]
    (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))

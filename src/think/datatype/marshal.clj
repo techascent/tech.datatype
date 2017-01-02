@@ -3,7 +3,10 @@
   an (nio buffer or array) or one type to a (nio buffer or array) or another type."
   (:require [clojure.core.matrix.macros :refer [c-for]])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
-            FloatBuffer DoubleBuffer Buffer]))
+            FloatBuffer DoubleBuffer Buffer]
+           [think.datatype DoubleArrayView FloatArrayView
+            LongArrayView IntArrayView ShortArrayView ByteArrayView
+            ArrayView]))
 
 ;;Some utility items to make the macros easier.
 (set! *warn-on-reflection* true)
@@ -197,6 +200,65 @@ and thus needs to cast."
 
 (def buffer-bindings
   (buffer-type-iterator buffer-marshal-impl))
+
+
+(defn as-byte-array-view
+  ^ByteArrayView [obj] obj)
+
+(defn as-short-array-view
+  ^ShortArrayView [obj] obj)
+
+(defn as-int-array-view
+  ^IntArrayView [obj] obj)
+
+(defn as-long-array-view
+  ^LongArrayView [obj] obj)
+
+(defn as-float-array-view
+  ^FloatArrayView [obj] obj)
+
+(defn as-double-array-view
+  ^DoubleArrayView [obj] obj)
+
+
+(defmacro array-view-iterator
+  [inner-macro & args]
+  `[(~inner-macro ByteArrayView as-byte-array-view 'copy-to-byte-array byte ~@args)
+    (~inner-macro ShortArrayView as-short-array-view 'copy-to-short-array short ~@args)
+    (~inner-macro IntArrayView as-int-array-view 'copy-to-int-array int ~@args)
+    (~inner-macro LongArrayView as-long-array-view 'copy-to-long-array long ~@args)
+    (~inner-macro FloatArrayView as-float-array-view 'copy-to-float-array float ~@args)
+    (~inner-macro DoubleArrayView as-double-array-view 'copy-to-double-array double ~@args)])
+
+
+(defmacro view->copy-impl
+  [array-type cast-type-fn copy-to-fn cast-fn]
+  `[(keyword (name ~copy-to-fn)) (fn [src# src-offset# dest# dest-offset# n-elems#]
+                                   (~(eval copy-to-fn)
+                                    (view->array src#)
+                                    (view->array-offset src# src-offset#)
+                                    dest# dest-offset# n-elems#))])
+
+(defprotocol ArrayViewToArray
+  (view->array [view])
+  (view->array-offset [view offset]))
+
+
+(defmacro array-view-marshal-impl
+  [view-type cast-type-fn copy-to-fn cast-fn]
+  `(extend ~view-type
+     ArrayViewToArray
+     {:view->array (fn [view#] (.data (~cast-type-fn view#)))
+      :view->array-offset (fn [view# offset#] (.index (~cast-type-fn view#) (long offset#)))}
+     PTypeToCopyToFn
+     {:get-copy-to-fn (fn [dest# offset#] #(~(eval copy-to-fn) %1 %2 (view->array dest#)
+                                            (view->array-offset dest# offset#) %3))}
+     PCopyToArray
+     (->> (array-type-iterator view->copy-impl)
+          (into {}))
+     PCopyToBuffer
+     (->> (buffer-type-iterator view->copy-impl)
+          (into {}))))
 
 
 (defn marshal-copy-to

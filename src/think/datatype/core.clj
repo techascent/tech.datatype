@@ -923,3 +923,16 @@ The function signature will be:
   PCopyRawDataToArray
   (copy-raw->item! [raw-data ary-target target-offset]
     (raw-dtype-copy! raw-data ary-target target-offset)))
+
+
+;;Add the overloads for object for marshal-type copies.
+(defmacro generic-copy-impl
+  [dest-type cast-type-fn copy-to-dest-fn cast-fn]
+  `[(keyword (name ~copy-to-dest-fn)) generic-copy!])
+
+
+(extend Object
+  marshal/PCopyToArray
+  (marshal/array-type-iterator generic-copy-impl)
+  marshal/PCopyToBuffer
+  (marshal/buffer-type-iterator generic-copy-impl))

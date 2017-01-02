@@ -261,6 +261,10 @@ and thus needs to cast."
           (into {}))))
 
 
+(def array-buffer-bindings
+  (array-view-iterator array-view-marshal-impl))
+
+
 (defn marshal-copy-to
   [src src-offset dest dest-offset n-elems]
   ((get-copy-to-fn dest dest-offset) src src-offset n-elems))

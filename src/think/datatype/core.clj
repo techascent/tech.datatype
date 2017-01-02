@@ -15,7 +15,8 @@ this involves a double-dispatch on both the src and dest arguments:
 
   (:require [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]
-            [clojure.core.matrix :as m])
+            [clojure.core.matrix :as m]
+            [think.datatype.marshal :as marshal])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
            [mikera.arrayz INDArray]
@@ -194,6 +195,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl (.data dest) (+ (long dest-offset) (.offset dest))))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset)
                                                            (.offset item)) (byte value)))
@@ -217,6 +221,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (short value)))
@@ -240,6 +247,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (int value)))
@@ -262,6 +272,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (long value)))
@@ -285,6 +298,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (float value)))
@@ -307,6 +323,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [item dest-offset]
     (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (double value)))
@@ -360,6 +379,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset ^bytes dest dest-offset elem-count]
     (let [^bytes item item]
@@ -386,6 +408,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset ^shorts dest dest-offset elem-count]
     (let [^shorts item item]
@@ -412,6 +437,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset ^ints dest dest-offset elem-count]
     (let [^ints item item]
@@ -438,6 +466,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset ^longs dest dest-offset elem-count]
     (let [^longs item item]
@@ -464,6 +495,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset ^floats dest dest-offset elem-count]
     (let [^floats item item]
@@ -490,6 +524,9 @@ The function signature will be:
   PCopyQueryDirect
   (get-direct-copy-fn [dest dest-offset]
     (array-copy-query-impl dest dest-offset))
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn dest dest-offset))
   PCopyToItemDirect
   (copy-to-array-direct! [item item-offset ^doubles dest dest-offset elem-count]
     (let [^doubles item item]
@@ -588,6 +625,13 @@ The function signature will be:
 
 (defprotocol PBufferOffset
   (offset-buffer [buffer start-offset length]))
+
+
+(extend-type Buffer
+  PCopyQueryIndirect
+  (get-indirect-copy-fn [dest dest-offset]
+    (marshal/get-copy-to-fn dest dest-offset)))
+
 
 (extend-type ByteBuffer
   PBufferInfo

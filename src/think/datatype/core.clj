@@ -933,6 +933,8 @@ The function signature will be:
 
 (extend Object
   marshal/PCopyToArray
-  (marshal/array-type-iterator generic-copy-impl)
+  (->> (marshal/array-type-iterator generic-copy-impl)
+       (into {}))
   marshal/PCopyToBuffer
-  (marshal/buffer-type-iterator generic-copy-impl))
+  (->> (marshal/buffer-type-iterator generic-copy-impl)
+       (into {})))

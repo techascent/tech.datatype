@@ -1,7 +1,8 @@
 (ns think.datatype.core-test
   (:require [clojure.test :refer :all]
             [think.datatype.core :as dtype]
-            [clojure.core.matrix :as m]))
+            [clojure.core.matrix :as m]
+            [think.datatype.util :as util]))
 
 
 (deftest raw-copy-with-mutable-lazy-sequence
@@ -24,14 +25,48 @@
     (dtype/copy-raw->item! double-array-seq output-doubles 0)
     (is (= (vec output-doubles) (mapv double (flatten input-seq))))))
 
+(defn basic-copy
+  [src-fn dest-fn]
+  (let [ary (src-fn :float (range 10))
+        buf (dest-fn :double 10)
+        retval (dtype/make-array-of-type :double 10)]
+    ;;copy starting at position 2 of ary into position 4 of buf 4 elements
+    (dtype/copy! ary 2 buf 4 4)
+    (dtype/copy! buf 0 retval 0 10)
+    (is (m/equals [0 0 0 0 2 3 4 5 0 0]
+                  (vec retval)))))
+
+(defn make-offset-view
+  [dtype elems-or-len]
+  (let [temp-view (dtype/make-array-of-type dtype elems-or-len)
+        retval (dtype/->view
+                (dtype/make-array-of-type dtype (+ (dtype/ecount temp-view) 100))
+                100
+                (dtype/ecount temp-view))]
+    (dtype/copy! temp-view 0 retval 0 (dtype/ecount temp-view))
+    retval))
+
+
+(def create-functions [dtype/make-array-of-type
+                       dtype/make-buffer
+                       dtype/make-view
+                       make-offset-view])
+
+
+
+(deftest generalized-copy-test
+  (mapv (fn [[src-fn dest-fn]]
+          (basic-copy src-fn dest-fn))
+        (util/all-pairs create-functions)))
+
 
 (defn indexed-copy-test
   [src-fn dest-fn]
   (let [n-elems 100
-        src-data (src-fn (range n-elems))
+        src-data (src-fn :float (range n-elems))
         src-indexes (range n-elems)
         dest-indexes (reverse (range n-elems))
-        dest-data (dest-fn n-elems)
+        dest-data (dest-fn :double n-elems)
         result (double-array n-elems)]
     (dtype/indexed-copy! src-data 0 src-indexes dest-data 0 dest-indexes)
     (dtype/copy! dest-data 0 result 0 n-elems)
@@ -39,30 +74,12 @@
                   (vec result)))))
 
 
+(deftest generalized-indexed-copy-test
+  (mapv (fn [[src-fn dest-fn]]
+          (indexed-copy-test src-fn dest-fn))
+        (util/all-pairs create-functions)))
 
-(deftest array->array-indexed-test
-  (indexed-copy-test #(dtype/make-array-of-type :float %)
-                     #(dtype/make-array-of-type :int %)))
 
-(deftest array->buffer-indexed-test
-  (indexed-copy-test #(dtype/make-array-of-type :float %)
-                     #(dtype/make-buffer :int %)))
-
-(deftest buffer->array-indexed-test
-  (indexed-copy-test #(dtype/make-buffer :float %)
-                     #(dtype/make-array-of-type :int %)))
-
-(deftest buffer->buffer-indexed-test
-  (indexed-copy-test #(dtype/make-buffer :float %)
-                     #(dtype/make-array-of-type :int %)))
-
-(deftest array->array-view-indexed-test
-  (indexed-copy-test #(dtype/make-array-of-type :float %)
-                     #(dtype/make-view :double %)))
-
-(deftest array-view->array-indexed-test
-  (indexed-copy-test #(dtype/make-view :float %)
-                     #(dtype/make-array-of-type :double %)))
 
 (deftest array-view-offset->array-indexed-test
   (let [n-elems 100

@@ -811,6 +811,17 @@ The function signature will be:
   ^long [item]
   (m/ecount item))
 
+
+(defmacro check-range
+  [item offset elem-count]
+  `(when-not (<= (+ ~offset ~elem-count)
+                 (ecount ~item))
+     (throw (ex-info (format "%s offset + n-elems > ecount range violation"
+                             ~(name item))
+                     {:offset ~offset
+                      :n-elems ~elem-count
+                      :length (ecount ~item)}))))
+
 (defn copy!
   "copy elem-count src items to dest items"
   ([src src-offset dest dest-offset elem-count]
@@ -819,6 +830,8 @@ The function signature will be:
          dest-dtype (get-datatype dest)
          dest-offset (long dest-offset)
          elem-count (long elem-count)]
+     (check-range src src-offset elem-count)
+     (check-range dest dest-offset elem-count)
      (if (and (= src-dtype dest-dtype))
        ((get-direct-copy-fn dest dest-offset) src src-offset elem-count)
        ((get-indirect-copy-fn dest dest-offset) src src-offset elem-count))
@@ -925,10 +938,26 @@ The function signature will be:
     (raw-dtype-copy! raw-data ary-target target-offset)))
 
 
+(defn generic-indexed-copy!
+  [src src-offset ^ints src-indexes dest dest-offset ^ints dest-indexes]
+  (let [elem-count (alength src-indexes)
+        src-offset (long src-offset)
+        dest-offset (long dest-offset)]
+    (c-for [idx 0 (< idx elem-count) (inc idx)]
+           (set-value! dest (+ dest-offset (aget dest-indexes idx))
+                      (get-value src (+ src-offset (aget src-indexes idx)))))
+    dest))
+
+
 ;;Add the overloads for object for marshal-type copies.
 (defmacro generic-copy-impl
   [dest-type cast-type-fn copy-to-dest-fn cast-fn]
   `[(keyword (name ~copy-to-dest-fn)) generic-copy!])
+
+
+(defmacro generic-indexed-copy-impl
+  [dest-type cast-type-fn copy-to-dest-fn cast-fn]
+  `[(keyword (name ~copy-to-dest-fn)) generic-indexed-copy!])
 
 
 (extend Object
@@ -937,4 +966,40 @@ The function signature will be:
        (into {}))
   marshal/PCopyToBuffer
   (->> (marshal/buffer-type-iterator generic-copy-impl)
+       (into {}))
+  marshal/PIndexedTypeToCopyToFn
+  {:get-indexed-copy-to-fn (fn [dest dest-offset]
+                             #(generic-indexed-copy! %1 %2 %3 dest dest-offset %4))}
+  marshal/PIndexedCopyToArray
+  (->> (marshal/indexed-array-type-iterator generic-indexed-copy-impl)
+       (into {}))
+  marshal/PIndexedCopyToBuffer
+  (->> (marshal/indexed-buffer-type-iterator generic-indexed-copy-impl)
        (into {})))
+
+
+(defn ->int-buffer
+  "As efficiently as possible, ensure data is an int buffer."
+  ^ints [data]
+  (if (instance? (Class/forName "[I") data)
+    data
+    (int-array data)))
+
+
+(defn indexed-copy!
+  "Indirect copy function where src and dest indexes are provided."
+  ([src src-offset src-indexes dest dest-offset dest-indexes]
+   (let [src-indexes (->int-buffer src-indexes)
+         dest-indexes (->int-buffer dest-indexes)
+         n-elems (alength src-indexes)
+         src-offset (long src-offset)
+         dest-offset (long dest-offset)]
+     (when-not (= (alength src-indexes)
+                  (alength dest-indexes))
+       (throw (ex-info "indexed-copy! src and dest index size mismatch"
+                       {:src-index-count (alength src-indexes)
+                        :dst-index-count (alength dest-indexes)})))
+     ((marshal/get-indexed-copy-to-fn dest dest-offset)
+      src src-offset src-indexes dest-indexes)))
+  ([src src-indexes dest dest-indexes]
+   (indexed-copy! src 0 src-indexes dest 0 dest-indexes)))

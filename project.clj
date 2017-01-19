@@ -7,6 +7,7 @@
                  [net.mikera/vectorz-clj "0.45.0"]
                  [net.mikera/core.matrix "0.56.0"]]
 
+
   :java-source-paths ["java"]
 
   ;;If you want to run perf tests

@@ -80,7 +80,6 @@
         (util/all-pairs create-functions)))
 
 
-
 (deftest array-view-offset->array-indexed-test
   (let [n-elems 100
         src-data (dtype/make-view :float (range (+ n-elems 100)))
@@ -93,3 +92,23 @@
     (dtype/indexed-copy! src-data 0 src-indexes dest-data 0 dest-indexes)
     (dtype/copy! dest-data 0 answer 0 n-elems)
     (is (m/equals result answer))))
+
+
+(deftest vector-indexed-copy-test
+  (let [n-elems 100
+        vec-len 10
+        n-vecs (/ n-elems vec-len)
+        src-data (dtype/make-view :float (range n-elems))
+        dst-data (dtype/make-view :double n-elems)
+        src-indexes (range vec-len)
+        dest-indexes (reverse src-indexes)
+        result (double-array n-elems)
+        answer (->> (range n-elems)
+                    (partition vec-len)
+                    reverse
+                    (mapv vec))]
+    (dtype/indexed-copy! src-data 0 src-indexes dst-data 0 dest-indexes vec-len)
+    (dtype/copy! dst-data result)
+    (is (m/equals (->> result
+                       (partition vec-len)
+                       (mapv vec)) answer))))

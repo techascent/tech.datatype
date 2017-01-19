@@ -939,13 +939,15 @@ The function signature will be:
 
 
 (defn generic-indexed-copy!
-  [src src-offset ^ints src-indexes dest dest-offset ^ints dest-indexes]
+  [src src-offset ^ints src-indexes dest dest-offset ^ints dest-indexes n-elems-per-idx]
   (let [elem-count (alength src-indexes)
         src-offset (long src-offset)
-        dest-offset (long dest-offset)]
-    (c-for [idx 0 (< idx elem-count) (inc idx)]
-           (set-value! dest (+ dest-offset (aget dest-indexes idx))
-                      (get-value src (+ src-offset (aget src-indexes idx)))))
+        dest-offset (long dest-offset)
+        n-elems-per-idx (long n-elems-per-idx)]
+    (if (= 1 n-elems-per-idx)
+      (c-for [idx 0 (< idx elem-count) (inc idx)]
+             (set-value! dest (+ dest-offset (aget dest-indexes idx))
+                         (get-value src (+ src-offset (aget src-indexes idx))))))
     dest))
 
 
@@ -988,18 +990,26 @@ The function signature will be:
 
 (defn indexed-copy!
   "Indirect copy function where src and dest indexes are provided."
-  ([src src-offset src-indexes dest dest-offset dest-indexes]
+  ([src src-offset src-indexes dest dest-offset dest-indexes n-elems-per-idx]
    (let [src-indexes (->int-buffer src-indexes)
          dest-indexes (->int-buffer dest-indexes)
          n-elems (alength src-indexes)
          src-offset (long src-offset)
-         dest-offset (long dest-offset)]
+         dest-offset (long dest-offset)
+         n-elems-per-idx (long n-elems-per-idx)]
      (when-not (= (alength src-indexes)
                   (alength dest-indexes))
        (throw (ex-info "indexed-copy! src and dest index size mismatch"
                        {:src-index-count (alength src-indexes)
                         :dst-index-count (alength dest-indexes)})))
-     ((marshal/get-indexed-copy-to-fn dest dest-offset)
-      src src-offset src-indexes dest-indexes)))
+     (if (= 1 n-elems-per-idx)
+      ((marshal/get-indexed-copy-to-fn dest dest-offset)
+       src src-offset src-indexes dest-indexes)
+      (c-for [idx 0 (< idx n-elems) (inc idx)]
+             (copy! src (+ src-offset (* (aget src-indexes idx) n-elems-per-idx))
+                    dest (+ dest-offset (* (aget dest-indexes idx) n-elems-per-idx))
+                    n-elems-per-idx)))))
+  ([src src-indexes src-offset dest dest-indexes dest-offset]
+   (indexed-copy! src src-indexes src-offset dest dest-indexes dest-offset 1))
   ([src src-indexes dest dest-indexes]
    (indexed-copy! src 0 src-indexes dest 0 dest-indexes)))

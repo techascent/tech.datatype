@@ -2,7 +2,8 @@
   (:require [clojure.test :refer :all]
             [think.datatype.core :as dtype]
             [clojure.core.matrix :as m]
-            [think.datatype.util :as util]))
+            [think.datatype.util :as util])
+  (:import [think.datatype FloatArrayView]))
 
 
 (deftest raw-copy-with-mutable-lazy-sequence
@@ -112,3 +113,19 @@
     (is (m/equals (->> result
                        (partition vec-len)
                        (mapv vec)) answer))))
+
+
+(deftest v-aget-rem-regression-test
+  (let [n-elems 100
+        view-len 10
+        test-view (dtype/make-view :float (range n-elems))
+        sub-views (map (fn [idx]
+                         (dtype/->view test-view (* idx view-len) view-len))
+                       (range (quot n-elems view-len)))
+        result-seq (mapcat (fn [^FloatArrayView sub-view]
+                             (map (fn [^long idx]
+                                    (dtype/v-aget-rem sub-view idx))
+                                  (range view-len)))
+                           sub-views)]
+    (is (m/equals (range n-elems)
+                  result-seq))))

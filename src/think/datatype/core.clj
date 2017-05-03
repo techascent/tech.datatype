@@ -364,8 +364,10 @@ The function signature will be:
 
 (defmacro v-aget-rem
   [array-view item-offset]
-  `(aget (.data ~array-view) (rem (+ (.offset ~array-view) ~item-offset)
-                                (.length ~array-view))))
+  `(aget (.data ~array-view)
+         (+ (.offset ~array-view)
+            (rem ~item-offset
+                 (.length ~array-view)))))
 
 (defmacro v-alength
   [array-view]

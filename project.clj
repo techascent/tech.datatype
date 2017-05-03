@@ -1,4 +1,4 @@
-(defproject thinktopic/think.datatype "0.3.11"
+(defproject thinktopic/think.datatype "0.3.12-SNAPSHOT"
   :description "Library for efficient manipulation of contiguous mutable containers of primitive datatypes."
   :url "http://github.com/thinktopic/think.datatype"
   :license {:name "Eclipse Public License"

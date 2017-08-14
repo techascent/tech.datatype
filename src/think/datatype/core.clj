@@ -118,18 +118,6 @@ this involves a double-dispatch on both the src and dest arguments:
   (set-constant! [item offset value elem-count])
   (get-value [item offset]))
 
-(defprotocol PCopyToItemDirect
-  "Fast paths for when the types match.  When they don't the slower
-get/set value path is used."
-  (copy-to-buffer-direct! [item item-offset dest dest-offset elem-count])
-  (copy-to-array-direct! [item item-offset dest dest-offset elem-count]))
-
-(defprotocol PCopyQueryDirect
-  "Return a direct copy function for this dest datatype.
-The function signature will be:
-(copy-fn! item item-offset elem-count)."
-  (get-direct-copy-fn [dest dest-offset]))
-
 (defprotocol PCopyQueryIndirect
   "Copy protocol when the types do not match"
   (get-indirect-copy-fn [dest destoffset]))
@@ -164,13 +152,6 @@ The function signature will be:
      (c-for [idx# 0 (< idx# elem-count#) (inc idx#)]
             (aset ~item (+ offset# idx#) ~value))))
 
-(defmacro array-copy-query-impl
-  [dest dest-offset]
-  `(fn [item# item-offset# elem-count#]
-     (copy-to-array-direct! item# item-offset#
-                            ~dest ~dest-offset
-                            elem-count#)))
-
 
 (defprotocol PView
   (->view-impl [item offset elem-count]))
@@ -198,9 +179,6 @@ The function signature will be:
   (buffer-wrap-impl [item n-offset n-length] (ByteBuffer/wrap (.data item)
                                                            (+ (.offset item) (int n-offset))
                                                            (int n-length)))
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (array-copy-query-impl (.data dest) (+ (long dest-offset) (.offset dest))))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
@@ -224,9 +202,6 @@ The function signature will be:
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (ShortBuffer/wrap (.data item) (+ (.offset item)
                                                                           (long n-offset)) len))
-  PCopyQueryDirect
-  (get-direct-copy-fn [item dest-offset]
-    (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
@@ -250,9 +225,6 @@ The function signature will be:
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (IntBuffer/wrap (.data item) (+ (long n-offset)
                                                                         (.offset item)) len))
-  PCopyQueryDirect
-  (get-direct-copy-fn [item dest-offset]
-    (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
@@ -275,9 +247,6 @@ The function signature will be:
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (LongBuffer/wrap (.data item) (+ (.offset item)
                                                                          (long n-offset)) len))
-  PCopyQueryDirect
-  (get-direct-copy-fn [item dest-offset]
-    (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
@@ -301,9 +270,6 @@ The function signature will be:
   (buffer-wrap-impl [item n-offset len] (FloatBuffer/wrap (.data item) (+ (.offset item)
                                                                           (long n-offset))
                                                           len))
-  PCopyQueryDirect
-  (get-direct-copy-fn [item dest-offset]
-    (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
@@ -326,9 +292,6 @@ The function signature will be:
   PBufferWrap
   (buffer-wrap-impl [item n-offset len] (DoubleBuffer/wrap (.data item) (+ (long n-offset)
                                                                            (.offset item)) len))
-  PCopyQueryDirect
-  (get-direct-copy-fn [item dest-offset]
-    (array-copy-query-impl (.data item) (+ (long dest-offset) (.offset item))))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
@@ -384,19 +347,9 @@ The function signature will be:
   (buffer-wrap-impl [ary offset len] (ByteBuffer/wrap ^bytes ary (int offset) (int len)))
   PArrayInfo
   (is-primitive-array? [ary] true)
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (array-copy-query-impl dest dest-offset))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^bytes dest dest-offset elem-count]
-    (let [^bytes item item]
-      (copy-array-to-array-impl item item-offset dest dest-offset elem-count)))
-  (copy-to-buffer-direct! [item item-offset ^ByteBuffer dest dest-offset elem-count]
-    (let [^bytes item item]
-      (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
   PAccess
   (set-value! [item ^long offset value] (aset ^bytes item offset (byte value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -413,19 +366,9 @@ The function signature will be:
   (buffer-wrap-impl [ary offset len] (ShortBuffer/wrap ^shorts ary (int offset) (int len)))
   PArrayInfo
   (is-primitive-array? [ary] true)
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (array-copy-query-impl dest dest-offset))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^shorts dest dest-offset elem-count]
-    (let [^shorts item item]
-      (copy-array-to-array-impl item item-offset dest dest-offset elem-count)))
-  (copy-to-buffer-direct! [item item-offset ^ShortBuffer dest dest-offset elem-count]
-    (let [^shorts item item]
-      (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
   PAccess
   (set-value! [item ^long offset value] (aset ^shorts item offset (short value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -442,19 +385,9 @@ The function signature will be:
   (buffer-wrap-impl [ary offset len] (IntBuffer/wrap ^ints ary (int offset) (int len)))
   PArrayInfo
   (is-primitive-array? [ary] true)
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (array-copy-query-impl dest dest-offset))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^ints dest dest-offset elem-count]
-    (let [^ints item item]
-      (copy-array-to-array-impl item item-offset dest dest-offset elem-count)))
-  (copy-to-buffer-direct! [item item-offset ^IntBuffer dest dest-offset elem-count]
-    (let [^ints item item]
-      (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
   PAccess
   (set-value! [item ^long offset value] (aset ^ints item offset (int value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -471,19 +404,9 @@ The function signature will be:
   (buffer-wrap-impl [ary] (LongBuffer/wrap ^long ary))
   PArrayInfo
   (is-primitive-array? [ary] true)
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (array-copy-query-impl dest dest-offset))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^longs dest dest-offset elem-count]
-    (let [^longs item item]
-      (copy-array-to-array-impl item item-offset dest dest-offset elem-count)))
-  (copy-to-buffer-direct! [item item-offset ^LongBuffer dest dest-offset elem-count]
-    (let [^longs item item]
-      (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
   PAccess
   (set-value! [item ^long offset value] (aset ^longs item offset (long value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -500,19 +423,9 @@ The function signature will be:
   (buffer-wrap-impl [ary offset len] (FloatBuffer/wrap ^floats ary (int offset) (int len)))
   PArrayInfo
   (is-primitive-array? [ary] true)
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (array-copy-query-impl dest dest-offset))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^floats dest dest-offset elem-count]
-    (let [^floats item item]
-      (copy-array-to-array-impl item item-offset dest dest-offset elem-count)))
-  (copy-to-buffer-direct! [item item-offset ^FloatBuffer dest dest-offset elem-count]
-    (let [^floats item item]
-      (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
   PAccess
   (set-value! [item ^long offset value] (aset ^floats item offset (float value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -529,19 +442,9 @@ The function signature will be:
   (buffer-wrap-impl [ary offset len] (DoubleBuffer/wrap ^doubles ary (int offset) (int len)))
   PArrayInfo
   (is-primitive-array? [ary] true)
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (array-copy-query-impl dest dest-offset))
   PCopyQueryIndirect
   (get-indirect-copy-fn [dest dest-offset]
     (marshal/get-copy-to-fn dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^doubles dest dest-offset elem-count]
-    (let [^doubles item item]
-      (copy-array-to-array-impl item item-offset dest dest-offset elem-count)))
-  (copy-to-buffer-direct! [item item-offset ^DoubleBuffer dest dest-offset elem-count]
-    (let [^doubles item item]
-      (copy-array-to-buffer-impl item item-offset dest dest-offset elem-count)))
   PAccess
   (set-value! [item ^long offset value] (aset ^doubles item offset (double value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -652,14 +555,6 @@ The function signature will be:
     (let [^ByteBuffer item item]
       (set-buffer-constant-impl item offset value byte elem-count)))
   (get-value [item ^long offset] (.get ^ByteBuffer item offset))
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (buffer-copy-query-impl dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^bytes dest dest-offset elem-count]
-    (copy-buffer-to-array-impl item item-offset dest dest-offset elem-count))
-  (copy-to-buffer-direct! [item item-offset ^ByteBuffer dest dest-offset elem-count]
-    (copy-buffer-to-buffer-impl item item-offset dest dest-offset elem-count))
   PBufferOffset
   (offset-buffer [buffer start-offset length]
     (nio-offset-impl buffer start-offset length)))
@@ -675,14 +570,6 @@ The function signature will be:
     (let [^ShortBuffer item item]
       (set-buffer-constant-impl item offset value short elem-count)))
   (get-value [item ^long offset] (.get ^ShortBuffer item offset))
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (buffer-copy-query-impl dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^shorts dest dest-offset elem-count]
-    (copy-buffer-to-array-impl item item-offset dest dest-offset elem-count))
-  (copy-to-buffer-direct! [item item-offset ^ShortBuffer dest dest-offset elem-count]
-    (copy-buffer-to-buffer-impl item item-offset dest dest-offset elem-count))
   PBufferOffset
   (offset-buffer [buffer start-offset length]
     (nio-offset-impl buffer start-offset length)))
@@ -698,14 +585,6 @@ The function signature will be:
     (let [^IntBuffer item item]
       (set-buffer-constant-impl item offset value int elem-count)))
   (get-value [item ^long offset] (.get ^IntBuffer item offset))
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (buffer-copy-query-impl dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^ints dest dest-offset elem-count]
-    (copy-buffer-to-array-impl item item-offset dest dest-offset elem-count))
-  (copy-to-buffer-direct! [item item-offset ^IntBuffer dest dest-offset elem-count]
-    (copy-buffer-to-buffer-impl item item-offset dest dest-offset elem-count))
   PBufferOffset
   (offset-buffer [buffer start-offset length]
     (nio-offset-impl buffer start-offset length)))
@@ -722,14 +601,6 @@ The function signature will be:
     (let [^LongBuffer item item]
       (set-buffer-constant-impl item offset value long elem-count)))
   (get-value [item ^long offset] (.get ^LongBuffer item offset))
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (buffer-copy-query-impl dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^longs dest dest-offset elem-count]
-    (copy-buffer-to-array-impl item item-offset dest dest-offset elem-count))
-  (copy-to-buffer-direct! [item item-offset ^LongBuffer dest dest-offset elem-count]
-    (copy-buffer-to-buffer-impl item item-offset dest dest-offset elem-count))
   PBufferOffset
   (offset-buffer [buffer start-offset length]
     (nio-offset-impl buffer start-offset length)))
@@ -746,14 +617,6 @@ The function signature will be:
     (let [^FloatBuffer item item]
       (set-buffer-constant-impl item offset value float elem-count)))
   (get-value [item ^long offset] (.get ^FloatBuffer item offset))
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (buffer-copy-query-impl dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^floats dest dest-offset elem-count]
-    (copy-buffer-to-array-impl item item-offset dest dest-offset elem-count))
-  (copy-to-buffer-direct! [item item-offset ^FloatBuffer dest dest-offset elem-count]
-    (copy-buffer-to-buffer-impl item item-offset dest dest-offset elem-count))
   PBufferOffset
   (offset-buffer [buffer start-offset length]
     (nio-offset-impl buffer start-offset length)))
@@ -770,14 +633,6 @@ The function signature will be:
     (let [^DoubleBuffer item item]
       (set-buffer-constant-impl item offset value double elem-count)))
   (get-value [item ^long offset] (.get ^DoubleBuffer item offset))
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset]
-    (buffer-copy-query-impl dest dest-offset))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset ^doubles dest dest-offset elem-count]
-    (copy-buffer-to-array-impl item item-offset dest dest-offset elem-count))
-  (copy-to-buffer-direct! [item item-offset ^DoubleBuffer dest dest-offset elem-count]
-    (copy-buffer-to-buffer-impl item item-offset dest dest-offset elem-count))
   PBufferOffset
   (offset-buffer [buffer start-offset length]
     (nio-offset-impl buffer start-offset length)))
@@ -790,6 +645,9 @@ The function signature will be:
 
 (defn generic-copy!
   [item item-offset dest dest-offset elem-count]
+  (throw (ex-info "should not hit slow path"
+                  {:src-type (type item)
+                   :dest-type (type dest)}))
   (let [item-offset (long item-offset)
         dest-offset (long dest-offset)
         elem-count (long elem-count)]
@@ -804,15 +662,8 @@ The function signature will be:
   (is-primitive-array? [ary] false)
   PBufferInfo
   (is-nio-buffer? [item] false)
-  PCopyQueryDirect
-  (get-direct-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3))
   PCopyQueryIndirect
-  (get-indirect-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3))
-  PCopyToItemDirect
-  (copy-to-array-direct! [item item-offset dest dest-offset elem-count]
-    (generic-copy! item item-offset dest dest-offset elem-count))
-  (copy-to-buffer-direct! [item item-offset dest dest-offset elem-count]
-    (generic-copy! item item-offset dest dest-offset elem-count)))
+  (get-indirect-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3)))
 
 
 (defn ecount
@@ -840,9 +691,7 @@ The function signature will be:
          elem-count (long elem-count)]
      (check-range src src-offset elem-count)
      (check-range dest dest-offset elem-count)
-     (if (and (= src-dtype dest-dtype))
-       ((get-direct-copy-fn dest dest-offset) src src-offset elem-count)
-       ((get-indirect-copy-fn dest dest-offset) src src-offset elem-count))
+     ((get-indirect-copy-fn dest dest-offset) src src-offset elem-count)
      dest))
   ([src dest]
    (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))

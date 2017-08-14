@@ -643,11 +643,15 @@ this involves a double-dispatch on both the src and dest arguments:
   (element-count [item] (.remaining item)))
 
 
+(def ^:dynamic *error-on-slow-path* false)
+
+
 (defn generic-copy!
   [item item-offset dest dest-offset elem-count]
-  (throw (ex-info "should not hit slow path"
-                  {:src-type (type item)
-                   :dest-type (type dest)}))
+  (when *error-on-slow-path*
+    (throw (ex-info "should not hit slow path"
+                    {:src-type (type item)
+                     :dest-type (type dest)})))
   (let [item-offset (long item-offset)
         dest-offset (long dest-offset)
         elem-count (long elem-count)]

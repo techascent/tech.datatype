@@ -72,8 +72,8 @@ this involves a double-dispatch on both the src and dest arguments:
 
 
 (defn copy-raw->item!
-  [& args]
-  (apply base/copy-raw->item! args))
+  [raw-data ary-target target-offset]
+  (base/copy-raw->item! raw-data ary-target target-offset))
 
 
 (defn ->view
@@ -543,3 +543,9 @@ this involves a double-dispatch on both the src and dest arguments:
   marshal/PCopyToBuffer
   (->> (marshal/buffer-type-iterator generic-copy-impl)
        (into {})))
+
+(extend-type Object
+  base/PCopyRawData
+  (copy-raw->item!
+   [src-data dst-data offset]
+   (base/copy-raw->item! (seq src-data) dst-data offset)))

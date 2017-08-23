@@ -1,6 +1,7 @@
 (ns think.datatype.core-test
   (:require [clojure.test :refer :all]
             [think.datatype.core :as dtype]
+            [think.datatype.base :as base]
             [clojure.core.matrix :as m]
             [think.datatype.util :as util])
   (:import [think.datatype FloatArrayView]))
@@ -58,3 +59,15 @@
   (mapv (fn [[src-fn dest-fn]]
           (basic-copy src-fn dest-fn))
         (util/all-pairs create-functions)))
+
+
+(deftest array-of-array-support
+  (let [^"[[D" src-data (make-array (Class/forName "[D") 5)
+        _ (doseq [idx (range 5)]
+            (aset src-data idx (double-array (repeat 10 idx))))
+        dst-data (float-array (* 5 10))]
+    ;;This should not hit any slow paths.
+    (with-bindings {#'base/*error-on-slow-path* true}
+      (dtype/copy-raw->item! src-data dst-data 0))
+    (is (= (vec (float-array (flatten (map #(repeat 10 %) (range 5)))))
+           (vec dst-data)))))

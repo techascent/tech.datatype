@@ -6,6 +6,11 @@ pom.xml.asc
 *.jar
 *.class
 /.lein-*
-/.nrepl-port
+.nrepl-port
 .hgignore
 .hg/
+checkouts
+*.log
+validation-project/target
+validation-project/classes
+validation-project/resources

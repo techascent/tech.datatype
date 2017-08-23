@@ -1,8 +1,2 @@
 language: clojure
 jdk: oraclejdk8
-before_install:
-- openssl aes-256-cbc -K $encrypted_6fe29066b587_key -iv $encrypted_6fe29066b587_iv
-  -in profiles.clj.enc -out profiles.clj -d
-- mkdir -p ~/.lein && cp profiles.clj ~/.lein/profiles.clj
-
-script: GIT_IS_MASTER=`git branch --contains HEAD | grep -q master ; echo $?` ./build-and-deploy.sh

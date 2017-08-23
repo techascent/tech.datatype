@@ -12,12 +12,6 @@ public final class IntArrayView extends ArrayViewBase
 		(String.format("data length %s is less than offset %s + capacity %s.",
 			       data.length, offset, capacity));
     }
-    public IntArrayView( int[] d, int o, int cap, int str ) throws Exception
-    {
-	super(o, cap, str);
-	data = d;
-	checkDataLength();
-    }
     public IntArrayView( int[] d, int o, int cap ) throws Exception
     {
 	super(o, cap);
@@ -38,9 +32,9 @@ public final class IntArrayView extends ArrayViewBase
     /**
        Member function construction to allow chaining from an existing view while preserving type.
      */
-    public final IntArrayView construct( int offset, int capacity, int stride ) throws Exception
+    public final IntArrayView construct( int offset, int capacity ) throws Exception
     {
-	return new IntArrayView(data, offset, capacity, stride);
+	return new IntArrayView(data, offset, capacity);
     }
 
     public final int get(int idx)
@@ -68,26 +62,15 @@ public final class IntArrayView extends ArrayViewBase
 	data[index(idx)] /= value;
     }
     public final void fill(int value)
-    {
-	if (stride == 1)
-	    Arrays.fill(data, offset, (offset + capacity), value);
-	else {
-	    int len = length();
-	    for( int idx = 0; idx < len; ++idx )
-		set(idx, value);
-	}
+    {	
+        Arrays.fill(data, offset, (offset + capacity), value);
     }
     public final IntArrayView toView(int new_offset, int len) throws Exception
     {
-	return new IntArrayView(data, offset + new_offset*stride, len*stride, stride);
+	return new IntArrayView(data, offset + new_offset, len);
     }
     public final IntArrayView toView(int offset) throws Exception
     {
 	return toView(offset, length() - offset);
-    }
-    public final IntArrayView toStridedView(int elem_offset, int str) throws Exception
-    {
-	return new IntArrayView( data, offset + (elem_offset * stride)
-				  , capacity - (elem_offset * stride), str*stride );
     }
 }

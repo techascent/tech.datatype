@@ -33,6 +33,9 @@ this involves a double-dispatch on both the src and dest arguments:
   (base/get-datatype item))
 
 
+(def datatypes base/datatypes)
+
+
 (defn make-array-of-type
   [datatype elem-count-or-seq]
   (base/make-array-of-type datatype elem-count-or-seq))
@@ -71,6 +74,24 @@ this involves a double-dispatch on both the src and dest arguments:
 (defn copy-raw->item!
   [& args]
   (apply base/copy-raw->item! args))
+
+
+(defn ->view
+  [& args]
+  (apply base/->view args))
+
+
+(defn set-value! [item offset value]
+  (base/set-value! item offset value))
+
+
+(defn set-constant! [item offset value elem-count]
+  (base/set-constant! item offset value elem-count))
+
+
+(defn get-value [item offset]
+  (base/get-value item offset))
+
 
 
 (extend-protocol base/PDatatype
@@ -120,7 +141,7 @@ this involves a double-dispatch on both the src and dest arguments:
          val# (~cast-fn ~val)
          elem-count# (long ~elem-count)]
      (c-for
-      [idx# 0 (< idx# elem-count#) (inc elem-count#)]
+      [idx# 0 (< idx# elem-count#) (inc idx#)]
       (aset ary# (+ offset# idx#) val#))))
 
 

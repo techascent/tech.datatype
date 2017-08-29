@@ -1,9 +1,6 @@
 # think.datatype ![TravisCI](https://travis-ci.org/thinktopic/think.datatype.svg?branch=master)
+[![Clojars Project](https://clojars.org/thinktopic/think.datatype/latest-version.svg)](https://clojars.org/thinktopic/think.datatype)
 
-
-```clojure
-[thinktopic/think.datatype "0.3.16"]
-```
 
 Efficient manipulation of contiguous mutable containers of primitive datatypes.
 

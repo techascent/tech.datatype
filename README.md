@@ -2,7 +2,7 @@
 
 
 ```clojure
-[thinktopic/think.datatype "0.3.15"]
+[thinktopic/think.datatype "0.3.16"]
 ```
 
 Efficient manipulation of contiguous mutable containers of primitive datatypes.

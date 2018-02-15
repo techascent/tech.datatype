@@ -6,11 +6,55 @@
             FloatBuffer DoubleBuffer Buffer]
            [tech.datatype DoubleArrayView FloatArrayView
             LongArrayView IntArrayView ShortArrayView ByteArrayView
-            ArrayView]))
+            ArrayView ArrayViewBase]))
 
 ;;Some utility items to make the macros easier.
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
+
+
+(defprotocol PContainerType
+  (get-container-type [item]))
+
+(extend-type ArrayViewBase
+  PContainerType
+  (get-container-type [item] :array-view))
+
+(extend-type Buffer
+  PContainerType
+  (get-container-type [item] :nio-buffer))
+
+(extend-type (Class/forName "[B")
+  PContainerType
+  (get-container-type [item] :java-array))
+
+(extend-type (Class/forName "[S")
+  PContainerType
+  (get-container-type [item] :java-array))
+
+(extend-type (Class/forName "[I")
+  PContainerType
+  (get-container-type [item] :java-array))
+
+(extend-type (Class/forName "[J")
+  PContainerType
+  (get-container-type [item] :java-array))
+
+(extend-type (Class/forName "[F")
+  PContainerType
+  (get-container-type [item] :java-array))
+
+(extend-type (Class/forName "[D")
+  PContainerType
+  (get-container-type [item] :java-array))
+
+
+
+;;Conversion is src-container< type>, offset -> dst-container<type>, offset
+(def ^:dynamic conversion-table (atom {}))
+
+;;Copy is src-container<type>, offset, dst-container<type>, offset, num-elems -> nil
+(def ^:dynamic copy-table (atom {}))
 
 
 (defprotocol PCopyToArray

@@ -1,5 +1,5 @@
-(ns think.datatype.main
-  (:require [think.datatype.time-test :as time-test])
+(ns tech.datatype.main
+  (:require [tech.datatype.time-test :as time-test])
   (:gen-class))
 
 

@@ -1,4 +1,4 @@
-(ns think.datatype.shared-macros
+(ns tech.datatype.shared-macros
   (:require [clojure.core.matrix :as m]))
 
 

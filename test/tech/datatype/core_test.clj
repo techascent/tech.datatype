@@ -1,10 +1,10 @@
-(ns think.datatype.core-test
+(ns tech.datatype.core-test
   (:require [clojure.test :refer :all]
-            [think.datatype.core :as dtype]
-            [think.datatype.base :as base]
+            [tech.datatype.core :as dtype]
+            [tech.datatype.base :as base]
             [clojure.core.matrix :as m]
-            [think.datatype.util :as util])
-  (:import [think.datatype FloatArrayView]))
+            [tech.datatype.util :as util])
+  (:import [tech.datatype FloatArrayView]))
 
 
 (deftest raw-copy-with-mutable-lazy-sequence

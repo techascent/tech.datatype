@@ -1,9 +1,9 @@
-(ns think.datatype.time-test
-  (:require [think.datatype.core :refer :all]
+(ns tech.datatype.time-test
+  (:require [tech.datatype.core :refer :all]
             [clojure.core.matrix.macros :refer [c-for]]
-            [think.datatype.marshal :as marshal])
+            [tech.datatype.marshal :as marshal])
   (:import [java.nio DoubleBuffer]
-           [think.datatype DoubleArrayView FloatArrayView
+           [tech.datatype DoubleArrayView FloatArrayView
             LongArrayView IntArrayView ShortArrayView ByteArrayView
             ArrayView]))
 

@@ -1,4 +1,4 @@
-(ns think.datatype.core
+(ns tech.datatype.core
   "Generalized efficient manipulations of sequences of primitive datatype.
 Includes specializations for java arrays, array views (subsection of an array)
 and nio buffers.  There are specializations to allow implementations to provide
@@ -16,12 +16,12 @@ this involves a double-dispatch on both the src and dest arguments:
   (:require [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m]
-            [think.datatype.marshal :as marshal]
-            [think.datatype.base :as base])
+            [tech.datatype.marshal :as marshal]
+            [tech.datatype.base :as base])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
            [mikera.arrayz INDArray]
-           [think.datatype DoubleArrayView FloatArrayView
+           [tech.datatype DoubleArrayView FloatArrayView
             LongArrayView IntArrayView ShortArrayView ByteArrayView]))
 
 (set! *warn-on-reflection* true)

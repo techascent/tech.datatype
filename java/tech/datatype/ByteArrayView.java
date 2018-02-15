@@ -1,10 +1,10 @@
-package think.datatype;
+package tech.datatype;
 
 import java.util.Arrays;
 
-public final class IntArrayView extends ArrayViewBase
+public final class ByteArrayView extends ArrayViewBase
 {
-    public final int[] data;
+    public final byte[] data;
     void checkDataLength() throws Exception
     {
 	if ( data.length < (offset + capacity) )
@@ -12,18 +12,18 @@ public final class IntArrayView extends ArrayViewBase
 		(String.format("data length %s is less than offset %s + capacity %s.",
 			       data.length, offset, capacity));
     }
-    public IntArrayView( int[] d, int o, int cap ) throws Exception
+    public ByteArrayView( byte[] d, int o, int cap ) throws Exception
     {
 	super(o, cap);
 	data = d;
 	checkDataLength();
     }
-    public IntArrayView( int[] d, int o )
+    public ByteArrayView( byte[] d, int o )
     {
 	super(o, d.length - o);
 	data = d;
     }
-    public IntArrayView( int[] d )
+    public ByteArrayView( byte[] d )
     {
 	super(d.length);
 	data = d;
@@ -32,44 +32,44 @@ public final class IntArrayView extends ArrayViewBase
     /**
        Member function construction to allow chaining from an existing view while preserving type.
      */
-    public final IntArrayView construct( int offset, int capacity ) throws Exception
+    public final ByteArrayView construct( int offset, int capacity ) throws Exception
     {
-	return new IntArrayView(data, offset, capacity);
+	return new ByteArrayView(data, offset, capacity);
     }
 
-    public final int get(int idx)
+    public final byte get(int idx)
     {
 	return data[index(idx)];
     }
-    public final void set(int idx, int value)
+    public final void set(int idx, byte value)
     {
 	data[index(idx)] = value;
     }
-    public final void pluseq(int idx, int value)
+    public final void pluseq(int idx, byte value)
     {
 	data[index(idx)] += value;
     }
-    public final void minuseq(int idx, int value)
+    public final void minuseq(int idx, byte value)
     {
 	data[index(idx)] -= value;
     }
-    public final void multeq(int idx, int value)
+    public final void multeq(int idx, byte value)
     {
 	data[index(idx)] *= value;
     }
-    public final void diveq(int idx, int value)
+    public final void diveq(int idx, byte value)
     {
 	data[index(idx)] /= value;
     }
-    public final void fill(int value)
+    public final void fill(byte value)
     {	
         Arrays.fill(data, offset, (offset + capacity), value);
     }
-    public final IntArrayView toView(int new_offset, int len) throws Exception
+    public final ByteArrayView toView(int new_offset, int len) throws Exception
     {
-	return new IntArrayView(data, offset + new_offset, len);
+	return new ByteArrayView(data, offset + new_offset, len);
     }
-    public final IntArrayView toView(int offset) throws Exception
+    public final ByteArrayView toView(int offset) throws Exception
     {
 	return toView(offset, length() - offset);
     }

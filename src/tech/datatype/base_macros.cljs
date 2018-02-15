@@ -1,4 +1,4 @@
-(ns think.datatype.base-macros)
+(ns tech.datatype.base-macros)
 
 (defmacro try-catch-any
   [try-body & catch-body]

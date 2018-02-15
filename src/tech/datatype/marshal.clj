@@ -1,10 +1,10 @@
-(ns think.datatype.marshal
+(ns tech.datatype.marshal
   "Namespace to contain the madness that happens when you want to marshal
   an (nio buffer or array) or one type to a (nio buffer or array) or another type."
   (:require [clojure.core.matrix.macros :refer [c-for]])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
-           [think.datatype DoubleArrayView FloatArrayView
+           [tech.datatype DoubleArrayView FloatArrayView
             LongArrayView IntArrayView ShortArrayView ByteArrayView
             ArrayView]))
 

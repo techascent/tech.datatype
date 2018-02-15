@@ -1,4 +1,4 @@
-(ns think.datatype.base-macros
+(ns tech.datatype.base-macros
   (:require [clojure.core.matrix :as m]))
 
 (defmacro try-catch-any

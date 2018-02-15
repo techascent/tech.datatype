@@ -1,4 +1,4 @@
-(ns think.datatype.util)
+(ns tech.datatype.util)
 
 
 ;;Test utility, keep at end of file.

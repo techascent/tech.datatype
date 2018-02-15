@@ -1,4 +1,4 @@
-package think.datatype;
+package tech.datatype;
 
 
 public class ArrayViewBase

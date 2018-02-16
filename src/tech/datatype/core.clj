@@ -148,9 +148,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type ByteArrayView
   base/PDatatype
   (get-datatype [item] :byte)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset)
                                                            (.offset item)) (byte value)))
@@ -168,9 +165,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type ShortArrayView
   base/PDatatype
   (get-datatype [item] :short)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (short value)))
@@ -188,9 +182,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type IntArrayView
   base/PDatatype
   (get-datatype [item] :int)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (int value)))
@@ -207,9 +198,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type LongArrayView
   base/PDatatype
   (get-datatype [item] :long)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (long value)))
@@ -226,9 +214,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type FloatArrayView
   base/PDatatype
   (get-datatype [item] :float)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (float value)))
@@ -245,9 +230,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type DoubleArrayView
   base/PDatatype
   (get-datatype [item] :double)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn (.data dest) (+ (long dest-offset) (.offset dest))))
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (double value)))
@@ -282,9 +264,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type (Class/forName "[B")
   base/PDatatype
   (get-datatype [item] :byte)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn dest dest-offset))
   base/PAccess
   (set-value! [item ^long offset value] (aset ^bytes item offset (byte value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -300,9 +279,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type (Class/forName "[S")
   base/PDatatype
   (get-datatype [item] :short)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn dest dest-offset))
   base/PAccess
   (set-value! [item ^long offset value] (aset ^shorts item offset (short value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -318,9 +294,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type (Class/forName "[I")
   base/PDatatype
   (get-datatype [item] :int)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn dest dest-offset))
   base/PAccess
   (set-value! [item ^long offset value] (aset ^ints item offset (int value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -336,9 +309,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type (Class/forName "[J")
   base/PDatatype
   (get-datatype [item] :long)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn dest dest-offset))
   base/PAccess
   (set-value! [item ^long offset value] (aset ^longs item offset (long value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -354,9 +324,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type (Class/forName "[F")
   base/PDatatype
   (get-datatype [item] :float)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn dest dest-offset))
   base/PAccess
   (set-value! [item ^long offset value] (aset ^floats item offset (float value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -372,9 +339,6 @@ this involves a double-dispatch on both the src and dest arguments:
 (extend-type (Class/forName "[D")
   base/PDatatype
   (get-datatype [item] :double)
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn dest dest-offset))
   base/PAccess
   (set-value! [item ^long offset value] (aset ^doubles item offset (double value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -425,9 +389,6 @@ this involves a double-dispatch on both the src and dest arguments:
 
 
 (extend-type Buffer
-  base/PCopyQuery
-  (get-copy-fn [dest dest-offset]
-    (marshal/get-copy-to-fn dest dest-offset))
   mp/PElementCount
   (element-count [item] (.remaining item))
   base/PCopyRawData
@@ -529,20 +490,6 @@ this involves a double-dispatch on both the src and dest arguments:
                                  (mp/to-double-array raw-data))]
       (copy-raw->item! item-data ary-target target-offset))))
 
-
-;;Add the overloads for object for marshal-type copies.
-(defmacro generic-copy-impl
-  [dest-type cast-type-fn copy-to-dest-fn cast-fn]
-  `[(keyword (name ~copy-to-dest-fn)) base/generic-copy!])
-
-
-(extend Object
-  marshal/PCopyToArray
-  (->> (marshal/array-type-iterator generic-copy-impl)
-       (into {}))
-  marshal/PCopyToBuffer
-  (->> (marshal/buffer-type-iterator generic-copy-impl)
-       (into {})))
 
 (extend-type Object
   base/PCopyRawData

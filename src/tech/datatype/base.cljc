@@ -162,11 +162,6 @@ Contains:
     dest))
 
 
-(extend-type Object
-  PCopyQuery
-  (get-copy-fn [dest dest-offset] #(generic-copy! %1 %2 dest dest-offset %3)))
-
-
 (defprotocol PView
   (->view-impl [item offset elem-count]))
 

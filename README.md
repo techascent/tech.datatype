@@ -1,5 +1,5 @@
-# think.datatype ![TravisCI](https://travis-ci.org/thinktopic/think.datatype.svg?branch=master)
-[![Clojars Project](https://clojars.org/thinktopic/think.datatype/latest-version.svg)](https://clojars.org/thinktopic/think.datatype)
+# tech.datatype 
+[![Clojars Project](https://clojars.org/thinktopic/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
 
 
 Efficient manipulation of contiguous mutable containers of primitive datatypes.
@@ -21,7 +21,7 @@ efficient full typed copy functions when the types can be ascertained.
 
 
 ```clojure
-(:require [think.datatype.core :as dtype])
+(:require [tech.datatype.core :as dtype])
 
 (let [ary (dtype/make-array-of-type :float (range 10))
       buf (dtype/make-buffer :double 10)]

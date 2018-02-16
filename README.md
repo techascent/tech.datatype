@@ -1,5 +1,5 @@
 # tech.datatype 
-[![Clojars Project](https://clojars.org/thinktopic/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
+[![Clojars Project](https://clojars.org/techascent/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
 
 
 Efficient manipulation of contiguous mutable containers of primitive datatypes.

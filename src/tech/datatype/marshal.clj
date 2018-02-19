@@ -350,7 +350,7 @@ and thus needs to cast."
                    ;;Then use the copy entry along with the conversion
                    (let [[src-conv-cont src-conv] src-conversion
                          [dst-conv-cont dst-conv] dst-conversion]
-                     (when-let [table-copy-map (get @copy-table [src-conv-cont dst-conv-cont])]
+                     (when-let [table-copy-map (get @*copy-table* [src-conv-cont dst-conv-cont])]
                        [table-copy-map src-conv dst-conv])))
                  (remove nil?)
                  first)))]

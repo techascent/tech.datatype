@@ -54,21 +54,21 @@
 ;;Conversion is src-container< type>, offset -> dst-container<type>, offset
 ;;Conversion map is a double-lookup of src-type to a map of dst-type to a function
 ;;that converts src type to dst type.
-(def ^:dynamic conversion-table (atom {:array-view
-                                       {:java-array
-                                        (fn [src-item src-offset]
-                                          (let [src-dtype (base/get-datatype src-item)
-                                                src-offset (long src-offset)
-                                                src-item ^ArrayViewBase src-item
-                                                view-offset (.offset src-item)
-                                                dst-item (condp = src-dtype
-                                                           :byte (.data ^ByteArrayView src-item)
-                                                           :short (.data ^ShortArrayView src-item)
-                                                           :int (.data ^IntArrayView src-item)
-                                                           :long (.data ^LongArrayView src-item)
-                                                           :float (.data ^FloatArrayView src-item)
-                                                           :double (.data ^DoubleArrayView src-item))]
-                                            [dst-item (+ src-offset view-offset)]))}}))
+(defonce ^:dynamic *conversion-table* (atom {:array-view
+                                             {:java-array
+                                              (fn [src-item src-offset]
+                                                (let [src-dtype (base/get-datatype src-item)
+                                                      src-offset (long src-offset)
+                                                      src-item ^ArrayViewBase src-item
+                                                      view-offset (.offset src-item)
+                                                      dst-item (condp = src-dtype
+                                                                 :byte (.data ^ByteArrayView src-item)
+                                                                 :short (.data ^ShortArrayView src-item)
+                                                                 :int (.data ^IntArrayView src-item)
+                                                                 :long (.data ^LongArrayView src-item)
+                                                                 :float (.data ^FloatArrayView src-item)
+                                                                 :double (.data ^DoubleArrayView src-item))]
+                                                  [dst-item (+ src-offset view-offset)]))}}))
 
 
 (defn identity-conversion
@@ -78,9 +78,9 @@
 
 (defn add-conversion-fn
   [src-container-type dst-container-type convert-fn]
-  (swap! conversion-table
+  (swap! *conversion-table*
          (fn [convert-map]
-           (assoc-in convert-map [:src-container-type :dst-container-type] convert-fn))))
+           (assoc-in convert-map [src-container-type dst-container-type] convert-fn))))
 
 
 (defn as-byte-buffer
@@ -237,7 +237,7 @@ and thus needs to cast."
 
 
 ;;Copy is src-container<type>, offset, dst-container<type>, offset, num-elems -> nil
-(def ^:dynamic copy-table (atom {}))
+(defonce ^:dynamic *copy-table* (atom {}))
 
 (def datatype-pairs
   (->> (for [src-dtype base/datatypes
@@ -253,7 +253,7 @@ and thus needs to cast."
     (throw (ex-info "Not all datatype combinations are present in the copy operation map"
                     {:missing (cset/difference (set datatype-pairs)
                                                (set (keys copy-operation-map)))})))
-  (swap! copy-table assoc [src-container-type dst-container-type] copy-operation-map))
+  (swap! *copy-table* assoc [src-container-type dst-container-type] copy-operation-map))
 
 
 (defmacro build-core-copy-operations
@@ -338,10 +338,10 @@ and thus needs to cast."
   (let [src-container (container-type src)
         dst-container (container-type dst)
         copy-fn-and-conversions
-        (if-let [table-copy-map (get @copy-table [src-container dst-container])]
+        (if-let [table-copy-map (get @*copy-table* [src-container dst-container])]
           [table-copy-map nil nil]
-          (let [src-conversions (get @conversion-table src-container)
-                dst-conversions (get @conversion-table dst-container)]
+          (let [src-conversions (get @*conversion-table* src-container)
+                dst-conversions (get @*conversion-table* dst-container)]
             (->> (for [src-conversion (concat [[src-container nil]]
                                               (seq src-conversions))
                        dst-conversion (concat [[dst-container nil]]

@@ -13,12 +13,12 @@ Contains:
 
 
 (def datatypes
-  [:byte
-   :short
-   :int
-   :long
-   :float
-   :double])
+  [:int8
+   :int16
+   :int32
+   :int64
+   :float32
+   :float64])
 
 (def datatype-sizes
   [1
@@ -74,15 +74,15 @@ Contains:
 
     (defn byte-array
       [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Int8Array %) :byte))
+      (setup-array elem-count-or-seq #(new js/Int8Array %) :int8))
 
     (defn short-array
       [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Int16Array %) :short))
+      (setup-array elem-count-or-seq #(new js/Int16Array %) :int16))
 
     (defn int-array
       [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Int32Array %) :int))
+      (setup-array elem-count-or-seq #(new js/Int32Array %) :int32))
 
     (defn long-array
       [elem-count-or-seq]
@@ -90,23 +90,23 @@ Contains:
 
     (defn float-array
       [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Float32Array %) :float))
+      (setup-array elem-count-or-seq #(new js/Float32Array %) :float32))
 
     (defn double-array
       [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Float64Array %) :double))))
+      (setup-array elem-count-or-seq #(new js/Float64Array %) :float64))))
 
 
 (defn make-array-of-type
   [datatype elem-count-or-seq]
   (base-macros/try-catch-any
     (cond
-      (= datatype :byte) (byte-array elem-count-or-seq)
-      (= datatype :short) (short-array elem-count-or-seq)
-      (= datatype :int) (int-array elem-count-or-seq)
+      (= datatype :int8) (byte-array elem-count-or-seq)
+      (= datatype :int16) (short-array elem-count-or-seq)
+      (= datatype :int32) (int-array elem-count-or-seq)
       (= datatype :long) (long-array elem-count-or-seq)
-      (= datatype :float) (float-array elem-count-or-seq)
-      (= datatype :double) (double-array elem-count-or-seq)
+      (= datatype :float32) (float-array elem-count-or-seq)
+      (= datatype :float64) (double-array elem-count-or-seq)
       :else
       (throw (ex-info "Unknown datatype in make-array-of-type"
                       {:datatype datatype})))

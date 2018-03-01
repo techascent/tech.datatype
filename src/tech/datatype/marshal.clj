@@ -54,21 +54,22 @@
 ;;Conversion is src-container< type>, offset -> dst-container<type>, offset
 ;;Conversion map is a double-lookup of src-type to a map of dst-type to a function
 ;;that converts src type to dst type.
-(defonce ^:dynamic *conversion-table* (atom {:array-view
-                                             {:java-array
-                                              (fn [src-item src-offset]
-                                                (let [src-dtype (base/get-datatype src-item)
-                                                      src-offset (long src-offset)
-                                                      src-item ^ArrayViewBase src-item
-                                                      view-offset (.offset src-item)
-                                                      dst-item (condp = src-dtype
-                                                                 :byte (.data ^ByteArrayView src-item)
-                                                                 :short (.data ^ShortArrayView src-item)
-                                                                 :int (.data ^IntArrayView src-item)
-                                                                 :long (.data ^LongArrayView src-item)
-                                                                 :float (.data ^FloatArrayView src-item)
-                                                                 :double (.data ^DoubleArrayView src-item))]
-                                                  [dst-item (+ src-offset view-offset)]))}}))
+(defonce ^:dynamic *conversion-table*
+  (atom {:array-view
+         {:java-array
+          (fn [src-item src-offset]
+            (let [src-dtype (base/get-datatype src-item)
+                  src-offset (long src-offset)
+                  src-item ^ArrayViewBase src-item
+                  view-offset (.offset src-item)
+                  dst-item (condp = src-dtype
+                             :int8 (.data ^ByteArrayView src-item)
+                             :int16 (.data ^ShortArrayView src-item)
+                             :int32 (.data ^IntArrayView src-item)
+                             :int64 (.data ^LongArrayView src-item)
+                             :float32 (.data ^FloatArrayView src-item)
+                             :float64 (.data ^DoubleArrayView src-item))]
+              [dst-item (+ src-offset view-offset)]))}}))
 
 
 (defn identity-conversion
@@ -141,45 +142,45 @@
 (defmacro datatype->array-cast-fn
   [dtype buf]
   (condp = dtype
-    :byte `(as-byte-array ~buf)
-    :short `(as-short-array ~buf)
-    :int `(as-int-array ~buf)
-    :long `(as-long-array ~buf)
-    :float `(as-float-array ~buf)
-    :double `(as-double-array ~buf)))
+    :int8 `(as-byte-array ~buf)
+    :int16 `(as-short-array ~buf)
+    :int32 `(as-int-array ~buf)
+    :int64 `(as-long-array ~buf)
+    :float32 `(as-float-array ~buf)
+    :float64 `(as-double-array ~buf)))
 
 
 (defmacro datatype->view-cast-fn
   [dtype buf]
   (condp = dtype
-    :byte `(as-byte-array-view ~buf)
-    :short `(as-short-array-view ~buf)
-    :int `(as-int-array-view ~buf)
-    :long `(as-long-array-view ~buf)
-    :float `(as-float-array-view ~buf)
-    :double `(as-double-array-view ~buf)))
+    :int8 `(as-byte-array-view ~buf)
+    :int16 `(as-short-array-view ~buf)
+    :int32 `(as-int-array-view ~buf)
+    :int64 `(as-long-array-view ~buf)
+    :float32 `(as-float-array-view ~buf)
+    :float64 `(as-double-array-view ~buf)))
 
 
 (defmacro datatype->buffer-cast-fn
   [dtype buf]
   (condp = dtype
-    :byte `(as-byte-buffer ~buf)
-    :short `(as-short-buffer ~buf)
-    :int `(as-int-buffer ~buf)
-    :long `(as-long-buffer ~buf)
-    :float `(as-float-buffer ~buf)
-    :double `(as-double-buffer ~buf)))
+    :int8 `(as-byte-buffer ~buf)
+    :int16 `(as-short-buffer ~buf)
+    :int32 `(as-int-buffer ~buf)
+    :int64 `(as-long-buffer ~buf)
+    :float32 `(as-float-buffer ~buf)
+    :float64 `(as-double-buffer ~buf)))
 
 
 (defmacro datatype->cast-fn
   [dtype val]
   (condp = dtype
-    :byte `(byte ~val)
-    :short `(short ~val)
-    :int `(int ~val)
-    :long `(long ~val)
-    :float `(float ~val)
-    :double `(double ~val)))
+    :int8 `(byte ~val)
+    :int16 `(short ~val)
+    :int32 `(int ~val)
+    :int64 `(long ~val)
+    :float32 `(float ~val)
+    :float64 `(double ~val)))
 
 (defmacro create-buffer->array-fn
   "Create a function that assumes the types do not match

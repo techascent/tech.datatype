@@ -96,38 +96,38 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-protocol base/PDatatype
   ByteBuffer
-  (get-datatype [item] :byte)
+  (get-datatype [item] :int8)
   ShortBuffer
-  (get-datatype [item] :short)
+  (get-datatype [item] :int16)
   IntBuffer
-  (get-datatype [item] :int)
+  (get-datatype [item] :int32)
   LongBuffer
-  (get-datatype [item] :long)
+  (get-datatype [item] :int64)
   FloatBuffer
-  (get-datatype [item] :float)
+  (get-datatype [item] :float32)
   LongBuffer
-  (get-datatype [item] :long)
+  (get-datatype [item] :int64)
   Byte
-  (get-datatype [item] :byte)
+  (get-datatype [item] :int8)
   Short
-  (get-datatype [item] :short)
+  (get-datatype [item] :int16)
   Integer
-  (get-datatype [item] :int)
+  (get-datatype [item] :int32)
   Long
-  (get-datatype [item] :long)
+  (get-datatype [item] :int64)
   Float
-  (get-datatype [item] :float)
+  (get-datatype [item] :float32)
   Double
-  (get-datatype [item] :double))
+  (get-datatype [item] :float64))
 
 
 (def datatype->primitive-type-map
-  {:byte Byte/TYPE
-   :short Short/TYPE
-   :int Integer/TYPE
-   :long Long/TYPE
-   :float Float/TYPE
-   :double Double/TYPE})
+  {:int8 Byte/TYPE
+   :int16 Short/TYPE
+   :int32 Integer/TYPE
+   :int64 Long/TYPE
+   :float32 Float/TYPE
+   :float64 Double/TYPE})
 
 (defn datatype->primitive-type
   [datatype]
@@ -147,7 +147,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type ByteArrayView
   base/PDatatype
-  (get-datatype [item] :byte)
+  (get-datatype [item] :int8)
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset)
                                                            (.offset item)) (byte value)))
@@ -164,7 +164,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type ShortArrayView
   base/PDatatype
-  (get-datatype [item] :short)
+  (get-datatype [item] :int16)
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (short value)))
@@ -181,7 +181,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type IntArrayView
   base/PDatatype
-  (get-datatype [item] :int)
+  (get-datatype [item] :int32)
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (int value)))
@@ -197,7 +197,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type LongArrayView
   base/PDatatype
-  (get-datatype [item] :long)
+  (get-datatype [item] :int64)
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (long value)))
@@ -213,7 +213,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type FloatArrayView
   base/PDatatype
-  (get-datatype [item] :float)
+  (get-datatype [item] :float32)
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (float value)))
@@ -229,7 +229,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type DoubleArrayView
   base/PDatatype
-  (get-datatype [item] :double)
+  (get-datatype [item] :float64)
   base/PAccess
   (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
                                            (double value)))
@@ -263,7 +263,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type (Class/forName "[B")
   base/PDatatype
-  (get-datatype [item] :byte)
+  (get-datatype [item] :int8)
   base/PAccess
   (set-value! [item ^long offset value] (aset ^bytes item offset (byte value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -278,7 +278,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type (Class/forName "[S")
   base/PDatatype
-  (get-datatype [item] :short)
+  (get-datatype [item] :int16)
   base/PAccess
   (set-value! [item ^long offset value] (aset ^shorts item offset (short value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -293,7 +293,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type (Class/forName "[I")
   base/PDatatype
-  (get-datatype [item] :int)
+  (get-datatype [item] :int32)
   base/PAccess
   (set-value! [item ^long offset value] (aset ^ints item offset (int value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -308,7 +308,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type (Class/forName "[J")
   base/PDatatype
-  (get-datatype [item] :long)
+  (get-datatype [item] :int64)
   base/PAccess
   (set-value! [item ^long offset value] (aset ^longs item offset (long value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -323,7 +323,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type (Class/forName "[F")
   base/PDatatype
-  (get-datatype [item] :float)
+  (get-datatype [item] :float32)
   base/PAccess
   (set-value! [item ^long offset value] (aset ^floats item offset (float value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -338,7 +338,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type (Class/forName "[D")
   base/PDatatype
-  (get-datatype [item] :double)
+  (get-datatype [item] :float64)
   base/PAccess
   (set-value! [item ^long offset value] (aset ^doubles item offset (double value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -355,12 +355,12 @@ this involves a double-dispatch on both the src and dest arguments:
 (defn datatype->cast-fn
   [datatype]
   (cond
-    (= datatype :byte) byte
-    (= datatype :short) short
-    (= datatype :int) int
-    (= datatype :long) long
-    (= datatype :float) float
-    (= datatype :double) double))
+    (= datatype :int8) byte
+    (= datatype :int16) short
+    (= datatype :int32) int
+    (= datatype :int64) long
+    (= datatype :float32) float
+    (= datatype :float64) double))
 
 (defn cast-to
   "cast to. boxes object if datatype is runtime variable"
@@ -371,12 +371,12 @@ this involves a double-dispatch on both the src and dest arguments:
   "cast to, potentially keep unboxed if datatype is known at compile time"
   [value datatype]
   (cond
-    (= datatype :byte) `(byte ~value)
-    (= datatype :short) `(short ~value)
-    (= datatype :int) `(int ~value)
-    (= datatype :long) `(long ~value)
-    (= datatype :float) `(float ~value)
-    (= datatype :double) `(double ~value)))
+    (= datatype :int8) `(byte ~value)
+    (= datatype :int16) `(short ~value)
+    (= datatype :int32) `(int ~value)
+    (= datatype :int64) `(long ~value)
+    (= datatype :float32) `(float ~value)
+    (= datatype :float64) `(double ~value)))
 
 
 (defmacro set-buffer-constant-impl
@@ -398,7 +398,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type ByteBuffer
   base/PDatatype
-  (get-datatype [item] :byte)
+  (get-datatype [item] :int8)
   base/PAccess
   (set-value! [item ^long offset value] (.put ^ByteBuffer item offset (byte value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -412,7 +412,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type ShortBuffer
   base/PDatatype
-  (get-datatype [item] :short)
+  (get-datatype [item] :int16)
   base/PAccess
   (set-value! [item ^long offset value] (.put ^ShortBuffer item offset (short value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -426,7 +426,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type IntBuffer
   base/PDatatype
-  (get-datatype [item] :int)
+  (get-datatype [item] :int32)
   base/PAccess
   (set-value! [item ^long offset value] (.put ^IntBuffer item offset (int value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -440,7 +440,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type LongBuffer
   base/PDatatype
-  (get-datatype [item] :long)
+  (get-datatype [item] :int64)
   base/PAccess
   (set-value! [item ^long offset value] (.put ^LongBuffer item offset (long value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -454,7 +454,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type FloatBuffer
   base/PDatatype
-  (get-datatype [item] :float)
+  (get-datatype [item] :float32)
   base/PAccess
   (set-value! [item ^long offset value] (.put ^FloatBuffer item offset (float value)))
   (set-constant! [item ^long offset value ^long elem-count]
@@ -468,7 +468,7 @@ this involves a double-dispatch on both the src and dest arguments:
 
 (extend-type DoubleBuffer
   base/PDatatype
-  (get-datatype [item] :double)
+  (get-datatype [item] :float64)
   base/PAccess
   (set-value! [item ^long offset value] (.put ^DoubleBuffer item offset (double value)))
   (set-constant! [item ^long offset value ^long elem-count]

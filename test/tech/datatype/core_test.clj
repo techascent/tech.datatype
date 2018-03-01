@@ -29,9 +29,9 @@
 
 (defn basic-copy
   [src-fn dest-fn]
-  (let [ary (src-fn :float (range 10))
-        buf (dest-fn :double 10)
-        retval (dtype/make-array-of-type :double 10)]
+  (let [ary (src-fn :float32 (range 10))
+        buf (dest-fn :float64 10)
+        retval (dtype/make-array-of-type :float64 10)]
     ;;copy starting at position 2 of ary into position 4 of buf 4 elements
     (dtype/copy! ary 2 buf 4 4)
     (dtype/copy! buf 0 retval 0 10)

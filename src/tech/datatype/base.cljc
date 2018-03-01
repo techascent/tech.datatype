@@ -104,7 +104,7 @@ Contains:
       (= datatype :int8) (byte-array elem-count-or-seq)
       (= datatype :int16) (short-array elem-count-or-seq)
       (= datatype :int32) (int-array elem-count-or-seq)
-      (= datatype :long) (long-array elem-count-or-seq)
+      (= datatype :int64) (long-array elem-count-or-seq)
       (= datatype :float32) (float-array elem-count-or-seq)
       (= datatype :float64) (double-array elem-count-or-seq)
       :else

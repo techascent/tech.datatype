@@ -173,8 +173,7 @@
 
 
 (defmacro datatype->cast-fn
-  [src-dtype dest-dtype val]
-  (if (base/signed? src-dtype))
+  [dtype val]
   (condp = dtype
     :int8 `(unchecked-byte ~val)
     :int16 `(unchecked-short ~val)
@@ -182,60 +181,6 @@
     :int64 `(unchecked-long ~val)
     :float32 `(unchecked-float ~val)
     :float64 `(unchecked-double ~val)))
-
-(defmacro create-buffer->array-fn
-  "Create a function that assumes the types do not match
-and thus needs to cast."
-  [buf-cast-fn ary-cast-fn dest-cast-fn]
-  `(fn [src# src-offset# dest# dest-offset# n-elems#]
-     (let [src# (~buf-cast-fn src#)
-           src-offset# (long src-offset#)
-           dest# (~ary-cast-fn dest#)
-           dest-offset# (long dest-offset#)
-           n-elems# (long n-elems#)]
-       (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-              (aset dest# (+ dest-offset# idx#)
-                    (~dest-cast-fn (.get src# (+ src-offset# idx#))))))))
-
-
-(defmacro create-array->buffer-fn
-  [ary-cast-fn buf-cast-fn dest-cast-fn]
-  `(fn [src# src-offset# dest# dest-offset# n-elems#]
-     (let [src# (~ary-cast-fn src#)
-           src-offset# (long src-offset#)
-           dest# (~buf-cast-fn dest#)
-           dest-offset# (long dest-offset#)
-           n-elems# (long n-elems#)]
-       (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-              (.put dest# (+ dest-offset# idx#)
-                    (~dest-cast-fn (aget src# (+ src-offset# idx#))))))))
-
-
-(defmacro create-array->array-fn
-  [src-type-fn dest-type-fn dest-cast-fn]
-  `(fn [src# src-offset# dest# dest-offset# n-elems#]
-     (let [src# (~src-type-fn src#)
-           src-offset# (long src-offset#)
-           dest# (~dest-type-fn dest#)
-           dest-offset# (long dest-offset#)
-           n-elems# (long n-elems#)]
-       (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-              (aset dest# (+ dest-offset# idx#)
-                    (~dest-cast-fn (aget src# (+ src-offset# idx#))))))))
-
-
-
-(defmacro create-buffer->buffer-fn
-  [src-type-fn dest-type-fn dest-cast-fn]
-  `(fn [src# src-offset# dest# dest-offset# n-elems#]
-     (let [src# (~src-type-fn src#)
-           src-offset# (long src-offset#)
-           dest# (~dest-type-fn dest#)
-           dest-offset# (long dest-offset#)
-           n-elems# (long n-elems#)]
-       (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-              (.put dest# (+ dest-offset# idx#)
-                    (~dest-cast-fn (.get src# (+ src-offset# idx#))))))))
 
 
 ;;Copy is src-container<type>, offset, dst-container<type>, offset, num-elems -> nil
@@ -250,11 +195,13 @@ and thus needs to cast."
 (defn add-copy-operation
   "Add a new copy operation; the operation map must contain all n^2 datatype copy ops."
   [src-container-type dst-container-type copy-operation-map]
-  (when-not (= (set (keys copy-operation-map))
-               (set datatype-pairs))
-    (throw (ex-info "Not all datatype combinations are present in the copy operation map"
-                    {:missing (cset/difference (set datatype-pairs)
-                                               (set (keys copy-operation-map)))})))
+  (let [missing-ops (cset/difference (set datatype-pairs)
+                                     (set (keys copy-operation-map)))]
+    (when (seq missing-ops)
+      (throw (ex-info "Not all datatype combinations are present in the copy operation map"
+                      {:missing missing-ops
+                       :containers [src-container-type dst-container-type]
+                       :new-ops (keys copy-operation-map)}))))
   (swap! *copy-table* assoc [src-container-type dst-container-type] copy-operation-map))
 
 

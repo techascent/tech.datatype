@@ -20,6 +20,20 @@ Contains:
    :float32
    :float64])
 
+(def datatypes-set (set datatypes))
+
+(def unsigned-datatypes
+  [:uint8
+   :uint16
+   :uint32
+   :uint64])
+
+(def unsigned-datatype-set (set unsigned-datatypes))
+
+
+(defn signed? [dtype] (boolean (unsigned-datatype-set dtype)))
+
+
 (def datatype-sizes
   [1
    2
@@ -28,8 +42,12 @@ Contains:
    4
    8])
 
+(def unsigned-datatype-sizes
+  [1 2 4 8])
+
 (def datatype-size-map
-  (into {} (map vec (partition 2 (interleave datatypes datatype-sizes)))))
+  (into {} (map vec (partition 2 (interleave (concat datatypes unsigned-datatypes)
+                                             (concat datatype-sizes unsigned-datatype-sizes))))))
 
 (defn datatype->byte-size
   ^long [datatype] (get datatype-size-map datatype))

@@ -173,14 +173,15 @@
 
 
 (defmacro datatype->cast-fn
-  [dtype val]
+  [src-dtype dest-dtype val]
+  (if (base/signed? src-dtype))
   (condp = dtype
-    :int8 `(byte ~val)
-    :int16 `(short ~val)
-    :int32 `(int ~val)
-    :int64 `(long ~val)
-    :float32 `(float ~val)
-    :float64 `(double ~val)))
+    :int8 `(unchecked-byte ~val)
+    :int16 `(unchecked-short ~val)
+    :int32 `(unchecked-int ~val)
+    :int64 `(unchecked-long ~val)
+    :float32 `(unchecked-float ~val)
+    :float64 `(unchecked-double ~val)))
 
 (defmacro create-buffer->array-fn
   "Create a function that assumes the types do not match

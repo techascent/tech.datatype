@@ -8,9 +8,4 @@
                  [net.mikera/core.matrix "0.60.3"]]
 
 
-  :java-source-paths ["java"]
-
-  ;;If you want to run perf tests
-;  :aot [think.datatype.main]
-;  :main think.datatype.main
-)
+  :java-source-paths ["java"])

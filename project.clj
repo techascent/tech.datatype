@@ -1,6 +1,6 @@
-(defproject techascent/tech.datatype "0.4.3-SNAPSHOT"
+(defproject techascent/tech.datatype "0.4.3"
   :description "Library for efficient manipulation of contiguous mutable containers of primitive datatypes."
-  :url "http://github.com/thinktopic/think.datatype"
+  :url "http://github.com/tech-ascent/tech.datatype"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0"]
@@ -13,5 +13,4 @@
   ;;If you want to run perf tests
 ;  :aot [think.datatype.main]
 ;  :main think.datatype.main
-
-  :think/meta {:type :library :tags [:low-level]})
+)

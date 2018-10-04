@@ -50,6 +50,10 @@
   PContainerType
   (container-type [item] :java-array))
 
+(extend-type Object
+  PContainerType
+  (container-type [item] :object))
+
 
 ;;Conversion is src-container< type>, offset -> dst-container<type>, offset
 ;;Conversion map is a double-lookup of src-type to a map of dst-type to a function

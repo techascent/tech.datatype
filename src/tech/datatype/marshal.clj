@@ -209,82 +209,115 @@
   (swap! *copy-table* assoc [src-container-type dst-container-type] copy-operation-map))
 
 
-(defmacro build-core-copy-operations
-  []
-  {[:java-array :java-array]
-   (->> datatype-pairs
-        (map (fn [[src-dtype dst-dtype]]
-               [[src-dtype dst-dtype]
-                `(fn [src# src-offset# dst# dst-offset# n-elems#]
-                   (let [src# (datatype->array-cast-fn ~src-dtype src#)
-                         dst# (datatype->array-cast-fn ~dst-dtype dst#)
-                         src-offset# (long src-offset#)
-                         dst-offset# (long dst-offset#)
-                         n-elems# (long n-elems#)]
-                     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-                            (aset dst# (+ idx# dst-offset#)
-                                  (datatype->cast-fn
-                                   ~dst-dtype
-                                   (aget src# (+ idx# src-offset#)))))))]))
-        (into {}))
-   [:java-array :nio-buffer]
-   (->> datatype-pairs
-        (map (fn [[src-dtype dst-dtype]]
-               [[src-dtype dst-dtype]
-                `(fn [src# src-offset# dst# dst-offset# n-elems#]
-                   (let [src# (datatype->array-cast-fn ~src-dtype src#)
-                         dst# (datatype->buffer-cast-fn ~dst-dtype dst#)
-                         src-offset# (long src-offset#)
-                         dst-offset# (long dst-offset#)
-                         n-elems# (long n-elems#)]
-                     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-                            (.put dst# (+ idx# dst-offset#)
-                                  (datatype->cast-fn
-                                   ~dst-dtype
-                                   (aget src# (+ idx# src-offset#)))))))]))
-        (into {}))
-   [:nio-buffer :java-array]
-   (->> datatype-pairs
-        (map (fn [[src-dtype dst-dtype]]
-               [[src-dtype dst-dtype]
-                `(fn [src# src-offset# dst# dst-offset# n-elems#]
-                   (let [src# (datatype->buffer-cast-fn ~src-dtype src#)
-                         dst# (datatype->array-cast-fn ~dst-dtype dst#)
-                         src-offset# (long src-offset#)
-                         dst-offset# (long dst-offset#)
-                         n-elems# (long n-elems#)]
-                     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-                            (aset dst# (+ idx# dst-offset#)
-                                  (datatype->cast-fn
-                                   ~dst-dtype
-                                   (.get src# (+ idx# src-offset#)))))))]))
-        (into {}))
-   [:nio-buffer :nio-buffer]
-   (->> datatype-pairs
-        (map (fn [[src-dtype dst-dtype]]
-               [[src-dtype dst-dtype]
-                `(fn [src# src-offset# dst# dst-offset# n-elems#]
-                   (let [src# (datatype->buffer-cast-fn ~src-dtype src#)
-                         dst# (datatype->buffer-cast-fn ~dst-dtype dst#)
-                         src-offset# (long src-offset#)
-                         dst-offset# (long dst-offset#)
-                         n-elems# (long n-elems#)]
-                     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-                            (.put dst# (+ idx# dst-offset#)
-                                  (datatype->cast-fn
-                                   ~dst-dtype
-                                   (.get src# (+ idx# src-offset#)))))))]))
-        (into {}))})
+(defmacro array-array-copy
+  [src-dtype dst-dtype src src-offset dst dst-offset n-elems]
+  `(let [src# (datatype->array-cast-fn ~src-dtype ~src)
+         dst# (datatype->array-cast-fn ~dst-dtype ~dst)
+         src-offset# (long ~src-offset)
+         dst-offset# (long ~dst-offset)
+         n-elems# (long ~n-elems)]
+     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
+            (aset dst# (+ idx# dst-offset#)
+                  (datatype->cast-fn
+                   ~dst-dtype
+                   (aget src# (+ idx# src-offset#)))))))
 
 
-(def copy-ops (build-core-copy-operations))
+(defmacro array-buffer-copy
+  [src-dtype dst-dtype src src-offset dst dst-offset n-elems]
+  `(let [src# (datatype->array-cast-fn ~src-dtype ~src)
+         dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)
+         src-offset# (long ~src-offset)
+         dst-offset# (long ~dst-offset)
+         n-elems# (long ~n-elems)]
+     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
+            (.put dst# (+ idx# dst-offset#)
+                  (datatype->cast-fn
+                   ~dst-dtype
+                   (aget src# (+ idx# src-offset#)))))))
 
 
-(doseq [[container-pair copy-map] copy-ops]
-  (add-copy-operation (first container-pair)
-                      (second container-pair)
-                      copy-map))
+(defmacro buffer-array-copy
+  [src-dtype dst-dtype src src-offset dst dst-offset n-elems]
+  `(let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
+         dst# (datatype->array-cast-fn ~dst-dtype ~dst)
+         src-offset# (long ~src-offset)
+         dst-offset# (long ~dst-offset)
+         n-elems# (long ~n-elems)]
+     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
+            (aset dst# (+ idx# dst-offset#)
+                  (datatype->cast-fn
+                   ~dst-dtype
+                   (.get src# (+ idx# src-offset#)))))))
 
+
+(defmacro buffer-buffer-copy
+  [src-dtype dst-dtype src src-offset dst dst-offset n-elems]
+  `(let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
+         dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)
+         src-offset# (long ~src-offset)
+         dst-offset# (long ~dst-offset)
+         n-elems# (long ~n-elems)]
+     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
+            (.put dst# (+ idx# dst-offset#)
+                  (datatype->cast-fn
+                   ~dst-dtype
+                   (.get src# (+ idx# src-offset#)))))))
+
+
+(defmacro generate-core-copy-dtype-dst-dispatch
+  [copy-macro src-datatype src src-offset dst dst-offset n-elems]
+  `(case (base/get-datatype ~dst)
+     ~@(->> (for [dst-datatype base/datatypes]
+              `(~dst-datatype (~copy-macro ~src-datatype ~dst-datatype
+                               ~src ~src-offset ~dst ~dst-offset ~n-elems)))
+            (apply concat))))
+
+
+(defmacro generate-core-copy-dtype-dispatch
+  [copy-macro src src-offset dst dst-offset n-elems]
+  `(case (base/get-datatype ~src)
+     ~@(->> (for [src-datatype base/datatypes]
+              `(~src-datatype (generate-core-copy-dtype-dst-dispatch
+                               ~copy-macro ~src-datatype
+                               ~src ~src-offset ~dst ~dst-offset
+                               ~n-elems)))
+            (apply concat))))
+
+
+(defmacro generate-core-copy-op
+  [src src-offset dst dst-offset n-elems]
+  `(case (container-type ~src)
+     :java-array
+     (case (container-type ~dst)
+       :java-array (generate-core-copy-dtype-dispatch array-array-copy
+                                                      ~src ~src-offset
+                                                      ~dst ~dst-offset ~n-elems)
+       :nio-buffer (generate-core-copy-dtype-dispatch array-buffer-copy
+                                                      ~src ~src-offset
+                                                      ~dst ~dst-offset ~n-elems))
+     :nio-buffer
+     (case (container-type ~dst)
+       :java-array (generate-core-copy-dtype-dispatch buffer-array-copy
+                                                      ~src ~src-offset
+                                                      ~dst ~dst-offset ~n-elems)
+       :nio-buffer (generate-core-copy-dtype-dispatch buffer-buffer-copy
+                                                      ~src ~src-offset
+                                                      ~dst ~dst-offset ~n-elems))))
+
+(defn core-copy-operation
+  [src src-offset dst dst-offset n-elems]
+  (generate-core-copy-op src src-offset dst dst-offset n-elems))
+
+
+(def copy-map
+  (->> (map vector datatype-pairs (repeat core-copy-operation))
+       (into {})))
+
+(->> (for [src-container [:nio-buffer :java-array]
+           dst-container [:nio-buffer :java-array]]
+       (add-copy-operation src-container dst-container copy-map))
+     dorun)
 
 (defn copy!
   [src src-offset dst dst-offset n-elems]

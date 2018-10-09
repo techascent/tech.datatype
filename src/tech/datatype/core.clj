@@ -1,9 +1,9 @@
 (ns tech.datatype.core
-  "Generalized efficient manipulations of sequences of primitive datatype.
-Includes specializations for java arrays, array views (subsection of an array)
-and nio buffers.  There are specializations to allow implementations to provide
-efficient full typed copy functions when the types can be ascertained.  Usually
-this involves a double-dispatch on both the src and dest arguments:
+  "Generalized efficient manipulations of sequences of primitive datatype.  Includes
+  specializations for java arrays and nio buffers.  There are specializations to allow
+  implementations to provide efficient full typed copy functions when the types can be
+  ascertained.  Usually this involves a double-dispatch on both the src and dest
+  arguments:
 
   https://en.wikipedia.org/wiki/Double_dispatch.
 
@@ -20,9 +20,7 @@ this involves a double-dispatch on both the src and dest arguments:
             [tech.datatype.base :as base])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
-           [mikera.arrayz INDArray]
-           [tech.datatype DoubleArrayView FloatArrayView
-            LongArrayView IntArrayView ShortArrayView ByteArrayView]))
+           [mikera.arrayz INDArray]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -46,16 +44,6 @@ this involves a double-dispatch on both the src and dest arguments:
   (base/ecount item))
 
 
-(defn ->view
-  [& args]
-  (apply base/->view args))
-
-
-(defn make-view
-  [datatype item-count-or-seq]
-  (base/make-view datatype item-count-or-seq))
-
-
 (defn copy!
   [& args]
   (apply base/copy! args))
@@ -75,10 +63,6 @@ this involves a double-dispatch on both the src and dest arguments:
   [raw-data ary-target target-offset]
   (base/copy-raw->item! raw-data ary-target target-offset))
 
-
-(defn ->view
-  [& args]
-  (apply base/->view args))
 
 
 (defn set-value! [item offset value]
@@ -145,122 +129,6 @@ this involves a double-dispatch on both the src and dest arguments:
       (aset ary# (+ offset# idx#) val#))))
 
 
-(extend-type ByteArrayView
-  base/PDatatype
-  (get-datatype [item] :int8)
-  base/PAccess
-  (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset)
-                                                           (.offset item)) (byte value)))
-  (set-constant! [item in-offset value elem-count]
-    (set-array-constant-impl (.data item) (+ (long in-offset) (.offset item))
-                             value byte elem-count))
-  (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
-  mp/PElementCount
-  (element-count [item] (.length item))
-  base/PView
-  (->view-impl [item n-offset length] (ByteArrayView. (.data item)
-                                                      (+ (.offset item) (long n-offset))
-                                                      length)))
-
-(extend-type ShortArrayView
-  base/PDatatype
-  (get-datatype [item] :int16)
-  base/PAccess
-  (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
-                                           (short value)))
-  (set-constant! [item in-offset value elem-count]
-    (set-array-constant-impl (.data item) (+ (long in-offset) (.offset item))
-                             value short elem-count))
-  (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
-  mp/PElementCount
-  (element-count [item] (.length item))
-  base/PView
-  (->view-impl [item n-offset length] (ShortArrayView. (.data item) (+ (.offset item)
-                                                                       (long n-offset))
-                                                       length)))
-
-(extend-type IntArrayView
-  base/PDatatype
-  (get-datatype [item] :int32)
-  base/PAccess
-  (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
-                                           (int value)))
-  (set-constant! [item in-offset value elem-count]
-    (set-array-constant-impl (.data item) (+ (long in-offset) (.offset item))
-                             value int elem-count))
-  (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
-  mp/PElementCount
-  (element-count [item] (.length item))
-  base/PView
-  (->view-impl [item n-offset length] (IntArrayView. (.data item) (+ (.offset item)
-                                                                     (long n-offset)) length)))
-
-(extend-type LongArrayView
-  base/PDatatype
-  (get-datatype [item] :int64)
-  base/PAccess
-  (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
-                                           (long value)))
-  (set-constant! [item in-offset value elem-count]
-    (set-array-constant-impl (.data item) (+ (long in-offset) (.offset item)) value
-                             long elem-count))
-  (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
-  mp/PElementCount
-  (element-count [item] (.length item))
-  base/PView
-  (->view-impl [item n-offset length] (LongArrayView. (.data item) (+ (.offset item)
-                                                                      (long n-offset)) length)))
-
-(extend-type FloatArrayView
-  base/PDatatype
-  (get-datatype [item] :float32)
-  base/PAccess
-  (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
-                                           (float value)))
-  (set-constant! [item in-offset value elem-count]
-    (set-array-constant-impl (.data item) (+ (long in-offset) (.offset item)) value
-                             float elem-count))
-  (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
-  mp/PElementCount
-  (element-count [item] (.length item))
-  base/PView
-  (->view-impl [item n-offset length] (FloatArrayView. (.data item) (+ (.offset item)
-                                                                       (long n-offset)) length)))
-
-(extend-type DoubleArrayView
-  base/PDatatype
-  (get-datatype [item] :float64)
-  base/PAccess
-  (set-value! [item in-offset value] (aset (.data item) (+ (long in-offset) (.offset item))
-                                           (double value)))
-  (set-constant! [item in-offset value elem-count]
-    (set-array-constant-impl (.data item) (+ (long in-offset) (.offset item)) value
-                             double elem-count))
-  (get-value [item in-offset] (aget (.data item) (+ (.offset item) (long in-offset))))
-  mp/PElementCount
-  (element-count [item] (.length item))
-  base/PView
-  (->view-impl [item n-offset n-length] (DoubleArrayView. (.data item) (+ (.offset item)
-                                                                          (long n-offset))
-                                                          n-length)))
-
-
-;;Macros to use to use the sub views as efficiently as one uses arrays.
-(defmacro v-aset
-  [array-view item-offset value]
-  `(.set ~array-view ~item-offset ~value))
-
-
-(defmacro v-aget
-  [array-view item-offset]
-  `(.get ~array-view ~item-offset))
-
-
-(defmacro v-alength
-  [array-view]
-  `(.length ~array-view))
-
-
 (extend-type (Class/forName "[B")
   base/PDatatype
   (get-datatype [item] :int8)
@@ -270,8 +138,6 @@ this involves a double-dispatch on both the src and dest arguments:
     (let [^bytes item item]
       (set-array-constant-impl item offset value byte elem-count)))
   (get-value [item ^long offset] (aget ^bytes item offset))
-  base/PView
-  (->view-impl [item offset length] (ByteArrayView. item offset length))
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset]
     (base/raw-dtype-copy! raw-data ary-target target-offset)))
@@ -285,8 +151,6 @@ this involves a double-dispatch on both the src and dest arguments:
     (let [^shorts item item]
       (set-array-constant-impl item offset value short elem-count)))
   (get-value [item ^long offset] (aget ^shorts item offset))
-  base/PView
-  (->view-impl [item offset length] (ShortArrayView. item offset length))
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset]
     (base/raw-dtype-copy! raw-data ary-target target-offset)))
@@ -300,8 +164,6 @@ this involves a double-dispatch on both the src and dest arguments:
     (let [^ints item item]
       (set-array-constant-impl item offset value int elem-count)))
   (get-value [item ^long offset] (aget ^ints item offset))
-  base/PView
-  (->view-impl [item offset length] (IntArrayView. item offset length))
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset]
     (base/raw-dtype-copy! raw-data ary-target target-offset)))
@@ -315,8 +177,6 @@ this involves a double-dispatch on both the src and dest arguments:
     (let [^longs item item]
       (set-array-constant-impl item offset value long elem-count)))
   (get-value [item ^long offset] (aget ^longs item offset))
-  base/PView
-  (->view-impl [item offset length] (LongArrayView. item offset length))
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset]
     (base/raw-dtype-copy! raw-data ary-target target-offset)))
@@ -330,8 +190,6 @@ this involves a double-dispatch on both the src and dest arguments:
     (let [^floats item item]
       (set-array-constant-impl item offset value float elem-count)))
   (get-value [item ^long offset] (aget ^floats item offset))
-  base/PView
-  (->view-impl [item offset length] (FloatArrayView. item offset length))
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset]
     (base/raw-dtype-copy! raw-data ary-target target-offset)))
@@ -345,8 +203,6 @@ this involves a double-dispatch on both the src and dest arguments:
     (let [^doubles item item]
       (set-array-constant-impl item offset value double elem-count)))
   (get-value [item ^long offset] (aget ^doubles item offset))
-  base/PView
-  (->view-impl [item offset length] (DoubleArrayView. item offset length))
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset]
     (base/raw-dtype-copy! raw-data ary-target target-offset)))

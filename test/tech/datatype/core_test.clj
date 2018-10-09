@@ -3,8 +3,7 @@
             [tech.datatype.core :as dtype]
             [tech.datatype.base :as base]
             [clojure.core.matrix :as m]
-            [tech.datatype.util :as util])
-  (:import [tech.datatype FloatArrayView]))
+            [tech.datatype.util :as util]))
 
 
 (deftest raw-copy-with-mutable-lazy-sequence
@@ -38,20 +37,8 @@
     (is (m/equals [0 0 0 0 2 3 4 5 0 0]
                   (vec retval)))))
 
-(defn make-offset-view
-  [dtype elems-or-len]
-  (let [temp-view (dtype/make-array-of-type dtype elems-or-len)
-        retval (dtype/->view
-                (dtype/make-array-of-type dtype (+ (dtype/ecount temp-view) 100))
-                100
-                (dtype/ecount temp-view))]
-    (dtype/copy! temp-view 0 retval 0 (dtype/ecount temp-view))
-    retval))
 
-
-(def create-functions [dtype/make-array-of-type
-                       dtype/make-view
-                       make-offset-view])
+(def create-functions [dtype/make-array-of-type])
 
 
 
@@ -71,3 +58,16 @@
       (dtype/copy-raw->item! src-data dst-data 0))
     (is (= (vec (float-array (flatten (map #(repeat 10 %) (range 5)))))
            (vec dst-data)))))
+
+
+(def demo-graph {:red    {:green 10, :blue   5, :orange 8},
+                 :green  {:red 10,   :blue   3},
+                 :blue   {:green 3,  :red    5, :purple 7},
+                 :purple {:blue 7,   :orange 2},
+                 :orange {:purple 2, :red 2}
+                 :island {}
+                 :mainland {:island 2}})
+
+(def demo-edge-pairs (->> demo-graph
+                          (mapcat (fn [[k v-map]]
+                                    (map vector (repeat k) (keys v-map))))))

@@ -180,26 +180,6 @@ Contains:
     dest))
 
 
-(defprotocol PView
-  (->view-impl [item offset elem-count]))
-
-
-(defn ->view
-  ([item ^long offset ^long elem-count]
-   (let [item-ecount (long (m/ecount item))]
-     (when-not (>= (- item-ecount offset) elem-count)
-       (throw (ex-info "View out of range" {:required-count (+ offset elem-count)
-                                            :actual-count item-ecount})))
-     (->view-impl item offset elem-count)))
-  ([item]
-   (->view item 0 (m/ecount item))))
-
-
-(defn make-view
-  [datatype item-count-or-seq]
-  (->view (make-array-of-type datatype item-count-or-seq)))
-
-
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."
   (copy-raw->item! [raw-data ary-target target-offset]))

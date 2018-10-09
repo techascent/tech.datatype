@@ -5,10 +5,7 @@
             [tech.datatype.base :as base]
             [clojure.set :as cset])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
-            FloatBuffer DoubleBuffer Buffer]
-           [tech.datatype DoubleArrayView FloatArrayView
-            LongArrayView IntArrayView ShortArrayView ByteArrayView
-            ArrayView ArrayViewBase]))
+            FloatBuffer DoubleBuffer Buffer]))
 
 ;;Some utility items to make the macros easier.
 (set! *warn-on-reflection* true)
@@ -18,9 +15,6 @@
 (defprotocol PContainerType
   (container-type [item]))
 
-(extend-type ArrayViewBase
-  PContainerType
-  (container-type [item] :array-view))
 
 (extend-type Buffer
   PContainerType
@@ -59,21 +53,7 @@
 ;;Conversion map is a double-lookup of src-type to a map of dst-type to a function
 ;;that converts src type to dst type.
 (defonce ^:dynamic *conversion-table*
-  (atom {:array-view
-         {:java-array
-          (fn [src-item src-offset]
-            (let [src-dtype (base/get-datatype src-item)
-                  src-offset (long src-offset)
-                  src-item ^ArrayViewBase src-item
-                  view-offset (.offset src-item)
-                  dst-item (condp = src-dtype
-                             :int8 (.data ^ByteArrayView src-item)
-                             :int16 (.data ^ShortArrayView src-item)
-                             :int32 (.data ^IntArrayView src-item)
-                             :int64 (.data ^LongArrayView src-item)
-                             :float32 (.data ^FloatArrayView src-item)
-                             :float64 (.data ^DoubleArrayView src-item))]
-              [dst-item (+ src-offset view-offset)]))}}))
+  (atom {}))
 
 
 (defn identity-conversion
@@ -124,25 +104,6 @@
 (defn as-double-array
   ^doubles [obj] obj)
 
-(defn as-byte-array-view
-  ^ByteArrayView [obj] obj)
-
-(defn as-short-array-view
-  ^ShortArrayView [obj] obj)
-
-(defn as-int-array-view
-  ^IntArrayView [obj] obj)
-
-(defn as-long-array-view
-  ^LongArrayView [obj] obj)
-
-(defn as-float-array-view
-  ^FloatArrayView [obj] obj)
-
-(defn as-double-array-view
-  ^DoubleArrayView [obj] obj)
-
-
 (defmacro datatype->array-cast-fn
   [dtype buf]
   (condp = dtype
@@ -153,16 +114,6 @@
     :float32 `(as-float-array ~buf)
     :float64 `(as-double-array ~buf)))
 
-
-(defmacro datatype->view-cast-fn
-  [dtype buf]
-  (condp = dtype
-    :int8 `(as-byte-array-view ~buf)
-    :int16 `(as-short-array-view ~buf)
-    :int32 `(as-int-array-view ~buf)
-    :int64 `(as-long-array-view ~buf)
-    :float32 `(as-float-array-view ~buf)
-    :float64 `(as-double-array-view ~buf)))
 
 
 (defmacro datatype->buffer-cast-fn
@@ -336,11 +287,11 @@
                    ;;Then use the copy entry along with the conversion
                    (let [[src-conv-cont src-conv] src-conversion
                          [dst-conv-cont dst-conv] dst-conversion]
-                     (when-let [table-copy-map (get @*copy-table* [src-conv-cont dst-conv-cont])]
+                     (when-let [table-copy-map (get @*copy-table*
+                                                    [src-conv-cont dst-conv-cont])]
                        [table-copy-map src-conv dst-conv])))
                  (remove nil?)
                  first)))]
-
     (if-not copy-fn-and-conversions
       ;;Use slow path if we don't have a good marshalling pathway
       (base/generic-copy! src src-offset dst dst-offset n-elems)

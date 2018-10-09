@@ -23,8 +23,8 @@ efficient full typed copy functions when the types can be ascertained.
 ```clojure
 (:require [tech.datatype.core :as dtype])
 
-(let [ary (dtype/make-array-of-type :float (range 10))
-      buf (dtype/make-buffer :double 10)]
+(let [ary (dtype/make-array-of-type :float32 (range 10))
+      buf (dtype/make-array-of-type :float64 10)]
   ;;copy starting at position 2 of ary into position 4 of buf 4 elements
   (dtype/copy! ary 2 buf 4 4))
   ;;buf now has [0 0 0 0 2 3 4 5 0 0]

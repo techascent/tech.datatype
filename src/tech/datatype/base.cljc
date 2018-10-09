@@ -148,7 +148,7 @@ Contains:
 
 (defn copy!
   "copy elem-count src items to dest items"
-  ([src src-offset dest dest-offset elem-count]
+  ([src src-offset dest dest-offset elem-count options]
    (let [src-dtype (get-datatype src)
          src-offset (long src-offset)
          dest-dtype (get-datatype dest)
@@ -156,8 +156,10 @@ Contains:
          elem-count (long elem-count)]
      (shared-macros/check-range src src-offset elem-count)
      (shared-macros/check-range dest dest-offset elem-count)
-     ((get-copy-fn dest dest-offset) src src-offset elem-count)
+     ((get-copy-fn dest dest-offset) src src-offset elem-count options)
      dest))
+  ([src src-offset dst dst-offset elem-count]
+   (copy! src src-offset dst dst-offset elem-count {:unchecked? false}))
   ([src dest]
    (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))
 
@@ -166,7 +168,7 @@ Contains:
 
 
 (defn generic-copy!
-  [item item-offset dest dest-offset elem-count]
+  [item item-offset dest dest-offset elem-count options]
   (when *error-on-slow-path*
     (throw (ex-info "should not hit slow path"
                     {:src-type (type item)

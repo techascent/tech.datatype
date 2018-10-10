@@ -12,6 +12,12 @@
 (set! *warn-on-reflection* true)
 
 
+(defprotocol PToBuffer
+  "Take a 'thing' and convert it to a nio buffer."
+  (->buffer [item]))
+
+
+
 (defn raw-dtype-copy!
   [raw-data ary-target ^long target-offset options]
   (base/copy! raw-data 0 ary-target target-offset (base/ecount raw-data) options)
@@ -86,24 +92,9 @@
     :float64 (double-array elem-count-or-seq)))
 
 
-(defn array->buffer
-  [src-ary]
-  (when-not (= :java-array (base/container-type src-ary))
-    (throw (ex-info "Source data appears not to be a java array"
-                    {:src-data src-ary
-                     :src-container-type (base/container-type src-ary)})))
-  (case (base/get-datatype src-ary)
-    :int8 (ByteBuffer/wrap ^bytes src-ary)
-    :int16 (ShortBuffer/wrap ^shorts src-ary)
-    :int32 (IntBuffer/wrap ^ints src-ary)
-    :int64 (LongBuffer/wrap ^longs src-ary)
-    :float32 (FloatBuffer/wrap ^floats src-ary)
-    :float64 (DoubleBuffer/wrap ^doubles src-ary)))
-
-
 (defn make-buffer-of-type
   [datatype elem-count-or-seq]
-  (array->buffer (make-array-of-type datatype elem-count-or-seq)))
+  (->buffer (make-array-of-type datatype elem-count-or-seq)))
 
 
 ;;Provide type hinted access to container
@@ -226,6 +217,17 @@
       :float64 `(unchecked-double ~val))))
 
 
+(defmacro datatype->buffer-creation
+  [datatype src-ary]
+  (case datatype
+    :int8 `(ByteBuffer/wrap ^bytes ~src-ary)
+    :int16 `(ShortBuffer/wrap ^shorts ~src-ary)
+    :int32 `(IntBuffer/wrap ^ints ~src-ary)
+    :int64 `(LongBuffer/wrap ^longs ~src-ary)
+    :float32 `(FloatBuffer/wrap ^floats ~src-ary)
+    :float64 `(DoubleBuffer/wrap ^doubles ~src-ary)))
+
+
 (defmacro implement-array-type
   [array-class datatype]
   `(clojure.core/extend
@@ -253,7 +255,10 @@
                          (let [copy-len# (alength (datatype->array-cast-fn ~datatype raw-data#))]
                            (base/copy! raw-data# 0 ary-target# target-offset#
                                        copy-len# options#)
-                           [ary-target# (+ (long target-offset#) copy-len#)]))}))
+                           [ary-target# (+ (long target-offset#) copy-len#)]))}
+     PToBuffer
+     {:->buffer (fn [src-ary#]
+                  (datatype->buffer-creation ~datatype src-ary#))}))
 
 
 (implement-array-type (Class/forName "[B") :int8)
@@ -289,7 +294,9 @@
                          (let [copy-len# (.remaining (datatype->buffer-cast-fn ~datatype raw-data#))]
                            (base/copy! raw-data# 0 ary-target# target-offset#
                                        copy-len# options#)
-                           [ary-target# (+ (long target-offset#) copy-len#)]))}))
+                           [ary-target# (+ (long target-offset#) copy-len#)]))}
+     PToBuffer
+     {:->buffer (fn [item#] item#)}))
 
 
 (implement-buffer-type ByteBuffer :int8)
@@ -308,10 +315,7 @@
 (base/add-container-conversion-fn
  :java-array :nio-buffer
  (fn [dst-type src-ary]
-   (when-not (= dst-type :nio-buffer)
-     (throw (ex-info "nio buffer conversion isn't possible"
-                     {:dst-type dst-type})))
-   [(array->buffer src-ary) 0]))
+   [(->buffer src-ary) 0]))
 
 
 (defmacro buffer-buffer-copy

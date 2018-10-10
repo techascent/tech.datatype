@@ -78,8 +78,12 @@
         src-buf (FloatBuffer/wrap src-data)
         dst-buf (FloatBuffer/wrap dst-data)
         buffer-copy (fn []
-                      (let [src-buf (.slice src-buf)
-                            dst-buf (.slice dst-buf)]
+                      (let [
+                            ;; Curiously, uncommenting this gets a far faster result.
+                            ;; But it isn't at all practical.
+                            ;; src-buf (FloatBuffer/wrap src-data)
+                            ;; dst-buf (FloatBuffer/wrap dst-data)
+                            ]
                         (c-for [idx (int 0) (< idx num-items) (inc idx)]
                                (.put dst-buf idx (.get src-buf idx)))))
 

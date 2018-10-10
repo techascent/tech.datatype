@@ -29,7 +29,7 @@
          src-offset# (long ~src-offset)
          dst-offset# (long ~dst-offset)
          n-elems# (long ~n-elems)]
-     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
+     (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
             (.put dst# (+ idx# dst-offset#)
                   (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                                (.get src# (+ idx# src-offset#)))))))

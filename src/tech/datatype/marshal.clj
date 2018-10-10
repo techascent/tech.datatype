@@ -136,10 +136,10 @@
          src-offset# (long ~src-offset)
          dst-offset# (long ~dst-offset)
          n-elems# (long ~n-elems)]
-     (c-for [idx# 0 (< idx# n-elems#) (inc idx#)]
-            (.put dst# (+ idx# dst-offset#)
+     (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
+            (.put dst# (unchecked-add idx# dst-offset#)
                   (datatype->cast-fn ~src-dtype ~dst-dtype
-                                     (.get src# (+ idx# src-offset#)))))))
+                                     (.get src# (unchecked-add idx# src-offset#)))))))
 
 
 (defmacro generate-core-copy-dtype-dst-dispatch

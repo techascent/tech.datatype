@@ -17,6 +17,7 @@
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m]
             [tech.datatype.marshal :as marshal]
+            [tech.datatype.marshal-unchecked]
             [tech.datatype.base :as base])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]

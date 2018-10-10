@@ -2,8 +2,12 @@
   (:require [clojure.test :refer :all]
             [tech.datatype.core :as dtype]
             [tech.datatype.base :as base]
+            [tech.datatype.marshal :as marshal]
+            [tech.datatype.marshal-unchecked]
             [clojure.core.matrix :as m]
-            [tech.datatype.util :as util]))
+            [tech.datatype.util :as util]
+            [clojure.core.matrix.macros :refer [c-for]])
+  (:import [java.nio FloatBuffer]))
 
 
 (deftest raw-copy-with-mutable-lazy-sequence
@@ -60,14 +64,50 @@
            (vec dst-data)))))
 
 
-(def demo-graph {:red    {:green 10, :blue   5, :orange 8},
-                 :green  {:red 10,   :blue   3},
-                 :blue   {:green 3,  :red    5, :purple 7},
-                 :purple {:blue 7,   :orange 2},
-                 :orange {:purple 2, :red 2}
-                 :island {}
-                 :mainland {:island 2}})
+(set! *warn-on-reflection* true)
 
-(def demo-edge-pairs (->> demo-graph
-                          (mapcat (fn [[k v-map]]
-                                    (map vector (repeat k) (keys v-map))))))
+
+(defn nio-buffer-best-case
+  []
+  (let [num-items (long 100000)
+        src-data (float-array (range num-items))
+        dst-data (float-array num-items)
+        array-copy (fn []
+                     (c-for [idx (int 0) (< idx num-items) (inc idx)]
+                            (aset dst-data idx (aget src-data idx))))
+        src-buf (FloatBuffer/wrap src-data)
+        dst-buf (FloatBuffer/wrap dst-data)
+        buffer-copy (fn []
+                      (let [src-buf (.slice src-buf)
+                            dst-buf (.slice dst-buf)]
+                        (c-for [idx (int 0) (< idx num-items) (inc idx)]
+                               (.put dst-buf idx (.get src-buf idx)))))
+
+        dtype-copy (fn []
+                     (dtype/copy! src-buf 0 dst-buf 0 num-items))
+
+        unchecked-dtype-copy (fn []
+                               (dtype/copy! src-buf 0 dst-buf 0 num-items {:unchecked? true}))
+
+        raw-copy (get @marshal/*copy-table* [:nio-buffer :nio-buffer :float32 :float32 true])
+        raw-dtype-copy (fn []
+                         (raw-copy src-buf 0 dst-buf 0 num-items {:unchecked? true}))
+        generic-copy (fn []
+                       (base/generic-copy! src-buf 0 dst-buf 0 num-items {:unchecked? true}))
+        fns {:array-copy array-copy
+             :buffer-copy buffer-copy
+             :dtype-copy dtype-copy
+             :unchecked-dtype-copy unchecked-dtype-copy
+             :raw-copy raw-dtype-copy
+             :generic-copy generic-copy}
+        run-timed-fns (fn []
+                        (->> fns
+                             (map (fn [[fn-name time-fn]]
+                                    [fn-name (with-out-str
+                                               (time
+                                                (dotimes [iter 400]
+                                                  (time-fn))))]))
+                             (into {})))
+        warmup (run-timed-fns)
+        times (run-timed-fns)]
+    times))

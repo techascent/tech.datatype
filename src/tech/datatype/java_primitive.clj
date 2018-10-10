@@ -12,7 +12,7 @@
 (set! *warn-on-reflection* true)
 
 
-(defn- raw-dtype-copy!
+(defn raw-dtype-copy!
   [raw-data ary-target ^long target-offset options]
   (base/copy! raw-data 0 ary-target target-offset (base/ecount raw-data) options)
   [ary-target (+ target-offset ^long (base/ecount raw-data))])

@@ -20,4 +20,7 @@
       (is (= [-1 -2 0 1 2 3] (vec casted-bytes))))
     ;;The item-by-item interfaces always check
     (is (thrown? Throwable (dtype/set-value! dst-buffer 2 -1)))
-    (is (thrown? Throwable (dtype/set-value! dst-buffer 2 256)))))
+    (is (thrown? Throwable (dtype/set-value! dst-buffer 2 256)))
+    (let [new-buf (float-array n-elems)]
+      (dtype/copy! dst-buffer new-buf)
+      (is (= test-data (mapv long new-buf))))))

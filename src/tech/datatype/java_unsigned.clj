@@ -166,8 +166,7 @@
 
 (defmacro datatype->cast-fn
   [src-dtype dst-dtype val]
-  (if (or (= src-dtype dst-dtype)
-          (direct-conversion? src-dtype dst-dtype))
+  (if (= src-dtype dst-dtype)
     val
     (case dst-dtype
       :uint8 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
@@ -184,9 +183,11 @@
 (defmacro datatype->jvm-cast-fn
   [src-dtype dst-dtype val]
   (let [jvm-type (datatype->jvm-datatype dst-dtype)]
-    `(primitive/datatype->unchecked-cast-fn
-      :ignored ~jvm-type
-      (datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
+    (if (= jvm-type dst-dtype)
+      `(primitive/datatype->cast-fn ~src-dtype ~dst-dtype ~val)
+      `(primitive/datatype->unchecked-cast-fn
+        :ignored ~jvm-type
+        (datatype->cast-fn ~src-dtype ~dst-dtype ~val)))))
 
 
 (defmacro datatype->unchecked-jvm-cast-fn
@@ -194,7 +195,7 @@
   (let [jvm-type (datatype->jvm-datatype dst-dtype)]
     `(primitive/datatype->unchecked-cast-fn
       :ignored ~jvm-type
-      (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
+      (datatype->unchecked-cast-fn :ignored ~src-dtype ~val))))
 
 
 (defmacro casting
@@ -329,9 +330,7 @@
                 (.put dst# (+ idx# dst-offset#)
                       (datatype->unchecked-jvm-cast-fn
                        ~src-dtype ~dst-dtype
-                       (datatype->unchecked-cast-fn
-                        :ignored ~src-dtype
-                        (.get src# (+ idx# src-offset#))))))))
+                       (.get src# (+ idx# src-offset#)))))))
     `(fn [src# src-offset# dst# dst-offset# elem-count# options#]
        (let [src# (primitive/datatype->buffer-cast-fn
                    ~(datatype->jvm-datatype src-dtype)
@@ -344,9 +343,9 @@
              elem-count# (long elem-count#)]
          (c-for [idx# 0 (< idx# elem-count#) (+ idx# 1)]
                 (.put dst# (+ idx# dst-offset#)
-                      (datatype->unchecked-jvm-cast-fn
+                      (datatype->jvm-cast-fn
                        ~src-dtype ~dst-dtype
-                       (datatype->cast-fn
+                       (datatype->unchecked-cast-fn
                         :ignored ~src-dtype
                         (.get src# (+ idx# src-offset#))))))))))
 

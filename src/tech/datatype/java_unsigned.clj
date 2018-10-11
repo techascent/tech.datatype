@@ -297,7 +297,6 @@
 
 (defn- raw-copy
   [src src-offset dst dst-offset elem-count options]
-  (println "trivial conversions")
   (base/copy! (primitive/->buffer-backing-store src) src-offset
               (primitive/->buffer-backing-store dst) dst-offset
               elem-count options))

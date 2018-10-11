@@ -125,11 +125,45 @@ of operations."
   (primitive/make-array-of-type datatype elem-count-or-seq))
 
 
-(defn array->buffer
-  [src-ary]
-  (primitive/->buffer-backing-store src-ary))
+(defn ->array
+  "Returns nil of item does not share a backing store with an array."
+  [item]
+  (primitive/->array item))
 
+
+(defn ->array-copy
+  "Copy the data into an array that can correctly hold the datatype.  This
+  array may not have the same datatype as the source item"
+  [item]
+  (primitive/->array-copy item))
 
 (defn make-buffer-of-type
   [datatype elem-count-or-seq]
   (primitive/make-buffer-of-type datatype elem-count-or-seq))
+
+
+(defn ->buffer-backing-store
+  "Convert to nio buffer that stores the data for the object.  This may have
+  a different datatype than the object, so for instance the backing store for
+  the uint8 datatype is a nio buffer of type int8."
+  [src-ary]
+  (primitive/->buffer-backing-store src-ary))
+
+
+(defn make-typed-buffer
+  "Support for unsigned datatypes comes via the typed buffer mechanism"
+  [datatype elem-count-or-seq]
+  ;;Dynamic require because this auto-generates quite a bit of code and
+  ;;I think most people will not need this.
+  (require '[tech.datatype.java-unsigned :as unsigned])
+  ((resolve 'tech.datatype.java-unsigned/make-typed-buffer)
+   datatype elem-count-or-seq))
+
+
+(defn ->typed-buffer
+  "Conversion of a thing to a typed buffer"
+  [item & {:keys [datatype]}]
+  (require '[tech.datatype.java-unsigned :as unsigned])
+  (let [datatype (or datatype (get-datatype item))
+        retval ((resolve 'tech.datatype.java-unsigned/->typed-buffer) item)]
+    (assoc retval :dtype datatype)))

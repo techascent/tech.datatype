@@ -121,8 +121,9 @@ of operations."
 ;; Primitive functions.  Would be different for clojurescript.
 
 (defn make-array-of-type
-  [datatype elem-count-or-seq]
-  (primitive/make-array-of-type datatype elem-count-or-seq))
+  [datatype elem-count-or-seq & [options]]
+  (primitive/make-array-of-type datatype elem-count-or-seq
+                                (or options {})))
 
 
 (defn ->array
@@ -138,8 +139,9 @@ of operations."
   (primitive/->array-copy item))
 
 (defn make-buffer-of-type
-  [datatype elem-count-or-seq]
-  (primitive/make-buffer-of-type datatype elem-count-or-seq))
+  [datatype elem-count-or-seq & [options]]
+  (primitive/make-buffer-of-type datatype elem-count-or-seq
+                                 (or options {})))
 
 
 (defn ->buffer-backing-store
@@ -152,12 +154,12 @@ of operations."
 
 (defn make-typed-buffer
   "Support for unsigned datatypes comes via the typed buffer mechanism"
-  [datatype elem-count-or-seq]
+  [datatype elem-count-or-seq & [options]]
   ;;Dynamic require because this auto-generates quite a bit of code and
   ;;I think most people will not need this.
   (require '[tech.datatype.java-unsigned :as unsigned])
   ((resolve 'tech.datatype.java-unsigned/make-typed-buffer)
-   datatype elem-count-or-seq))
+   datatype elem-count-or-seq (or options {})))
 
 
 (defn ->typed-buffer

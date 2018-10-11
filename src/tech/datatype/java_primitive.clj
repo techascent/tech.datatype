@@ -44,7 +44,8 @@
    [src-data dst-data offset options]
     (base/copy-raw->item! (seq src-data) dst-data offset options))
   base/PPersistentVector
-  (->vector [src] (vec (->array-copy src)))
+  (->vector [src] (vec (or (->array src)
+                           (->array-copy src))))
   PToBuffer
   (->buffer-backing-store [src]
     (when-let [ary-data (->array src)]

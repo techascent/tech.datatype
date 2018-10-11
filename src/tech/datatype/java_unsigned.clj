@@ -78,7 +78,7 @@
 
 (defn add-datatype->jvm-datatype-conversion
   [src-dtype dst-dtype]
-  (when-not (is-jvm-datatype? dst-dtype)
+  (when-not (primitive/is-jvm-datatype? dst-dtype)
     (throw (ex-info "Destination datatype is not a jvm datatype"
                     {:dst-dtype dst-dtype})))
   (swap! *->jvm-datatype-table* assoc src-dtype dst-dtype))
@@ -110,7 +110,7 @@
 
 (defn datatype->jvm-datatype
   [src-dtype]
-  (if (is-jvm-datatype? src-dtype)
+  (if (primitive/is-jvm-datatype? src-dtype)
     src-dtype
     (if-let [retval (@*->jvm-datatype-table* src-dtype)]
       retval
@@ -246,10 +246,10 @@
   (->buffer-backing-store [item] (primitive/->buffer-backing-store buffer))
   primitive/PToArray
   (->array [item]
-    (when (is-jvm-datatype? dtype)
+    (when (primitive/is-jvm-datatype? dtype)
       (primitive/->array buffer)))
   (->array-copy [item]
-    (if (is-jvm-datatype? dtype)
+    (if (primitive/is-jvm-datatype? dtype)
       (primitive/->array-copy buffer)
       (let [dst-ary (primitive/make-array-of-type (get-safe-jvm-datatype dtype)
                                                   (mp/element-count buffer))]

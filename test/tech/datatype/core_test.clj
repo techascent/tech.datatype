@@ -67,18 +67,21 @@
 
 
 (deftest out-of-range-data-causes-exception
-  (is (thrown? Throwable (dtype/copy! (int-array [1000 2000 3000 4000]) (byte-array 4)))))
+  (is (thrown? Throwable (dtype/copy! (int-array [1000 2000 3000 4000])
+                                      (byte-array 4)))))
 
 
 (deftest out-of-range-data-does-not-cause-exception-if-unchecked
   (let [byte-data
-        (dtype/copy! (int-array [1000 2000 3000 4000]) 0 (byte-array 4) 0 4 {:unchecked? true})]
+        (dtype/copy! (int-array [1000 2000 3000 4000]) 0
+                     (byte-array 4) 0
+                     4 {:unchecked? true})]
     (is (= [-24 -48 -72 -96]
            (vec byte-data)))))
 
 
 (set! *warn-on-reflection* true)
-
+(set! *unchecked-math* :warn-on-boxed)
 
 (deftest copy-time-test
   (testing "Run perf regression of times spent to copy data"
@@ -104,13 +107,16 @@
                        (dtype/copy! src-buf 0 dst-buf 0 num-items))
 
           unchecked-dtype-copy (fn []
-                                 (dtype/copy! src-buf 0 dst-buf 0 num-items {:unchecked? true}))
+                                 (dtype/copy! src-buf 0 dst-buf 0 num-items
+                                              {:unchecked? true}))
 
-          raw-copy (get @base/*copy-table* [:nio-buffer :nio-buffer :float32 :float32 true])
+          raw-copy (get @base/*copy-table* [:nio-buffer :nio-buffer
+                                            :float32 :float32 true])
           raw-dtype-copy (fn []
                            (raw-copy src-buf 0 dst-buf 0 num-items {:unchecked? true}))
           generic-copy (fn []
-                         (base/generic-copy! src-buf 0 dst-buf 0 num-items {:unchecked? true}))
+                         (base/generic-copy! src-buf 0 dst-buf 0 num-items
+                                             {:unchecked? true}))
           fns {:array-copy array-copy
                :buffer-copy buffer-copy
                :dtype-copy dtype-copy

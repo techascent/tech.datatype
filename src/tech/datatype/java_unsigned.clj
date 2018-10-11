@@ -1,5 +1,8 @@
-(ns tech.datatype.unsigned
-  "Adds unsigned integer support to nio buffers."
+(ns tech.datatype.java-unsigned
+  "1.  Generalized support for datatypes not present as jvm primitive types but which
+  can be store on a 1-to-1 correspondance with a jvm primitive type (so things that
+  need 1,2,4, or 8 bytes to store per element).
+  2.  Unsigned integer support for nio buffers."
   (:require [tech.datatype.base :as base]
             [tech.datatype.java-primitive :as primitive]
             [clojure.core.matrix.protocols :as mp]
@@ -22,6 +25,8 @@
 (def ^:dynamic *jvm-cast-table* (atom {}))
 (def ^:dynamic *unchecked-jvm-cast-table* (atom {}))
 (def ^:dynamic *->jvm-datatype-table* (atom {}))
+(def ^:dynamic *safe-jvm-datatype-table* (atom {}))
+
 
 (defn add-jvm-cast
   [dtype cast-fn]
@@ -40,17 +45,35 @@
                     {:datatype dtype}))))
 
 
+(defn add-safe-jvm-datatype
+  "Add a datatype that can safely container the src datatype.
+  So int16 for an uint8 value, for instance.  This will only be queried
+  in the case that the datatype is not a native jvm datatype."
+  [src-datatype safe-jvm-datatype]
+  (swap! *safe-jvm-datatype-table* assoc src-datatype safe-jvm-datatype))
+
+
+(add-safe-jvm-datatype :uint8 :int16)
+(add-safe-jvm-datatype :uint16 :int32)
+(add-safe-jvm-datatype :uint32 :int64)
+;;This should necessitate checking every member really
+(add-safe-jvm-datatype :uint64 :int64)
+
+
+(defn get-safe-jvm-datatype
+  [src-datatype]
+  (if-let [retval (@*safe-jvm-datatype-table* src-datatype)]
+    retval
+    (throw (ex-info "No safe jvm datatype registered for datatype"
+                    {:datatype src-datatype}))))
+
+
 (defn unchecked-jvm-cast
   [dtype value]
     (if-let [cast-fn (get @*unchecked-jvm-cast-table* dtype)]
     (cast-fn value)
     (throw (ex-info "Failed to find jvm cast"
                     {:datatype dtype}))))
-
-
-(defn is-jvm-datatype?
-  [dtype]
-  (boolean ((set primitive/datatypes) dtype)))
 
 
 (defn add-datatype->jvm-datatype-conversion
@@ -61,11 +84,11 @@
   (swap! *->jvm-datatype-table* assoc src-dtype dst-dtype))
 
 
-
 (base/add-datatype->size-mapping :uint8 1)
 (base/add-datatype->size-mapping :uint16 2)
 (base/add-datatype->size-mapping :uint32 4)
 (base/add-datatype->size-mapping :uint64 8)
+
 
 ;;The unsigned types have to cast directly to their signed types
 ;;and vice versa in all cases.
@@ -147,9 +170,13 @@
           (direct-conversion? src-dtype dst-dtype))
     val
     (case dst-dtype
-      :uint8 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype (check (short 0xff) (short 0) (short ~val)))
-      :uint16 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype (check (int 0xffff) (int 0) (int ~val)))
-      :uint32 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype (check (long 0xffffffff) (int 0) (long ~val)))
+      :uint8 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
+                                           (check (short 0xff) (short 0) (short ~val)))
+      :uint16 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
+                                            (check (int 0xffff) (int 0) (int ~val)))
+      :uint32 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
+                                            (check (long 0xffffffff) (int 0)
+                                                   (long ~val)))
       :uint64 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val)
       `(primitive/datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
 
@@ -157,17 +184,17 @@
 (defmacro datatype->jvm-cast-fn
   [src-dtype dst-dtype val]
   (let [jvm-type (datatype->jvm-datatype dst-dtype)]
-    `(primitive/datatype->cast-fn :ignored
-                                  ~jvm-type
-                                  (datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
+    `(primitive/datatype->unchecked-cast-fn
+      :ignored ~jvm-type
+      (datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
 
 
 (defmacro datatype->unchecked-jvm-cast-fn
   [src-dtype dst-dtype val]
   (let [jvm-type (datatype->jvm-datatype dst-dtype)]
-    `(primitive/datatype->cast-fn :ignored
-                                  ~jvm-type
-                                  (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
+    `(primitive/datatype->unchecked-cast-fn
+      :ignored ~jvm-type
+      (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
 
 
 (defmacro casting
@@ -176,10 +203,17 @@
      ~@(for [u-dtype unsigned-datatypes]
          (let [s-dtype (direct-unsigned->signed-map u-dtype)]
            `(do
-              (base/add-cast-fn ~u-dtype (fn [val#] (datatype->cast-fn :ignored ~u-dtype val#)))
-              (base/add-unchecked-cast-fn ~u-dtype (fn [val#] (datatype->unchecked-cast-fn :ignored ~u-dtype val#)))
-              (add-jvm-cast ~u-dtype (fn [val#] (datatype->jvm-cast-fn :ignored ~u-dtype val#)))
-              (add-unchecked-jvm-cast ~u-dtype (fn [val#] (datatype->unchecked-jvm-cast-fn :ignored ~u-dtype val#))))))))
+              (base/add-cast-fn ~u-dtype (fn [val#]
+                                           (datatype->cast-fn :ignored
+                                                              ~u-dtype val#)))
+              (base/add-unchecked-cast-fn ~u-dtype (fn [val#]
+                                                     (datatype->unchecked-cast-fn
+                                                      :ignored ~u-dtype val#)))
+              (add-jvm-cast ~u-dtype (fn [val#] (datatype->jvm-cast-fn
+                                                 :ignored ~u-dtype val#)))
+              (add-unchecked-jvm-cast ~u-dtype (fn [val#]
+                                                 (datatype->unchecked-jvm-cast-fn
+                                                  :ignored ~u-dtype val#))))))))
 
 
 (def casts (casting))
@@ -192,36 +226,56 @@
   (element-count [item] (mp/element-count buffer))
   base/PAccess
   (set-value! [item offset value]
-    (base/set-value! (primitive/->buffer item) offset (jvm-cast dtype value)))
+    (base/set-value! (primitive/->buffer-backing-store item) offset
+                     (jvm-cast dtype value)))
   (set-constant! [item offset value elem-count]
-    (base/set-constant! (primitive/->buffer item) offset (jvm-cast dtype value) elem-count))
+    (base/set-constant! (primitive/->buffer-backing-store item) offset
+                        (jvm-cast dtype value) elem-count))
   (get-value [item offset]
-    (-> (base/get-value (primitive/->buffer item) offset)
+    (-> (base/get-value (primitive/->buffer-backing-store item) offset)
         (base/unchecked-cast dtype)))
   base/PContainerType
   (container-type [_] :typed-buffer)
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
     (primitive/raw-dtype-copy! raw-data ary-target target-offset options))
+  base/PPersistentVector
+  (->vector [item]
+    (vec (primitive/->array-copy item)))
   primitive/PToBuffer
-  (->buffer [item] (primitive/->buffer buffer)))
+  (->buffer-backing-store [item] (primitive/->buffer-backing-store buffer))
+  primitive/PToArray
+  (->array [item]
+    (when (is-jvm-datatype? dtype)
+      (primitive/->array buffer)))
+  (->array-copy [item]
+    (if (is-jvm-datatype? dtype)
+      (primitive/->array-copy buffer)
+      (let [dst-ary (primitive/make-array-of-type (get-safe-jvm-datatype dtype)
+                                                  (mp/element-count buffer))]
+        (base/copy! item 0 dst-ary 0
+                    (mp/element-count buffer)
+                    {:unchecked? true})))))
 
 
 (extend-type Object
   PToTypedBuffer
   (->typed-buffer [item]
-    (->TypedBuffer (primitive/->buffer item) (base/get-datatype item))))
+    (if-let [buf-data (primitive/->buffer-backing-store item)]
+      (->TypedBuffer buf-data (base/get-datatype item))
+      (throw (ex-info "Item is not convertable to a nio buffer." {})))))
 
 
-;;And now we fill out the copy table.
-;;All the direct conversions can use a ->buffer pathway both to and from the container for
-;;unchecked.
+;;And now we fill out the copy table.  All the direct conversions can use a ->buffer
+;;pathway both to and from the container for unchecked.
 
 
-(base/add-container-conversion-fn :java-array :typed-buffer (fn [dst-dtype src-data]
-                                                              [(->typed-buffer src-data) 0]))
-(base/add-container-conversion-fn :nio-buffer :typed-buffer (fn [dst-dtype src-data]
-                                                              [(->typed-buffer src-data) 0]))
+(base/add-container-conversion-fn :java-array :typed-buffer
+                                  (fn [dst-dtype src-data]
+                                    [(->typed-buffer src-data) 0]))
+(base/add-container-conversion-fn :nio-buffer :typed-buffer
+                                  (fn [dst-dtype src-data]
+                                    [(->typed-buffer src-data) 0]))
 
 (def all-possible-datatype-pairs
   (let [all-dtypes (concat primitive/datatypes unsigned-datatypes)]
@@ -230,20 +284,21 @@
            [src-dtype dst-dtype])
          set)))
 
-(def trivial-conversions (->> all-possible-datatype-pairs
-                              (filter (fn [[src-dtype dst-dtype]]
-                                        (or (direct-conversion? src-dtype dst-dtype)
-                                            (= src-dtype dst-dtype)
-                                            (not (or (unsigned-datatype? src-dtype)
-                                                     (unsigned-datatype? dst-dtype))))))))
+(def trivial-conversions
+  (->> all-possible-datatype-pairs
+       (filter (fn [[src-dtype dst-dtype]]
+                 (or (= src-dtype dst-dtype)
+                     (not (or (unsigned-datatype? src-dtype)
+                              (unsigned-datatype? dst-dtype))))))))
 
 (def nontrivial-conversions (c-set/difference (set all-possible-datatype-pairs)
                                               (set trivial-conversions)))
 
 (defn- raw-copy
   [src src-offset dst dst-offset elem-count options]
-  (base/copy! (primitive/->buffer src) src-offset
-              (primitive/->buffer dst) dst-offset
+  (println "trivial conversions")
+  (base/copy! (primitive/->buffer-backing-store src) src-offset
+              (primitive/->buffer-backing-store dst) dst-offset
               elem-count options))
 
 
@@ -251,7 +306,8 @@
   (->> (for [[src-dtype dst-dtype] trivial-conversions
              unchecked? [true false]]
          (do
-           (base/add-copy-operation :typed-buffer :typed-buffer src-dtype dst-dtype unchecked? raw-copy)
+           (base/add-copy-operation :typed-buffer :typed-buffer
+                                    src-dtype dst-dtype unchecked? raw-copy)
            [:typed-buffer :typed-buffer src-dtype dst-dtype unchecked?]))
        vec))
 
@@ -260,36 +316,68 @@
   [src-dtype dst-dtype unchecked?]
   (if unchecked?
     `(fn [src# src-offset# dst# dst-offset# elem-count# options#]
-       (let [src# (primitive/datatype->buffer-cast-fn ~(datatype->jvm-datatype src-dtype) (primitive/->buffer src#))
-             dst# (primitive/datatype->buffer-cast-fn ~(datatype->jvm-datatype dst-dtype) (primitive/->buffer dst#))
+       (let [src# (primitive/datatype->buffer-cast-fn
+                   ~(datatype->jvm-datatype src-dtype)
+                   (primitive/->buffer-backing-store src#))
+             dst# (primitive/datatype->buffer-cast-fn
+                   ~(datatype->jvm-datatype dst-dtype)
+                   (primitive/->buffer-backing-store dst#))
              src-offset# (long src-offset#)
              dst-offset# (long dst-offset#)
              elem-count# (long elem-count#)]
          (c-for [idx# 0 (< idx# elem-count#) (+ idx# 1)]
                 (.put dst# (+ idx# dst-offset#)
-                      (datatype->unchecked-jvm-cast-fn ~src-dtype ~dst-dtype
-                                                       (.get src# (+ idx# dst-offset#)))))))
+                      (datatype->unchecked-jvm-cast-fn
+                       ~src-dtype ~dst-dtype
+                       (datatype->unchecked-cast-fn
+                        :ignored ~src-dtype
+                        (.get src# (+ idx# src-offset#))))))))
     `(fn [src# src-offset# dst# dst-offset# elem-count# options#]
-       (let [src# (primitive/datatype->buffer-cast-fn ~(datatype->jvm-datatype src-dtype) (primitive/->buffer src#))
-             dst# (primitive/datatype->buffer-cast-fn ~(datatype->jvm-datatype dst-dtype) (primitive/->buffer dst#))
+       (let [src# (primitive/datatype->buffer-cast-fn
+                   ~(datatype->jvm-datatype src-dtype)
+                   (primitive/->buffer-backing-store src#))
+             dst# (primitive/datatype->buffer-cast-fn
+                   ~(datatype->jvm-datatype dst-dtype)
+                   (primitive/->buffer-backing-store dst#))
              src-offset# (long src-offset#)
              dst-offset# (long dst-offset#)
              elem-count# (long elem-count#)]
          (c-for [idx# 0 (< idx# elem-count#) (+ idx# 1)]
                 (.put dst# (+ idx# dst-offset#)
-                      (datatype->jvm-cast-fn ~src-dtype ~dst-dtype
-                                         (.get src# (+ idx# dst-offset#)))))))))
+                      (datatype->unchecked-jvm-cast-fn
+                       ~src-dtype ~dst-dtype
+                       (datatype->cast-fn
+                        :ignored ~src-dtype
+                        (.get src# (+ idx# src-offset#))))))))))
 
 
 (defmacro custom-conversions-macro
   []
   `(vector
-     ~@(for [[src-dtype dst-dtype] custom-convert-dtype-combos
+     ~@(for [[src-dtype dst-dtype] nontrivial-conversions
              unchecked? [true false]]
-         `(let [operation# (bufferable-bufferable-copy ~src-dtype ~dst-dtype ~unchecked?)]
-            (base/add-copy-operation :typed-buffer :typed-buffer ~src-dtype ~dst-dtype ~unchecked?
+         `(let [operation# (bufferable-bufferable-copy
+                            ~src-dtype ~dst-dtype ~unchecked?)]
+            (base/add-copy-operation :typed-buffer :typed-buffer
+                                     ~src-dtype ~dst-dtype ~unchecked?
                                      operation#)
             [:typed-buffer :typed-buffer ~src-dtype ~dst-dtype ~unchecked?]))))
 
 
 (def custom-conversions (custom-conversions-macro))
+
+
+(defn make-typed-buffer
+  ([datatype elem-count-or-seq options]
+   (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
+                                   (:unchecked? options))
+                             elem-count-or-seq
+                             (map #(base/cast % datatype)
+                                  elem-count-or-seq))]
+     (->TypedBuffer (primitive/make-buffer-of-type
+                     (datatype->jvm-datatype datatype)
+                     elem-count-or-seq
+                     (assoc options :unchecked? true))
+                    datatype)))
+  ([datatype elem-count-or-seq]
+   (make-typed-buffer datatype elem-count-or-seq {})))

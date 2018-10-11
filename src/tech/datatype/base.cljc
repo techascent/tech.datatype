@@ -31,6 +31,11 @@
   (copy-raw->item! [raw-data ary-target target-offset options]))
 
 
+(defprotocol PPersistentVector
+  "Conversion to a persistent vector of numbers."
+  (->vector [item]))
+
+
 ;;Map of keyword datatype to size in bytes.
 (def ^:dynamic *datatype->size-map* (atom {}))
 
@@ -187,7 +192,8 @@
   "Add a new copy operation.  Note that this is a single point in a 5 dimensional space
 of operations."
   [src-container-type dst-container-type src-dtype dst-dtype unchecked? copy-fn]
-  (swap! *copy-table* assoc [src-container-type dst-container-type src-dtype dst-dtype unchecked?]
+  (swap! *copy-table* assoc [src-container-type dst-container-type
+                             src-dtype dst-dtype unchecked?]
          copy-fn))
 
 
@@ -221,7 +227,8 @@ of operations."
                    (let [[src-conv-cont src-conv] src-conversion
                          [dst-conv-cont dst-conv] dst-conversion]
                      (when-let [copy-fn (get copy-table
-                                             [src-conv-cont dst-conv-cont src-dtype dst-dtype unchecked?])]
+                                             [src-conv-cont dst-conv-cont
+                                              src-dtype dst-dtype unchecked?])]
                        [copy-fn
                         (when src-conv
                           (partial src-conv src-conv-cont))

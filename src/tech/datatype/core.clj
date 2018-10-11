@@ -89,6 +89,12 @@ Calls clojure.core.matrix/ecount."
   (base/unchecked-cast value datatype))
 
 
+(defn ->vector
+  "Conversion to persistent vector"
+  [item]
+  (base/->vector item))
+
+
 (defn add-container-conversion-fn
   "Add a container->container conversion.  Function takes a dst-datatype and the src-container
 and returns a tuple of [result-container result-offset]."
@@ -121,7 +127,7 @@ of operations."
 
 (defn array->buffer
   [src-ary]
-  (primitive/array->buffer src-ary))
+  (primitive/->buffer-backing-store src-ary))
 
 
 (defn make-buffer-of-type

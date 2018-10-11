@@ -13,9 +13,20 @@
 
 
 (defprotocol PToBuffer
-  "Take a 'thing' and convert it to a nio buffer."
-  (->buffer [item]))
+  "Take a 'thing' and convert it to a nio buffer.  Only valid if the thing
+  shares the backing store with the buffer.  Result may not exactly
+  represent the value of the item itself as the backing store may require
+  element-by-element conversion to represent the value of the item."
+  (->buffer-backing-store [item]))
 
+
+(defprotocol PToArray
+  "Take a'thing' and convert it to an array that exactly represents the value
+  of the data."
+  (->array [item]
+    "Convert to an array; both objects must share backing store")
+  (->array-copy [item]
+    "Convert to an array containing a copy of the data"))
 
 
 (defn raw-dtype-copy!
@@ -31,7 +42,13 @@
   base/PCopyRawData
   (copy-raw->item!
    [src-data dst-data offset options]
-    (base/copy-raw->item! (seq src-data) dst-data offset options)))
+    (base/copy-raw->item! (seq src-data) dst-data offset options))
+  base/PPersistentVector
+  (->vector [src] (vec (->array-copy src)))
+  PToBuffer
+  (->buffer-backing-store [src]
+    (when-let [ary-data (->array src)]
+      (->buffer-backing-store src))))
 
 
 (extend-type Buffer
@@ -51,9 +68,19 @@
   (container-type [item] :mikeral-n-dimensional-array)
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
-    (let [^doubles item-data (or (mp/as-double-array raw-data)
-                                 (mp/to-double-array raw-data))]
-      (raw-dtype-copy! item-data ary-target target-offset options))))
+    (let [^doubles item-data (->array raw-data)]
+      (raw-dtype-copy! item-data ary-target target-offset options)))
+  PToArray
+  (->array [item]
+    (mp/as-double-array item))
+  (->array-copy [item]
+    (mp/to-double-array item))
+  PToBuffer
+  (->buffer-backing-store [item]
+    (if-let [ary-data (->array item)]
+      (->buffer-backing-store ary-data)
+      (throw (ex-info "Item cannot be represented as a buffer"
+                      {})))))
 
 
 (def java-primitive-datatypes
@@ -77,24 +104,16 @@
     :numeric-type :float}])
 
 
+(def datatypes (set (map :name java-primitive-datatypes)))
+
+
+(defn is-jvm-datatype?
+  [dtype]
+  (boolean (datatypes dtype)))
+
+
 (doseq [{:keys [name byte-size]} java-primitive-datatypes]
   (base/add-datatype->size-mapping name byte-size))
-
-
-(defn make-array-of-type
-  [datatype elem-count-or-seq]
-  (case datatype
-    :int8 (byte-array elem-count-or-seq)
-    :int16 (short-array elem-count-or-seq)
-    :int32 (int-array elem-count-or-seq)
-    :int64 (long-array elem-count-or-seq)
-    :float32 (float-array elem-count-or-seq)
-    :float64 (double-array elem-count-or-seq)))
-
-
-(defn make-buffer-of-type
-  [datatype elem-count-or-seq]
-  (->buffer (make-array-of-type datatype elem-count-or-seq)))
 
 
 ;;Provide type hinted access to container
@@ -228,6 +247,31 @@
     :float64 `(DoubleBuffer/wrap ^doubles ~src-ary)))
 
 
+(defn make-array-of-type
+  ([datatype elem-count-or-seq options]
+   (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
+                                   (:unchecked? options))
+                             elem-count-or-seq
+                             (map #(base/cast % datatype) elem-count-or-seq))]
+     (case datatype
+       :int8 (byte-array elem-count-or-seq)
+       :int16 (short-array elem-count-or-seq)
+       :int32 (int-array elem-count-or-seq)
+       :int64 (long-array elem-count-or-seq)
+       :float32 (float-array elem-count-or-seq)
+       :float64 (double-array elem-count-or-seq))))
+  ([datatype elem-count-or-seq]
+   (make-array-of-type datatype elem-count-or-seq {})))
+
+
+(defn make-buffer-of-type
+  ([datatype elem-count-or-seq options]
+   (->buffer-backing-store
+    (make-array-of-type datatype elem-count-or-seq options)))
+  ([datatype elem-count-or-seq]
+   (make-buffer-of-type datatype elem-count-or-seq {})))
+
+
 (defmacro implement-array-type
   [array-class datatype]
   `(clojure.core/extend
@@ -252,13 +296,22 @@
                                 (aset item# idx# value#))))}
      base/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
-                         (let [copy-len# (alength (datatype->array-cast-fn ~datatype raw-data#))]
+                         (let [copy-len# (alength (datatype->array-cast-fn ~datatype
+                                                                           raw-data#))]
                            (base/copy! raw-data# 0 ary-target# target-offset#
                                        copy-len# options#)
                            [ary-target# (+ (long target-offset#) copy-len#)]))}
+     base/PPersistentVector
+     {:->vector (fn [src-ary#] (vec src-ary#))}
      PToBuffer
-     {:->buffer (fn [src-ary#]
-                  (datatype->buffer-creation ~datatype src-ary#))}))
+     {:->buffer-backing-store (fn [src-ary#]
+                  (datatype->buffer-creation ~datatype src-ary#))}
+     PToArray
+     {:->array identity
+      :->array-copy (fn [src-ary#]
+                      (let [dst-ary# (make-array-of-type ~datatype
+                                                         (mp/element-count src-ary#))]
+                        (base/copy! src-ary# dst-ary#)))}))
 
 
 (implement-array-type (Class/forName "[B") :int8)
@@ -291,12 +344,22 @@
                                 (.put item# idx# value#))))}
      base/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
-                         (let [copy-len# (.remaining (datatype->buffer-cast-fn ~datatype raw-data#))]
+                         (let [copy-len# (.remaining (datatype->buffer-cast-fn
+                                                      ~datatype raw-data#))]
                            (base/copy! raw-data# 0 ary-target# target-offset#
                                        copy-len# options#)
                            [ary-target# (+ (long target-offset#) copy-len#)]))}
      PToBuffer
-     {:->buffer (fn [item#] item#)}))
+     {:->buffer-backing-store (fn [item#] item#)}
+     PToArray
+     {:->array (fn [item#]
+                 (let [item# (datatype->buffer-cast-fn ~datatype item#)]
+                   (when (= 0 (.position item#))
+                     (.array item#))))
+      :->array-copy (fn [item#]
+                      (let [dst-ary# (make-array-of-type ~datatype
+                                                         (mp/element-count item#))]
+                        (base/copy! item# dst-ary#)))}))
 
 
 (implement-buffer-type ByteBuffer :int8)
@@ -309,27 +372,35 @@
 
 ;;Implement dtype-x-dtype copy operation table
 
-(def datatypes (mapv :name java-primitive-datatypes))
-
 
 (base/add-container-conversion-fn
  :java-array :nio-buffer
  (fn [dst-type src-ary]
-   [(->buffer src-ary) 0]))
+   [(->buffer-backing-store src-ary) 0]))
 
 
 (defmacro buffer-buffer-copy
   [src-dtype dst-dtype unchecked? src src-offset dst dst-offset n-elems options]
   (if unchecked?
-    `(let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
-           dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)
-           src-offset# (long ~src-offset)
+    `(let [src-offset# (long ~src-offset)
            dst-offset# (long ~dst-offset)
-           n-elems# (long ~n-elems)]
-       (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
-              (.put dst# (unchecked-add idx# dst-offset#)
-                    (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
-                                                 (.get src# (unchecked-add idx# src-offset#))))))
+           n-elems# (long ~n-elems)
+           src# (datatype->array-cast-fn ~src-dtype (->array ~src))
+           dst# (datatype->array-cast-fn ~dst-dtype (->array ~dst))]
+       ;;Fast path if both are representable by java arrays
+       (if (and src# dst#)
+         (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
+                (aset dst# (unchecked-add idx# dst-offset#)
+                      (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
+                                                   (aget src# (unchecked-add
+                                                               idx# src-offset#)))))
+         (let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
+               dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)]
+           (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
+                  (.put dst# (unchecked-add idx# dst-offset#)
+                        (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
+                                                     (.get src# (unchecked-add
+                                                                 idx# src-offset#))))))))
     `(let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
            dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)
            src-offset# (long ~src-offset)
@@ -338,7 +409,8 @@
        (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
               (.put dst# (unchecked-add idx# dst-offset#)
                     (datatype->cast-fn ~src-dtype ~dst-dtype
-                                                 (.get src# (unchecked-add idx# src-offset#))))))))
+                                       (.get src# (unchecked-add
+                                                   idx# src-offset#))))))))
 
 
 (defmacro update-base-copy-table
@@ -347,10 +419,12 @@
     ~@(for [src-dtype datatypes
             dst-dtype datatypes
             unchecked? [false true]]
-        `(do (base/add-copy-operation :nio-buffer :nio-buffer ~src-dtype ~dst-dtype ~unchecked?
-                                      (fn [src# src-offset# dst# dst-offset# n-elems# options#]
-                                        (buffer-buffer-copy ~src-dtype ~dst-dtype ~unchecked?
-                                                            src# src-offset# dst# dst-offset# n-elems# options#)))
+        `(do (base/add-copy-operation
+              :nio-buffer :nio-buffer
+              ~src-dtype ~dst-dtype ~unchecked?
+              (fn [src# src-offset# dst# dst-offset# n-elems# options#]
+                (buffer-buffer-copy ~src-dtype ~dst-dtype ~unchecked?
+                                    src# src-offset# dst# dst-offset# n-elems# options#)))
              [:nio-buffer :nio-buffer ~src-dtype ~dst-dtype ~unchecked?]))))
 
 

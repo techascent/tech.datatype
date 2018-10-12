@@ -38,11 +38,22 @@
   (swap! *unchecked-jvm-cast-table* assoc dtype cast-fn))
 
 (defn jvm-cast
-  [dtype value]
-  (if-let [cast-fn (get @*jvm-cast-table* dtype)]
-    (cast-fn value)
-    (throw (ex-info "Failed to find jvm cast"
-                    {:datatype dtype}))))
+  [value dtype]
+  (if (primitive/is-jvm-datatype? dtype)
+    (base/cast value dtype)
+    (if-let [cast-fn (get @*jvm-cast-table* dtype)]
+      (cast-fn value)
+      (throw (ex-info "Failed to find jvm cast"
+                      {:datatype dtype})))))
+
+(defn unchecked-jvm-cast
+  [value dtype]
+  (if (primitive/is-jvm-datatype? dtype)
+    (base/unchecked-cast value dtype)
+    (if-let [cast-fn (get @*unchecked-jvm-cast-table* dtype)]
+      (cast-fn value)
+      (throw (ex-info "Failed to find jvm cast"
+                      {:datatype dtype})))))
 
 
 (defn add-safe-jvm-datatype
@@ -66,14 +77,6 @@
     retval
     (throw (ex-info "No safe jvm datatype registered for datatype"
                     {:datatype src-datatype}))))
-
-
-(defn unchecked-jvm-cast
-  [dtype value]
-    (if-let [cast-fn (get @*unchecked-jvm-cast-table* dtype)]
-    (cast-fn value)
-    (throw (ex-info "Failed to find jvm cast"
-                    {:datatype dtype}))))
 
 
 (defn add-datatype->jvm-datatype-conversion
@@ -228,10 +231,10 @@
   base/PAccess
   (set-value! [item offset value]
     (base/set-value! (primitive/->buffer-backing-store item) offset
-                     (jvm-cast dtype value)))
+                     (jvm-cast value dtype)))
   (set-constant! [item offset value elem-count]
     (base/set-constant! (primitive/->buffer-backing-store item) offset
-                        (jvm-cast dtype value) elem-count))
+                        (jvm-cast value dtype) elem-count))
   (get-value [item offset]
     (-> (base/get-value (primitive/->buffer-backing-store item) offset)
         (base/unchecked-cast dtype)))

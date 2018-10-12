@@ -104,8 +104,14 @@
 
 
 (defn ecount
+  "Type hinted ecount."
   ^long [item]
   (m/ecount item))
+
+
+(defn shape
+  [item]
+  (or (m/shape item) [(ecount item)]))
 
 
 #?(:cljs

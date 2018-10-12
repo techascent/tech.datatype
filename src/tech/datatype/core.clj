@@ -50,6 +50,12 @@ Calls clojure.core.matrix/ecount."
   (base/ecount item))
 
 
+(defn shape
+  "m/shape with fallback to m/ecount if m/shape is not available."
+  [item]
+  (base/shape item))
+
+
 (defn copy-raw->item!
   "Copy raw data into an array.  Returns a tuple of
   [ary-target result-offset-after-copy]"

@@ -10,9 +10,9 @@
 
 (deftest raw-copy-with-mutable-lazy-sequence
   ;;It is important that raw copy can work with a lazy sequence of double buffers where
-  ;;the same buffer is being filled for ever member of the lazy sequence.  This is an easy
-  ;;optimization to make that cuts down the memory usage when reading from datasets by
-  ;;a fairly large amount.
+  ;;the same buffer is being filled for ever member of the lazy sequence.  This is an
+  ;;easy optimization to make that cuts down the memory usage when reading from datasets
+  ;;by a fairly large amount.
   (let [input-seq (partition 10 (range 100))
         input-ary (double-array 10)
         ;;Note the input ary is being reused.  Now imagine the input ary is a large
@@ -78,6 +78,17 @@
                      4 {:unchecked? true})]
     (is (= [-24 -48 -72 -96]
            (vec byte-data)))))
+
+
+(deftest offset-buffers-should-copy-correctly
+  (let [^FloatBuffer fbuf (dtype/make-buffer-of-type :float32 (range 10))
+        _ (.position fbuf 3)
+        result-buf (dtype/make-array-of-type :float32 (dtype/ecount fbuf))]
+    (dtype/copy! fbuf result-buf)
+    (is (= (dtype/get-value fbuf 0)
+           (float 3)))
+    (is (= (vec (drop 3 (range 10)))
+           (mapv long (dtype/->vector result-buf))))))
 
 
 (set! *warn-on-reflection* true)

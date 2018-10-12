@@ -1,7 +1,8 @@
 (ns tech.datatype.unsigned-test
   (:require [tech.datatype.java-unsigned :as unsigned]
             [tech.datatype.core :as dtype]
-            [clojure.test :refer :all]))
+            [clojure.test :refer :all])
+  (:import [java.nio ByteBuffer]))
 
 
 
@@ -23,4 +24,17 @@
     (is (thrown? Throwable (dtype/set-value! dst-buffer 2 256)))
     (let [new-buf (float-array n-elems)]
       (dtype/copy! dst-buffer new-buf)
-      (is (= test-data (mapv long new-buf))))))
+      (is (= test-data (mapv long new-buf))))
+    (let [^ByteBuffer storage-buf (:buffer dst-buffer)
+          _ (.position storage-buf 1)
+          test-ary (short-array (dtype/ecount dst-buffer))]
+      (dtype/copy! dst-buffer test-ary)
+
+      (is (= [254 0 1 2 3]
+             (vec test-ary)))
+      (is (= 254
+             (dtype/get-value dst-buffer 0)))
+      (dtype/set-value! dst-buffer 0 255)
+      (dtype/copy! dst-buffer test-ary)
+      (is (= [255 0 1 2 3]
+             (vec test-ary))))))

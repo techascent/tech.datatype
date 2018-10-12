@@ -325,8 +325,8 @@
              dst# (primitive/datatype->buffer-cast-fn
                    ~(datatype->jvm-datatype dst-dtype)
                    (primitive/->buffer-backing-store dst#))
-             src-offset# (long src-offset#)
-             dst-offset# (long dst-offset#)
+             src-offset# (+ (long src-offset#) (.position src#))
+             dst-offset# (+ (long dst-offset#) (.position dst#))
              elem-count# (long elem-count#)]
          (c-for [idx# 0 (< idx# elem-count#) (+ idx# 1)]
                 (.put dst# (+ idx# dst-offset#)
@@ -340,8 +340,8 @@
              dst# (primitive/datatype->buffer-cast-fn
                    ~(datatype->jvm-datatype dst-dtype)
                    (primitive/->buffer-backing-store dst#))
-             src-offset# (long src-offset#)
-             dst-offset# (long dst-offset#)
+             src-offset# (+ (long src-offset#) (.position src#))
+             dst-offset# (+ (long dst-offset#) (.position dst#))
              elem-count# (long elem-count#)]
          (c-for [idx# 0 (< idx# elem-count#) (+ idx# 1)]
                 (.put dst# (+ idx# dst-offset#)

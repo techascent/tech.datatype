@@ -331,10 +331,12 @@
      {:get-datatype (fn [arg#] ~datatype)}
      base/PAccess
      {:get-value (fn [item# ^long idx#]
-                   (.get (datatype->buffer-cast-fn ~datatype item#) idx#))
+                   (let [buf# (datatype->buffer-cast-fn ~datatype item#)]
+                     (.get buf# (+ idx# (.position buf#)))))
       :set-value! (fn [item# ^long offset# value#]
-                    (.put (datatype->buffer-cast-fn ~datatype item#) offset#
-                          (datatype->cast-fn :ignored ~datatype value#)))
+                    (let [buf# (datatype->buffer-cast-fn ~datatype item#)]
+                      (.put buf# (+ (.position buf#) offset#)
+                            (datatype->cast-fn :ignored ~datatype value#))))
       :set-constant! (fn [item# ^long offset# value# ^long elem-count#]
                        (let [value# (datatype->cast-fn :ignored ~datatype value#)
                              item# (datatype->buffer-cast-fn ~datatype item#)
@@ -342,7 +344,7 @@
                              elem-count# (+ (long elem-count#)
                                             offset#)]
                          (c-for [idx# offset# (< idx# elem-count#) (+ idx# 1)]
-                                (.put item# idx# value#))))}
+                                (.put item# (+ idx# (.position item#)) value#))))}
      base/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
                          (let [copy-len# (.remaining (datatype->buffer-cast-fn
@@ -383,11 +385,14 @@
 (defmacro buffer-buffer-copy
   [src-dtype dst-dtype unchecked? src src-offset dst dst-offset n-elems options]
   (if unchecked?
-    `(let [src-offset# (long ~src-offset)
-           dst-offset# (long ~dst-offset)
+    `(let [
            n-elems# (long ~n-elems)
+           src-buf# (datatype->buffer-cast-fn ~src-dtype ~src)
+           dst-buf# (datatype->buffer-cast-fn ~dst-dtype ~dst)
            src# (datatype->array-cast-fn ~src-dtype (->array ~src))
-           dst# (datatype->array-cast-fn ~dst-dtype (->array ~dst))]
+           dst# (datatype->array-cast-fn ~dst-dtype (->array ~dst))
+           src-offset# (+ (.position src-buf#) (long ~src-offset))
+           dst-offset# (+ (.position dst-buf#) (long ~dst-offset))]
        ;;Fast path if both are representable by java arrays
        (if (and src# dst#)
          (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
@@ -404,8 +409,10 @@
                                                                  idx# src-offset#))))))))
     `(let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
            dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)
-           src-offset# (long ~src-offset)
-           dst-offset# (long ~dst-offset)
+           src-buf# (datatype->buffer-cast-fn ~src-dtype ~src)
+           dst-buf# (datatype->buffer-cast-fn ~dst-dtype ~dst)
+           src-offset# (+ (.position src-buf#) (long ~src-offset))
+           dst-offset# (+ (.position dst-buf#) (long ~dst-offset))
            n-elems# (long ~n-elems)]
        (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
               (.put dst# (unchecked-add idx# dst-offset#)

@@ -365,13 +365,19 @@
 (def custom-conversions (custom-conversions-macro))
 
 
+(defn unsigned-safe-elem-count-or-seq
+  [datatype elem-count-or-seq options]
+  (if (or (number? elem-count-or-seq)
+          (:unchecked? options))
+    elem-count-or-seq
+    (map #(base/cast % datatype)
+         elem-count-or-seq)))
+
+
 (defn make-typed-buffer
   ([datatype elem-count-or-seq options]
-   (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
-                                   (:unchecked? options))
-                             elem-count-or-seq
-                             (map #(base/cast % datatype)
-                                  elem-count-or-seq))]
+   (let [elem-count-or-seq (unsigned-safe-elem-count-or-seq
+                            datatype elem-count-or-seq options)]
      (->TypedBuffer (primitive/make-buffer-of-type
                      (datatype->jvm-datatype datatype)
                      elem-count-or-seq

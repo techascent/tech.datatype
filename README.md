@@ -2,7 +2,7 @@
 [![Clojars Project](https://clojars.org/techascent/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
 
 
-Efficient manipulation of contiguous mutable containers of primitive datatypes.
+A Clojure library for efficient manipulation of contiguous mutable containers of primitive datatypes.
 
 Generalized efficient manipulations of sequences of primitive datatype.
 Includes specializations for java arrays, array views (subsection of an array)
@@ -32,7 +32,7 @@ efficient full typed copy functions when the types can be ascertained.
 
 ## License
 
-Copyright © 2016 FIXME
+Copyright © 2016 TechAscent, LLC.
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.

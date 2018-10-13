@@ -357,7 +357,8 @@
      PToArray
      {:->array (fn [item#]
                  (let [item# (datatype->buffer-cast-fn ~datatype item#)]
-                   (when (= 0 (.position item#))
+                   (when (and (= 0 (.position item#))
+                              (not (.isDirect item#)))
                      (.array item#))))
       :->array-copy (fn [item#]
                       (let [dst-ary# (make-array-of-type ~datatype
@@ -432,7 +433,8 @@
               ~src-dtype ~dst-dtype ~unchecked?
               (fn [src# src-offset# dst# dst-offset# n-elems# options#]
                 (buffer-buffer-copy ~src-dtype ~dst-dtype ~unchecked?
-                                    src# src-offset# dst# dst-offset# n-elems# options#)))
+                                    src# src-offset# dst# dst-offset#
+                                    n-elems# options#)))
              [:nio-buffer :nio-buffer ~src-dtype ~dst-dtype ~unchecked?]))))
 
 

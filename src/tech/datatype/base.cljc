@@ -310,3 +310,8 @@ of operations."
   clojure.lang.ISeq
   (copy-raw->item! [raw-data ary-target target-offset options]
     (copy-raw-seq->item! raw-data ary-target target-offset options)))
+
+(extend-type Object
+  PAccess
+  (get-value [item idx]
+    (item idx)))

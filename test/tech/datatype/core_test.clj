@@ -91,6 +91,16 @@
            (mapv long (dtype/->vector result-buf))))))
 
 
+(deftest primitive-types-are-typed
+  (doseq [[cls dtype] [[(byte 1) :int8]
+                       [(short 1) :int16]
+                       [(int 1) :int32]
+                       [(long 1) :int64]
+                       [(float 1) :float32]
+                       [(double 1) :float64]]]
+    (is (= dtype (dtype/get-datatype cls)))))
+
+
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 

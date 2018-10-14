@@ -66,7 +66,7 @@
   base/PDatatype
   (get-datatype [item] :float64)
   base/PContainerType
-  (container-type [item] :mikeral-n-dimensional-array)
+  (container-type [item] :mikera-n-dimensional-array)
   base/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
     (let [^doubles item-data (->array raw-data)]
@@ -439,3 +439,27 @@
 
 
 (def core-copy-operations (update-base-copy-table))
+
+
+
+(defmacro implement-scalar-primitive
+  [cls datatype]
+  `(clojure.core/extend
+       ~cls
+     base/PDatatype
+     {:get-datatype (fn [item#] ~datatype)}
+     base/PAccess
+     {:get-value (fn [item# off#]
+                   (when-not (= off# 0)
+                     (throw (ex-info "Index out of range" {:offset off#})))
+                   item#)}
+     mp/PElementCount
+     {:element-count (fn [item#] 1)}))
+
+
+(implement-scalar-primitive Byte :int8)
+(implement-scalar-primitive Short :int16)
+(implement-scalar-primitive Integer :int32)
+(implement-scalar-primitive Long :int64)
+(implement-scalar-primitive Float :float32)
+(implement-scalar-primitive Double :float64)

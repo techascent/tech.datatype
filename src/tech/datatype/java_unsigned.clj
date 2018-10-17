@@ -179,7 +179,9 @@
       :uint32 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                             (check (long 0xffffffff) (int 0)
                                                    (long ~val)))
-      :uint64 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val)
+      :uint64 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
+                                            (check (long Long/MAX_VALUE) (long 0)
+                                                   (long ~val)))
       `(primitive/datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
 
 

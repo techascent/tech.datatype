@@ -38,3 +38,8 @@
       (dtype/copy! dst-buffer test-ary)
       (is (= [255 0 1 2 3]
              (vec test-ary))))))
+
+(deftest negative-numbers-always-wrong
+  (doseq [datatype unsigned/unsigned-datatypes]
+    (is (thrown? Throwable
+                 (dtype/cast -1 datatype)))))

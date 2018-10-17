@@ -281,8 +281,10 @@
                                   (fn [dst-dtype src-data]
                                     [(->typed-buffer src-data) 0]))
 
+(def datatypes (concat primitive/datatypes unsigned-datatypes))
+
 (def all-possible-datatype-pairs
-  (let [all-dtypes (concat primitive/datatypes unsigned-datatypes)]
+  (let [all-dtypes datatypes]
     (->> (for [src-dtype all-dtypes
                dst-dtype all-dtypes]
            [src-dtype dst-dtype])

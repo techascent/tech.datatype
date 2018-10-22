@@ -1,6 +1,6 @@
-(ns tech.datatype.core-test
+(ns tech.datatype-test
   (:require [clojure.test :refer :all]
-            [tech.datatype.core :as dtype]
+            [tech.datatype :as dtype]
             [tech.datatype.base :as base]
             [clojure.core.matrix :as m]
             [clojure.core.matrix.macros :refer [c-for]]

@@ -1,6 +1,6 @@
 (ns tech.datatype.unsigned-test
   (:require [tech.datatype.java-unsigned :as unsigned]
-            [tech.datatype.core :as dtype]
+            [tech.datatype :as dtype]
             [clojure.test :refer :all])
   (:import [java.nio ByteBuffer]))
 

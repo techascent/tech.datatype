@@ -1,4 +1,4 @@
-(ns tech.datatype.core
+(ns tech.datatype
   "Generalized efficient manipulations of sequences of primitive datatype.  Includes
   specializations for java arrays and nio buffers.  There are specializations to allow
   implementations to provide efficient full typed copy functions when the types can be

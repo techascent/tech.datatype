@@ -5,11 +5,9 @@
 
   (:require [clojure.core.matrix :as m])
   #?(:clj (:require [tech.datatype.base-macros :as base-macros]
-                    [clojure.core.matrix.macros :refer [c-for]]
-                    [tech.datatype.shared-macros :as shared-macros])
+                    [clojure.core.matrix.macros :refer [c-for]])
      :cljs (:require-macros [tech.datatype.base-macros :as base-macros]
-                            [clojure.core.matrix.macros :refer [c-for]]
-                            [tech.datatype.shared-macros :as shared-macros])))
+                            [clojure.core.matrix.macros :refer [c-for]])))
 
 
 (defprotocol PDatatype
@@ -271,8 +269,8 @@ of operations."
          copy-fn (find-copy-fn (container-type src) (container-type dest)
                                (get-datatype src) (get-datatype dest)
                                (boolean (:unchecked? options)))]
-     (shared-macros/check-range src src-offset elem-count)
-     (shared-macros/check-range dest dest-offset elem-count)
+     (base-macros/check-range src src-offset elem-count)
+     (base-macros/check-range dest dest-offset elem-count)
      (copy-fn src src-offset dest dest-offset elem-count options)
      dest))
   ([src src-offset dst dst-offset elem-count]

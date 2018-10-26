@@ -37,8 +37,6 @@
 
 
 (extend-type Object
-  base/PContainerType
-  (container-type [item] :object)
   base/PCopyRawData
   (copy-raw->item!
    [src-data dst-data offset options]

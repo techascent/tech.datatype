@@ -14,10 +14,6 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(defprotocol PToTypedBuffer
-  (->typed-buffer [item]))
-
-
 ;;We first instroduce a new type of cast and this takes the datatype and
 ;;casts it to it storage type in the jvm.
 
@@ -264,12 +260,26 @@
                     {:unchecked? true})))))
 
 
-(extend-type Object
-  PToTypedBuffer
-  (->typed-buffer [item]
-    (if-let [buf-data (primitive/->buffer-backing-store item)]
-      (->TypedBuffer buf-data (base/get-datatype item))
-      (throw (ex-info "Item is not convertable to a nio buffer." {})))))
+(defn typed-buffer?
+  "If you satisify these protocols then you are a typed buffer
+needing no wrapping or conversion."
+  [item]
+  (every? #(satisfies? % item)
+          [base/PDatatype mp/PElementCount base/PAccess base/PContainerType
+           base/PCopyRawData base/PPersistentVector primitive/PToBuffer
+           primitive/PToArray]))
+
+
+(defn as-typed-buffer
+  [item]
+  (when (typed-buffer? item)
+    item))
+
+
+(defn ->typed-buffer [item]
+  (if-let [item-buf (primitive/->buffer-backing-store item)]
+    (->TypedBuffer item-buf (base/get-datatype item))
+    (throw (ex-info "Item is not convertable to a nio buffer." {}))))
 
 
 ;;And now we fill out the copy table.  All the direct conversions can use a ->buffer

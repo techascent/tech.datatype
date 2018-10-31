@@ -16,7 +16,8 @@
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m]
             [tech.datatype.base :as base]
-            [tech.datatype.java-primitive :as primitive]))
+            [tech.datatype.java-primitive :as primitive])
+  (:refer-clojure :exclude [cast]))
 
 
 (set! *warn-on-reflection* true)

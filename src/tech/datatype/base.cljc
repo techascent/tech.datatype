@@ -4,6 +4,7 @@
   set of datatypes and containers that hold contiguous sections of those datatypes."
 
   (:require [clojure.core.matrix :as m])
+  (:refer-clojure :exclude [cast])
   #?(:clj (:require [tech.datatype.base-macros :as base-macros]
                     [clojure.core.matrix.macros :refer [c-for]])
      :cljs (:require-macros [tech.datatype.base-macros :as base-macros]

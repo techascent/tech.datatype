@@ -35,6 +35,14 @@
   (->vector [item]))
 
 
+(defprotocol PPrototype
+  (from-prototype [item]))
+
+
+(defprotocol PClone
+  (clone [item]))
+
+
 ;;Map of keyword datatype to size in bytes.
 (def ^:dynamic *datatype->size-map* (atom {}))
 
@@ -309,8 +317,3 @@ of operations."
   clojure.lang.ISeq
   (copy-raw->item! [raw-data ary-target target-offset options]
     (copy-raw-seq->item! raw-data ary-target target-offset options)))
-
-(extend-type Object
-  PAccess
-  (get-value [item idx]
-    (item idx)))

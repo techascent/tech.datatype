@@ -35,7 +35,6 @@
   [ary-target (+ target-offset ^long (base/ecount raw-data))])
 
 
-
 (extend-type Object
   base/PCopyRawData
   (copy-raw->item!
@@ -47,7 +46,13 @@
   PToBuffer
   (->buffer-backing-store [src]
     (when-let [ary-data (->array src)]
-      (->buffer-backing-store src))))
+      (->buffer-backing-store src)))
+  base/PAccess
+  (get-value [item idx]
+    (item idx))
+  base/PClone
+  (clone [item]
+    (base/copy! item (base/from-prototype item))))
 
 
 (extend-type Buffer
@@ -302,6 +307,11 @@
                            [ary-target# (+ (long target-offset#) copy-len#)]))}
      base/PPersistentVector
      {:->vector (fn [src-ary#] (vec src-ary#))}
+     base/PPrototype
+     {:from-prototype (fn [src-ary#]
+                        (make-array-of-type ~datatype (alength
+                                                       (datatype->array-cast-fn ~datatype
+                                                                                src-ary#))))}
      PToBuffer
      {:->buffer-backing-store (fn [src-ary#]
                   (datatype->buffer-creation ~datatype src-ary#))}
@@ -350,6 +360,11 @@
                            (base/copy! raw-data# 0 ary-target# target-offset#
                                        copy-len# options#)
                            [ary-target# (+ (long target-offset#) copy-len#)]))}
+     base/PPrototype
+     {:from-prototype (fn [src-ary#]
+                        (if-not (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
+                          (make-buffer-of-type ~datatype (base/ecount src-ary#))
+                          (throw (ex-info "Cannot clone direct nio buffers" {}))))}
      PToBuffer
      {:->buffer-backing-store (fn [item#] item#)}
      PToArray

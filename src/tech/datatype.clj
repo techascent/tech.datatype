@@ -102,6 +102,16 @@ Calls clojure.core.matrix/ecount."
   (base/->vector item))
 
 
+(defn from-prototype
+  [item]
+  (base/from-prototype item))
+
+
+(defn clone
+  [item]
+  (base/clone item))
+
+
 (defn add-container-conversion-fn
   "Add a container->container conversion.  Function takes a dst-datatype and the src-container
 and returns a tuple of [result-container result-offset]."

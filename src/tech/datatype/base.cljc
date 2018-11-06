@@ -36,11 +36,24 @@
 
 
 (defprotocol PPrototype
-  (from-prototype [item]))
+  (from-prototype [item datatype shape]))
 
 
 (defprotocol PClone
-  (clone [item]))
+  (clone [item datatype]))
+
+
+(defn shape->ecount
+  ^long [shape-or-num]
+  (if (number? shape-or-num)
+    (long shape-or-num)
+    (do
+      (when-not (seq shape-or-num)
+        (throw (ex-info "Shape appears to not be a shape"
+                        {:shape shape-or-num})))
+      (when-not (> (count shape-or-num) 0)
+        (throw (ex-info "Empty shape is meaningless" {:shape shape-or-num})))
+      (long (apply * shape-or-num)))))
 
 
 ;;Map of keyword datatype to size in bytes.

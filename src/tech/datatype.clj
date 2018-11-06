@@ -57,6 +57,11 @@ Calls clojure.core.matrix/ecount."
   (base/shape item))
 
 
+(defn shape->ecount
+  ^long [shape-or-num]
+  (base/shape->ecount shape-or-num))
+
+
 (defn copy-raw->item!
   "Copy raw data into an array.  Returns a tuple of
   [ary-target result-offset-after-copy]"
@@ -103,13 +108,15 @@ Calls clojure.core.matrix/ecount."
 
 
 (defn from-prototype
-  [item]
-  (base/from-prototype item))
+  [item & {:keys [datatype shape]}]
+  (base/from-prototype item
+                       (or datatype (get-datatype item))
+                       (or shape (base/shape item))))
 
 
 (defn clone
-  [item]
-  (base/clone item))
+  [item & {:keys [datatype]}]
+  (base/clone item (or datatype (get-datatype item))))
 
 
 (defn add-container-conversion-fn

@@ -242,8 +242,9 @@
   (copy-raw->item! [raw-data ary-target target-offset options]
     (primitive/raw-dtype-copy! raw-data ary-target target-offset options))
   base/PPrototype
-  (from-prototype [item]
-    (->TypedBuffer (base/from-prototype buffer) dtype))
+  (from-prototype [item datatype shape]
+    (->TypedBuffer (base/from-prototype buffer (datatype->jvm-datatype datatype) shape)
+                   datatype))
   base/PPersistentVector
   (->vector [item]
     (vec (primitive/->array-copy item)))

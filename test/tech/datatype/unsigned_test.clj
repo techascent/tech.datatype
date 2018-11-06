@@ -5,7 +5,6 @@
   (:import [java.nio ByteBuffer]))
 
 
-
 (deftest unsigned-basics
   (let [test-data [255 254 0 1 2 3]
         src-buffer (short-array test-data)
@@ -37,7 +36,14 @@
       (dtype/set-value! dst-buffer 0 255)
       (dtype/copy! dst-buffer test-ary)
       (is (= [255 0 1 2 3]
-             (vec test-ary))))))
+             (vec test-ary)))
+      (is (= [255 0 1 2 3]
+             (-> (dtype/clone dst-buffer)
+                 (dtype/->vector))))
+      (is (= :uint32
+             (-> (dtype/clone dst-buffer :datatype :uint32)
+                 (dtype/get-datatype)))))))
+
 
 (deftest negative-numbers-always-wrong
   (doseq [datatype unsigned/unsigned-datatypes]

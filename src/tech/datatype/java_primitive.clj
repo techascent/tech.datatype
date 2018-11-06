@@ -51,8 +51,9 @@
   (get-value [item idx]
     (item idx))
   base/PClone
-  (clone [item]
-    (base/copy! item (base/from-prototype item))))
+  (clone [item datatype]
+    (base/copy! item (base/from-prototype item datatype
+                                          (base/shape item)))))
 
 
 (extend-type Buffer
@@ -308,10 +309,8 @@
      base/PPersistentVector
      {:->vector (fn [src-ary#] (vec src-ary#))}
      base/PPrototype
-     {:from-prototype (fn [src-ary#]
-                        (make-array-of-type ~datatype (alength
-                                                       (datatype->array-cast-fn ~datatype
-                                                                                src-ary#))))}
+     {:from-prototype (fn [src-ary# datatype# shape#]
+                        (make-array-of-type datatype# (base/shape->ecount shape#)))}
      PToBuffer
      {:->buffer-backing-store (fn [src-ary#]
                   (datatype->buffer-creation ~datatype src-ary#))}
@@ -361,9 +360,9 @@
                                        copy-len# options#)
                            [ary-target# (+ (long target-offset#) copy-len#)]))}
      base/PPrototype
-     {:from-prototype (fn [src-ary#]
+     {:from-prototype (fn [src-ary# datatype# shape#]
                         (if-not (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
-                          (make-buffer-of-type ~datatype (base/ecount src-ary#))
+                          (make-buffer-of-type datatype# (base/shape->ecount shape#))
                           (throw (ex-info "Cannot clone direct nio buffers" {}))))}
      PToBuffer
      {:->buffer-backing-store (fn [item#] item#)}

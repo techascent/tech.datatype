@@ -271,7 +271,7 @@ needing no wrapping or conversion."
   (every? #(satisfies? % item)
           [base/PDatatype mp/PElementCount base/PAccess base/PContainerType
            base/PCopyRawData base/PPersistentVector primitive/PToBuffer
-           primitive/PToArray base/PPrototype]))
+           primitive/PToArray base/PPrototype primitive/POffsetable]))
 
 
 (defn as-typed-buffer

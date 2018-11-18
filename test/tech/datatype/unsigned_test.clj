@@ -49,3 +49,10 @@
   (doseq [datatype unsigned/unsigned-datatypes]
     (is (thrown? Throwable
                  (dtype/cast -1 datatype)))))
+
+
+(deftest get-value-on-things
+  (is (= :one (dtype/get-value :one 0)))
+  (is (= 3 (dtype/get-value {:alpha 3} :alpha)))
+  (is (= 3 (dtype/get-value [1 2 3] 2)))
+  (is (thrown? Throwable (dtype/get-value :one 1))))

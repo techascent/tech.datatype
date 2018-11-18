@@ -48,18 +48,24 @@
   "Type hinted ecount so numeric expressions run faster.
 Calls clojure.core.matrix/ecount."
   ^long [item]
-  (base/ecount item))
+  (if (nil? item)
+    0
+    (base/ecount item)))
 
 
 (defn shape
   "m/shape with fallback to m/ecount if m/shape is not available."
   [item]
-  (base/shape item))
+  (if (nil? item)
+    nil
+    (base/shape item)))
 
 
 (defn shape->ecount
   ^long [shape-or-num]
-  (base/shape->ecount shape-or-num))
+  (if (nil? shape-or-num)
+    0
+    (base/shape->ecount shape-or-num)))
 
 
 (defn copy-raw->item!

@@ -155,3 +155,9 @@
           warmup (run-timed-fns)
           times (run-timed-fns)]
       (println times))))
+
+
+(deftest nil-has-nil-shape
+  (is (= nil (dtype/shape nil)))
+  (is (= 0 (dtype/ecount nil)))
+  (is (= 0 (dtype/shape->ecount (dtype/shape nil)))))

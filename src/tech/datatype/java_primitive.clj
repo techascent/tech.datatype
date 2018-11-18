@@ -3,9 +3,11 @@
   (:require [tech.datatype.base-macros :as base-macros]
             [tech.datatype.base :as base]
             [clojure.core.matrix.macros :refer [c-for]]
-            [clojure.core.matrix.protocols :as mp])
+            [clojure.core.matrix.protocols :as mp]
+            [tech.jna :as jna])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
+           [com.sun.jna Pointer]
            [mikera.arrayz INDArray]))
 
 
@@ -20,6 +22,11 @@
   (->buffer-backing-store [item]))
 
 
+(defprotocol POffsetable
+  (offset-item [item offset]
+    "Offset this thing and return a new item"))
+
+
 (defprotocol PToArray
   "Take a'thing' and convert it to an array that exactly represents the value
   of the data."
@@ -27,6 +34,34 @@
     "Convert to an array; both objects must share backing store")
   (->array-copy [item]
     "Convert to an array containing a copy of the data"))
+
+
+(defn ensure-ptr-like
+  "JNA is extremely flexible in what it can take as an argument.  Anything convertible
+  to a nio buffer, be it direct or array backend is fine."
+  [item]
+  (cond
+    (satisfies? jna/PToPtr item)
+    (jna/->ptr-backing-store item)
+    :else
+    (->buffer-backing-store item)))
+
+
+;;JNA functions
+(jna/def-jna-fn "c" memset
+  "Set a block of memory to a value"
+  Pointer
+  [data ensure-ptr-like]
+  [val int]
+  [num-bytes int])
+
+
+(jna/def-jna-fn "c" memcpy
+  "Copy bytes from one object to another"
+  Pointer
+  [dst ensure-ptr-like]
+  [src ensure-ptr-like]
+  [n-bytes int])
 
 
 (defn raw-dtype-copy!
@@ -294,6 +329,30 @@
    (make-buffer-of-type datatype elem-count-or-seq {})))
 
 
+(defn memset-constant
+  "Try to memset a constant value.  Returns true if succeeds, false otherwise"
+  [item offset value elem-count]
+  (let [offset (long offset)
+        elem-count (long elem-count)]
+    (if (or (= 0.0 (double value))
+            (and (<= Byte/MAX_VALUE (long value))
+                 (>= Byte/MIN_VALUE (long value))
+                 (= :int8 (base/get-datatype item))))
+      (do
+        (when-not (<= (+ (long offset)
+                         (long elem-count))
+                      (base/ecount item))
+          (throw (ex-info "Memset out of range"
+                          {:offset offset
+                           :elem-count elem-count
+                           :item-ecount (base/ecount item)})))
+        (memset (offset-item item offset) (int value)
+                (* elem-count (base/datatype->byte-size
+                               (base/get-datatype item))))
+        true)
+      false)))
+
+
 (defmacro implement-array-type
   [array-class datatype]
   `(clojure.core/extend
@@ -312,10 +371,11 @@
                        (let [value# (datatype->cast-fn :ignored ~datatype value#)
                              item# (datatype->array-cast-fn ~datatype item#)
                              offset# (long offset#)
-                             elem-count# (+ (long elem-count#)
+                             off-elem-count# (+ (long elem-count#)
                                             offset#)]
-                         (c-for [idx# offset# (< idx# elem-count#) (+ idx# 1)]
-                                (aset item# idx# value#))))}
+                         (when-not (memset-constant item# offset# value# elem-count#)
+                           (c-for [idx# offset# (< idx# off-elem-count#) (+ idx# 1)]
+                                  (aset item# idx# value#)))))}
      base/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
                          (let [copy-len# (alength (datatype->array-cast-fn ~datatype
@@ -330,7 +390,10 @@
                         (make-array-of-type datatype# (base/shape->ecount shape#)))}
      PToBuffer
      {:->buffer-backing-store (fn [src-ary#]
-                  (datatype->buffer-creation ~datatype src-ary#))}
+                                (datatype->buffer-creation ~datatype src-ary#))}
+     POffsetable
+     {:offset-item (fn [src-ary# offset#]
+                     (offset-item (->buffer-backing-store src-ary#) offset#))}
      PToArray
      {:->array identity
       :->array-copy (fn [src-ary#]
@@ -365,10 +428,11 @@
                        (let [value# (datatype->cast-fn :ignored ~datatype value#)
                              item# (datatype->buffer-cast-fn ~datatype item#)
                              offset# (long offset#)
-                             elem-count# (+ (long elem-count#)
-                                            offset#)]
-                         (c-for [idx# offset# (< idx# elem-count#) (+ idx# 1)]
-                                (.put item# (+ idx# (.position item#)) value#))))}
+                             off-elem-count# (+ (long elem-count#)
+                                                offset#)]
+                         (when-not (memset-constant item# offset# value# elem-count#)
+                           (c-for [idx# offset# (< idx# off-elem-count#) (+ idx# 1)]
+                                  (.put item# (+ idx# (.position item#)) value#)))))}
      base/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
                          (let [copy-len# (.remaining (datatype->buffer-cast-fn
@@ -383,6 +447,18 @@
                           (throw (ex-info "Cannot clone direct nio buffers" {}))))}
      PToBuffer
      {:->buffer-backing-store (fn [item#] item#)}
+     POffsetable
+     {:offset-item (fn [src-buf# offset#]
+                     (let [src-buf# (datatype->buffer-cast-fn ~datatype src-buf#)
+                           src-buf# (.slice src-buf#)
+                           offset# (long offset#)]
+                       (when-not (< offset# (base/ecount src-buf#))
+                         (throw (ex-info "Offset out of range:"
+                                         {:offset offset#
+                                          :ecount (base/ecount src-buf#)})))
+                       (.position src-buf# (+ (long offset#)
+                                              (.position src-buf#)))
+                       src-buf#))}
      PToArray
      {:->array (fn [item#]
                  (let [item# (datatype->buffer-cast-fn ~datatype item#)]
@@ -414,7 +490,14 @@
 
 (defmacro buffer-buffer-copy
   [src-dtype dst-dtype unchecked? src src-offset dst dst-offset n-elems options]
-  (if unchecked?
+  (cond
+    ;;If datatypes are equal, then just use memcpy
+    (= src-dtype dst-dtype)
+    `(memcpy (offset-item ~dst ~dst-offset)
+             (offset-item ~src ~src-offset)
+             (* (long ~n-elems)
+                (base/datatype->byte-size ~src-dtype)))
+    unchecked?
     `(let [
            n-elems# (long ~n-elems)
            src-buf# (datatype->buffer-cast-fn ~src-dtype ~src)
@@ -434,9 +517,11 @@
                dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)]
            (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
                   (.put dst# (unchecked-add idx# dst-offset#)
-                        (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
-                                                     (.get src# (unchecked-add
-                                                                 idx# src-offset#))))))))
+                        (datatype->unchecked-cast-fn
+                         ~src-dtype ~dst-dtype
+                         (.get src# (unchecked-add
+                                     idx# src-offset#))))))))
+    :else
     `(let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
            dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)
            src-buf# (datatype->buffer-cast-fn ~src-dtype ~src)

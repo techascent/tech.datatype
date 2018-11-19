@@ -56,3 +56,9 @@
   (is (= 3 (dtype/get-value {:alpha 3} :alpha)))
   (is (= 3 (dtype/get-value [1 2 3] 2)))
   (is (thrown? Throwable (dtype/get-value :one 1))))
+
+
+(deftest satsifies-interface-requirements
+  (is (unsigned/typed-buffer? (unsigned/make-typed-buffer :uint8 5 {})))
+  (is (unsigned/typed-buffer? (double-array 5)))
+  (is (unsigned/typed-buffer? (ByteBuffer/allocate 5))))

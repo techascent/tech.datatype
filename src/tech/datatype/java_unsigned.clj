@@ -261,7 +261,10 @@
                                                   (mp/element-count buffer))]
         (base/copy! item 0 dst-ary 0
                     (mp/element-count buffer)
-                    {:unchecked? true})))))
+                    {:unchecked? true}))))
+  primitive/POffsetable
+  (offset-item [item offset]
+    (->TypedBuffer (primitive/offset-item buffer offset))))
 
 
 (defn typed-buffer?

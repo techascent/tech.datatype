@@ -1,4 +1,4 @@
-(defproject techascent/tech.datatype "2.1-SNAPSHOT"
+(defproject techascent/tech.datatype "2.1"
   :description "Library for efficient manipulation of contiguous mutable containers of primitive datatypes."
   :url "http://github.com/tech-ascent/tech.datatype"
   :license {:name "Eclipse Public License"
@@ -6,4 +6,4 @@
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [net.mikera/core.matrix "0.62.0"]
                  [net.mikera/vectorz-clj "0.48.0"]
-                 [techascent/tech.jna "2.4"]])
+                 [techascent/tech.jna "2.5"]])

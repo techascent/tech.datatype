@@ -16,11 +16,6 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(defn- integer-datatype?
-  [datatype]
-  (boolean (#{:int8 :uint8 :int16 :uint16 :int32 :uint32 :int64 :uint64} datatype)))
-
-
 (defn offset-pointer
   ^Pointer [^Pointer ptr, ^long offset]
   (Pointer. (+ offset (Pointer/nativeValue ptr))))
@@ -194,7 +189,15 @@ and we convert your thing to a typed pointer."
           dorun)))
 
 
+(defn unsafe-free-ptr
+  [^Pointer ptr]
+  (Native/free (Pointer/nativeValue ptr)))
+
+
 (defn make-typed-pointer
+  "Make a typed pointer.  Aside from the usual option :unchecked?, there is a new option
+  :untracked? which means to explicitly avoid using the resource or gc tracking system
+  to track this pointer."
   [datatype elem-count-or-seq & [options]]
   (let [n-elems (long (if (number? elem-count-or-seq)
                         elem-count-or-seq
@@ -204,9 +207,11 @@ and we convert your thing to a typed pointer."
         byte-len (* n-elems (dtype-base/datatype->byte-size datatype))
         data (Native/malloc byte-len)
         retval (unsafe-address->typed-pointer data byte-len datatype)]
-    ;;This will be freed if either the resource context is released *or*
-    ;;the return value goes out of scope.
-    (gc-resource/track retval #(Native/free data))
+    ;;This will be freed if either the resource context is released *or* the return
+    ;;value goes out of scope.  In For some use-cases, the returned item should be
+    ;;untracked and the callers will assume resposibility for freeing the data.
+    (when-not (:untracked? options)
+      (gc-resource/track retval #(Native/free data)))
     (when-not (number? elem-count-or-seq)
       (let [jvm-datatype (unsigned/datatype->jvm-datatype datatype)
             data-ary (dtype/make-array-of-type jvm-datatype elem-count-or-seq {:unchecked? true})]

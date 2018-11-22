@@ -5,7 +5,6 @@
             [tech.datatype :as dtype]
             [tech.jna :as jna]
             [tech.resource :as resource]
-            [tech.gc-resource :as gc-resource]
             [clojure.core.matrix.protocols :as mp])
   (:import [com.sun.jna Pointer Native Function NativeLibrary]
            [com.sun.jna.ptr PointerByReference]
@@ -185,7 +184,8 @@ and we convert your thing to a typed pointer."
      (->> ~item-seq
           (map-indexed (fn [idx# val#]
                          (. ~ptr ~set-fn (* (long idx#) byte-size#)
-                            (primitive/datatype->unchecked-cast-fn :ignored ~datatype val#))))
+                            (primitive/datatype->unchecked-cast-fn :ignored
+                                                                   ~datatype val#))))
           dorun)))
 
 
@@ -211,10 +211,11 @@ and we convert your thing to a typed pointer."
     ;;value goes out of scope.  In For some use-cases, the returned item should be
     ;;untracked and the callers will assume resposibility for freeing the data.
     (when-not (:untracked? options)
-      (gc-resource/track retval #(Native/free data)))
+      (resource/track retval #(Native/free data) [:stack :gc]))
     (when-not (number? elem-count-or-seq)
       (let [jvm-datatype (unsigned/datatype->jvm-datatype datatype)
-            data-ary (dtype/make-array-of-type jvm-datatype elem-count-or-seq {:unchecked? true})]
+            data-ary (dtype/make-array-of-type jvm-datatype elem-count-or-seq
+                                               {:unchecked? true})]
         (dtype/copy! data-ary 0 retval 0 n-elems {:unchecked? true})))
     retval))
 
@@ -294,15 +295,21 @@ and we convert your thing to a typed pointer."
            (if (= dtype jvm-dtype)
              `(let [to-copy-fn# (array->buffer-copy ~dtype)
                     from-copy-fn# (buffer->array-copy ~dtype)]
-                (dtype-base/add-copy-operation :java-array :jna-buffer ~dtype ~dtype true to-copy-fn#)
-                (dtype-base/add-copy-operation :java-array :jna-buffer ~dtype ~dtype false to-copy-fn#)
-                (dtype-base/add-copy-operation :jna-buffer :java-array ~dtype ~dtype true from-copy-fn#)
-                (dtype-base/add-copy-operation :jna-buffer :java-array ~dtype ~dtype false from-copy-fn#)
+                (dtype-base/add-copy-operation :java-array :jna-buffer ~dtype
+                                               ~dtype true to-copy-fn#)
+                (dtype-base/add-copy-operation :java-array :jna-buffer ~dtype
+                                               ~dtype false to-copy-fn#)
+                (dtype-base/add-copy-operation :jna-buffer :java-array ~dtype
+                                               ~dtype true from-copy-fn#)
+                (dtype-base/add-copy-operation :jna-buffer :java-array ~dtype
+                                               ~dtype false from-copy-fn#)
                 ~dtype)
              `(let [to-copy-fn# (array->buffer-copy ~dtype)
                     from-copy-fn# (buffer->array-copy ~dtype)]
-                (dtype-base/add-copy-operation :java-array :jna-buffer ~jvm-dtype ~dtype true to-copy-fn#)
-                (dtype-base/add-copy-operation :jna-buffer :java-array ~dtype ~jvm-dtype true from-copy-fn#)
+                (dtype-base/add-copy-operation :java-array :jna-buffer ~jvm-dtype
+                                               ~dtype true to-copy-fn#)
+                (dtype-base/add-copy-operation :jna-buffer :java-array ~dtype
+                                               ~jvm-dtype true from-copy-fn#)
                 ~dtype))))
        vec))
 
@@ -313,7 +320,8 @@ and we convert your thing to a typed pointer."
   (->> (for [[src-dtype dst-dtype] unsigned/all-possible-datatype-pairs
              unchecked? [true false]]
          (do
-           (dtype-base/add-copy-operation :jna-buffer :jna-buffer src-dtype dst-dtype unchecked?
+           (dtype-base/add-copy-operation :jna-buffer :jna-buffer src-dtype
+                                          dst-dtype unchecked?
                                           buffer->buffer-copy)
            [src-dtype dst-dtype unchecked?]))
        vec))

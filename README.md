@@ -32,7 +32,7 @@ efficient full typed copy functions when the types can be ascertained.
 
 ## License
 
-Copyright © 2016 TechAscent, LLC.
+Copyright © 2018 TechAscent, LLC.
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.

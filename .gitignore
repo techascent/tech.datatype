@@ -11,6 +11,4 @@ pom.xml.asc
 .hg/
 checkouts
 *.log
-validation-project/target
-validation-project/classes
-validation-project/resources
+.cpcache

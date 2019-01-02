@@ -4,6 +4,8 @@
 
 A Clojure library for efficient manipulation of contiguous mutable containers of primitive datatypes.
 
+A nice post explaining more is [here](http://techascent.com/blog/datatype-library.html).
+
 Generalized efficient manipulations of sequences of primitive datatype.
 Includes specializations for java arrays, array views (subsection of an array)
 and nio buffers.  There are specializations to allow implementations to provide

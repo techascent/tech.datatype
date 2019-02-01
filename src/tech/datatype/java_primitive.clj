@@ -8,7 +8,9 @@
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
            [com.sun.jna Pointer]
-           [mikera.arrayz INDArray]))
+           [mikera.arrayz INDArray]
+           [tech.datatype ByteConverter ShortConverter IntConverter
+            LongConverter FloatConverter DoubleConverter]))
 
 
 (set! *warn-on-reflection* true)
@@ -488,6 +490,76 @@
    [(->buffer-backing-store src-ary) 0]))
 
 
+(defn byte-converter-cast ^ByteConverter [item] item)
+(defn short-converter-cast ^ShortConverter [item] item)
+(defn int-converter-cast ^IntConverter [item] item)
+(defn long-converter-cast ^LongConverter [item] item)
+(defn float-converter-cast ^FloatConverter [item] item)
+(defn double-converter-cast ^DoubleConverter [item] item)
+
+
+(defmacro datatype->converter
+  [datatype item]
+  (case datatype
+    :int8 `(byte-converter-cast ~item)
+    :int16 `(short-converter-cast ~item)
+    :int32 `(int-converter-cast ~item)
+    :int64 `(long-converter-cast ~item)
+    :float32 `(float-converter-cast ~item)
+    :float64 `(double-converter-cast ~item)))
+
+
+(defmacro buffer-converter-copy-fn
+  [dst-dtype]
+  `(fn [dst# dst-offset# n-elems# converter#]
+     (let [n-elems# (int n-elems#)
+           dst-buf# (datatype->buffer-cast-fn ~dst-dtype (->buffer-backing-store dst#))
+           dst# (datatype->array-cast-fn ~dst-dtype (->array dst#))
+           dst-offset# (+ (.position dst-buf#) (int dst-offset#))
+           converter# (datatype->converter ~dst-dtype converter#)]
+       (if dst#
+         (c-for [idx# (int 0) (< idx# n-elems#) (unchecked-add idx# 1)]
+                (aset dst# (unchecked-add idx# dst-offset#)
+                      (.convert converter# idx#)))
+         (let [dst# dst-buf#]
+           (c-for [idx# (int 0) (< idx# n-elems#) (unchecked-add idx# 1)]
+                  (.put dst# (unchecked-add idx# dst-offset#)
+                        (.convert converter# idx#))))))))
+
+
+(defmacro create-converter-fns
+  []
+  (->> (for [dtype datatypes]
+         [dtype `(buffer-converter-copy-fn ~dtype)])
+       (into {})))
+
+
+(def converter-fn-map (create-converter-fns))
+
+
+(defmacro make-converter
+  [dst-dtype & convert-code]
+  (case dst-dtype
+    :int8 `(reify ByteConverter
+             (convert [this# ~'idx]
+               ~@convert-code))
+    :int16 `(reify ShortConverter
+              (convert [this# ~'idx]
+                ~@convert-code))
+    :int32 `(reify IntConverter
+              (convert [this# ~'idx]
+                ~@convert-code))
+    :int64 `(reify LongConverter
+              (convert [this# ~'idx]
+                ~@convert-code))
+    :float32 `(reify FloatConverter
+                (convert [this# ~'idx]
+                  ~@convert-code))
+    :float64 `(reify DoubleConverter
+                (convert [this# ~'idx]
+                  ~@convert-code))))
+
+
 (defmacro buffer-buffer-copy
   [src-dtype dst-dtype unchecked? src src-offset dst dst-offset n-elems options]
   (cond
@@ -498,42 +570,40 @@
              (* (long ~n-elems)
                 (base/datatype->byte-size ~src-dtype)))
     unchecked?
-    `(let [
-           n-elems# (long ~n-elems)
-           src-buf# (datatype->buffer-cast-fn ~src-dtype ~src)
-           dst-buf# (datatype->buffer-cast-fn ~dst-dtype ~dst)
+    `(let [src-buf# (datatype->buffer-cast-fn ~src-dtype ~src)
            src# (datatype->array-cast-fn ~src-dtype (->array ~src))
-           dst# (datatype->array-cast-fn ~dst-dtype (->array ~dst))
-           src-offset# (+ (.position src-buf#) (long ~src-offset))
-           dst-offset# (+ (.position dst-buf#) (long ~dst-offset))]
+           src-offset# (+ (.position src-buf#) (int ~src-offset))
+           converter-fn# (get converter-fn-map ~dst-dtype)]
        ;;Fast path if both are representable by java arrays
-       (if (and src# dst#)
-         (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
-                (aset dst# (unchecked-add idx# dst-offset#)
-                      (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
-                                                   (aget src# (unchecked-add
-                                                               idx# src-offset#)))))
-         (let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
-               dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)]
-           (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
-                  (.put dst# (unchecked-add idx# dst-offset#)
-                        (datatype->unchecked-cast-fn
-                         ~src-dtype ~dst-dtype
-                         (.get src# (unchecked-add
-                                     idx# src-offset#))))))))
+       (if src#
+         (converter-fn# ~dst ~dst-offset ~n-elems
+                        (make-converter
+                         ~dst-dtype
+                         (datatype->unchecked-cast-fn
+                          ~src-dtype ~dst-dtype
+                          (aget src# (unchecked-add
+                                      ~'idx src-offset#)))))
+         (let [src# (datatype->buffer-cast-fn
+                     ~src-dtype (->buffer-backing-store ~src))]
+           (converter-fn# ~dst ~dst-offset ~n-elems
+                          (make-converter
+                           ~dst-dtype
+                           (datatype->unchecked-cast-fn
+                            ~src-dtype ~dst-dtype
+                            (.get src# (unchecked-add
+                                        ~'idx src-offset#))))))))
     :else
     `(let [src# (datatype->buffer-cast-fn ~src-dtype ~src)
-           dst# (datatype->buffer-cast-fn ~dst-dtype ~dst)
            src-buf# (datatype->buffer-cast-fn ~src-dtype ~src)
-           dst-buf# (datatype->buffer-cast-fn ~dst-dtype ~dst)
-           src-offset# (+ (.position src-buf#) (long ~src-offset))
-           dst-offset# (+ (.position dst-buf#) (long ~dst-offset))
-           n-elems# (long ~n-elems)]
-       (c-for [idx# 0 (< idx# n-elems#) (unchecked-add idx# 1)]
-              (.put dst# (unchecked-add idx# dst-offset#)
-                    (datatype->cast-fn ~src-dtype ~dst-dtype
-                                       (.get src# (unchecked-add
-                                                   idx# src-offset#))))))))
+           src-offset# (+ (.position src-buf#) (int ~src-offset))
+           converter-fn# (get converter-fn-map ~dst-dtype)]
+       (converter-fn# ~dst ~dst-offset ~n-elems
+                      (make-converter
+                       ~dst-dtype
+                       (datatype->cast-fn
+                        ~src-dtype ~dst-dtype
+                        (.get src# (unchecked-add
+                                    ~'idx src-offset#))))))))
 
 
 (defmacro update-base-copy-table

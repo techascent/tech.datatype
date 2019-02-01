@@ -338,39 +338,35 @@ needing no wrapping or conversion."
 
 (defmacro bufferable-bufferable-copy
   [src-dtype dst-dtype unchecked?]
-  (if unchecked?
-    `(fn [src# src-offset# dst# dst-offset# elem-count# options#]
-       (let [src# (primitive/datatype->buffer-cast-fn
-                   ~(datatype->jvm-datatype src-dtype)
-                   (primitive/->buffer-backing-store src#))
-             dst# (primitive/datatype->buffer-cast-fn
-                   ~(datatype->jvm-datatype dst-dtype)
-                   (primitive/->buffer-backing-store dst#))
-             src-offset# (+ (long src-offset#) (.position src#))
-             dst-offset# (+ (long dst-offset#) (.position dst#))
-             elem-count# (long elem-count#)]
-         (c-for [idx# 0 (< idx# elem-count#) (+ idx# 1)]
-                (.put dst# (+ idx# dst-offset#)
-                      (datatype->unchecked-jvm-cast-fn
-                       ~src-dtype ~dst-dtype
-                       (.get src# (+ idx# src-offset#)))))))
-    `(fn [src# src-offset# dst# dst-offset# elem-count# options#]
-       (let [src# (primitive/datatype->buffer-cast-fn
-                   ~(datatype->jvm-datatype src-dtype)
-                   (primitive/->buffer-backing-store src#))
-             dst# (primitive/datatype->buffer-cast-fn
-                   ~(datatype->jvm-datatype dst-dtype)
-                   (primitive/->buffer-backing-store dst#))
-             src-offset# (+ (long src-offset#) (.position src#))
-             dst-offset# (+ (long dst-offset#) (.position dst#))
-             elem-count# (long elem-count#)]
-         (c-for [idx# 0 (< idx# elem-count#) (+ idx# 1)]
-                (.put dst# (+ idx# dst-offset#)
-                      (datatype->jvm-cast-fn
-                       ~src-dtype ~dst-dtype
-                       (datatype->unchecked-cast-fn
-                        :ignored ~src-dtype
-                        (.get src# (+ idx# src-offset#))))))))))
+  (let [dst-jvm-dtype (datatype->jvm-datatype dst-dtype)
+        src-jvm-dtype (datatype->jvm-datatype src-dtype)]
+    (if unchecked?
+      `(fn [src# src-offset# dst# dst-offset# elem-count# options#]
+         (let [src# (primitive/datatype->buffer-cast-fn
+                     ~src-jvm-dtype
+                     (primitive/->buffer-backing-store src#))
+               src-offset# (+ (long src-offset#) (.position src#))
+               converter-fn# (get primitive/converter-fn-map ~dst-jvm-dtype)]
+           (converter-fn# dst# dst-offset# elem-count#
+                          (primitive/make-converter
+                           ~dst-jvm-dtype
+                           (datatype->unchecked-jvm-cast-fn
+                            ~src-dtype ~dst-dtype
+                            (.get src# (+ ~'idx src-offset#)))))))
+      `(fn [src# src-offset# dst# dst-offset# elem-count# options#]
+         (let [src# (primitive/datatype->buffer-cast-fn
+                     ~(datatype->jvm-datatype src-dtype)
+                     (primitive/->buffer-backing-store src#))
+               src-offset# (+ (long src-offset#) (.position src#))
+               converter-fn# (get primitive/converter-fn-map ~dst-jvm-dtype)]
+           (converter-fn# dst# dst-offset# elem-count#
+                          (primitive/make-converter
+                           ~dst-jvm-dtype
+                           (datatype->jvm-cast-fn
+                            ~src-dtype ~dst-dtype
+                            (datatype->unchecked-cast-fn
+                             :ignored ~src-dtype
+                             (.get src# (+ ~'idx src-offset#)))))))))))
 
 
 (defmacro custom-conversions-macro

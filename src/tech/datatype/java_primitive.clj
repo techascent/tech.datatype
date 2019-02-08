@@ -10,7 +10,8 @@
            [com.sun.jna Pointer]
            [mikera.arrayz INDArray]
            [tech.datatype ByteConverter ShortConverter IntConverter
-            LongConverter FloatConverter DoubleConverter]))
+            LongConverter FloatConverter DoubleConverter]
+           [java.lang.reflect Constructor]))
 
 
 (set! *warn-on-reflection* true)
@@ -306,21 +307,71 @@
     :float64 `(DoubleBuffer/wrap ^doubles ~src-ary)))
 
 
+(defonce ^:dynamic *array-constructors* (atom {}))
+
+
+(defn add-array-constructor!
+  [item-dtype cons-fn]
+  (swap! *array-constructors* assoc item-dtype cons-fn)
+  (keys @*array-constructors*))
+
+
+(defn add-numeric-array-constructor
+  [item-dtype ary-cons-fn]
+  (add-array-constructor!
+   item-dtype
+   (fn [elem-count-or-seq options]
+     (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
+                                     (:unchecked? options))
+                               elem-count-or-seq
+                               (map #(base/cast % item-dtype) elem-count-or-seq))]
+       (ary-cons-fn elem-count-or-seq)))))
+
+
+(add-numeric-array-constructor :int8 byte-array)
+(add-numeric-array-constructor :int16 short-array)
+(add-numeric-array-constructor :int32 int-array)
+(add-numeric-array-constructor :int64 long-array)
+(add-numeric-array-constructor :float32 float-array)
+(add-numeric-array-constructor :float64 double-array)
+(add-numeric-array-constructor :boolean boolean-array)
+
+
+(defn make-object-array-of-type
+  [obj-type elem-count-or-seq options]
+  (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
+                                     (:unchecked? options))
+                               elem-count-or-seq
+                               (map (partial jna/ensure-type obj-type) elem-count-or-seq))]
+    (if (number? elem-count-or-seq)
+      (let [constructor (if (:construct? options)
+                          (.getConstructor ^Class obj-type (make-array Class 0))
+                          nil)]
+        (if constructor
+          (into-array obj-type (repeatedly (long elem-count-or-seq)
+                                           #(.newInstance
+                                             ^Constructor constructor
+                                             (make-array Object 0))))
+          (make-array obj-type (long elem-count-or-seq))))
+      (into-array obj-type elem-count-or-seq))))
+
+
 (defn make-array-of-type
   ([datatype elem-count-or-seq options]
-   (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
-                                   (:unchecked? options))
-                             elem-count-or-seq
-                             (map #(base/cast % datatype) elem-count-or-seq))]
-     (case datatype
-       :int8 (byte-array elem-count-or-seq)
-       :int16 (short-array elem-count-or-seq)
-       :int32 (int-array elem-count-or-seq)
-       :int64 (long-array elem-count-or-seq)
-       :float32 (float-array elem-count-or-seq)
-       :float64 (double-array elem-count-or-seq))))
+   (if (instance? Class datatype)
+     (make-object-array-of-type datatype elem-count-or-seq options)
+     (if-let [cons-fn (get @*array-constructors* datatype)]
+       (cons-fn elem-count-or-seq options)
+       (throw (ex-info (format "Failed to find constructor for datatype %s" datatype)
+                       {:datatype datatype})))))
   ([datatype elem-count-or-seq]
    (make-array-of-type datatype elem-count-or-seq {})))
+
+
+(base/add-cast-fn :string str)
+(base/add-unchecked-cast-fn :string str)
+
+(add-numeric-array-constructor :string #(make-object-array-of-type String % {:construct? true}))
 
 
 (defn make-buffer-of-type
@@ -368,7 +419,8 @@
                    (aget (datatype->array-cast-fn ~datatype item#) idx#))
       :set-value! (fn [item# ^long offset# value#]
                     (aset (datatype->array-cast-fn ~datatype item#) offset#
-                          (datatype->cast-fn :ignored ~datatype value#)))
+                          (datatype->cast-fn :ignored ~datatype value#))
+                    item#)
       :set-constant! (fn [item# ^long offset# value# ^long elem-count#]
                        (let [value# (datatype->cast-fn :ignored ~datatype value#)
                              item# (datatype->array-cast-fn ~datatype item#)
@@ -377,7 +429,8 @@
                                             offset#)]
                          (when-not (memset-constant item# offset# value# elem-count#)
                            (c-for [idx# offset# (< idx# off-elem-count#) (+ idx# 1)]
-                                  (aset item# idx# value#)))))}
+                                  (aset item# idx# value#)))
+                         item#))}
      base/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
                          (let [copy-len# (alength (datatype->array-cast-fn ~datatype
@@ -412,6 +465,156 @@
 (implement-array-type (Class/forName "[D") :float64)
 
 
+(defn world->bool
+  [item]
+  (if (number? item)
+    (not= 0.0 (double item))
+    (boolean item)))
+
+(defn bool->world
+  ^long [bool-val]
+  (if (boolean bool-val)
+    1
+    0))
+
+(base/add-cast-fn :boolean world->bool)
+(base/add-unchecked-cast-fn :boolean world->bool)
+
+
+(defn as-boolean-array
+  ^"[Z" [obj] obj)
+
+(extend-type (Class/forName "[Z")
+  base/PDatatype
+  (get-datatype [_] :boolean)
+
+  base/PContainerType
+  (container-type [_] :boolean-array)
+
+  base/PAccess
+  (get-value [item idx]
+    (aget (as-boolean-array item) (int idx)))
+  (set-value! [item idx value]
+    (aset (as-boolean-array item) (int idx) ^boolean (world->bool value))
+    item)
+  (set-constant! [item offset value elem-count]
+    (let [offset (long offset)
+          off-elem-count (+ (long elem-count) offset)
+          value (boolean value)
+          item (as-boolean-array item)]
+      (c-for [idx offset (< idx off-elem-count) (unchecked-add idx 1)]
+             (aset item idx value))
+      item))
+
+  base/PCopyRawData
+  (copy-raw->item! [raw-data ary-target offset options]
+    (let [raw-data (as-boolean-array raw-data)
+          elem-count (alength raw-data)
+          offset (long offset)
+          off-elem-count (+ (long elem-count) offset)
+          target-dtype (base/get-datatype ary-target)]
+      (c-for [idx offset (< idx off-elem-count) (unchecked-add idx 1)]
+             (base/set-value! ary-target idx (if (aget raw-data (- idx offset))
+                                               0
+                                               1)))
+      [ary-target (+ offset off-elem-count)]))
+
+  base/PPersistentVector
+  (->vector [item] (vec item))
+
+  base/PPrototype
+  (from-prototype [src-ary datatype shape]
+    (make-array-of-type datatype (base/shape->ecount shape)))
+
+
+  PToArray
+  (->array [item] item)
+  (->array-copy [src-ary]
+    (base/copy! src-ary (make-array-of-type :boolean (alength (as-boolean-array src-ary))))))
+
+
+(defn as-object-array
+  ^"[Ljava.lang.Object;" [item]
+  item)
+
+
+(defonce ^:dynamic *object-array-datatype-override* (atom nil))
+
+
+(defn add-object-array-datatype-override!
+  [cls-dtype override-val]
+  (swap! *object-array-datatype-override* assoc cls-dtype override-val)
+  (keys @*object-array-datatype-override*))
+
+
+(defn extend-object-array-type
+  [obj-ary-cls]
+  (when-not (.isArray ^Class obj-ary-cls)
+    (throw (ex-info "Obj class is not an array class" {})))
+
+  (clojure.core/extend
+      obj-ary-cls
+    base/PDatatype
+    {:get-datatype (fn [item]
+                     (let [ary-data-cls (.getComponentType ^Class (type item))]
+                       (get @*object-array-datatype-override* ary-data-cls ary-data-cls)))}
+
+    base/PContainerType
+    {:container-type (fn [item] (type item))}
+
+    base/PAccess
+    {:get-value (fn [item idx]
+                  (aget (as-object-array item) (int idx)))
+     :set-value! (fn [item idx value]
+                   (when-not (jna/ensure-type (.getComponentType ^Class (type item))
+                                              value)
+                     (throw (ex-info "Value is not of expected array type."
+                                     {:datatype (base/get-datatype item)
+                                      :value-type (type value)})))
+                   (aset (as-object-array item) (int idx) value)
+                   item)
+     :set-constant! (fn [item offset value elem-count]
+                      (when-not (jna/ensure-type (.getComponentType ^Class (type item))
+                                                 value)
+                        (throw (ex-info "Value is not of expected array type."
+                                        {:datatype (base/get-datatype item)
+                                         :value-type (type value)})))
+                      (let [offset (long offset)
+                            off-elem-count (+ (long elem-count) offset)
+                            item (as-object-array item)]
+                        (c-for [idx offset (< idx off-elem-count) (unchecked-add idx 1)]
+                               (aset item idx value))
+                        item))}
+
+  base/PCopyRawData
+  {:copy-raw->item! (fn [raw-data ary-target offset options]
+                      (let [raw-data (as-object-array raw-data)
+                            elem-count (alength raw-data)
+                            offset (long offset)
+                            off-elem-count (+ (long elem-count) offset)
+                            target-dtype (base/get-datatype ary-target)]
+                        (c-for [idx offset (< idx off-elem-count) (unchecked-add idx 1)]
+                               (base/set-value! ary-target idx (aget raw-data (- idx offset))))
+                        [ary-target (+ offset off-elem-count)]))}
+
+  base/PPersistentVector
+  {:->vector (fn [item] (vec item))}
+
+  base/PPrototype
+  {:from-prototype (fn [src-ary datatype shape]
+                     (make-array-of-type datatype (base/shape->ecount shape)))}
+
+  PToArray
+  {:->array (fn [item] item)
+   :->array-copy (fn [src-ary]
+                   (base/copy! src-ary (make-array-of-type :boolean (alength (as-boolean-array src-ary)))))}))
+
+
+(extend-object-array-type (Class/forName "[Ljava.lang.Object;"))
+(extend-object-array-type (Class/forName "[Ljava.lang.String;"))
+(add-object-array-datatype-override! String :string)
+
+
 (defmacro implement-buffer-type
   [buffer-class datatype]
   `(clojure.core/extend
@@ -425,7 +628,8 @@
       :set-value! (fn [item# ^long offset# value#]
                     (let [buf# (datatype->buffer-cast-fn ~datatype item#)]
                       (.put buf# (+ (.position buf#) offset#)
-                            (datatype->cast-fn :ignored ~datatype value#))))
+                            (datatype->cast-fn :ignored ~datatype value#))
+                      item#))
       :set-constant! (fn [item# ^long offset# value# ^long elem-count#]
                        (let [value# (datatype->cast-fn :ignored ~datatype value#)
                              item# (datatype->buffer-cast-fn ~datatype item#)
@@ -434,7 +638,8 @@
                                                 offset#)]
                          (when-not (memset-constant item# offset# value# elem-count#)
                            (c-for [idx# offset# (< idx# off-elem-count#) (+ idx# 1)]
-                                  (.put item# (+ idx# (.position item#)) value#)))))}
+                                  (.put item# (+ idx# (.position item#)) value#))))
+                       item#)}
      base/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
                          (let [copy-len# (.remaining (datatype->buffer-cast-fn

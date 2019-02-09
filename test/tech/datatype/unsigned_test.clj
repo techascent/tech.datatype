@@ -62,3 +62,11 @@
   (is (unsigned/typed-buffer? (unsigned/make-typed-buffer :uint8 5 {})))
   (is (unsigned/typed-buffer? (double-array 5)))
   (is (unsigned/typed-buffer? (ByteBuffer/allocate 5))))
+
+
+(deftest ->array-respects-limit
+  (let [nio-buf (doto (ByteBuffer/wrap (byte-array [1 2 3 4 5]))
+                  (.limit 2))]
+    (is (= 2 (dtype/ecount nio-buf)))
+    (is (nil? (dtype/->array nio-buf)))
+    (is (= (dtype/->vector nio-buf) [1 2]))))

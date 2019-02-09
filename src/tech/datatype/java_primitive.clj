@@ -670,7 +670,9 @@
      {:->array (fn [item#]
                  (let [item# (datatype->buffer-cast-fn ~datatype item#)]
                    (when (and (= 0 (.position item#))
-                              (not (.isDirect item#)))
+                              (not (.isDirect item#))
+                              (= (.limit item#)
+                                 (.capacity item#)))
                      (.array item#))))
       :->array-copy (fn [item#]
                       (let [dst-ary# (make-array-of-type ~datatype

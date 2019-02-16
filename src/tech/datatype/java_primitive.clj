@@ -321,11 +321,23 @@
   (add-array-constructor!
    item-dtype
    (fn [elem-count-or-seq options]
-     (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
-                                     (:unchecked? options))
-                               elem-count-or-seq
-                               (map #(base/cast % item-dtype) elem-count-or-seq))]
-       (ary-cons-fn elem-count-or-seq)))))
+     (cond
+       (number? elem-count-or-seq)
+       (ary-cons-fn elem-count-or-seq)
+       (satisfies? base/PDatatype elem-count-or-seq)
+       (if (and (satisfies? PToArray elem-count-or-seq)
+                (= item-dtype (base/get-datatype elem-count-or-seq)))
+         (->array-copy elem-count-or-seq)
+         (let [n-elems (base/ecount elem-count-or-seq)]
+           (base/copy! elem-count-or-seq 0
+                       (ary-cons-fn item-dtype) 0
+                       n-elems options)))
+       :else
+       (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
+                                       (:unchecked? options))
+                                 elem-count-or-seq
+                                 (map #(base/cast % item-dtype) elem-count-or-seq))]
+         (ary-cons-fn elem-count-or-seq))))))
 
 
 (add-numeric-array-constructor :int8 byte-array)
@@ -342,7 +354,8 @@
   (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
                                      (:unchecked? options))
                                elem-count-or-seq
-                               (map (partial jna/ensure-type obj-type) elem-count-or-seq))]
+                               (map (partial jna/ensure-type obj-type)
+                                    elem-count-or-seq))]
     (if (number? elem-count-or-seq)
       (let [constructor (if (:construct? options)
                           (.getConstructor ^Class obj-type (make-array Class 0))

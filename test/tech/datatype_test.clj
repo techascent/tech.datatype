@@ -138,11 +138,15 @@
           generic-copy (fn []
                          (base/generic-copy! src-buf 0 dst-buf 0 num-items
                                              {:unchecked? true}))
+
+          make-array (fn []
+                       (dtype/make-array-of-type :float32 dst-buf))
           fns {:array-copy array-copy
                :buffer-copy buffer-copy
                :dtype-copy dtype-copy
                :unchecked-dtype-copy unchecked-dtype-copy
                :raw-copy raw-dtype-copy
+               :make-array make-array
                :generic-copy generic-copy}
           run-timed-fns (fn []
                           (->> fns

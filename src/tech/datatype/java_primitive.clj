@@ -330,7 +330,7 @@
          (->array-copy elem-count-or-seq)
          (let [n-elems (base/ecount elem-count-or-seq)]
            (base/copy! elem-count-or-seq 0
-                       (ary-cons-fn item-dtype) 0
+                       (ary-cons-fn n-elems) 0
                        n-elems options)))
        :else
        (let [elem-count-or-seq (if (or (number? elem-count-or-seq)

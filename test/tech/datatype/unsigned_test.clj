@@ -70,3 +70,17 @@
     (is (= 2 (dtype/ecount nio-buf)))
     (is (nil? (dtype/->array nio-buf)))
     (is (= (dtype/->vector nio-buf) [1 2]))))
+
+
+(deftest make-array-all-variants
+  (let [src-buf (unsigned/make-typed-buffer :uint8 (range 5) {})
+        test-vec (dtype/->vector src-buf)
+        make-array-test-fn (fn [target-dtype input]
+                             (let [dest-ary (dtype/make-array-of-type
+                                             target-dtype input)]
+                               (is (= test-vec
+                                      (mapv long (dtype/->vector dest-ary))))))]
+    (make-array-test-fn :int8 src-buf)
+    (make-array-test-fn :float32 src-buf)
+    (make-array-test-fn :int64 (dtype/->vector src-buf))
+    (make-array-test-fn :int32 (int-array (dtype/->vector src-buf)))))

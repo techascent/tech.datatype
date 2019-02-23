@@ -237,22 +237,31 @@
     :float32 `(as-float-buffer ~buf)
     :float64 `(as-double-buffer ~buf)))
 
+(defmacro bool->number
+  [item]
+  `(if ~item 1 0))
 
 ;; Save these because we are switching to unchecked soon.
-(def int8-cast byte)
-(def int16-cast short)
-(def int32-cast int)
-(def int64-cast long)
-(def float32-cast float)
-(def float64-cast double)
+(defmacro ->number
+  [item]
+  `(if (not (number? ~item))
+     (bool->number ~item)
+     ~item))
+
+(def int8-cast #(byte (->number %)))
+(def int16-cast #(short (->number %)))
+(def int32-cast #(int (->number %)))
+(def int64-cast #(long (->number %)))
+(def float32-cast #(float (->number %)))
+(def float64-cast #(double (->number %)))
 
 
-(base/add-cast-fn :int8 byte)
-(base/add-cast-fn :int16 short)
-(base/add-cast-fn :int32 int)
-(base/add-cast-fn :int64 long)
-(base/add-cast-fn :float32 float)
-(base/add-cast-fn :float64 double)
+(base/add-cast-fn :int8 int8-cast)
+(base/add-cast-fn :int16 int16-cast)
+(base/add-cast-fn :int32 int32-cast)
+(base/add-cast-fn :int64 int64-cast)
+(base/add-cast-fn :float32 float32-cast)
+(base/add-cast-fn :float64 float64-cast)
 
 
 ;; From this point on everything else is unchecked-checked!!
@@ -262,12 +271,12 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(base/add-unchecked-cast-fn :int8 unchecked-byte)
-(base/add-unchecked-cast-fn :int16 unchecked-short)
-(base/add-unchecked-cast-fn :int32 unchecked-int)
-(base/add-unchecked-cast-fn :int64 unchecked-long)
-(base/add-unchecked-cast-fn :float32 unchecked-float)
-(base/add-unchecked-cast-fn :float64 unchecked-double)
+(base/add-unchecked-cast-fn :int8 #(unchecked-byte (->number %)))
+(base/add-unchecked-cast-fn :int16 #(unchecked-short (->number %)))
+(base/add-unchecked-cast-fn :int32 #(unchecked-int (->number %)))
+(base/add-unchecked-cast-fn :int64 #(unchecked-long (->number %)))
+(base/add-unchecked-cast-fn :float32 #(unchecked-float (->number %)))
+(base/add-unchecked-cast-fn :float64 #(unchecked-double (->number %)))
 
 
 (defmacro datatype->cast-fn
@@ -288,12 +297,12 @@
   (if (= src-dtype dtype)
     val
     (case dtype
-      :int8 `(unchecked-byte ~val)
-      :int16 `(unchecked-short ~val)
-      :int32 `(unchecked-int ~val)
-      :int64 `(unchecked-long ~val)
-      :float32 `(unchecked-float ~val)
-      :float64 `(unchecked-double ~val))))
+      :int8 `(unchecked-byte (->number ~val))
+      :int16 `(unchecked-short (->number ~val))
+      :int32 `(unchecked-int (->number ~val))
+      :int64 `(unchecked-long (->number ~val))
+      :float32 `(unchecked-float (->number ~val))
+      :float64 `(unchecked-double (->number ~val)))))
 
 
 (defmacro datatype->buffer-creation

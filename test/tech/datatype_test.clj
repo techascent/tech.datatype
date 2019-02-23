@@ -165,3 +165,40 @@
   (is (= nil (dtype/shape nil)))
   (is (= 0 (dtype/ecount nil)))
   (is (= 0 (dtype/shape->ecount (dtype/shape nil)))))
+
+
+(deftest boolean-support
+  (is (= [0 1 0]
+         (-> (dtype/make-array-of-type :int8 [false true false])
+             (dtype/->vector))))
+
+
+  (is (= [0 1 0]
+         (-> (dtype/make-array-of-type :int8 (boolean-array [false true false]))
+             (dtype/->vector))))
+
+
+  (is (= [0 1 0]
+         (-> (dtype/copy! (boolean-array [false true false]) 0
+                          (dtype/make-array-of-type :int8 3) 0
+                          3
+                          {:unchecked? true})
+             (dtype/->vector))))
+
+
+  (is (= [false true false]
+         (-> (dtype/make-array-of-type :boolean [0 1 0])
+             (dtype/->vector))))
+
+
+  (is (= [false true false]
+         (-> (dtype/make-array-of-type :boolean [0.0 0.01 0.0])
+             (dtype/->vector))))
+
+  (is (= true (dtype/cast 10 :boolean)))
+
+  (is (= false (dtype/cast 0 :boolean)))
+
+  (is (= 1 (dtype/cast true :int16)))
+
+  (is (= 0.0 (dtype/cast false :float64))))

@@ -681,7 +681,7 @@
                      (let [src-buf# (datatype->buffer-cast-fn ~datatype src-buf#)
                            src-buf# (.slice src-buf#)
                            offset# (long offset#)]
-                       (when-not (< offset# (base/ecount src-buf#))
+                       (when-not (<= offset# (base/ecount src-buf#))
                          (throw (ex-info "Offset out of range:"
                                          {:offset offset#
                                           :ecount (base/ecount src-buf#)})))
@@ -692,10 +692,11 @@
      {:->array (fn [item#]
                  (let [item# (datatype->buffer-cast-fn ~datatype item#)]
                    (when (and (= 0 (.position item#))
-                              (not (.isDirect item#))
-                              (= (.limit item#)
-                                 (.capacity item#)))
-                     (.array item#))))
+                              (not (.isDirect item#)))
+                     (let [array-data# (.array item#)]
+                       (when (= (.limit item#)
+                                (alength array-data#))
+                         array-data#)))))
       :->array-copy (fn [item#]
                       (let [dst-ary# (make-array-of-type ~datatype
                                                          (mp/element-count item#))]

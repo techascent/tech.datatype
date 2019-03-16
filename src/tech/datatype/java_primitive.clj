@@ -17,28 +17,6 @@
 (set! *warn-on-reflection* true)
 
 
-(defprotocol PToBuffer
-  "Take a 'thing' and convert it to a nio buffer.  Only valid if the thing
-  shares the backing store with the buffer.  Result may not exactly
-  represent the value of the item itself as the backing store may require
-  element-by-element conversion to represent the value of the item."
-  (->buffer-backing-store [item]))
-
-
-(defprotocol POffsetable
-  (offset-item [item offset]
-    "Offset this thing and return a new item"))
-
-
-(defprotocol PToArray
-  "Take a'thing' and convert it to an array that exactly represents the value
-  of the data."
-  (->array [item]
-    "Convert to an array; both objects must share backing store")
-  (->array-copy [item]
-    "Convert to an array containing a copy of the data"))
-
-
 (defn ensure-ptr-like
   "JNA is extremely flexible in what it can take as an argument.  Anything convertible
   to a nio buffer, be it direct or array backend is fine."

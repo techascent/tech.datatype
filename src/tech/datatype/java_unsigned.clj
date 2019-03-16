@@ -16,8 +16,6 @@
 
 ;;We first instroduce a new type of cast and this takes the datatype and
 ;;casts it to it storage type in the jvm.
-
-
 (def ^:dynamic *jvm-cast-table* (atom {}))
 (def ^:dynamic *unchecked-jvm-cast-table* (atom {}))
 (def ^:dynamic *->jvm-datatype-table* (atom {}))
@@ -161,24 +159,6 @@
       :uint32 `(bit-and (unchecked-long ~val) 0xFFFFFFFF)
       :uint64 `(unchecked-long ~val)
       `(primitive/datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
-
-
-(defmacro datatype->cast-fn
-  [src-dtype dst-dtype val]
-  (if (= src-dtype dst-dtype)
-    val
-    (case dst-dtype
-      :uint8 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
-                                           (check (short 0xff) (short 0) (short ~val)))
-      :uint16 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
-                                            (check (int 0xffff) (int 0) (int ~val)))
-      :uint32 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
-                                            (check (long 0xffffffff) (int 0)
-                                                   (long ~val)))
-      :uint64 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
-                                            (check (long Long/MAX_VALUE) (long 0)
-                                                   (long ~val)))
-      `(primitive/datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
 
 
 (defmacro datatype->jvm-cast-fn

@@ -6,42 +6,10 @@
   (:require [clojure.core.matrix :as m])
   (:refer-clojure :exclude [cast])
   #?(:clj (:require [tech.datatype.base-macros :as base-macros]
+                    [tech.datatype.protocols :as dtype-proto]
                     [clojure.core.matrix.macros :refer [c-for]])
      :cljs (:require-macros [tech.datatype.base-macros :as base-macros]
                             [clojure.core.matrix.macros :refer [c-for]])))
-
-
-(defprotocol PDatatype
-  (get-datatype [item]))
-
-
-(defprotocol PAccess
-  (set-value! [item offset value])
-  (set-constant! [item offset value elem-count])
-  (get-value [item offset]))
-
-
-(defprotocol PContainerType
-  (container-type [item]))
-
-
-(defprotocol PCopyRawData
-  "Given a sequence of data copy it as fast as possible into a target item."
-  (copy-raw->item! [raw-data ary-target target-offset options]))
-
-
-(defprotocol PPersistentVector
-  "Conversion to a persistent vector of numbers."
-  (->vector [item]))
-
-
-(defprotocol PPrototype
-  (from-prototype [item datatype shape]))
-
-
-(defprotocol PClone
-  (clone [item datatype]))
-
 
 (defn shape->ecount
   ^long [shape-or-num]

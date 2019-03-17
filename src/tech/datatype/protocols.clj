@@ -5,11 +5,7 @@
   (get-datatype [item]))
 
 (defprotocol PContainerType
-  (container-type [item])
-  ;;If dense, then conversion to typed buffer is possible
-  (dense-container? [item])
-  ;;IF sparse, then conversion to sparse typed buffer is possible.
-  (sparse-container? [item]))
+  (container-type [item]))
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."

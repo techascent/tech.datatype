@@ -5,6 +5,7 @@
   (:refer-clojure :exclude [cast])
   (:require [tech.datatype.base-macros :as base-macros]
             [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.casting :as casting]
             [tech.datatype.io :as dtype-io]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix :as m])
@@ -26,40 +27,9 @@
       (long (apply * shape-or-num)))))
 
 
-;;Map of keyword datatype to size in bytes.
-(def ^:dynamic *datatype->size-map* (atom {}))
-
-;;Container Conversion Table
-;;{src-container-type {dst-container-type (fn [src dst-container-type] [dst dst-offset])
-;;}}
-;;Conversion map is a map of all destination conversions available
-;;given a source container type.
-(def ^:dynamic *container-conversion-table* (atom {}))
-
-;;Copy table maps tuple of:
-;;[src-container dst-container src-dtype dst-dtype unchecked?]
-;;to a function:
-;;(fn [src src-offset dst dst-offset n-elems options] (do-the-copy ...)
-(def ^:dynamic *copy-table* (atom {}))
-
-
-;;Set to true to catch when copy operations are falling back to the slow generic
-;;copy path.
-(def ^:dynamic *error-on-slow-path* false)
-
-
-(defn add-datatype->size-mapping
-  [datatype byte-size]
-  (swap! *datatype->size-map* assoc datatype byte-size))
-
-
 (defn datatype->byte-size
   ^long [datatype]
-  (if-let [retval (get @*datatype->size-map* datatype)]
-    (long retval)
-    (throw (ex-info "Failed to find datatype->size mapping"
-                    {:datatype datatype
-                     :available-datatypes (keys @*datatype->size-map*)}))))
+  (casting/numeric-byte-width datatype))
 
 
 (defn set-value! [item offset value]
@@ -98,117 +68,21 @@
    (dtype-proto/make-container container-type datatype
                                elem-seq options))
   ([container-type datatype elem-seq]
-   (dtype-proto/make-container container-type datatype elem-seq)))
-
-
-(defn generic-copy!
-  "Copy using PAccess protocol.  Extremely slow for large buffers."
-  [item item-offset dest dest-offset elem-count options]
-  (when *error-on-slow-path*
-    (throw (ex-info "should not hit slow path"
-                    {:src-type (type item)
-                     :dest-type (type dest)})))
-  (let [item-offset (long item-offset)
-        dest-offset (long dest-offset)
-        elem-count (long elem-count)]
-    (c-for [idx 0 (< idx elem-count) (inc idx)]
-           (set-value!
-            dest (+ dest-offset idx)
-            (get-value item (+ item-offset idx))))
-    dest))
-
-
-(defn add-container-conversion-fn
-  [src-container-type dst-container-type convert-fn]
-  (swap! *container-conversion-table*
-         (fn [convert-map]
-           (assoc-in convert-map [src-container-type dst-container-type] convert-fn))))
-
-
-
-(defn add-copy-operation
-  "Add a new copy operation.  Note that this is a single point in a 5 dimensional space
-of operations."
-  [src-container-type dst-container-type src-dtype dst-dtype unchecked? copy-fn]
-  (swap! *copy-table* assoc [src-container-type dst-container-type
-                             src-dtype dst-dtype unchecked?]
-         copy-fn))
-
-
-(defn- find-copy-fn
-  [src-container dst-container src-dtype dst-dtype unchecked?]
-  (let [cache-fn-key [src-container
-                      dst-container
-                      src-dtype
-                      dst-dtype
-                      unchecked?]]
-    (if-let [cache-fn (get @*copy-table* cache-fn-key)]
-      cache-fn
-      (let [copy-table @*copy-table*
-            conversion-table @*container-conversion-table*
-            cache-copy-fn (fn [copy-fn]
-                            (swap! *copy-table*
-                                   assoc cache-fn-key copy-fn)
-                            copy-fn)
-            src-conversions (get conversion-table src-container)
-            dst-conversions (get conversion-table dst-container)
-            ;;This should be a combination of dijkstras shortest path
-            ;;to something in the table copy map for both src and dst.
-            ;;It is not at this time.
-            table-data
-            (->> (for [src-conversion (concat [[src-container nil]]
-                                              (seq src-conversions))
-                       dst-conversion (concat [[dst-container nil]]
-                                              (seq dst-conversions))]
-                   ;;When the copy table has an entry for the converted types
-                   ;;Then use the copy entry along with the conversion
-                   (let [[src-conv-cont src-conv] src-conversion
-                         [dst-conv-cont dst-conv] dst-conversion]
-                     (when-let [copy-fn (get copy-table
-                                             [src-conv-cont dst-conv-cont
-                                              src-dtype dst-dtype unchecked?])]
-                       [copy-fn
-                        (when src-conv
-                          (partial src-conv src-conv-cont))
-                        (when dst-conv
-                          (partial dst-conv dst-conv-cont))])))
-                 (remove nil?)
-                 first)]
-        (if table-data
-          (let [[table-copy-fn src-conv dst-conv] table-data]
-            (cache-copy-fn
-             (fn [src src-offset dst dst-offset n-elems options]
-               (let [[src src-conv-offset] (if src-conv
-                                             (src-conv src)
-                                             [src 0])
-                     [dst dst-conv-offset] (if dst-conv
-                                             (dst-conv dst)
-                                             [dst 0])]
-                 (table-copy-fn src (+ (long src-offset) (long src-conv-offset))
-                                dst (+ (long dst-offset) (long dst-conv-offset))
-                                n-elems options)))))
-
-          generic-copy!)))))
+   (dtype-proto/make-container container-type datatype elem-seq {})))
 
 
 (defn copy!
   "copy elem-count src items to dest items.  Options may contain unchecked in which you
   get unchecked operations."
   ([src src-offset dest dest-offset elem-count options]
-   (let [src-dtype (dtype-proto/get-datatype src)
-         src-offset (long src-offset)
-         dest-dtype (dtype-proto/get-datatype dest)
-         dest-offset (long dest-offset)
-         elem-count (long elem-count)
-         copy-fn (find-copy-fn (dtype-proto/container-type src)
-                               (dtype-proto/container-type dest)
-                               (dtype-proto/get-datatype src)
-                               (dtype-proto/get-datatype dest)
-                               (boolean (:unchecked? options)))]
-     (base-macros/check-range src src-offset elem-count)
-     (base-macros/check-range dest dest-offset elem-count)
-     (copy-fn src src-offset dest dest-offset elem-count options)
-     dest))
+   (base-macros/check-range src src-offset elem-count)
+   (base-macros/check-range dest dest-offset elem-count)
+   (let [src (dtype-proto/sub-buffer src src-offset elem-count)
+         dest (dtype-proto/sub-buffer dest dest-offset elem-count)]
+     (dtype-io/dense-copy! dest src elem-count
+                           (:unchecked? options)
+                           (:parallel? options)))
+   dest)
   ([src src-offset dst dst-offset elem-count]
    (copy! src src-offset dst dst-offset elem-count {:unchecked? false}))
   ([src dest]

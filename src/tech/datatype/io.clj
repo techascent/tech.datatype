@@ -25,14 +25,76 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
+(extend-protocol dtype-proto/PDatatype
+  ObjectReader
+  (get-datatype [item] :object)
+  ObjectWriter
+  (get-datatype [item] :object)
+  Mutable
+  (get-datatype [item] :object)
+  ByteReader
+  (get-datatype [item] :int8)
+  ByteWriter
+  (get-datatype [item] :int8)
+  ByteMutable
+  (get-datatype [item] :int8)
+  ShortReader
+  (get-datatype [item] :int16)
+  ShortWriter
+  (get-datatype [item] :int16)
+  ShortMutable
+  (get-datatype [item] :int16)
+  IntReader
+  (get-datatype [item] :int32)
+  IntWriter
+  (get-datatype [item] :int32)
+  IntMutable
+  (get-datatype [item] :int32)
+  LongReader
+  (get-datatype [item] :int64)
+  LongWriter
+  (get-datatype [item] :int64)
+  LongMutable
+  (get-datatype [item] :int64)
+  FloatReader
+  (get-datatype [item] :float32)
+  FloatWriter
+  (get-datatype [item] :float32)
+  FloatMutable
+  (get-datatype [item] :float32)
+  DoubleReader
+  (get-datatype [item] :float64)
+  DoubleWriter
+  (get-datatype [item] :float64)
+  DoubleMutable
+  (get-datatype [item] :float64)
+  BooleanReader
+  (get-datatype [item] :boolean)
+  BooleanWriter
+  (get-datatype [item] :boolean)
+  BooleanMutable
+  (get-datatype [item] :boolean))
+
+
 (defn ->object-reader ^ObjectReader [item]
   (if (instance? ObjectReader item)
     item
     (dtype-proto/->object-reader item)))
+
+(extend-type ObjectReader
+  dtype-proto/PToReader
+  (->object-reader [item] item)
+  (->reader-of-type [item datatype] (throw (ex-info "unimplemented" {}))))
+
 (defn ->object-writer ^ObjectWriter [item]
   (if (instance? ObjectWriter item)
     item
     (dtype-proto/->object-writer item)))
+
+(extend-type ObjectWriter
+  dtype-proto/PToWriter
+  (->object-writer [item] item)
+  (->writer-of-type [item datatype] (throw (ex-info "unimplemented" {}))))
 
 (defn ->object-mutable ^Mutable [item]
   (if (instance? Mutable item)
@@ -169,7 +231,7 @@
 
 (defn as-nio-buffer
   [item]
-  (when (satisfies? dtype-proto/PToNioBuffer)
+  (when (satisfies? dtype-proto/PToNioBuffer item)
     (dtype-proto/->buffer-backing-store item)))
 
 

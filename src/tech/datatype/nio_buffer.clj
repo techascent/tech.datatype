@@ -7,7 +7,8 @@
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.reader :as reader]
             [clojure.core.matrix.macros :refer [c-for]]
-            [tech.parallel :as parallel])
+            [tech.parallel :as parallel]
+            [tech.datatype.array])
   (:import [com.sun.jna Pointer]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
@@ -55,17 +56,6 @@
     :int64 `(as-long-buffer ~buf)
     :float32 `(as-float-buffer ~buf)
     :float64 `(as-double-buffer ~buf)))
-
-
-(defmacro datatype->buffer-creation
-  [datatype src-ary]
-  (case datatype
-    :int8 `(ByteBuffer/wrap ^bytes ~src-ary)
-    :int16 `(ShortBuffer/wrap ^shorts ~src-ary)
-    :int32 `(IntBuffer/wrap ^ints ~src-ary)
-    :int64 `(LongBuffer/wrap ^longs ~src-ary)
-    :float32 `(FloatBuffer/wrap ^floats ~src-ary)
-    :float64 `(DoubleBuffer/wrap ^doubles ~src-ary)))
 
 
 (jna/def-jna-fn "c" memset
@@ -137,7 +127,7 @@
                  (= value# zero-val#))
            ;;For zero hit fast path
            (memset (dtype-proto/sub-buffer ~buffer idx# count#)
-                   (int value#) count#)
+                   (int value#) (*  count# (casting/numeric-byte-width ~datatype)))
            (let [pos# (.position ~buffer)]
              (c-for [idx# (int 0) (< idx# count#) (inc idx#)]
                     (.put ~buffer (+ idx# pos#) value#))))))
@@ -186,11 +176,7 @@
      {:get-datatype (fn [arg#] ~datatype)}
      dtype-proto/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
-                         (let [copy-len# (.remaining (datatype->buffer-cast-fn
-                                                      ~datatype raw-data#))]
-                           (base/copy! raw-data# 0 ary-target# target-offset#
-                                       copy-len# options#)
-                           [ary-target# (+ (long target-offset#) copy-len#)]))}
+                         (base/raw-dtype-copy! raw-data# ary-target# target-offset# options#))}
      dtype-proto/PPrototype
      {:from-prototype (fn [src-ary# datatype# shape#]
                         (if-not (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
@@ -216,7 +202,7 @@
                           :length (mp/element-count item#)})))
       :->array-copy (fn [item#]
                       (let [dst-ary# (base/make-container
-                                      :jvm-array ~datatype
+                                      :java-array ~datatype
                                       (mp/element-count item#))]
                         (base/copy! item# dst-ary#)))}
      dtype-proto/PNioBuffer
@@ -301,3 +287,21 @@
 
 
 (implement-buffer-type ByteBuffer :int8)
+(implement-buffer-type ShortBuffer :int16)
+(implement-buffer-type IntBuffer :int32)
+(implement-buffer-type LongBuffer :int64)
+(implement-buffer-type FloatBuffer :float32)
+(implement-buffer-type DoubleBuffer :float64)
+
+
+(defn make-buffer-of-type
+  ([datatype elem-count-or-seq options]
+   (dtype-proto/->buffer-backing-store
+    (dtype-proto/make-container :java-array datatype elem-count-or-seq options)))
+  ([datatype elem-count-or-seq]
+   (make-buffer-of-type datatype elem-count-or-seq)))
+
+
+(defmethod dtype-proto/make-container :nio-buffer
+  [container-type datatype elem-count-or-seq options]
+  (make-buffer-of-type datatype elem-count-or-seq options))

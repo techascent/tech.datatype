@@ -28,11 +28,6 @@
   dtype-proto/PDatatype
   (get-datatype [item] datatype)
 
-  dtype-proto/PContainerType
-  (container-type [item] :typed-buffer)
-  (dense-container? [item] true)
-  (sparse-container? [item] false)
-
   dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
     (base/raw-dtype-copy! raw-data ary-target target-offset options))
@@ -101,22 +96,22 @@
       (if-not (= datatype reader-datatype)
         ;;now make a reader that does outward conversion to dest datatype.
         (case (dtype-proto/get-datatype backing-store)
-          :int8 (reader/make-marshalling-reader (dtype-io/datatype->reader :int8 temp-reader)
+          :int8 (reader/make-marshalling-reader (dtype-io/datatype->reader :int8 temp-reader true)
                                                 :int8
                                                 reader-datatype unchecked?)
-          :int16 (reader/make-marshalling-reader (dtype-io/datatype->reader :int16 temp-reader)
+          :int16 (reader/make-marshalling-reader (dtype-io/datatype->reader :int16 temp-reader true)
                                                  :int16
                                                  reader-datatype unchecked?)
-          :int32 (reader/make-marshalling-reader (dtype-io/datatype->reader :int32 temp-reader)
+          :int32 (reader/make-marshalling-reader (dtype-io/datatype->reader :int32 temp-reader true)
                                                  :int32
                                                  reader-datatype unchecked?)
-          :int64 (reader/make-marshalling-reader (dtype-io/datatype->reader :int64 temp-reader)
+          :int64 (reader/make-marshalling-reader (dtype-io/datatype->reader :int64 temp-reader true)
                                                  :int64
                                                  reader-datatype unchecked?)
-          :float32 (reader/make-marshalling-reader (dtype-io/datatype->reader :float32 temp-reader)
+          :float32 (reader/make-marshalling-reader (dtype-io/datatype->reader :float32 temp-reader true)
                                                  :float32
                                                 reader-datatype unchecked?)
-          :float64 (reader/make-marshalling-reader (dtype-io/datatype->reader :float64 temp-reader)
+          :float64 (reader/make-marshalling-reader (dtype-io/datatype->reader :float64 temp-reader true)
                                                  :float64
                                                  reader-datatype unchecked?)))))
 
@@ -150,3 +145,16 @@
     :else
     (throw (ex-info "Item is not convertible to typed buffer"
                     {:item-type (type item)}))))
+
+
+(defn make-typed-buffer
+  ([datatype elem-count-or-seq options]
+   (->typed-buffer (dtype-proto/make-container
+                    :java-array datatype elem-count-or-seq options)))
+  ([datatype elem-count-or-seq]
+   (make-typed-buffer datatype elem-count-or-seq {})))
+
+
+(defmethod dtype-proto/make-container :typed-buffer
+  [container-type datatype elem-count-or-seq options]
+  (make-typed-buffer datatype elem-count-or-seq options))

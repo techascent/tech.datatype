@@ -1,5 +1,9 @@
 (ns tech.datatype.io
   (:require [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.casting
+             :refer [numeric-type? integer-type? numeric-byte-width
+                     datatype->jvm-type]
+             :as casting]
             [tech.jna :as jna]
             [tech.parallel :as parallel]
             [clojure.set :as c-set]
@@ -203,6 +207,82 @@
     `(->object-reader ~item)))
 
 
+(defmacro with-typed-writer
+  [item & body]
+  `(case (dtype-proto/get-datatype ~item)
+     :int8 (let [~'writer (datatype->writer :int8 ~item)] ~@body)
+     :int16 (let [~'writer (datatype->writer :int16 ~item)] ~@body)
+     :int32 (let [~'writer (datatype->writer :int32 ~item)] ~@body)
+     :int64 (let [~'writer (datatype->writer :int64 ~item)] ~@body)
+     :float32 (let [~'writer (datatype->writer :float32 ~item)] ~@body)
+     :float64 (let [~'writer (datatype->writer :float64 ~item)] ~@body)
+     :boolean (let [~'writer (datatype->writer :boolean ~item)] ~@body)
+     (let [~'writer (datatype->writer :object ~item)] ~@body)))
+
+
+(defmacro with-typed-reader
+  [item & body]
+  `(case (dtype-proto/get-datatype ~item)
+     :int8 (let [~'reader (datatype->reader :int8 ~item true)] ~@body)
+     :int16 (let [~'reader (datatype->reader :int16 ~item true)] ~@body)
+     :int32 (let [~'reader (datatype->reader :int32 ~item true)] ~@body)
+     :int64 (let [~'reader (datatype->reader :int64 ~item true)] ~@body)
+     :float32 (let [~'reader (datatype->reader :float32 ~item true)] ~@body)
+     :float64 (let [~'reader (datatype->reader :float64 ~item true)] ~@body)
+     :boolean (let [~'reader (datatype->reader :boolean ~item true)] ~@body)
+     (let [~'reader (datatype->reader :object ~item false)] ~@body)))
+
+
+(defn make-object-writer
+  [item datatype]
+  (when-not (casting/is-host-datatype? (dtype-proto/get-datatype item))
+    (throw (ex-info "Must make writers from containers of host types."
+                    {:datatype datatype})))
+  (with-typed-writer item
+    (reify ObjectWriter
+        (write [item idx value]
+          (.write writer idx (casting/jvm-cast value datatype)))
+        (writeConstant [item idx value n-elems]
+          (.writeConstant writer idx (casting/jvm-cast value datatype)
+                          n-elems))
+        (writeBlock [item-writer offset values]
+          (doseq [[idx val] (map-indexed vector (seq values))]
+            (.write item-writer (+ offset (long idx)) val)))
+        (writeIndexes [item-writer indexes values]
+          (doseq [[idx val] (map vector
+                                 (dtype-proto/->vector indexes)
+                                 (seq values))]
+            (.write item-writer (long idx) val))))))
+
+
+(defn make-object-reader
+  [src-container datatype]
+  (when-not (casting/is-host-datatype? (dtype-proto/get-datatype src-container))
+    (throw (ex-info "Must make readers from containers of host types."
+                    {:datatype datatype})))
+  (with-typed-reader src-container
+    (reify ObjectReader
+      (read [item# idx]
+        (casting/unchecked-cast
+         (.read reader idx)
+         datatype))
+      (readBlock [reader-item offset dest]
+        (let [dest-size (.size dest)]
+          (c-for [idx (int 0) (< idx dest-size) (inc idx)]
+                 (.set dest idx
+                       (.read reader-item (+ offset idx)))))
+        dest)
+      (readIndexes [reader-item indexes dest]
+        (let [dest-size (.size dest)]
+          (c-for [idx (int 0) (< idx dest-size) (inc idx)]
+                 (.set dest idx
+                       (.read reader-item
+                              (.get indexes
+                                    (+ (.position indexes)
+                                       idx)))))
+          dest)))))
+
+
 (defmacro datatype->parallel-write
   [datatype dst src n-elems unchecked?]
   `(let [writer# (datatype->writer ~datatype ~dst)
@@ -276,12 +356,13 @@
         dst-buf (as-nio-buffer dst)
         fast-path? (and src-buf
                         dst-buf
-                        (or (= dst-dtype src-dtype)
-                            (and (int-types dst-dtype)
-                                 (int-types src-dtype)
+                        (or (and (numeric-type? dst-dtype)
+                                 (= dst-dtype src-dtype))
+                            (and (integer-type? dst-dtype)
+                                 (integer-type? src-dtype)
                                  unchecked?
-                                 (= (int-width dst-dtype)
-                                    (int-width src-dtype)))))
+                                 (= (numeric-byte-width dst-dtype)
+                                    (numeric-byte-width src-dtype)))))
         n-elems (long n-elems)]
     ;;Fast path means no conversion is necessary and we can hit optimized
     ;;bulk pathways
@@ -292,7 +373,8 @@
             dst-ary (as-array dst)
             src-ptr (as-ptr src)
             src-ary (as-array src)
-            src-dtype (get unsigned-signed src-dtype src-dtype)]
+            ;;Flatten source so that it never represents the unsigned type.
+            src-dtype (datatype->jvm-type src-dtype)]
         (cond
           ;;Very fast path
           (and dst-ptr src-ary)

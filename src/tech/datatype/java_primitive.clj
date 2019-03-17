@@ -51,44 +51,6 @@
   [ary-target (+ target-offset ^long (base/ecount raw-data))])
 
 
-(extend-type Object
-  base/PCopyRawData
-  (copy-raw->item!
-   [src-data dst-data offset options]
-    (base/copy-raw->item! (seq src-data) dst-data offset options))
-  base/PPersistentVector
-  (->vector [src] (vec (or (->array src)
-                           (->array-copy src))))
-  PToBuffer
-  (->buffer-backing-store [src]
-    (when-let [ary-data (->array src)]
-      (->buffer-backing-store src)))
-  base/PAccess
-  (get-value [item idx]
-    (cond
-      (or (map? item)
-          (vector? item))
-      (do
-        (when-not (contains? item idx)
-          (throw (ex-info "Item has no idx entry"
-                          {:item item
-                           :idx idx})))
-        (item idx))
-      (fn? item)
-      (item idx)
-      :else
-      (do
-        (when-not (= 0 idx)
-          (throw (ex-info "Generic index access must be 0"
-                          {:item item
-                           :idx idx})))
-        item)))
-  base/PClone
-  (clone [item datatype]
-    (base/copy! item (base/from-prototype item datatype
-                                          (base/shape item)))))
-
-
 (extend-type Buffer
   base/PContainerType
   (container-type [item] :nio-buffer)

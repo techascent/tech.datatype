@@ -16,6 +16,7 @@
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m]
             [tech.datatype.base :as base]
+            [tech.datatype.casting :as casting]
             [tech.datatype.java-primitive :as primitive])
   (:refer-clojure :exclude [cast]))
 
@@ -56,9 +57,7 @@ Calls clojure.core.matrix/ecount."
 (defn shape
   "m/shape with fallback to m/ecount if m/shape is not available."
   [item]
-  (if (nil? item)
-    nil
-    (base/shape item)))
+  (base/shape item))
 
 
 (defn shape->ecount

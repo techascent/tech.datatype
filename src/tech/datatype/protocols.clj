@@ -4,13 +4,12 @@
 (defprotocol PDatatype
   (get-datatype [item]))
 
-(defprotocol PAccess
-  (set-value! [item offset value])
-  (set-constant! [item offset value elem-count])
-  (get-value [item offset]))
-
 (defprotocol PContainerType
-  (container-type [item]))
+  (container-type [item])
+  ;;If dense, then conversion to typed buffer is possible
+  (dense-container? [item])
+  ;;IF sparse, then conversion to sparse typed buffer is possible.
+  (sparse-container? [item]))
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."
@@ -24,6 +23,7 @@
   (from-prototype [item datatype shape]))
 
 (defprotocol PClone
+  "Clone an object.  Implemented generically for all objects."
   (clone [item datatype]))
 
 (defprotocol PToNioBuffer
@@ -33,10 +33,18 @@
   element-by-element conversion to represent the value of the item."
   (->buffer-backing-store [item]))
 
-
 (defprotocol PNioBuffer
   (position [item])
-  (limit [item]))
+  (limit [item])
+  (array-backed? [item]))
+
+
+(defprotocol PToTypedBuffer
+  "Conversion to an object that implements all of the protocols."
+  (->typed-buffer [item]
+    "Dense buffer of data")
+  (->typed-sparse-buffer [item]
+    "Sparse buffer of data"))
 
 
 (defprotocol PBuffer
@@ -57,7 +65,7 @@ data overlap?"))
   (->array [item]
     "Convert to an array; both objects must share backing store")
   (->sub-array [item]
-    "Convert to a map of {:array-data :offset :length}")
+    "Noncopying convert to a map of {:array-data :offset :length} or nil if impossible")
   (->array-copy [item]
     "Convert to an array containing a copy of the data"))
 
@@ -68,17 +76,19 @@ data overlap?"))
 
 (defprotocol PToWriter
   (->object-writer [item])
-  (->writer-of-type [item datatype])
-  (->writer [item]))
+  (->writer-of-type [item datatype]))
 
 
 (defprotocol PToReader
   (->object-reader [item])
-  (->reader-of-type [item datatype unchecked?])
-  (->reader [item]))
+  (->reader-of-type [item datatype unchecked?]))
 
 
 (defprotocol PToMutable
   (->object-mutable [item])
-  (->mutable-of-type [item datatype])
-  (->mutable [item]))
+  (->mutable-of-type [item datatype]))
+
+
+(defmulti make-container
+  (fn [container-type datatype elem-seq-or-count options]
+    container-type))

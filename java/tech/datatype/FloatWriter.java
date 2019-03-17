@@ -4,7 +4,8 @@ import java.nio.*;
 
 public interface FloatWriter
 {
-  float write(int idx, float value);
+  void write(int idx, float value);
+  void writeConstant(int idx, float value, int count);
   void writeBlock(int offset, FloatBuffer values);
   void writeIndexes(IntBuffer indexes, FloatBuffer values);
 };

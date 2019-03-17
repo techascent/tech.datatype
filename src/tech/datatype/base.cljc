@@ -2,14 +2,16 @@
   "Datatype library primitives shared between clojurescript and clojure.  The datatype
   system is an extensible system to provide understanding of and access to an undefined
   set of datatypes and containers that hold contiguous sections of those datatypes."
-
-  (:require [clojure.core.matrix :as m])
   (:refer-clojure :exclude [cast])
-  #?(:clj (:require [tech.datatype.base-macros :as base-macros]
-                    [tech.datatype.protocols :as dtype-proto]
-                    [clojure.core.matrix.macros :refer [c-for]])
-     :cljs (:require-macros [tech.datatype.base-macros :as base-macros]
-                            [clojure.core.matrix.macros :refer [c-for]])))
+  (:require [tech.datatype.base-macros :as base-macros]
+            [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.io :as dtype-io]
+            [clojure.core.matrix.macros :refer [c-for]]
+            [clojure.core.matrix :as m])
+  (:import [tech.datatype ObjectReader]))
+
+
+(set! *warn-on-reflection* true)
 
 (defn shape->ecount
   ^long [shape-or-num]
@@ -46,11 +48,6 @@
 (def ^:dynamic *error-on-slow-path* false)
 
 
-;;Map of datatype to functions that will cast to that datatype.
-(def ^:dynamic *cast-table* (atom {}))
-(def ^:dynamic *unchecked-cast-table* (atom {}))
-
-
 (defn add-datatype->size-mapping
   [datatype byte-size]
   (swap! *datatype->size-map* assoc datatype byte-size))
@@ -65,29 +62,16 @@
                      :available-datatypes (keys @*datatype->size-map*)}))))
 
 
-(defn add-cast-fn
-  [datatype cast-fn]
-  (swap! *cast-table* assoc datatype cast-fn))
+(defn set-value! [item offset value]
+  (.write (dtype-io/->object-writer item)
+          offset value))
 
+(defn set-constant! [item offset value elem-count]
+  (.writeConstant (dtype-io/->object-writer item)
+                  offset value elem-count))
 
-(defn add-unchecked-cast-fn
-  [datatype cast-fn]
-  (swap! *unchecked-cast-table* assoc datatype cast-fn))
-
-
-(defn cast
-  [value datatype]
-  (if-let [cast-fn (@*cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No cast available" {:datatype datatype}))))
-
-
-(defn unchecked-cast
-  [value datatype]
-  (if-let [cast-fn (@*unchecked-cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))
-
+(defn get-value [item offset]
+  (.read (dtype-io/->object-reader item) offset))
 
 
 
@@ -99,63 +83,22 @@
 
 (defn shape
   [item]
-  (or (m/shape item) [(ecount item)]))
+  (if (nil? item)
+    nil
+    (or (m/shape item) [(ecount item)])))
 
 
-#?(:cljs
-   (do
-    (defn- alloc-buffer
-      [datatype elem-count]
-      (new js/ArrayBuffer (* (datatype->byte-size datatype)
-                             elem-count)))
+(defn get-datatype
+  [item]
+  (dtype-proto/get-datatype item))
 
-    (defn- normalize-elem-count-or-seq
-      "returns [elem-count data-seq]
-  where data-seq may be nil."
-      [elem-count-or-seq]
-      (if (number? elem-count-or-seq)
-        [(long elem-count-or-seq) nil]
-        (let [array-data (new js/Array)]
-          (doseq [item elem-count-or-seq]
-            (.push array-data item))
-          [(count array-data) array-data])))
 
-    (defn- setup-array
-      [elem-count-or-seq constructor dtype]
-      (let [[data-len data-buf] (normalize-elem-count-or-seq elem-count-or-seq)
-            buffer (alloc-buffer dtype data-len)
-            retval (constructor buffer)]
-        (when data-buf
-          (loop [idx 0]
-            (when (< idx data-len)
-              (aset retval idx (aget data-buf idx))
-              (recur (inc idx)))))
-        retval))
-
-    (defn byte-array
-      [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Int8Array %) :int8))
-
-    (defn short-array
-      [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Int16Array %) :int16))
-
-    (defn int-array
-      [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Int32Array %) :int32))
-
-    (defn long-array
-      [elem-count-or-seq]
-      (throw (ex-info "No int64 support in js" {})))
-
-    (defn float-array
-      [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Float32Array %) :float32))
-
-    (defn double-array
-      [elem-count-or-seq]
-      (setup-array elem-count-or-seq #(new js/Float64Array %) :float64))))
-
+(defn make-container
+  ([container-type datatype elem-seq options]
+   (dtype-proto/make-container container-type datatype
+                               elem-seq options))
+  ([container-type datatype elem-seq]
+   (dtype-proto/make-container container-type datatype elem-seq)))
 
 
 (defn generic-copy!
@@ -169,8 +112,9 @@
         dest-offset (long dest-offset)
         elem-count (long elem-count)]
     (c-for [idx 0 (< idx elem-count) (inc idx)]
-           (set-value! dest (+ dest-offset idx)
-                       (get-value item (+ item-offset idx))))
+           (set-value!
+            dest (+ dest-offset idx)
+            (get-value item (+ item-offset idx))))
     dest))
 
 
@@ -251,13 +195,15 @@ of operations."
   "copy elem-count src items to dest items.  Options may contain unchecked in which you
   get unchecked operations."
   ([src src-offset dest dest-offset elem-count options]
-   (let [src-dtype (get-datatype src)
+   (let [src-dtype (dtype-proto/get-datatype src)
          src-offset (long src-offset)
-         dest-dtype (get-datatype dest)
+         dest-dtype (dtype-proto/get-datatype dest)
          dest-offset (long dest-offset)
          elem-count (long elem-count)
-         copy-fn (find-copy-fn (container-type src) (container-type dest)
-                               (get-datatype src) (get-datatype dest)
+         copy-fn (find-copy-fn (dtype-proto/container-type src)
+                               (dtype-proto/container-type dest)
+                               (dtype-proto/get-datatype src)
+                               (dtype-proto/get-datatype dest)
                                (boolean (:unchecked? options)))]
      (base-macros/check-range src src-offset elem-count)
      (base-macros/check-range dest dest-offset elem-count)
@@ -272,12 +218,19 @@ of operations."
 (defn copy-raw-seq->item!
   [raw-data-seq ary-target target-offset options]
   (reduce (fn [[ary-target target-offset] new-raw-data]
-            (copy-raw->item! new-raw-data ary-target target-offset options))
+            (dtype-proto/copy-raw->item! new-raw-data ary-target target-offset options))
           [ary-target target-offset]
           raw-data-seq))
 
 
-(extend-protocol PCopyRawData
+(defn raw-dtype-copy!
+  [raw-data ary-target target-offset options]
+  (let [elem-count (ecount raw-data)]
+    (copy! raw-data 0 ary-target target-offset elem-count options)
+    [ary-target (+ (long target-offset) elem-count)]))
+
+
+(extend-protocol dtype-proto/PCopyRawData
   Number
   (copy-raw->item! [raw-data ary-target ^long target-offset options]
     (set-value! ary-target target-offset raw-data)
@@ -298,3 +251,56 @@ of operations."
   clojure.lang.ISeq
   (copy-raw->item! [raw-data ary-target target-offset options]
     (copy-raw-seq->item! raw-data ary-target target-offset options)))
+
+
+(extend-type Object
+  dtype-proto/PCopyRawData
+  (copy-raw->item!
+   [src-data dst-data offset options]
+    (dtype-proto/copy-raw->item! (seq src-data) dst-data offset options))
+  dtype-proto/PPersistentVector
+  (->vector [src] (vec (or (dtype-proto/->array src)
+                           (dtype-proto/->array-copy src))))
+  dtype-proto/PToNioBuffer
+  (->buffer-backing-store [src]
+    (when-let [ary-data (dtype-proto/->array src)]
+      (dtype-proto/->buffer-backing-store src)))
+  dtype-proto/PToReader
+  (->object-reader [item]
+    (reify ObjectReader
+      (read [item-reader idx]
+        (cond
+          (or (map? item)
+              (vector? item))
+          (do
+            (when-not (contains? item idx)
+              (throw (ex-info "Item has no idx entry"
+                              {:item item
+                               :idx idx})))
+            (item idx))
+          (fn? item)
+          (item idx)
+          :else
+          (do
+            (when-not (= 0 idx)
+              (throw (ex-info "Generic index access must be 0"
+                              {:item item
+                               :idx idx})))
+            item)))
+      (readBlock [item-reader off dest]
+        (let [n-elems (.size dest)]
+          (c-for [idx (int 0) (< idx n-elems) (inc idx)]
+                 (.set dest idx (.read item-reader (+ off idx))))
+          dest))
+      (readIndexes [item-reader idx-buf dest]
+        (let [n-elems (ecount idx-buf)
+              buf-pos (.position idx-buf)]
+          (c-for [idx (int 0) (< idx n-elems) (inc idx)]
+                 (.set dest idx (.read item-reader
+                                       (.get idx-buf
+                                             (+ idx buf-pos))))))
+        dest)))
+  dtype-proto/PClone
+  (clone [item datatype]
+    (copy! item (dtype-proto/from-prototype item datatype
+                                            (shape item)))))

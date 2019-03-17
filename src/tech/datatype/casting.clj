@@ -1,4 +1,4 @@
-(ns tech.datatype.numeric
+(ns tech.datatype.casting
   (:refer-clojure :exclude [cast])
   (:require [clojure.set :as c-set]))
 
@@ -92,7 +92,12 @@
 
 (defn is-host-numeric-datatype?
   [dtype]
-  (boolean (host-types dtype)))
+  (boolean (host-numeric-types dtype)))
+
+
+(defn is-host-datatype?
+  [dtype]
+  (boolean (base-datatypes dtype)))
 
 
 (defn datatype->host-datatype
@@ -244,3 +249,40 @@
 (defn all-datatypes
   []
   (keys @*cast-table*))
+
+
+(defn datatype->jvm-type
+  "Get the signed analog of an unsigned type or return datatype unchanged."
+  [datatype]
+  (get unsigned-signed datatype datatype))
+
+
+(defn jvm-cast
+  [value datatype]
+  (unchecked-cast value (datatype->jvm-type datatype)))
+
+
+(defn datatype->safe-jvm-type
+  "Get a jvm datatype wide enough to store all values of this datatype"
+  [dtype]
+  (case dtype
+    :uint8 :int16
+    :uint16 :int32
+    :uint32 :int64
+    :uint64 :int64
+    dtype))
+
+(defmacro datatype->jvm-cast-fn
+  [src-dtype dst-dtype val]
+  (let [jvm-type (datatype->jvm-type dst-dtype)]
+    `(datatype->unchecked-cast-fn
+      :ignored ~jvm-type
+      (datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
+
+
+(defmacro datatype->unchecked-jvm-cast-fn
+  [src-dtype dst-dtype val]
+  (let [jvm-type (datatype->jvm-type dst-dtype)]
+    `(datatype->unchecked-cast-fn
+      :ignored ~jvm-type
+      (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))

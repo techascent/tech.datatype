@@ -106,9 +106,10 @@
      dtype-proto/PToWriter
      {:->object-writer (fn [item#]
                          (dtype-proto/->object-writer (dtype-proto/->buffer-backing-store item#)))
-      :->writer-of-type (fn [item# datatype#]
+      :->writer-of-type (fn [item# datatype# unchecked?#]
                           (dtype-proto/->writer-of-type (dtype-proto/->buffer-backing-store item#)
-                                                        datatype#))}))
+                                                        datatype#
+                                                        unchecked?#))}))
 
 
 (implement-numeric-array-type (Class/forName "[B") :int8)

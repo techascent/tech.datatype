@@ -1,4 +1,5 @@
 (ns tech.datatype.nio-buffer
+  "Nio buffers really are the workhorses of the entire system."
   (:require [tech.jna :as jna]
             [tech.datatype.io :as dtype-io]
             [tech.datatype.base :as base]
@@ -6,6 +7,7 @@
             [tech.datatype.protocols :as dtype-proto]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.reader :as reader]
+            [tech.datatype.writer :as writer]
             [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel]
             [tech.datatype.array])
@@ -115,57 +117,172 @@
 
 
 (defmacro make-buffer-writer
-  [writer-type buffer datatype]
-  `(reify ~writer-type
-     (write [writer# idx# value#]
-       (.put ~buffer (+ idx# (.position ~buffer)) value#))
-     (writeConstant [writer# idx# value# count#]
-       (let [value# (casting/datatype->cast-fn :unknown ~datatype value#)
-             zero-val# (casting/datatype->unchecked-cast-fn :unkown ~datatype 0)]
-         (if (or (= ~datatype :int8)
-                 (= ~datatype :uint8)
-                 (= value# zero-val#))
-           ;;For zero hit fast path
-           (memset (dtype-proto/sub-buffer ~buffer idx# count#)
-                   (int value#) (*  count# (casting/numeric-byte-width ~datatype)))
+  [writer-type buffer
+   writer-datatype
+   intermediate-datatype
+   buffer-datatype
+   unchecked?]
+  `(if ~unchecked?
+     (reify ~writer-type
+       (write [writer# idx# value#]
+         (.put ~buffer (+ idx# (.position ~buffer))
+               (casting/datatype->unchecked-cast-fn
+                ~intermediate-datatype
+                ~buffer-datatype
+                (casting/datatype->unchecked-cast-fn
+                 ~writer-datatype
+                 ~intermediate-datatype
+                 value#))))
+       (writeConstant [writer# offset# value# count#]
+         (let [value# (casting/datatype->unchecked-cast-fn
+                       ~intermediate-datatype
+                       ~buffer-datatype
+                       (casting/datatype->unchecked-cast-fn
+                        ~writer-datatype
+                        ~intermediate-datatype
+                        value#))
+               zero-val# (casting/datatype->unchecked-cast-fn :unknown ~buffer-datatype 0)]
+           (memset (dtype-proto/sub-buffer ~buffer offset# count#)
+                   (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
            (let [pos# (.position ~buffer)]
-             (c-for [idx# (int 0) (< idx# count#) (inc idx#)]
-                    (.put ~buffer (+ idx# pos#) value#))))))
-     (writeBlock [writer# offset# values#]
-       (dtype-io/dense-copy! (dtype-proto/sub-buffer ~buffer offset# (base/ecount values#))
-                             values# (base/ecount values#) true true))
-     (writeIndexes [writer# indexes# values#]
-       (let [n-elems# (base/ecount indexes#)
-             buf-pos# (.position ~buffer)
-             idx-pos# (.position indexes#)
-             val-pos# (.position values#)]
-         (parallel/parallel-for
-          idx#
-          n-elems#
-          (.put ~buffer (+ buf-pos#
-                           (.get indexes# (+ idx-pos# idx#)))
-                (.get values# (+ idx# val-pos#))))))))
+             (parallel/parallel-for
+              idx# count#
+              (.put ~buffer (+ idx# pos#) value#)))))
+       (writeBlock [writer# offset# values#]
+         (dtype-io/dense-copy! (dtype-proto/sub-buffer ~buffer offset# (base/ecount values#))
+                               values# (base/ecount values#) ~unchecked? true))
+       (writeIndexes [writer# indexes# values#]
+         (let [n-elems# (base/ecount indexes#)
+               buf-pos# (.position ~buffer)
+               idx-pos# (.position indexes#)
+               val-pos# (.position values#)]
+           (parallel/parallel-for
+            idx#
+            n-elems#
+            (.put ~buffer (+ buf-pos#
+                             (.get indexes# (+ idx-pos# idx#)))
+                  (casting/datatype->unchecked-cast-fn
+                   ~intermediate-datatype
+                   ~buffer-datatype
+                   (casting/datatype->unchecked-cast-fn
+                    ~writer-datatype
+                    ~intermediate-datatype
+                    (.get values# (+ idx# val-pos#)))))))))
+     (reify ~writer-type
+       (write [writer# idx# value#]
+         (.put ~buffer (+ idx# (.position ~buffer))
+               (casting/datatype->unchecked-cast-fn
+                ~intermediate-datatype
+                ~buffer-datatype
+                (casting/datatype->cast-fn
+                 ~writer-datatype
+                 ~intermediate-datatype
+                 value#))))
+       (writeConstant [writer# offset# value# count#]
+         (let [value# (casting/datatype->unchecked-cast-fn
+                       ~intermediate-datatype
+                       ~buffer-datatype
+                       (casting/datatype->cast-fn
+                        ~writer-datatype
+                        ~intermediate-datatype
+                        value#))
+               zero-val# (casting/datatype->cast-fn :unknown ~buffer-datatype 0)]
+           (memset (dtype-proto/sub-buffer ~buffer offset# count#)
+                   (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
+           (let [pos# (.position ~buffer)]
+             (parallel/parallel-for
+              idx# count#
+              (.put ~buffer (+ idx# pos#) value#)))))
+       (writeBlock [writer# offset# values#]
+         (dtype-io/dense-copy! (dtype-proto/sub-buffer ~buffer offset# (base/ecount values#))
+                               values# (base/ecount values#) ~unchecked? true))
+       (writeIndexes [writer# indexes# values#]
+         (let [n-elems# (base/ecount indexes#)
+               buf-pos# (.position ~buffer)
+               idx-pos# (.position indexes#)
+               val-pos# (.position values#)]
+           (parallel/parallel-for
+            idx#
+            n-elems#
+            (.put ~buffer (+ buf-pos#
+                             (.get indexes# (+ idx-pos# idx#)))
+                  (casting/datatype->cast-fn
+                   ~intermediate-datatype
+                   ~buffer-datatype
+                   (casting/datatype->cast-fn
+                    ~writer-datatype
+                    ~intermediate-datatype
+                    (.get values# (+ idx# val-pos#)))))))))))
+
+
 
 
 (defmacro make-buffer-reader
-  [reader-type buffer datatype]
-  `(reify ~reader-type
-     (read [reader# idx#]
-       (.get ~buffer (+ idx# (.position ~buffer))))
-     (readBlock [reader# offset# dest#]
-       (dtype-io/dense-copy! dest# (dtype-proto/sub-buffer ~buffer offset# (base/ecount dest#))
-                             (base/ecount dest#) true true))
-     (readIndexes [reader# indexes# dest#]
-       (let [idx-pos# (.position indexes#)
-             dest-pos# (.position dest#)
-             buf-pos# (.position ~buffer)
-             n-elems# (base/ecount dest#)]
-         (parallel/parallel-for
-          idx#
-          n-elems#
-          (.put dest# (+ idx# dest-pos#)
-                (.get ~buffer (+ buf-pos#
-                                 (.get indexes# (+ idx# idx-pos#))))))))))
+  [reader-type buffer
+   reader-datatype
+   intermediate-datatype
+   buffer-datatype
+   unchecked?]
+  `(if ~unchecked?
+     (reify ~reader-type
+       (read [reader# idx#]
+         (casting/datatype->unchecked-cast-fn
+          ~intermediate-datatype
+          ~reader-datatype
+          (casting/datatype->unchecked-cast-fn
+           ~buffer-datatype
+           ~intermediate-datatype
+           (.get ~buffer (+ idx# (.position ~buffer))))))
+       (readBlock [reader# offset# dest#]
+         (dtype-io/dense-copy! dest# (dtype-proto/sub-buffer ~buffer offset# (base/ecount dest#))
+                               (base/ecount dest#) true true))
+       (readIndexes [reader# indexes# dest#]
+         (let [idx-pos# (.position indexes#)
+               dest-pos# (.position dest#)
+               buf-pos# (.position ~buffer)
+               n-elems# (base/ecount dest#)]
+           (parallel/parallel-for
+            idx#
+            n-elems#
+            (.put dest# (+ idx# dest-pos#)
+                  (casting/datatype->unchecked-cast-fn
+                   ~intermediate-datatype
+                   ~reader-datatype
+                   (casting/datatype->unchecked-cast-fn
+                    ~buffer-datatype
+                    ~intermediate-datatype
+                    (.get ~buffer (+ buf-pos#
+                                     (.get indexes# (+ idx# idx-pos#)))))))))))
+     (reify ~reader-type
+       (read [reader# idx#]
+         (casting/datatype->cast-fn
+          ~intermediate-datatype
+          ~reader-datatype
+          (casting/datatype->cast-fn
+           ~buffer-datatype
+           ~intermediate-datatype
+           (.get ~buffer (+ idx# (.position ~buffer))))))
+       (readBlock [reader# offset# dest#]
+         (dtype-io/dense-copy! dest# (dtype-proto/sub-buffer ~buffer offset# (base/ecount dest#))
+                               (base/ecount dest#) true true))
+       (readIndexes [reader# indexes# dest#]
+         (let [idx-pos# (.position indexes#)
+               dest-pos# (.position dest#)
+               buf-pos# (.position ~buffer)
+               n-elems# (base/ecount dest#)]
+           (parallel/parallel-for
+            idx#
+            n-elems#
+            (.put dest# (+ idx# dest-pos#)
+                  (casting/datatype->cast-fn
+                   ~intermediate-datatype
+                   ~reader-datatype
+                   (casting/datatype->cast-fn
+                    ~buffer-datatype
+                    ~intermediate-datatype
+                    (.get ~buffer (+ buf-pos#
+                                     (.get indexes# (+ idx# idx-pos#)))))))))))))
+
 
 
 (defmacro implement-buffer-type
@@ -255,35 +372,41 @@
                                                       (:offset rhs-sub#) (:length rhs-sub#))))))))))}
      dtype-proto/PToWriter
      {:->object-writer (fn [item#]
-                         (dtype-io/make-object-writer item# ~datatype))
-      :->writer-of-type (fn [item# writer-datatype#]
-                          (when-not (= writer-datatype# ~datatype)
-                            (throw (ex-info "Base containers cannot marshal on write or read"
-                                            {:datatype ~datatype
-                                             :write-datatype writer-datatype#})))
+                         (-> (dtype-proto/->writer-of-type item# ~datatype false)
+                             (writer/make-marshalling-writer ~datatype :object :object ObjectWriter true)))
+      :->writer-of-type (fn [item# writer-datatype# unchecked?#]
                           (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
-                            ~(case datatype
-                               :int8 `(make-buffer-writer ByteWriter ~'buffer :int8)
-                               :int16 `(make-buffer-writer ShortWriter ~'buffer :int16)
-                               :int32 `(make-buffer-writer IntWriter ~'buffer :int32)
-                               :int64 `(make-buffer-writer LongWriter ~'buffer :int64)
-                               :float32 `(make-buffer-writer FloatWriter ~'buffer :float32)
-                               :float64 `(make-buffer-writer DoubleWriter ~'buffer :float64))))}
+                            (case writer-datatype#
+                              :int8 (make-buffer-writer ByteWriter ~'buffer :int8 :int8 ~datatype unchecked?#)
+                              :uint8 (make-buffer-writer ShortWriter ~'buffer :int16 :uint8 ~datatype unchecked?#)
+                              :int16 (make-buffer-writer ShortWriter ~'buffer :int16 :int16 ~datatype unchecked?#)
+                              :uint16 (make-buffer-writer IntWriter ~'buffer :int32 :uint16 ~datatype unchecked?#)
+                              :int32 (make-buffer-writer IntWriter ~'buffer :int32 :int32 ~datatype unchecked?#)
+                              :uint32 (make-buffer-writer LongWriter ~'buffer :int64 :uint32 ~datatype unchecked?#)
+                              :int64 (make-buffer-writer LongWriter ~'buffer :int64 :int64 ~datatype unchecked?#)
+                              :uint64 (make-buffer-writer LongWriter ~'buffer :int64 :int64 ~datatype unchecked?#)
+                              :float32 (make-buffer-writer FloatWriter ~'buffer :float32 :float32 ~datatype unchecked?#)
+                              :float64 (make-buffer-writer DoubleWriter ~'buffer :float64 :float64 ~datatype unchecked?#)
+                              (writer/->marshalling-writer ~'buffer writer-datatype# unchecked?#))))}
      dtype-proto/PToReader
      {:->object-reader (fn [item#]
-                         (dtype-io/make-object-reader item# ~datatype))
+                         (-> (dtype-proto/->reader-of-type item# ~datatype false)
+                             (reader/make-marshalling-reader ~datatype :object :object ObjectReader true)))
 
       :->reader-of-type (fn [item# reader-datatype# unchecked?#]
-                          (if (= reader-datatype# ~datatype)
-                            (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
-                              ~(case datatype
-                                 :int8 `(make-buffer-reader ByteReader ~'buffer :int8)
-                                 :int16 `(make-buffer-reader ShortReader ~'buffer :int16)
-                                 :int32 `(make-buffer-reader IntReader ~'buffer :int32)
-                                 :int64 `(make-buffer-reader LongReader ~'buffer :int64)
-                                 :float32 `(make-buffer-reader FloatReader ~'buffer :float32)
-                                 :float64 `(make-buffer-reader DoubleReader ~'buffer :float64)))
-                            (reader/make-reader item# reader-datatype# unchecked?#)))}))
+                          (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
+                            (case reader-datatype#
+                              :int8 (make-buffer-reader ByteReader ~'buffer :int8 :int8 ~datatype unchecked?#)
+                              :uint8 (make-buffer-reader ShortReader ~'buffer :int16 :uint8 ~datatype unchecked?#)
+                              :int16 (make-buffer-reader ShortReader ~'buffer :int16 :int16 ~datatype unchecked?#)
+                              :uint16 (make-buffer-reader IntReader ~'buffer :int32 :uint16 ~datatype unchecked?#)
+                              :int32 (make-buffer-reader IntReader ~'buffer :int32 :int32 ~datatype unchecked?#)
+                              :uint32 (make-buffer-reader LongReader ~'buffer :int64 :uint32 ~datatype unchecked?#)
+                              :int64 (make-buffer-reader LongReader ~'buffer :int64 :int64 ~datatype unchecked?#)
+                              :uint64 (make-buffer-reader LongReader ~'buffer :int64 :int64 ~datatype unchecked?#)
+                              :float32 (make-buffer-reader FloatReader ~'buffer :float32 :float32 ~datatype unchecked?#)
+                              :float64 (make-buffer-reader DoubleReader ~'buffer :float64 :float64 ~datatype unchecked?#)
+                              (reader/->marshalling-reader ~'buffer reader-datatype# unchecked?#))))}))
 
 
 (implement-buffer-type ByteBuffer :int8)
@@ -299,7 +422,7 @@
    (dtype-proto/->buffer-backing-store
     (dtype-proto/make-container :java-array datatype elem-count-or-seq options)))
   ([datatype elem-count-or-seq]
-   (make-buffer-of-type datatype elem-count-or-seq)))
+   (make-buffer-of-type datatype elem-count-or-seq {})))
 
 
 (defmethod dtype-proto/make-container :nio-buffer

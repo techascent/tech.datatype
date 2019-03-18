@@ -3,8 +3,10 @@
             [tech.datatype.casting :as casting]
             [tech.datatype.io :as dtype-io]
             [tech.datatype.base :as base]
+            [tech.datatype.nio-buffer]
             [tech.parallel :as parallel]
             [tech.datatype.reader :as reader]
+            [tech.datatype.writer :as writer]
             [tech.jna :as jna]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp])
@@ -74,46 +76,30 @@
     (if (= datatype (dtype-proto/get-datatype backing-store))
       (dtype-proto/->array-copy backing-store)
       (let [data-buf (dtype-proto/make-container
-                      :jvm-array  (casting/datatype->safe-jvm-type datatype)
+                      :java-array (casting/datatype->safe-jvm-type datatype)
                       (base/ecount backing-store))]
         (base/copy! item 0 data-buf 0 (base/ecount item)))))
 
   dtype-proto/PToWriter
   (->object-writer [item]
-    (dtype-io/make-object-writer backing-store datatype))
+    (writer/->marshalling-writer item :object false))
   ;;No marshalling/casting on the writer side.
-  (->writer-of-type [item writer-datatype]
-    (when (= datatype (dtype-proto/get-datatype backing-store))
-      (dtype-proto/->writer-of-type backing-store writer-datatype)))
+  (->writer-of-type [item writer-datatype unchecked?]
+    ;;If our datatype matches the datatype of the backing store
+    (if (= datatype (dtype-proto/get-datatype backing-store))
+      (dtype-proto/->writer-of-type backing-store writer-datatype unchecked?)
+      (-> (dtype-proto/->writer-of-type backing-store datatype true)
+          (dtype-proto/->writer-of-type writer-datatype unchecked?))))
 
   dtype-proto/PToReader
   (->object-reader [item]
-    (dtype-io/make-object-reader backing-store datatype))
+    (reader/->marshalling-reader item :object false))
 
   (->reader-of-type [item reader-datatype unchecked?]
-    ;;Make a reader that reads to our datatype first
-    (let [temp-reader (reader/make-reader backing-store datatype true)]
-      (if-not (= datatype reader-datatype)
-        ;;now make a reader that does outward conversion to dest datatype.
-        (case (dtype-proto/get-datatype backing-store)
-          :int8 (reader/make-marshalling-reader (dtype-io/datatype->reader :int8 temp-reader true)
-                                                :int8
-                                                reader-datatype unchecked?)
-          :int16 (reader/make-marshalling-reader (dtype-io/datatype->reader :int16 temp-reader true)
-                                                 :int16
-                                                 reader-datatype unchecked?)
-          :int32 (reader/make-marshalling-reader (dtype-io/datatype->reader :int32 temp-reader true)
-                                                 :int32
-                                                 reader-datatype unchecked?)
-          :int64 (reader/make-marshalling-reader (dtype-io/datatype->reader :int64 temp-reader true)
-                                                 :int64
-                                                 reader-datatype unchecked?)
-          :float32 (reader/make-marshalling-reader (dtype-io/datatype->reader :float32 temp-reader true)
-                                                 :float32
-                                                reader-datatype unchecked?)
-          :float64 (reader/make-marshalling-reader (dtype-io/datatype->reader :float64 temp-reader true)
-                                                 :float64
-                                                 reader-datatype unchecked?)))))
+    (if (= datatype (dtype-proto/get-datatype backing-store))
+      (dtype-proto/->reader-of-type backing-store reader-datatype unchecked?)
+      (-> (dtype-proto/->reader-of-type backing-store datatype true)
+          (dtype-proto/->reader-of-type reader-datatype unchecked?))))
 
   mp/PElementCount
   (element-count [item] (mp/element-count backing-store)))
@@ -122,7 +108,7 @@
   [item]
   (every? #(satisfies? % item)
           [dtype-proto/PDatatype
-           dtype-proto/PContainerType dtype-proto/PCopyRawData
+           dtype-proto/PCopyRawData
            dtype-proto/PPersistentVector dtype-proto/PPrototype
            dtype-proto/PToNioBuffer dtype-proto/PToTypedBuffer
            dtype-proto/PBuffer dtype-proto/PToArray

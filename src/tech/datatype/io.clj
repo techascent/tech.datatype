@@ -4,6 +4,8 @@
              :refer [numeric-type? integer-type? numeric-byte-width
                      datatype->jvm-type]
              :as casting]
+            [tech.datatype.reader :as reader]
+            [tech.datatype.writer :as writer]
             [tech.jna :as jna]
             [tech.parallel :as parallel]
             [clojure.set :as c-set]
@@ -26,178 +28,22 @@
 
 
 (extend-protocol dtype-proto/PDatatype
-  ObjectReader
-  (get-datatype [item] :object)
-  ObjectWriter
-  (get-datatype [item] :object)
   Mutable
   (get-datatype [item] :object)
-  ByteReader
-  (get-datatype [item] :int8)
-  ByteWriter
-  (get-datatype [item] :int8)
   ByteMutable
   (get-datatype [item] :int8)
-  ShortReader
-  (get-datatype [item] :int16)
-  ShortWriter
-  (get-datatype [item] :int16)
   ShortMutable
   (get-datatype [item] :int16)
-  IntReader
-  (get-datatype [item] :int32)
-  IntWriter
-  (get-datatype [item] :int32)
   IntMutable
   (get-datatype [item] :int32)
-  LongReader
-  (get-datatype [item] :int64)
-  LongWriter
-  (get-datatype [item] :int64)
   LongMutable
   (get-datatype [item] :int64)
-  FloatReader
-  (get-datatype [item] :float32)
-  FloatWriter
-  (get-datatype [item] :float32)
   FloatMutable
   (get-datatype [item] :float32)
-  DoubleReader
-  (get-datatype [item] :float64)
-  DoubleWriter
-  (get-datatype [item] :float64)
   DoubleMutable
   (get-datatype [item] :float64)
-  BooleanReader
-  (get-datatype [item] :boolean)
-  BooleanWriter
-  (get-datatype [item] :boolean)
   BooleanMutable
   (get-datatype [item] :boolean))
-
-
-(defn ->object-reader ^ObjectReader [item]
-  (if (instance? ObjectReader item)
-    item
-    (dtype-proto/->object-reader item)))
-
-(extend-type ObjectReader
-  dtype-proto/PToReader
-  (->object-reader [item] item)
-  (->reader-of-type [item datatype] (throw (ex-info "unimplemented" {}))))
-
-(defn ->object-writer ^ObjectWriter [item]
-  (if (instance? ObjectWriter item)
-    item
-    (dtype-proto/->object-writer item)))
-
-(extend-type ObjectWriter
-  dtype-proto/PToWriter
-  (->object-writer [item] item)
-  (->writer-of-type [item datatype] (throw (ex-info "unimplemented" {}))))
-
-(defn ->object-mutable ^Mutable [item]
-  (if (instance? Mutable item)
-    item
-    (dtype-proto/->object-mutable item)))
-
-
-(defn ->byte-reader ^ByteReader [item unchecked?]
-  (if (instance? ByteReader item)
-    item
-    (dtype-proto/->reader-of-type item :int8 unchecked?)))
-(defn ->byte-writer ^ByteWriter [item]
-  (if (instance? ByteWriter item)
-    item
-    (dtype-proto/->writer-of-type item :int8)))
-(defn ->byte-mutable ^ByteMutable [item]
-  (if (instance? ByteMutable item)
-    item
-    (dtype-proto/->mutable-of-type item :int8)))
-
-
-(defn ->short-reader ^ShortReader [item unchecked?]
-  (if (instance? ShortReader item)
-    item
-    (dtype-proto/->reader-of-type item :int16 unchecked?)))
-(defn ->short-writer ^ShortWriter [item]
-  (if (instance? ShortWriter item)
-    item
-    (dtype-proto/->writer-of-type item :int16)))
-(defn ->short-mutable ^ShortMutable [item]
-  (if (instance? ShortMutable item)
-    item
-    (dtype-proto/->mutable-of-type item :int16)))
-
-
-(defn ->int-reader ^IntReader [item unchecked?]
-  (if (instance? IntReader item)
-    item
-    (dtype-proto/->reader-of-type item :int32 unchecked?)))
-(defn ->int-writer ^IntWriter [item]
-  (if (instance? IntWriter item)
-    item
-    (dtype-proto/->writer-of-type item :int32)))
-(defn ->int-mutable ^IntMutable [item]
-  (if (instance? IntMutable item)
-    item
-    (dtype-proto/->mutable-of-type item :int32)))
-
-
-(defn ->long-reader ^LongReader [item unchecked?]
-  (if (instance? LongReader)
-    item
-    (dtype-proto/->reader-of-type item :int64 unchecked?)))
-(defn ->long-writer ^LongWriter [item]
-  (if (instance? LongWriter)
-    item
-    (dtype-proto/->writer-of-type item :int64)))
-(defn ->long-mutable ^LongMutable [item]
-  (if (instance? LongMutable item)
-    item
-    (dtype-proto/->mutable-of-type item :int64)))
-
-
-(defn ->float-reader ^FloatReader [item unchecked?]
-  (if (instance? FloatReader item)
-    item
-    (dtype-proto/->reader-of-type item :float32 unchecked?)))
-(defn ->float-writer ^FloatWriter [item]
-  (if (instance? FloatWriter item)
-    item
-    (dtype-proto/->writer-of-type item :float32)))
-(defn ->float-mutable ^FloatMutable [item]
-  (if (instance? FloatMutable item)
-    item
-    (dtype-proto/->mutable-of-type item :float32)))
-
-
-(defn ->double-reader ^DoubleReader [item unchecked?]
-  (if (instance? DoubleReader item)
-    item
-    (dtype-proto/->reader-of-type item :float64 unchecked?)))
-(defn ->double-writer ^DoubleWriter [item]
-  (if (instance? DoubleWriter item)
-    item
-    (dtype-proto/->writer-of-type item :float64)))
-(defn ->double-mutable ^DoubleMutable [item]
-  (if (instance? DoubleMutable item)
-    item
-    (dtype-proto/->mutable-of-type item :float64)))
-
-
-(defn ->boolean-reader ^BooleanReader [item unchecked?]
-  (if (instance? BooleanReader item)
-    item
-    (dtype-proto/->reader-of-type item :boolean unchecked?)))
-(defn ->boolean-writer ^BooleanWriter [item]
-  (if (instance? BooleanWriter item)
-    item
-    (dtype-proto/->writer-of-type item :boolean)))
-(defn ->boolean-mutable ^BooleanMutable [item]
-  (if (instance? BooleanMutable item)
-    item
-    (dtype-proto/->mutable-of-type item :boolean)))
 
 (defn ensure-ptr-like
   "JNA is extremely flexible in what it can take as an argument.  Anything convertible
@@ -235,120 +81,11 @@
     (dtype-proto/->buffer-backing-store item)))
 
 
-(defmacro datatype->writer
-  [datatype item]
-  (case datatype
-    :int8 `(->byte-writer ~item)
-    :uint8 `(->byte-writer ~item)
-    :int16 `(->short-writer ~item)
-    :uint16 `(->short-writer ~item)
-    :int32 `(->int-writer ~item)
-    :uint32 `(->int-writer ~item)
-    :int64 `(->long-writer ~item)
-    :uint64 `(->long-writer ~item)
-    :float32 `(->float-writer ~item)
-    :float64 `(->double-writer ~item)
-    :boolean `(->boolean-writer ~item)
-    `(->object-writer ~item)))
-
-
-(defmacro datatype->reader
-  [datatype item unchecked?]
-  (case datatype
-    :int8 `(->byte-reader ~item ~unchecked?)
-    :uint8 `(->byte-reader ~item ~unchecked?)
-    :int16 `(->short-reader ~item ~unchecked?)
-    :uint16 `(->short-reader ~item ~unchecked?)
-    :int32 `(->int-reader ~item ~unchecked?)
-    :uint32 `(->int-reader ~item ~unchecked?)
-    :int64 `(->long-reader ~item ~unchecked?)
-    :uint64 `(->long-reader ~item ~unchecked?)
-    :float32 `(->float-reader ~item ~unchecked?)
-    :float64 `(->double-reader ~item ~unchecked?)
-    :boolean `(->boolean-reader ~item ~unchecked?)
-    `(->object-reader ~item)))
-
-
-(defmacro with-typed-writer
-  [item & body]
-  `(case (dtype-proto/get-datatype ~item)
-     :int8 (let [~'writer (datatype->writer :int8 ~item)] ~@body)
-     :int16 (let [~'writer (datatype->writer :int16 ~item)] ~@body)
-     :int32 (let [~'writer (datatype->writer :int32 ~item)] ~@body)
-     :int64 (let [~'writer (datatype->writer :int64 ~item)] ~@body)
-     :float32 (let [~'writer (datatype->writer :float32 ~item)] ~@body)
-     :float64 (let [~'writer (datatype->writer :float64 ~item)] ~@body)
-     :boolean (let [~'writer (datatype->writer :boolean ~item)] ~@body)
-     (let [~'writer (datatype->writer :object ~item)] ~@body)))
-
-
-(defmacro with-typed-reader
-  [item & body]
-  `(case (dtype-proto/get-datatype ~item)
-     :int8 (let [~'reader (datatype->reader :int8 ~item true)] ~@body)
-     :int16 (let [~'reader (datatype->reader :int16 ~item true)] ~@body)
-     :int32 (let [~'reader (datatype->reader :int32 ~item true)] ~@body)
-     :int64 (let [~'reader (datatype->reader :int64 ~item true)] ~@body)
-     :float32 (let [~'reader (datatype->reader :float32 ~item true)] ~@body)
-     :float64 (let [~'reader (datatype->reader :float64 ~item true)] ~@body)
-     :boolean (let [~'reader (datatype->reader :boolean ~item true)] ~@body)
-     (let [~'reader (datatype->reader :object ~item false)] ~@body)))
-
-
-(defn make-object-writer
-  [item datatype]
-  (when-not (casting/is-host-datatype? (dtype-proto/get-datatype item))
-    (throw (ex-info "Must make writers from containers of host types."
-                    {:datatype datatype})))
-  (with-typed-writer item
-    (reify ObjectWriter
-        (write [item idx value]
-          (.write writer idx (casting/jvm-cast value datatype)))
-        (writeConstant [item idx value n-elems]
-          (.writeConstant writer idx (casting/jvm-cast value datatype)
-                          n-elems))
-        (writeBlock [item-writer offset values]
-          (doseq [[idx val] (map-indexed vector (seq values))]
-            (.write item-writer (+ offset (long idx)) val)))
-        (writeIndexes [item-writer indexes values]
-          (doseq [[idx val] (map vector
-                                 (dtype-proto/->vector indexes)
-                                 (seq values))]
-            (.write item-writer (long idx) val))))))
-
-
-(defn make-object-reader
-  [src-container datatype]
-  (when-not (casting/is-host-datatype? (dtype-proto/get-datatype src-container))
-    (throw (ex-info "Must make readers from containers of host types."
-                    {:datatype datatype})))
-  (with-typed-reader src-container
-    (reify ObjectReader
-      (read [item# idx]
-        (casting/unchecked-cast
-         (.read reader idx)
-         datatype))
-      (readBlock [reader-item offset dest]
-        (let [dest-size (.size dest)]
-          (c-for [idx (int 0) (< idx dest-size) (inc idx)]
-                 (.set dest idx
-                       (.read reader-item (+ offset idx)))))
-        dest)
-      (readIndexes [reader-item indexes dest]
-        (let [dest-size (.size dest)]
-          (c-for [idx (int 0) (< idx dest-size) (inc idx)]
-                 (.set dest idx
-                       (.read reader-item
-                              (.get indexes
-                                    (+ (.position indexes)
-                                       idx)))))
-          dest)))))
-
 
 (defmacro datatype->parallel-write
   [datatype dst src n-elems unchecked?]
-  `(let [writer# (datatype->writer ~datatype ~dst)
-         reader# (datatype->reader ~datatype ~src ~unchecked?)]
+  `(let [writer# (writer/datatype->writer ~datatype ~dst true)
+         reader# (reader/datatype->reader ~datatype ~src ~unchecked?)]
      (parallel/parallel-for
       idx#
       ~n-elems
@@ -357,8 +94,8 @@
 
 (defmacro datatype->serial-write
   [datatype dst src n-elems unchecked?]
-  `(let [writer# (datatype->writer ~datatype ~dst)
-         reader# (datatype->reader ~datatype ~src ~unchecked?)
+  `(let [writer# (writer/datatype->writer ~datatype ~dst true)
+         reader# (reader/datatype->reader ~datatype ~src ~unchecked?)
          n-elems# ~n-elems]
      (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
             (.write writer# idx# (.read reader# idx#)))))

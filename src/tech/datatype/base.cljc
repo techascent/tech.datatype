@@ -9,7 +9,7 @@
             [tech.datatype.io :as dtype-io]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix :as m])
-  (:import [tech.datatype ObjectReader]))
+  (:import [tech.datatype ObjectReader ObjectWriter]))
 
 
 (set! *warn-on-reflection* true)
@@ -33,16 +33,20 @@
 
 
 (defn set-value! [item offset value]
-  (.write (dtype-io/->object-writer item)
+  (.write ^ObjectWriter (dtype-proto/->object-writer item)
           offset value))
 
 (defn set-constant! [item offset value elem-count]
-  (.writeConstant (dtype-io/->object-writer item)
+  (.writeConstant ^ObjectWriter (dtype-proto/->object-writer item)
                   offset value elem-count))
 
 (defn get-value [item offset]
-  (.read (dtype-io/->object-reader item) offset))
+  (.read ^ObjectReader (dtype-proto/->object-reader item) offset))
 
+
+(defn ->vector
+  [item]
+  (dtype-proto/->vector item))
 
 
 (defn ecount

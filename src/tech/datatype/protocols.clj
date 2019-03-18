@@ -4,9 +4,6 @@
 (defprotocol PDatatype
   (get-datatype [item]))
 
-(defprotocol PContainerType
-  (container-type [item]))
-
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."
   (copy-raw->item! [raw-data ary-target target-offset options]))
@@ -72,7 +69,7 @@ data overlap?"))
 
 (defprotocol PToWriter
   (->object-writer [item])
-  (->writer-of-type [item datatype]))
+  (->writer-of-type [item datatype unchecked?]))
 
 
 (defprotocol PToReader

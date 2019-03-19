@@ -198,9 +198,31 @@
               :float64 (.read src-ptr 0 ^doubles array-data array-offset n-elems)))
           :else
           (memcpy dst-buf src-buf (* n-elems (numeric-byte-width src-dtype)))))
+      ;;The slow path still has fast aspects if one of the buffers is a known primitive type.
       (let [unchecked-reads? (or unchecked?
                                  (= dst-dtype src-dtype))]
-        (if parallel?
-          (parallel-write dst src n-elems unchecked-reads?)
-          (serial-write dst src n-elems unchecked-reads?)))))
+        (cond
+          ;;Dest has a nio buffer *and* the nio buffer matches the datatype of dest.
+          (and dst-buf (= dst-dtype (dtype-proto/get-datatype dst-buf)))
+          (case dst-dtype
+            :int8 (.readBlock (reader/datatype->reader :int8 src unchecked?) 0 dst-buf)
+            :int16 (.readBlock (reader/datatype->reader :int16 src unchecked?) 0 dst-buf)
+            :int32 (.readBlock (reader/datatype->reader :int32 src unchecked?) 0 dst-buf)
+            :int64 (.readBlock (reader/datatype->reader :int64 src unchecked?) 0 dst-buf)
+            :float32 (.readBlock (reader/datatype->reader :float32 src unchecked?) 0 dst-buf)
+            :float64 (.readBlock (reader/datatype->reader :float64 src unchecked?) 0 dst-buf))
+          ;;Src has nio buffer and nio buffer matches datatype or src
+          (and src-buf (= src-dtype (dtype-proto/get-datatype src-buf)))
+          (case src-dtype
+            :int8 (.writeBlock (writer/datatype->writer :int8 dst unchecked?) 0 src-buf)
+            :int16 (.writeBlock (writer/datatype->writer :int16 dst unchecked?) 0 src-buf)
+            :int32 (.writeBlock (writer/datatype->writer :int32 dst unchecked?) 0 src-buf)
+            :int64 (.writeBlock (writer/datatype->writer :int64 dst unchecked?) 0 src-buf)
+            :float32 (.writeBlock (writer/datatype->writer :float32 dst unchecked?) 0 src-buf)
+            :float64 (.writeBlock (writer/datatype->writer :float64 dst unchecked?) 0 src-buf))
+          :else
+          ;;Punt!!
+          (if parallel?
+            (parallel-write dst src n-elems unchecked-reads?)
+            (serial-write dst src n-elems unchecked-reads?))))))
   dst)

@@ -5,6 +5,7 @@
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.nio-access :refer [buf-put buf-get]]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.reader :as reader]
             [tech.datatype.writer :as writer]
@@ -94,10 +95,6 @@
 
 
 (extend-type Buffer
-  dtype-proto/PContainerType
-  (container-type [item] :nio-buffer)
-  (dense-container? [item] true)
-  (sparse-container? [item] false)
   dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
     (base/raw-dtype-copy! raw-data ary-target target-offset options))
@@ -125,7 +122,7 @@
   `(if ~unchecked?
      (reify ~writer-type
        (write [writer# idx# value#]
-         (.put ~buffer (+ idx# (.position ~buffer))
+         (buf-put ~buffer idx# (.position ~buffer)
                (casting/datatype->unchecked-cast-fn
                 ~intermediate-datatype
                 ~buffer-datatype
@@ -142,15 +139,28 @@
                         ~intermediate-datatype
                         value#))
                zero-val# (casting/datatype->unchecked-cast-fn :unknown ~buffer-datatype 0)]
-           (memset (dtype-proto/sub-buffer ~buffer offset# count#)
-                   (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
-           (let [pos# (.position ~buffer)]
-             (parallel/parallel-for
-              idx# count#
-              (.put ~buffer (+ idx# pos#) value#)))))
+           (if (or (= value# zero-val#)
+                   (= :int8 ~buffer-datatype))
+             (memset (dtype-proto/sub-buffer ~buffer offset# count#)
+                     (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
+             (let [pos# (.position ~buffer)]
+               (parallel/parallel-for
+                idx# count#
+                (buf-put ~buffer idx# pos# value#))))))
        (writeBlock [writer# offset# values#]
-         (dtype-io/dense-copy! (dtype-proto/sub-buffer ~buffer offset# (base/ecount values#))
-                               values# (base/ecount values#) ~unchecked? true))
+         (let [buf-pos# (+ offset# (.position ~buffer))
+               values-pos# (.position values#)
+               count# (base/ecount values#)]
+           (parallel/parallel-for
+            idx# count#
+            (buf-put ~buffer idx# buf-pos#
+                     (casting/datatype->unchecked-cast-fn
+                      ~intermediate-datatype
+                      ~buffer-datatype
+                      (casting/datatype->unchecked-cast-fn
+                       ~writer-datatype
+                       ~intermediate-datatype
+                       (buf-get values# idx# values-pos#)))))))
        (writeIndexes [writer# indexes# values#]
          (let [n-elems# (base/ecount indexes#)
                buf-pos# (.position ~buffer)
@@ -159,25 +169,24 @@
            (parallel/parallel-for
             idx#
             n-elems#
-            (.put ~buffer (+ buf-pos#
-                             (.get indexes# (+ idx-pos# idx#)))
+            (buf-put ~buffer (buf-get indexes# idx-pos# idx#) buf-pos#
                   (casting/datatype->unchecked-cast-fn
                    ~intermediate-datatype
                    ~buffer-datatype
                    (casting/datatype->unchecked-cast-fn
                     ~writer-datatype
                     ~intermediate-datatype
-                    (.get values# (+ idx# val-pos#)))))))))
+                    (buf-get values# idx# val-pos#))))))))
      (reify ~writer-type
        (write [writer# idx# value#]
-         (.put ~buffer (+ idx# (.position ~buffer))
-               (casting/datatype->unchecked-cast-fn
-                ~intermediate-datatype
-                ~buffer-datatype
-                (casting/datatype->cast-fn
-                 ~writer-datatype
-                 ~intermediate-datatype
-                 value#))))
+         (buf-put ~buffer idx# (.position ~buffer)
+                  (casting/datatype->unchecked-cast-fn
+                   ~intermediate-datatype
+                   ~buffer-datatype
+                   (casting/datatype->cast-fn
+                    ~writer-datatype
+                    ~intermediate-datatype
+                    value#))))
        (writeConstant [writer# offset# value# count#]
          (let [value# (casting/datatype->unchecked-cast-fn
                        ~intermediate-datatype
@@ -187,13 +196,28 @@
                         ~intermediate-datatype
                         value#))
                zero-val# (casting/datatype->cast-fn :unknown ~buffer-datatype 0)]
-           (memset (dtype-proto/sub-buffer ~buffer offset# count#)
-                   (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
-           (let [pos# (.position ~buffer)]
-             (parallel/parallel-for
-              idx# count#
-              (.put ~buffer (+ idx# pos#) value#)))))
+           (if (or (= value# zero-val#)
+                   (= :int8 ~buffer-datatype))
+             (memset (dtype-proto/sub-buffer ~buffer offset# count#)
+                     (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
+             (let [pos# (.position ~buffer)]
+               (parallel/parallel-for
+                idx# count#
+                (buf-put ~buffer idx# pos# value#))))))
        (writeBlock [writer# offset# values#]
+         (let [buf-pos# (+ offset# (.position ~buffer))
+               values-pos# (.position values#)
+               count# (base/ecount values#)]
+           (parallel/parallel-for
+            idx# count#
+            (buf-put ~buffer idx# buf-pos#
+                     (casting/datatype->unchecked-cast-fn
+                      ~intermediate-datatype
+                      ~buffer-datatype
+                      (casting/datatype->cast-fn
+                       ~writer-datatype
+                       ~intermediate-datatype
+                       (buf-get values# idx# values-pos#))))))
          (dtype-io/dense-copy! (dtype-proto/sub-buffer ~buffer offset# (base/ecount values#))
                                values# (base/ecount values#) ~unchecked? true))
        (writeIndexes [writer# indexes# values#]
@@ -204,15 +228,14 @@
            (parallel/parallel-for
             idx#
             n-elems#
-            (.put ~buffer (+ buf-pos#
-                             (.get indexes# (+ idx-pos# idx#)))
-                  (casting/datatype->cast-fn
-                   ~intermediate-datatype
-                   ~buffer-datatype
-                   (casting/datatype->cast-fn
-                    ~writer-datatype
-                    ~intermediate-datatype
-                    (.get values# (+ idx# val-pos#)))))))))))
+            (buf-put ~buffer (buf-get indexes# idx# idx-pos#) buf-pos#
+                     (casting/datatype->cast-fn
+                      ~intermediate-datatype
+                      ~buffer-datatype
+                      (casting/datatype->cast-fn
+                       ~writer-datatype
+                       ~intermediate-datatype
+                       (buf-get values# idx# val-pos#))))))))))
 
 
 
@@ -232,10 +255,21 @@
           (casting/datatype->unchecked-cast-fn
            ~buffer-datatype
            ~intermediate-datatype
-           (.get ~buffer (+ idx# (.position ~buffer))))))
+           (buf-get ~buffer idx# (.position ~buffer)))))
        (readBlock [reader# offset# dest#]
-         (dtype-io/dense-copy! dest# (dtype-proto/sub-buffer ~buffer offset# (base/ecount dest#))
-                               (base/ecount dest#) true true))
+         (let [buf-pos# (+ offset# (.position ~buffer))
+               dest-pos# (.position dest#)
+               count# (base/ecount dest#)]
+           (parallel/parallel-for
+            idx# count#
+            (buf-put dest# idx# dest-pos#
+                     (casting/datatype->unchecked-cast-fn
+                      ~intermediate-datatype
+                      ~reader-datatype
+                      (casting/datatype->unchecked-cast-fn
+                       ~buffer-datatype
+                       ~intermediate-datatype
+                       (buf-get ~buffer idx# buf-pos#)))))))
        (readIndexes [reader# indexes# dest#]
          (let [idx-pos# (.position indexes#)
                dest-pos# (.position dest#)
@@ -244,27 +278,38 @@
            (parallel/parallel-for
             idx#
             n-elems#
-            (.put dest# (+ idx# dest-pos#)
-                  (casting/datatype->unchecked-cast-fn
-                   ~intermediate-datatype
-                   ~reader-datatype
-                   (casting/datatype->unchecked-cast-fn
-                    ~buffer-datatype
-                    ~intermediate-datatype
-                    (.get ~buffer (+ buf-pos#
-                                     (.get indexes# (+ idx# idx-pos#)))))))))))
+            (buf-put dest# idx# dest-pos#
+                     (casting/datatype->unchecked-cast-fn
+                      ~intermediate-datatype
+                      ~reader-datatype
+                      (casting/datatype->unchecked-cast-fn
+                       ~buffer-datatype
+                       ~intermediate-datatype
+                       (buf-get ~buffer (buf-get indexes# idx# idx-pos#)
+                                buf-pos#))))))))
      (reify ~reader-type
        (read [reader# idx#]
          (casting/datatype->cast-fn
           ~intermediate-datatype
           ~reader-datatype
-          (casting/datatype->cast-fn
+          (casting/datatype->unchecked-cast-fn
            ~buffer-datatype
            ~intermediate-datatype
-           (.get ~buffer (+ idx# (.position ~buffer))))))
+           (buf-get ~buffer idx# (.position ~buffer)))))
        (readBlock [reader# offset# dest#]
-         (dtype-io/dense-copy! dest# (dtype-proto/sub-buffer ~buffer offset# (base/ecount dest#))
-                               (base/ecount dest#) true true))
+         (let [buf-pos# (+ offset# (.position ~buffer))
+               dest-pos# (.position dest#)
+               count# (base/ecount dest#)]
+           (parallel/parallel-for
+            idx# count#
+            (buf-put dest# idx# dest-pos#
+                     (casting/datatype->cast-fn
+                      ~intermediate-datatype
+                      ~reader-datatype
+                      (casting/datatype->unchecked-cast-fn
+                       ~buffer-datatype
+                       ~intermediate-datatype
+                       (buf-get ~buffer idx# buf-pos#)))))))
        (readIndexes [reader# indexes# dest#]
          (let [idx-pos# (.position indexes#)
                dest-pos# (.position dest#)
@@ -273,15 +318,14 @@
            (parallel/parallel-for
             idx#
             n-elems#
-            (.put dest# (+ idx# dest-pos#)
+            (buf-put dest# idx# dest-pos#
                   (casting/datatype->cast-fn
                    ~intermediate-datatype
                    ~reader-datatype
-                   (casting/datatype->cast-fn
+                   (casting/datatype->unchecked-cast-fn
                     ~buffer-datatype
                     ~intermediate-datatype
-                    (.get ~buffer (+ buf-pos#
-                                     (.get indexes# (+ idx# idx-pos#)))))))))))))
+                    (buf-get ~buffer (buf-get indexes# idx# idx-pos#) buf-pos#))))))))))
 
 
 

@@ -17,7 +17,12 @@
             [clojure.core.matrix :as m]
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
-            [tech.datatype.java-primitive :as primitive])
+            [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.array :as dtype-array]
+            [tech.datatype.nio-buffer :as dtype-nio]
+            [tech.datatype.typed-buffer :as dtype-tbuf]
+            [tech.datatype.jna :as dtype-jna]
+            [tech.parallel :as parallel])
   (:refer-clojure :exclude [cast]))
 
 
@@ -39,10 +44,6 @@
 
 (defn get-value [item offset]
   (base/get-value item offset))
-
-
-(defn container-type [item]
-  (base/container-type item))
 
 
 (defn ecount
@@ -71,14 +72,9 @@ Calls clojure.core.matrix/ecount."
   "Copy raw data into an array.  Returns a tuple of
   [ary-target result-offset-after-copy]"
   ([raw-data ary-target target-offset options]
-   (base/copy-raw->item! raw-data ary-target target-offset options))
+   (dtype-proto/copy-raw->item! raw-data ary-target target-offset options))
   ([raw-data ary-target target-offset]
-   (base/copy-raw->item! raw-data ary-target target-offset {})))
-
-
-(defn add-datatype->size-mapping
-  [datatype byte-size]
-  (base/add-datatype->size-mapping datatype byte-size))
+   (dtype-proto/copy-raw->item! raw-data ary-target target-offset {})))
 
 
 (defn datatype->byte-size
@@ -88,22 +84,22 @@ Calls clojure.core.matrix/ecount."
 
 (defn add-cast-fn
   [datatype cast-fn]
-  (base/add-cast-fn datatype cast-fn))
+  (casting/add-cast-fn datatype cast-fn))
 
 
 (defn add-unchecked-cast-fn
   [datatype cast-fn]
-  (base/add-unchecked-cast-fn datatype cast-fn))
+  (casting/add-unchecked-cast-fn datatype cast-fn))
 
 
 (defn cast
   [value datatype]
-  (base/cast value datatype))
+  (casting/cast value datatype))
 
 
 (defn unchecked-cast
   [value datatype]
-  (base/unchecked-cast value datatype))
+  (casting/unchecked-cast value datatype))
 
 
 (defn ->vector
@@ -114,28 +110,14 @@ Calls clojure.core.matrix/ecount."
 
 (defn from-prototype
   [item & {:keys [datatype shape]}]
-  (base/from-prototype item
+  (dtype-proto/from-prototype item
                        (or datatype (get-datatype item))
                        (or shape (base/shape item))))
 
 
 (defn clone
   [item & {:keys [datatype]}]
-  (base/clone item (or datatype (get-datatype item))))
-
-
-(defn add-container-conversion-fn
-  "Add a container->container conversion.  Function takes a dst-datatype and the src-container
-and returns a tuple of [result-container result-offset]."
-  [src-container-type dst-container-type convert-fn]
-  (base/add-container-conversion-fn src-container-type dst-container-type convert-fn))
-
-
-(defn add-copy-operation
-  "Add a new copy operation.  Note that this is a single point in a 5 dimensional space
-of operations."
-  [src-container-type dst-container-type src-dtype dst-dtype unchecked? copy-fn]
-  (base/add-copy-operation src-container-type dst-container-type src-dtype dst-dtype unchecked? copy-fn))
+  (dtype-proto/clone item (or datatype (get-datatype item))))
 
 
 (defn copy!
@@ -151,25 +133,33 @@ of operations."
 
 (defn make-array-of-type
   [datatype elem-count-or-seq & [options]]
-  (primitive/make-array-of-type datatype elem-count-or-seq
+  (dtype-array/make-array-of-type datatype elem-count-or-seq
                                 (or options {})))
 
 
 (defn ->array
   "Returns nil of item does not share a backing store with an array."
   [item]
-  (primitive/->array item))
+  (dtype-proto/->array item))
+
+
+(defn ->sub-array
+  "Returns map of the backing array plus a length and offset
+  of nil of this item is not array backed.
+  {:array-data :offset :length}"
+  [item]
+  (dtype-proto/->sub-array item))
 
 
 (defn ->array-copy
   "Copy the data into an array that can correctly hold the datatype.  This
   array may not have the same datatype as the source item"
   [item]
-  (primitive/->array-copy item))
+  (dtype-proto/->array-copy item))
 
 (defn make-buffer-of-type
   [datatype elem-count-or-seq & [options]]
-  (primitive/make-buffer-of-type datatype elem-count-or-seq
+  (dtype-nio/make-buffer-of-type datatype elem-count-or-seq
                                  (or options {})))
 
 
@@ -178,23 +168,36 @@ of operations."
   a different datatype than the object, so for instance the backing store for
   the uint8 datatype is a nio buffer of type int8."
   [src-ary]
-  (primitive/->buffer-backing-store src-ary))
+  (dtype-proto/->buffer-backing-store src-ary))
 
 
 (defn make-typed-buffer
   "Support for unsigned datatypes comes via the typed buffer mechanism"
   [datatype elem-count-or-seq & [options]]
-  ;;Dynamic require because this auto-generates quite a bit of code and
-  ;;I think most people will not need this.
-  (require '[tech.datatype.java-unsigned :as unsigned])
-  ((resolve 'tech.datatype.java-unsigned/make-typed-buffer)
-   datatype elem-count-or-seq (or options {})))
+  (dtype-tbuf/make-typed-buffer datatype elem-count-or-seq (or options {})))
 
 
 (defn ->typed-buffer
   "Conversion of a thing to a typed buffer"
   [item & {:keys [datatype]}]
-  (require '[tech.datatype.java-unsigned :as unsigned])
-  (let [datatype (or datatype (get-datatype item))
-        retval ((resolve 'tech.datatype.java-unsigned/->typed-buffer) item)]
-    (assoc retval :dtype datatype)))
+  (let [datatype (or datatype (get-datatype item))]
+    (-> (dtype-tbuf/->typed-buffer item)
+        (assoc :datatype datatype))))
+
+
+(defn make-container
+  "Generically make a container of the given type.  Built in types are:
+  - Support for host primitive types, boolean, and all object types:
+  :java-array
+
+  - Support for host primitive types
+  :nio-buffer
+
+  - Support for all (including unsigned) primitive numeric types
+  :native-buffer
+
+  (support all known datatypes, java array or list backed)
+  :typed-buffer"
+  [container-type datatype elem-count-or-seq & [options]]
+  (dtype-proto/make-container container-type datatype
+                              elem-count-or-seq options))

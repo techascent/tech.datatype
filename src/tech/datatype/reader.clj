@@ -3,6 +3,7 @@
             [tech.datatype.casting :as casting]
             [tech.parallel :as parallel]
             [tech.jna :as jna]
+            [tech.datatype.nio-access :refer [buf-put buf-get]]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m])
@@ -123,7 +124,7 @@
                      dest-pos# (.position dest#)]
                  (parallel/parallel-for
                   idx# n-elems#
-                  (.put dest# (+ idx# dest-pos#)
+                  (buf-put dest# idx# dest-pos#
                         (.read item# (+ offset# idx#))))))
              (readIndexes [item# indexes# dest#]
                (let [n-elems# (ecount dest#)
@@ -131,7 +132,7 @@
                      idx-pos# (.position indexes#)]
                  (parallel/parallel-for
                   idx# n-elems#
-                  (.put dest# (+ idx# dest-pos#)
+                  (buf-put dest# idx# dest-pos#
                         (.read item# (.get indexes#
                                            (+ idx# idx-pos#))))))))
            (reify ~dst-reader-type
@@ -147,17 +148,17 @@
                      dest-pos# (.position dest#)]
                  (parallel/parallel-for
                   idx# n-elems#
-                  (.put dest# (+ idx# dest-pos#)
-                        (.read item# (+ offset# idx#))))))
+                  (buf-put dest# idx# dest-pos#
+                           (.read item# (+ offset# idx#))))))
              (readIndexes [item# indexes# dest#]
                (let [n-elems# (ecount dest#)
                      dest-pos# (.position dest#)
                      idx-pos# (.position indexes#)]
                  (parallel/parallel-for
                   idx# n-elems#
-                  (.put dest# (+ idx# dest-pos#)
-                        (.read item# (.get indexes#
-                                           (+ idx# idx-pos#)))))))))
+                  (buf-put dest# idx# dest-pos#
+                           (.read item# (buf-get indexes#
+                                                 idx# idx-pos#))))))))
         (if (= :boolean dst-dtype)
           `(reify ~dst-reader-type
              (read [item# idx#]
@@ -174,8 +175,8 @@
                      idx-pos# (.position indexes#)]
                  (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
                         (.set dest# idx#
-                              (.read item# (.get indexes#
-                                                 (+ idx# idx-pos#))))))))
+                              (.read item# (buf-get indexes#
+                                                    idx# idx-pos#)))))))
           `(reify ~dst-reader-type
              (read [item# idx#]
                (.read ~'src-reader idx#))
@@ -189,8 +190,8 @@
                      idx-pos# (.position indexes#)]
                  (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
                         (.set dest# idx#
-                              (.read item# (.get indexes#
-                                                 (+ idx# idx-pos#))))))))))))
+                              (.read item# (buf-get indexes#
+                                                    idx# idx-pos#)))))))))))
 
 
 (defmacro extend-reader-type

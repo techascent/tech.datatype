@@ -32,14 +32,6 @@
   (array-backed? [item]))
 
 
-(defprotocol PToTypedBuffer
-  "Conversion to an object that implements all of the protocols."
-  (->typed-buffer [item]
-    "Dense buffer of data")
-  (->typed-sparse-buffer [item]
-    "Sparse buffer of data"))
-
-
 (defprotocol PBuffer
   "Interface to create sub-buffers out of larger contiguous buffers."
   (sub-buffer [buffer offset length]
@@ -63,8 +55,10 @@ data overlap?"))
     "Convert to an array containing a copy of the data"))
 
 
-(defprotocol PFastutilConvertible
-  (->fastutil-list-backing-store [item]))
+(defprotocol PToList
+  "Generically implemented for anything that implements ->array"
+  (->list-backing-store [item])
+  (->list-copy [item]))
 
 
 (defprotocol PToWriter

@@ -49,10 +49,6 @@
   (->buffer-backing-store [item]
     (dtype-proto/->buffer-backing-store backing-store))
 
-  dtype-proto/PToTypedBuffer
-  (->typed-buffer [item] item)
-  (->typed-sparse-buffer [item] nil)
-
 
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
@@ -110,7 +106,7 @@
           [dtype-proto/PDatatype
            dtype-proto/PCopyRawData
            dtype-proto/PPersistentVector dtype-proto/PPrototype
-           dtype-proto/PToNioBuffer dtype-proto/PToTypedBuffer
+           dtype-proto/PToNioBuffer
            dtype-proto/PBuffer dtype-proto/PToArray
            dtype-proto/PToWriter dtype-proto/PToReader]))
 

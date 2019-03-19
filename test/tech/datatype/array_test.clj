@@ -24,7 +24,7 @@
       (dtype-base/set-constant! sub-ary 0 0 3)
       (is (= [0 0 0] (dtype-proto/->vector sub-ary)))
       (is (= [0 1 2 0 0 0 6 7 8 9] (dtype-proto/->vector src-ary))))
-    (let [short-writer (dtype-proto/->writer-of-type src-ary :int16)
+    (let [short-writer (dtype-proto/->writer-of-type src-ary :int16 :true)
           new-shorts (short-array (range 4))
           new-indexes (int-array [0 2 4 6])]
       (.writeIndexes short-writer

@@ -2,9 +2,9 @@
   (:require [clojure.test :refer :all]
             [tech.datatype :as dtype]
             [tech.datatype.base :as base]
+            [tech.datatype.casting :as casting]
             [clojure.core.matrix :as m]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [tech.datatype.java-primitive :as primitive])
+            [clojure.core.matrix.macros :refer [c-for]])
   (:import [java.nio FloatBuffer]))
 
 
@@ -48,8 +48,8 @@
 (deftest generalized-copy-test
   (->> (for [src-fn create-functions
              dst-fn create-functions
-             src-dtype primitive/datatypes
-             dst-dtype primitive/datatypes]
+             src-dtype casting/host-numeric-types
+             dst-dtype casting/host-numeric-types]
          (basic-copy src-fn dst-fn src-dtype dst-dtype))
        dorun))
 
@@ -60,8 +60,7 @@
             (aset src-data idx (double-array (repeat 10 idx))))
         dst-data (float-array (* 5 10))]
     ;;This should not hit any slow paths.
-    (with-bindings {#'base/*error-on-slow-path* true}
-      (dtype/copy-raw->item! src-data dst-data 0))
+    (dtype/copy-raw->item! src-data dst-data 0)
     (is (= (vec (float-array (flatten (map #(repeat 10 %) (range 5)))))
            (vec dst-data)))))
 
@@ -97,7 +96,8 @@
                        [(int 1) :int32]
                        [(long 1) :int64]
                        [(float 1) :float32]
-                       [(double 1) :float64]]]
+                       [(double 1) :float64]
+                       [(boolean false) :boolean]]]
     (is (= dtype (dtype/get-datatype cls)))))
 
 
@@ -131,23 +131,22 @@
                                  (dtype/copy! src-buf 0 dst-buf 0 num-items
                                               {:unchecked? true}))
 
-          raw-copy (get @base/*copy-table* [:nio-buffer :nio-buffer
-                                            :float32 :float32 true])
-          raw-dtype-copy (fn []
-                           (raw-copy src-buf 0 dst-buf 0 num-items {:unchecked? true}))
-          generic-copy (fn []
-                         (base/generic-copy! src-buf 0 dst-buf 0 num-items
-                                             {:unchecked? true}))
-
           make-array (fn []
                        (dtype/make-array-of-type :float32 dst-buf))
+          marshal-buf (int-array num-items)
+          ;;If you have to do a marshalling copy then exploiting parallelism will
+          ;;be your best bet.  It costs a lot to marshal across datatypes, esp. int->float.
+          marshal-copy (fn []
+                         (dtype/copy! src-data 0
+                                      marshal-buf 0
+                                      num-items
+                                      {:unchecked? true}))
           fns {:array-copy array-copy
                :buffer-copy buffer-copy
                :dtype-copy dtype-copy
                :unchecked-dtype-copy unchecked-dtype-copy
-               :raw-copy raw-dtype-copy
                :make-array make-array
-               :generic-copy generic-copy}
+               :marshal-copy marshal-copy}
           run-timed-fns (fn []
                           (->> fns
                                (map (fn [[fn-name time-fn]]

@@ -1,6 +1,7 @@
 (ns tech.datatype.writer
   (:require [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.nio-access :refer [buf-put buf-get]]
             [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel]
             [clojure.core.matrix :as m])
@@ -130,15 +131,15 @@
                      values-pos# (.position values#)]
                  (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
                         (.write item# (+ offset# idx#)
-                                (.get values# (+ idx# values-pos#))))))
+                                (buf-get values# idx# values-pos#)))))
              (writeIndexes [item# indexes# values#]
                (let [n-elems# (ecount values#)
                      values-pos# (.position values#)
                      idx-pos# (.position indexes#)]
                  (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (.get indexes#
-                                            (+ idx# idx-pos#))
-                                (.get values# (+ values-pos# idx#)))))))
+                        (.write item# (buf-get indexes#
+                                            idx# idx-pos#)
+                                (buf-get values# values-pos# idx#))))))
            (reify ~src-writer-type
              (write[item# idx# value#]
                (.write ~'dst-writer idx#
@@ -166,9 +167,9 @@
                      values-pos# (.position values#)
                      idx-pos# (.position indexes#)]
                  (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (.get indexes#
-                                            (+ idx# idx-pos#))
-                                (.get values# (+ values-pos# idx#))))))))
+                        (.write item# (buf-get indexes#
+                                            idx# idx-pos#)
+                                (buf-get values# idx# values-pos#)))))))
         (if (= :boolean src-dtype)
           `(reify ~src-writer-type
              (write[item# idx# value#]
@@ -195,8 +196,8 @@
                (let [n-elems# (ecount values#)
                      idx-pos# (.position indexes#)]
                  (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (.get indexes#
-                                            (+ idx# idx-pos#))
+                        (.write item# (buf-get indexes#
+                                            idx# idx-pos#)
                                 (.getBoolean values# idx#))))))
           `(reify ~src-writer-type
              (write[item# idx# value#]
@@ -223,8 +224,8 @@
                (let [n-elems# (ecount values#)
                      idx-pos# (.position indexes#)]
                  (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (.get indexes#
-                                            (+ idx# idx-pos#))
+                        (.write item# (buf-get indexes#
+                                            idx# idx-pos#)
                                 (.get values# idx#))))))))))
 
 

@@ -191,3 +191,8 @@ and we convert your thing to a typed pointer."
     (when typed-buf
       (dtype-base/copy! typed-buf 0 retval 0 n-elems {:unchecked? true}))
     retval))
+
+
+(defmethod dtype-proto/make-container :native-buffer
+  [container-type datatype elem-count options]
+  (make-typed-pointer datatype elem-count options))

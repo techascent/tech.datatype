@@ -5,7 +5,10 @@
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto]
-            [tech.datatype.nio-access :refer [buf-put buf-get]]
+            [tech.datatype.nio-access :refer [buf-put buf-get
+                                              datatype->pos-fn
+                                              datatype->read-fn
+                                              datatype->write-fn]]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.reader :as reader]
             [tech.datatype.writer :as writer]
@@ -122,14 +125,16 @@
   `(if ~unchecked?
      (reify ~writer-type
        (write [writer# idx# value#]
-         (buf-put ~buffer idx# (.position ~buffer)
-               (casting/datatype->unchecked-cast-fn
-                ~intermediate-datatype
-                ~buffer-datatype
-                (casting/datatype->unchecked-cast-fn
-                 ~writer-datatype
-                 ~intermediate-datatype
-                 value#))))
+         (datatype->write-fn
+          ~buffer-datatype ~buffer idx#
+          (datatype->pos-fn ~buffer-datatype ~buffer)
+          (casting/datatype->unchecked-cast-fn
+           ~intermediate-datatype
+           ~buffer-datatype
+           (casting/datatype->unchecked-cast-fn
+            ~writer-datatype
+            ~intermediate-datatype
+            value#))))
        (writeConstant [writer# offset# value# count#]
          (let [value# (casting/datatype->unchecked-cast-fn
                        ~intermediate-datatype
@@ -142,7 +147,7 @@
            (if (or (= value# zero-val#)
                    (= :int8 ~buffer-datatype))
              (memset (dtype-proto/sub-buffer ~buffer offset# count#)
-                     (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
+                     (int value#) (* count# (casting/numeric-byte-width ~buffer-datatype)))
              (let [pos# (.position ~buffer)]
                (parallel/parallel-for
                 idx# count#

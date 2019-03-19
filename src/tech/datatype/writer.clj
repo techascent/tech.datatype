@@ -1,7 +1,10 @@
 (ns tech.datatype.writer
   (:require [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto]
-            [tech.datatype.nio-access :refer [buf-put buf-get]]
+            [tech.datatype.nio-access :refer [buf-put buf-get
+                                              datatype->pos-fn
+                                              datatype->read-fn
+                                              datatype->write-fn]]
             [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel]
             [clojure.core.matrix :as m])
@@ -55,11 +58,6 @@
     :object `ObjectWriter))
 
 
-(defn ->object-writer ^ObjectWriter [item]
-  (if (instance? ObjectWriter item)
-    item
-    (dtype-proto/->object-writer item)))
-
 
 (defmacro implement-writer-cast
   [datatype]
@@ -75,6 +73,7 @@
 (defn ->float-writer ^FloatWriter [item unchecked?] (implement-writer-cast :float32))
 (defn ->double-writer ^DoubleWriter [item unchecked?] (implement-writer-cast :float64))
 (defn ->boolean-writer ^BooleanWriter [item unchecked?] (implement-writer-cast :boolean))
+(defn ->object-writer ^ObjectWriter [item unchecked?] (implement-writer-cast :object))
 
 
 (defmacro datatype->writer
@@ -93,140 +92,75 @@
     :boolean `(->boolean-writer ~writer ~unchecked?)
     :object `(->object-writer ~writer ~unchecked?)))
 
+(declare ->marshalling-writer)
 
-(extend-type ObjectWriter
-  dtype-proto/PDatatype
-  (get-datatype [_] :object)
-
-  dtype-proto/PToWriter
-  (->object-writer [item] item)
-  (->writer-of-type [item dtype unchecked?]
-    (throw (ex-info "Cannot convert object writers to other writers." {}))))
 
 
 (defmacro make-marshalling-writer
   [dst-writer dst-dtype src-dtype src-writer-dtype src-writer-type
    unchecked?]
   `(let [~'dst-writer (datatype->writer ~dst-dtype ~dst-writer ~unchecked?)]
-     ~(if (casting/numeric-type? src-dtype)
-        `(if ~unchecked?
-           (reify ~src-writer-type
-             (write[item# idx# value#]
-               (.write ~'dst-writer idx#
-                (casting/datatype->unchecked-cast-fn
-                 ~src-dtype
-                 ~dst-dtype
-                 (casting/datatype->unchecked-cast-fn
-                  ~src-writer-dtype ~src-dtype value#))))
-             (writeConstant [item# idx# value# count#]
-               (.writeConstant ~'dst-writer idx#
-                               (casting/datatype->unchecked-cast-fn
-                                ~src-dtype
-                                ~dst-dtype
-                                (casting/datatype->unchecked-cast-fn
-                                 ~src-writer-dtype ~src-dtype value#))
-                               count#))
-             (writeBlock [item# offset# values#]
-               (let [n-elems# (ecount values#)
-                     values-pos# (.position values#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (+ offset# idx#)
-                                (buf-get values# idx# values-pos#)))))
-             (writeIndexes [item# indexes# values#]
-               (let [n-elems# (ecount values#)
-                     values-pos# (.position values#)
-                     idx-pos# (.position indexes#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (buf-get indexes#
-                                            idx# idx-pos#)
-                                (buf-get values# values-pos# idx#))))))
-           (reify ~src-writer-type
-             (write[item# idx# value#]
-               (.write ~'dst-writer idx#
-                (casting/datatype->unchecked-cast-fn
-                 ~src-dtype
-                 ~dst-dtype
-                 (casting/datatype->cast-fn
-                  ~src-writer-dtype ~src-dtype value#))))
-             (writeConstant [item# idx# value# count#]
-               (.writeConstant ~'dst-writer idx#
-                               (casting/datatype->unchecked-cast-fn
-                                ~src-dtype
-                                ~dst-dtype
-                                (casting/datatype->cast-fn
-                                 ~src-writer-dtype ~src-dtype value#))
-                               count#))
-             (writeBlock [item# offset# values#]
-               (let [n-elems# (ecount values#)
-                     values-pos# (.position values#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (+ offset# idx#)
-                                (.get values# (+ idx# values-pos#))))))
-             (writeIndexes [item# indexes# values#]
-               (let [n-elems# (ecount values#)
-                     values-pos# (.position values#)
-                     idx-pos# (.position indexes#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (buf-get indexes#
-                                            idx# idx-pos#)
-                                (buf-get values# idx# values-pos#)))))))
-        (if (= :boolean src-dtype)
-          `(reify ~src-writer-type
-             (write[item# idx# value#]
-               (.write ~'dst-writer idx#
-                       (casting/datatype->unchecked-cast-fn
-                        ~src-dtype
-                        ~dst-dtype
-                        (casting/datatype->unchecked-cast-fn
-                         ~src-writer-dtype ~src-dtype value#))))
-             (writeConstant [item# idx# value# count#]
-               (.writeConstant ~'dst-writer idx#
-                               (casting/datatype->unchecked-cast-fn
-                                ~src-dtype
-                                ~dst-dtype
-                                (casting/datatype->unchecked-cast-fn
-                                 ~src-writer-dtype ~src-dtype value#))
-                               count#))
-             (writeBlock [item# offset# values#]
-               (let [n-elems# (ecount values#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (+ offset# idx#)
-                                (.getBoolean values# idx#)))))
-             (writeIndexes [item# indexes# values#]
-               (let [n-elems# (ecount values#)
-                     idx-pos# (.position indexes#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (buf-get indexes#
-                                            idx# idx-pos#)
-                                (.getBoolean values# idx#))))))
-          `(reify ~src-writer-type
-             (write[item# idx# value#]
-               (.write ~'dst-writer idx#
-                       (casting/datatype->unchecked-cast-fn
-                        ~src-dtype
-                        ~dst-dtype
-                        (casting/datatype->unchecked-cast-fn
-                         ~src-writer-dtype ~src-dtype value#))))
-             (writeConstant [item# idx# value# count#]
-               (.writeConstant ~'dst-writer idx#
-                               (casting/datatype->unchecked-cast-fn
-                                ~src-dtype
-                                ~dst-dtype
-                                (casting/datatype->unchecked-cast-fn
-                                 ~src-writer-dtype ~src-dtype value#))
-                               count#))
-             (writeBlock [item# offset# values#]
-               (let [n-elems# (ecount values#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (+ offset# idx#)
-                                (.get values# idx#)))))
-             (writeIndexes [item# indexes# values#]
-               (let [n-elems# (ecount values#)
-                     idx-pos# (.position indexes#)]
-                 (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
-                        (.write item# (buf-get indexes#
-                                            idx# idx-pos#)
-                                (.get values# idx#))))))))))
+     (if ~unchecked?
+       (reify ~src-writer-type
+         (write[item# idx# value#]
+           (.write ~'dst-writer idx#
+                   (casting/datatype->unchecked-cast-fn
+                    ~src-dtype
+                    ~dst-dtype
+                    (casting/datatype->unchecked-cast-fn
+                     ~src-writer-dtype ~src-dtype value#))))
+         (writeConstant [item# idx# value# count#]
+           (.writeConstant ~'dst-writer idx#
+                           (casting/datatype->unchecked-cast-fn
+                            ~src-dtype
+                            ~dst-dtype
+                            (casting/datatype->unchecked-cast-fn
+                             ~src-writer-dtype ~src-dtype value#))
+                           count#))
+         (writeBlock [item# offset# values#]
+           (let [n-elems# (ecount values#)
+                 values-pos# (datatype->pos-fn ~src-dtype values#)]
+             (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
+                    (.write item# (+ offset# idx#)
+                            (datatype->read-fn ~src-dtype values# idx# values-pos#)))))
+         (writeIndexes [item# indexes# values#]
+           (let [n-elems# (ecount values#)
+                 values-pos# (datatype->pos-fn ~src-dtype values#)
+                 idx-pos# (.position indexes#)]
+             (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
+                    (.write item# (buf-get indexes#
+                                           idx# idx-pos#)
+                            (datatype->read-fn ~src-dtype values# values-pos# idx#))))))
+       (reify ~src-writer-type
+         (write[item# idx# value#]
+           (.write ~'dst-writer idx#
+                   (casting/datatype->unchecked-cast-fn
+                    ~src-dtype
+                    ~dst-dtype
+                    (casting/datatype->cast-fn
+                     ~src-writer-dtype ~src-dtype value#))))
+         (writeConstant [item# idx# value# count#]
+           (.writeConstant ~'dst-writer idx#
+                           (casting/datatype->unchecked-cast-fn
+                            ~src-dtype
+                            ~dst-dtype
+                            (casting/datatype->cast-fn
+                             ~src-writer-dtype ~src-dtype value#))
+                           count#))
+         (writeBlock [item# offset# values#]
+           (let [n-elems# (ecount values#)
+                 values-pos# (datatype->pos-fn ~src-dtype values#)]
+             (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
+                    (.write item# (+ offset# idx#)
+                            (datatype->read-fn ~src-dtype values# idx# values-pos#)))))
+         (writeIndexes [item# indexes# values#]
+           (let [n-elems# (ecount values#)
+                 values-pos# (datatype->pos-fn ~src-dtype values#)
+                 idx-pos# (.position indexes#)]
+             (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
+                    (.write item# (buf-get indexes#
+                                           idx# idx-pos#)
+                            (datatype->read-fn ~src-dtype values# idx# values-pos#)))))))))
 
 
 (defmacro extend-writer-type
@@ -277,6 +211,7 @@
 (extend-writer-type FloatWriter :float32)
 (extend-writer-type DoubleWriter :float64)
 (extend-writer-type BooleanWriter :boolean)
+(extend-writer-type ObjectWriter :object)
 
 
 (defn ->marshalling-writer

@@ -120,6 +120,54 @@
 (implement-numeric-array-type (Class/forName "[D") :float64)
 
 
+(defn as-boolean-array
+^"[Z" [obj] obj)
+
+
+(extend-type (Class/forName "[Z")
+  dtype-proto/PDatatype
+  (get-datatype [_] :boolean)
+
+  dtype-proto/PCopyRawData
+  (copy-raw->item! [raw-data ary-target offset options]
+    (base/raw-dtype-copy! raw-data ary-target offset options))
+
+  dtype-proto/PPrototype
+  (from-prototype [src-ary datatype shape]
+    (make-array-of-type datatype (base/shape->ecount shape)))
+
+  dtype-proto/PBuffer
+  (sub-buffer [buffer offset length]
+    (dtype-proto/sub-buffer (dtype-proto/->list-backing-store buffer) offset length))
+  (alias? [lhs-buffer rhs-buffer]
+    (identical? lhs-buffer (dtype-proto/->array rhs-buffer)))
+  (partially-alias? [lhs-buffer rhs-buffer]
+    (dtype-proto/alias? lhs-buffer rhs-buffer))
+
+  dtype-proto/PToArray
+  (->array [item] item)
+  (->sub-array [item]
+    {:array-data item
+     :offset 0
+     :length (alength ^booleans item)})
+  (->array-copy [src-ary]
+    (base/copy! src-ary (make-array-of-type :boolean (alength (as-boolean-array src-ary)))))
+
+
+  dtype-proto/PToWriter
+  (->object-writer [item] (dtype-proto/->object-writer (dtype-proto/->list-backing-store item)))
+  (->writer-of-type [item datatype unchecked?]
+    (dtype-proto/->writer-of-type (dtype-proto/->list-backing-store item)
+                                  datatype unchecked?))
+
+
+  dtype-proto/PToReader
+  (->object-reader [item] (dtype-proto/->object-reader (dtype-proto/->list-backing-store item)))
+  (->reader-of-type [item datatype unchecked?]
+    (dtype-proto/->reader-of-type (dtype-proto/->list-backing-store item)
+                                  datatype unchecked?)))
+
+
 (defonce ^:dynamic *array-constructors* (atom {}))
 
 
@@ -137,7 +185,8 @@
      (cond
        (number? elem-count-or-seq)
        (ary-cons-fn elem-count-or-seq)
-       (satisfies? dtype-proto/PDatatype elem-count-or-seq)
+       (and (satisfies? dtype-proto/PToReader elem-count-or-seq)
+            (satisfies? dtype-proto/PBuffer elem-count-or-seq))
        (if (and (satisfies? dtype-proto/PToArray elem-count-or-seq)
                 (= item-dtype (base/get-datatype elem-count-or-seq)))
          (dtype-proto/->array-copy elem-count-or-seq)

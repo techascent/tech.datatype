@@ -57,8 +57,7 @@ data overlap?"))
 
 (defprotocol PToList
   "Generically implemented for anything that implements ->array"
-  (->list-backing-store [item])
-  (->list-copy [item]))
+  (->list-backing-store [item]))
 
 
 (defprotocol PToWriter

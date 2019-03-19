@@ -128,7 +128,10 @@
 
   clojure.lang.ISeq
   (copy-raw->item! [raw-data ary-target target-offset options]
-    (copy-raw-seq->item! raw-data ary-target target-offset options)))
+    (copy-raw-seq->item! raw-data ary-target target-offset options))
+  java.lang.Iterable
+  (copy-raw->item! [raw-data ary-target target-offset options]
+    (copy-raw-seq->item! (seq raw-data) ary-target target-offset options)))
 
 
 (extend-type Object
@@ -137,12 +140,15 @@
    [src-data dst-data offset options]
     (dtype-proto/copy-raw->item! (seq src-data) dst-data offset options))
   dtype-proto/PPersistentVector
-  (->vector [src] (vec (or (dtype-proto/->array src)
-                           (dtype-proto/->array-copy src))))
+  (->vector [src]
+    (if (satisfies? dtype-proto/PToArray src)
+      (vec (or (dtype-proto/->array src)
+               (dtype-proto/->array-copy src)))))
   dtype-proto/PToNioBuffer
   (->buffer-backing-store [src]
-    (when-let [ary-data (dtype-proto/->array src)]
-      (dtype-proto/->buffer-backing-store src)))
+    (when (satisfies? dtype-proto/PToArray src)
+      (when-let [ary-data (dtype-proto/->array src)]
+        (dtype-proto/->buffer-backing-store src))))
   dtype-proto/PToReader
   (->object-reader [item]
     (reify ObjectReader
@@ -178,6 +184,9 @@
                                        (.get idx-buf
                                              (+ idx buf-pos))))))
         dest)))
+  (->reader-of-type [item datatype unchecked?]
+    (-> (dtype-proto/->object-reader item)
+        (dtype-proto/->reader-of-type datatype unchecked?)))
   dtype-proto/PClone
   (clone [item datatype]
     (copy! item (dtype-proto/from-prototype item datatype

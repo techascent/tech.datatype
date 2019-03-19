@@ -57,12 +57,6 @@
     :object `ObjectReader))
 
 
-(defn ->object-reader ^ObjectReader [item]
-  (if (instance? ObjectReader item)
-    item
-    (dtype-proto/->object-reader item)))
-
-
 (defmacro implement-reader-cast
   [datatype]
   `(if (instance? (datatype->reader-type ~datatype) ~'item)
@@ -77,6 +71,7 @@
 (defn ->float-reader ^FloatReader [item unchecked?] (implement-reader-cast :float32))
 (defn ->double-reader ^DoubleReader [item unchecked?] (implement-reader-cast :float64))
 (defn ->boolean-reader ^BooleanReader [item unchecked?] (implement-reader-cast :boolean))
+(defn ->object-reader ^ObjectReader [item unchecked?] (implement-reader-cast :object))
 
 
 (defmacro datatype->reader
@@ -94,16 +89,6 @@
     :float64 `(->double-reader ~reader ~unchecked?)
     :boolean `(->boolean-reader ~reader ~unchecked?)
     :object `(->object-reader ~reader ~unchecked?)))
-
-
-(extend-type ObjectReader
-  dtype-proto/PDatatype
-  (get-datatype [_] :object)
-
-  dtype-proto/PToReader
-  (->object-reader [item] item)
-  (->reader-of-type [item dtype unchecked?]
-    (throw (ex-info "Cannot convert object readers to other readers." {}))))
 
 
 (defmacro make-marshalling-reader
@@ -208,31 +193,32 @@
       (fn [item# dtype# unchecked?#]
         (if (= dtype# ~datatype)
           item#
-          (case dtype#
-            :int8 (make-marshalling-reader item# ~datatype
-                                           :int8 :int8 ByteReader unchecked?#)
-            :uint8 (make-marshalling-reader item# ~datatype
-                                            :uint8 :int16 ShortReader unchecked?#)
-            :int16 (make-marshalling-reader item# ~datatype
-                                            :int16 :int16 ShortReader unchecked?#)
-            :uint16 (make-marshalling-reader item# ~datatype
-                                             :uint16 :int32 IntReader unchecked?#)
-            :int32 (make-marshalling-reader item# ~datatype
-                                            :int32 :int32 IntReader unchecked?#)
-            :uint32 (make-marshalling-reader item# ~datatype
-                                             :uint32 :int64 LongReader unchecked?#)
-            :int64 (make-marshalling-reader item# ~datatype
-                                            :int64 :int64 LongReader unchecked?#)
-            :uint64 (make-marshalling-reader item# ~datatype
-                                             :uint64 :int64 LongReader unchecked?#)
-            :float32 (make-marshalling-reader item# ~datatype
-                                              :float32 :float32 FloatReader unchecked?#)
-            :float64 (make-marshalling-reader item# ~datatype
-                                              :float64 :float64 DoubleReader unchecked?#)
-            :boolean (make-marshalling-reader item# ~datatype
-                                              :boolean :boolean BooleanReader unchecked?#)
-            :object (make-marshalling-reader item# ~datatype
-                                             :object :object ObjectReader unchecked?#))))}))
+          (let [item# (datatype->reader ~datatype item# true)]
+            (case dtype#
+              :int8 (make-marshalling-reader item# ~datatype
+                                             :int8 :int8 ByteReader unchecked?#)
+              :uint8 (make-marshalling-reader item# ~datatype
+                                              :uint8 :int16 ShortReader unchecked?#)
+              :int16 (make-marshalling-reader item# ~datatype
+                                              :int16 :int16 ShortReader unchecked?#)
+              :uint16 (make-marshalling-reader item# ~datatype
+                                               :uint16 :int32 IntReader unchecked?#)
+              :int32 (make-marshalling-reader item# ~datatype
+                                              :int32 :int32 IntReader unchecked?#)
+              :uint32 (make-marshalling-reader item# ~datatype
+                                               :uint32 :int64 LongReader unchecked?#)
+              :int64 (make-marshalling-reader item# ~datatype
+                                              :int64 :int64 LongReader unchecked?#)
+              :uint64 (make-marshalling-reader item# ~datatype
+                                               :uint64 :int64 LongReader unchecked?#)
+              :float32 (make-marshalling-reader item# ~datatype
+                                                :float32 :float32 FloatReader unchecked?#)
+              :float64 (make-marshalling-reader item# ~datatype
+                                                :float64 :float64 DoubleReader unchecked?#)
+              :boolean (make-marshalling-reader item# ~datatype
+                                                :boolean :boolean BooleanReader unchecked?#)
+              :object (make-marshalling-reader item# ~datatype
+                                               :object :object ObjectReader unchecked?#)))))}))
 
 
 (extend-reader-type ByteReader :int8)
@@ -242,6 +228,7 @@
 (extend-reader-type FloatReader :float32)
 (extend-reader-type DoubleReader :float64)
 (extend-reader-type BooleanReader :boolean)
+(extend-reader-type ObjectReader :object)
 
 
 (defn ->marshalling-reader

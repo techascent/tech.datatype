@@ -4,6 +4,7 @@
             [tech.datatype.reader :as reader]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.casting :as casting]
+            [tech.datatype.typecast :refer :all]
             [tech.jna :as jna])
   (:import [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
@@ -12,36 +13,6 @@
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
-
-
-(defn as-byte-array
-  ^bytes [obj] obj)
-
-(defn as-short-array
-  ^shorts [obj] obj)
-
-(defn as-int-array
-  ^ints [obj] obj)
-
-(defn as-long-array
-  ^longs [obj] obj)
-
-(defn as-float-array
-  ^floats [obj] obj)
-
-(defn as-double-array
-  ^doubles [obj] obj)
-
-
-(defmacro datatype->array-cast-fn
-  [dtype buf]
-  (condp = dtype
-    :int8 `(as-byte-array ~buf)
-    :int16 `(as-short-array ~buf)
-    :int32 `(as-int-array ~buf)
-    :int64 `(as-long-array ~buf)
-    :float32 `(as-float-array ~buf)
-    :float64 `(as-double-array ~buf)))
 
 
 (declare make-array-of-type)
@@ -118,10 +89,6 @@
 (implement-numeric-array-type (Class/forName "[J") :int64)
 (implement-numeric-array-type (Class/forName "[F") :float32)
 (implement-numeric-array-type (Class/forName "[D") :float64)
-
-
-(defn as-boolean-array
-^"[Z" [obj] obj)
 
 
 (extend-type (Class/forName "[Z")

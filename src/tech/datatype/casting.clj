@@ -251,7 +251,7 @@
   (keys @*cast-table*))
 
 
-(defn datatype->jvm-type
+(defn datatype->host-type
   "Get the signed analog of an unsigned type or return datatype unchanged."
   [datatype]
   (get unsigned-signed datatype datatype))
@@ -259,10 +259,10 @@
 
 (defn jvm-cast
   [value datatype]
-  (unchecked-cast value (datatype->jvm-type datatype)))
+  (unchecked-cast value (datatype->host-type datatype)))
 
 
-(defn datatype->safe-jvm-type
+(defn datatype->safe-host-type
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
   (case dtype
@@ -272,17 +272,17 @@
     :uint64 :int64
     dtype))
 
-(defmacro datatype->jvm-cast-fn
+(defmacro datatype->host-cast-fn
   [src-dtype dst-dtype val]
-  (let [jvm-type (datatype->jvm-type dst-dtype)]
+  (let [host-type (datatype->host-type dst-dtype)]
     `(datatype->unchecked-cast-fn
-      :ignored ~jvm-type
+      :ignored ~host-type
       (datatype->cast-fn ~src-dtype ~dst-dtype ~val))))
 
 
-(defmacro datatype->unchecked-jvm-cast-fn
+(defmacro datatype->unchecked-host-cast-fn
   [src-dtype dst-dtype val]
-  (let [jvm-type (datatype->jvm-type dst-dtype)]
+  (let [host-type (datatype->host-type dst-dtype)]
     `(datatype->unchecked-cast-fn
-      :ignored ~jvm-type
+      :ignored ~host-type
       (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))

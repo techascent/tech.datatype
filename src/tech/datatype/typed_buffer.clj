@@ -7,6 +7,7 @@
             [tech.parallel :as parallel]
             [tech.datatype.reader :as reader]
             [tech.datatype.writer :as writer]
+            [tech.datatype.typecast :as typecast]
             [tech.jna :as jna]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]))
@@ -34,7 +35,7 @@
   (from-prototype [item datatype shape]
     (->TypedBuffer datatype
                    (dtype-proto/from-prototype backing-store
-                                               (casting/datatype->jvm-type datatype)
+                                               (casting/datatype->host-type datatype)
                                                shape)))
   dtype-proto/PToNioBuffer
   (->buffer-backing-store [item]
@@ -45,17 +46,14 @@
   (sub-buffer [buffer offset length]
     (->TypedBuffer datatype (dtype-proto/sub-buffer backing-store offset length)))
   (alias? [lhs-buffer rhs-buffer]
-    (when-let [rhs-nio (dtype-io/as-nio-buffer rhs-buffer)]
+    (when-let [rhs-nio (typecast/as-nio-buffer rhs-buffer)]
       (dtype-proto/alias? backing-store rhs-nio)))
   (partially-alias? [lhs-buffer rhs-buffer]
-    (when-let [rhs-nio (dtype-io/as-nio-buffer rhs-buffer)]
+    (when-let [rhs-nio (typecast/as-nio-buffer rhs-buffer)]
       (dtype-proto/alias? backing-store rhs-nio)))
 
 
   dtype-proto/PToArray
-  (->array [item]
-    (when (= datatype (dtype-proto/get-datatype backing-store))
-      (dtype-proto/->array backing-store)))
   (->sub-array [item]
     (when (= datatype (dtype-proto/get-datatype backing-store))
       (dtype-proto/->sub-array backing-store)))
@@ -63,13 +61,11 @@
     (if (= datatype (dtype-proto/get-datatype backing-store))
       (dtype-proto/->array-copy backing-store)
       (let [data-buf (dtype-proto/make-container
-                      :java-array (casting/datatype->safe-jvm-type datatype)
+                      :java-array (casting/datatype->safe-host-type datatype)
                       (base/ecount backing-store))]
         (base/copy! item 0 data-buf 0 (base/ecount item)))))
 
   dtype-proto/PToWriter
-  (->object-writer [item]
-    (writer/->marshalling-writer item :object false))
   ;;No marshalling/casting on the writer side.
   (->writer-of-type [item writer-datatype unchecked?]
     ;;If our datatype matches the datatype of the backing store
@@ -79,8 +75,6 @@
           (dtype-proto/->writer-of-type writer-datatype unchecked?))))
 
   dtype-proto/PToReader
-  (->object-reader [item]
-    (reader/->marshalling-reader item :object false))
 
   (->reader-of-type [item reader-datatype unchecked?]
     (if (= datatype (dtype-proto/get-datatype backing-store))

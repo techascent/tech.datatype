@@ -2,14 +2,15 @@
   (:require [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.casting
              :refer [numeric-type? integer-type? numeric-byte-width
-                     datatype->jvm-type]
+                     datatype->host-type]
              :as casting]
-            [tech.datatype.reader :as reader]
-            [tech.datatype.writer :as writer]
             [tech.jna :as jna]
             [tech.parallel :as parallel]
             [clojure.set :as c-set]
-            [clojure.core.matrix.macros :refer [c-for]])
+            [clojure.core.matrix.macros :refer [c-for]]
+            [tech.datatype.fast-copy :as fast-copy]
+            [tech.datatype.typecast :as typecast]
+            [clojure.core.matrix.protocols :as mp])
 
   (:import [tech.datatype
             ObjectReader ObjectWriter ObjectMutable
@@ -45,47 +46,14 @@
   BooleanMutable
   (get-datatype [item] :boolean))
 
-(defn ensure-ptr-like
-  "JNA is extremely flexible in what it can take as an argument.  Anything convertible
-  to a nio buffer, be it direct or array backend is fine."
-  [item]
-  (cond
-    (satisfies? jna/PToPtr item)
-    (jna/->ptr-backing-store item)
-    :else
-    (dtype-proto/->buffer-backing-store item)))
 
-(jna/def-jna-fn "c" memcpy
-  "Copy bytes from one object to another"
-  Pointer
-  [dst ensure-ptr-like]
-  [src ensure-ptr-like]
-  [n-bytes int])
-
-
-(defn as-ptr
-  ^Pointer [item]
-  (when (satisfies? jna/PToPtr item)
-    (jna/->ptr-backing-store item)))
-
-
-(defn as-array
-  [item]
-  (when (satisfies? dtype-proto/PToArray item)
-    (dtype-proto/->sub-array item)))
-
-
-(defn as-nio-buffer
-  [item]
-  (when (satisfies? dtype-proto/PToNioBuffer item)
-    (dtype-proto/->buffer-backing-store item)))
 
 
 
 (defmacro datatype->parallel-write
   [datatype dst src n-elems unchecked?]
-  `(let [writer# (writer/datatype->writer ~datatype ~dst true)
-         reader# (reader/datatype->reader ~datatype ~src ~unchecked?)]
+  `(let [writer# (typecast/datatype->writer ~datatype ~dst true)
+         reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)]
      (parallel/parallel-for
       idx#
       ~n-elems
@@ -94,8 +62,8 @@
 
 (defmacro datatype->serial-write
   [datatype dst src n-elems unchecked?]
-  `(let [writer# (writer/datatype->writer ~datatype ~dst true)
-         reader# (reader/datatype->reader ~datatype ~src ~unchecked?)
+  `(let [writer# (typecast/datatype->writer ~datatype ~dst true)
+         reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
          n-elems# ~n-elems]
      (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
             (.write writer# idx# (.read reader# idx#)))))
@@ -148,11 +116,11 @@
 
 
 (defn dense-copy!
-  [dst src n-elems unchecked? parallel?]
+  [dst src unchecked? parallel?]
   (let [dst-dtype (dtype-proto/get-datatype dst)
         src-dtype (dtype-proto/get-datatype src)
-        src-buf (as-nio-buffer src)
-        dst-buf (as-nio-buffer dst)
+        src-buf (typecast/as-nio-buffer src)
+        dst-buf (typecast/as-nio-buffer dst)
         fast-path? (and src-buf
                         dst-buf
                         (or (and (numeric-type? dst-dtype)
@@ -161,68 +129,62 @@
                                  (integer-type? src-dtype)
                                  unchecked?
                                  (= (numeric-byte-width dst-dtype)
-                                    (numeric-byte-width src-dtype)))))
-        n-elems (long n-elems)]
+                                    (numeric-byte-width src-dtype)))))]
     ;;Fast path means no conversion is necessary and we can hit optimized
     ;;bulk pathways
     (if fast-path?
       ;;The only real special case is if one side is a ptr
       ;;and the other is an array
-      (let [dst-ptr (as-ptr dst)
-            dst-ary (as-array dst)
-            src-ptr (as-ptr src)
-            src-ary (as-array src)
-            ;;Flatten source so that it never represents the unsigned type.
-            src-dtype (datatype->jvm-type src-dtype)]
-        (cond
-          ;;Very fast path
-          (and dst-ptr src-ary)
-          (let [{:keys [array-data array-offset]} src-ary
-                array-offset (int array-offset)]
-            (case src-dtype
-              :int8 (.write dst-ptr 0 ^bytes array-data array-offset n-elems)
-              :int16 (.write dst-ptr 0 ^shorts array-data array-offset n-elems)
-              :int32 (.write dst-ptr 0 ^ints array-data array-offset n-elems)
-              :int64 (.write dst-ptr 0 ^longs array-data array-offset n-elems)
-              :float32 (.write dst-ptr 0 ^floats array-data array-offset n-elems)
-              :float64 (.write dst-ptr 0 ^doubles array-data array-offset n-elems)))
-          (and dst-ary src-ptr)
-          (let [{:keys [array-data array-offset]} dst-ary
-                array-offset (int array-offset)]
-            (case src-dtype
-              :int8 (.read src-ptr 0 ^bytes array-data array-offset n-elems)
-              :int16 (.read src-ptr 0 ^shorts array-data array-offset n-elems)
-              :int32 (.read src-ptr 0 ^ints array-data array-offset n-elems)
-              :int64 (.read src-ptr 0 ^longs array-data array-offset n-elems)
-              :float32 (.read src-ptr 0 ^floats array-data array-offset n-elems)
-              :float64 (.read src-ptr 0 ^doubles array-data array-offset n-elems)))
-          :else
-          (memcpy dst-buf src-buf (* n-elems (numeric-byte-width src-dtype)))))
+      (fast-copy/copy! dst src)
       ;;The slow path still has fast aspects if one of the buffers is a known primitive type.
       (let [unchecked-reads? (or unchecked?
-                                 (= dst-dtype src-dtype))]
+                                 (= dst-dtype src-dtype))
+            src-list (typecast/as-list src)
+            dst-list (typecast/as-list dst)]
         (cond
-          ;;Dest has a nio buffer *and* the nio buffer matches the datatype of dest.
-          (and dst-buf (= dst-dtype (dtype-proto/get-datatype dst-buf)))
+          (and dst-buf (or (= dst-dtype (dtype-proto/get-datatype dst-buf))
+                           (and unchecked?
+                                (= (casting/datatype->host-datatype dst-dtype)
+                                   (dtype-proto/get-datatype dst-buf)))))
           (case dst-dtype
-            :int8 (.readBlock (reader/datatype->reader :int8 src unchecked?) 0 dst-buf)
-            :int16 (.readBlock (reader/datatype->reader :int16 src unchecked?) 0 dst-buf)
-            :int32 (.readBlock (reader/datatype->reader :int32 src unchecked?) 0 dst-buf)
-            :int64 (.readBlock (reader/datatype->reader :int64 src unchecked?) 0 dst-buf)
-            :float32 (.readBlock (reader/datatype->reader :float32 src unchecked?) 0 dst-buf)
-            :float64 (.readBlock (reader/datatype->reader :float64 src unchecked?) 0 dst-buf))
+            :int8 (.readBlock (typecast/datatype->reader :int8 src unchecked?) 0 dst-buf)
+            :int16 (.readBlock (typecast/datatype->reader :int16 src unchecked?) 0 dst-buf)
+            :int32 (.readBlock (typecast/datatype->reader :int32 src unchecked?) 0 dst-buf)
+            :int64 (.readBlock (typecast/datatype->reader :int64 src unchecked?) 0 dst-buf)
+            :float32 (.readBlock (typecast/datatype->reader :float32 src unchecked?) 0 dst-buf)
+            :float64 (.readBlock (typecast/datatype->reader :float64 src unchecked?) 0 dst-buf))
+
+          (and dst-list
+               (= dst-dtype (dtype-proto/get-datatype dst-list))
+               (or (= dst-dtype :boolean)
+                   (= dst-dtype :object)))
+          (case dst-dtype
+            :boolean (.readBlock (typecast/datatype->reader :boolean src unchecked?) 0 dst-list)
+            :object (.readBlock (typecast/datatype->reader :object src unchecked?) 0 dst-list))
+
           ;;Src has nio buffer and nio buffer matches datatype or src
-          (and src-buf (= src-dtype (dtype-proto/get-datatype src-buf)))
+          (and src-buf (or (= src-dtype (dtype-proto/get-datatype src-buf))
+                           (and unchecked?
+                                (= (casting/datatype->host-datatype src-dtype)
+                                   (dtype-proto/get-datatype src-buf)))))
           (case src-dtype
-            :int8 (.writeBlock (writer/datatype->writer :int8 dst unchecked?) 0 src-buf)
-            :int16 (.writeBlock (writer/datatype->writer :int16 dst unchecked?) 0 src-buf)
-            :int32 (.writeBlock (writer/datatype->writer :int32 dst unchecked?) 0 src-buf)
-            :int64 (.writeBlock (writer/datatype->writer :int64 dst unchecked?) 0 src-buf)
-            :float32 (.writeBlock (writer/datatype->writer :float32 dst unchecked?) 0 src-buf)
-            :float64 (.writeBlock (writer/datatype->writer :float64 dst unchecked?) 0 src-buf))
+            :int8 (.writeBlock (typecast/datatype->writer :int8 dst unchecked?) 0 src-buf)
+            :int16 (.writeBlock (typecast/datatype->writer :int16 dst unchecked?) 0 src-buf)
+            :int32 (.writeBlock (typecast/datatype->writer :int32 dst unchecked?) 0 src-buf)
+            :int64 (.writeBlock (typecast/datatype->writer :int64 dst unchecked?) 0 src-buf)
+            :float32 (.writeBlock (typecast/datatype->writer :float32 dst unchecked?) 0 src-buf)
+            :float64 (.writeBlock (typecast/datatype->writer :float64 dst unchecked?) 0 src-buf))
+
+          (and src-list
+               (= src-dtype (dtype-proto/get-datatype src-list))
+               (or (= src-dtype :boolean)
+                   (= src-dtype :object)))
+          (case src-dtype
+            :boolean (.writeBlock (typecast/datatype->writer :boolean dst unchecked?) 0 src-list)
+            :object (.writeBlock (typecast/datatype->writer :object dst unchecked?) 0 src-list))
           :else
           ;;Punt!!
           (if parallel?
-            (parallel-write dst src n-elems unchecked-reads?)
-            (serial-write dst src n-elems unchecked-reads?))))))
+            (parallel-write dst src (mp/element-count dst) unchecked-reads?)
+            (serial-write dst src (mp/element-count dst) unchecked-reads?))))))
   dst)

@@ -33,15 +33,15 @@
 
 
 (defn set-value! [item offset value]
-  (.write ^ObjectWriter (dtype-proto/->object-writer item)
+  (.write ^ObjectWriter (dtype-proto/->writer-of-type item :object false)
           offset value))
 
 (defn set-constant! [item offset value elem-count]
-  (.writeConstant ^ObjectWriter (dtype-proto/->object-writer item)
+  (.writeConstant ^ObjectWriter (dtype-proto/->writer-of-type item :object false)
                   offset value elem-count))
 
 (defn get-value [item offset]
-  (.read ^ObjectReader (dtype-proto/->object-reader item) offset))
+  (.read ^ObjectReader (dtype-proto/->reader-of-type item :object false) offset))
 
 
 (defn ->vector
@@ -185,7 +185,7 @@
                                              (+ idx buf-pos))))))
         dest)))
   (->reader-of-type [item datatype unchecked?]
-    (-> (dtype-proto/->object-reader item)
+    (-> (dtype-proto/->reader-of-type item :object unchecked?)
         (dtype-proto/->reader-of-type datatype unchecked?)))
   dtype-proto/PClone
   (clone [item datatype]

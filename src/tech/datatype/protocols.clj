@@ -77,7 +77,7 @@ data overlap?"))
 
 
 (defprotocol PToMutable
-  (->mutable-of-type [item datatype]))
+  (->mutable-of-type [item datatype unchecked?]))
 
 
 (defmulti make-container

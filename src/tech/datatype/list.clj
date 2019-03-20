@@ -3,8 +3,8 @@
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype :as dtype]
             [tech.datatype.array :as dtype-array]
-            [tech.datatype.reader :as reader]
-            [tech.datatype.writer :as writer]
+            [tech.datatype.reader :refer [make-buffer-reader] :as reader]
+            [tech.datatype.writer :refer [make-buffer-writer] :as writer]
             [tech.datatype.casting :as casting]
             [tech.datatype.nio-access :refer [buf-put buf-get
                                               datatype->pos-fn
@@ -234,59 +234,6 @@
         ~list-item))))
 
 
-(defmacro make-list-writer
-  [writer-type buffer
-   datatype]
-  `(reify ~writer-type
-     (write [writer# idx# value#]
-       (.set ~buffer idx# value#))
-     (writeConstant [writer# offset# value# count#]
-       (parallel/parallel-for
-        idx# count#
-        (.set ~buffer idx# value#)))
-     (writeBlock [writer# offset# values#]
-       (let [values-pos# (datatype->pos-fn ~datatype values#)
-             count# (base/ecount values#)]
-         (parallel/parallel-for
-          idx# count#
-          (.set ~buffer (+ idx# offset#)
-                (datatype->read-fn ~datatype values# idx# values-pos#)))))
-     (writeIndexes [writer# indexes# values#]
-       (let [n-elems# (base/ecount indexes#)
-             idx-pos# (.position indexes#)
-             val-pos# (datatype->pos-fn ~datatype values#)]
-         (parallel/parallel-for
-          idx#
-          n-elems#
-          (.set ~buffer (buf-get indexes# idx# idx-pos#)
-                (datatype->read-fn ~datatype values# idx# val-pos#)))))))
-
-
-(defmacro make-list-reader
-  [reader-type buffer datatype]
-  `(reify ~reader-type
-     (read [reader# idx#]
-       (datatype->list-read-fn ~datatype ~buffer idx#))
-     (readBlock [reader# offset# dest#]
-       (let [dest-pos# (datatype->pos-fn ~datatype dest#)
-             count# (base/ecount dest#)]
-         (parallel/parallel-for
-          idx# count#
-          (datatype->write-fn ~datatype dest# idx# dest-pos#
-                              (datatype->list-read-fn ~datatype ~buffer
-                                                      (+ idx# offset#))))))
-
-     (readIndexes [reader# indexes# dest#]
-       (let [idx-pos# (.position indexes#)
-             dest-pos# (datatype->pos-fn ~datatype dest#)
-             count# (base/ecount dest#)]
-         (parallel/parallel-for
-          idx# count#
-          (datatype->write-fn ~datatype dest# idx# dest-pos#
-                              (datatype->list-read-fn ~datatype ~buffer
-                                                      (buf-get indexes# idx# idx-pos#))))))))
-
-
 
 (defmacro extend-list
   [typename datatype]
@@ -329,15 +276,14 @@
                           (let [~'item (datatype->list-cast-fn ~datatype item#)
                                 src-writer#
                                 ~(case datatype
-                                   :int8 `(make-list-writer ByteWriter ~'item :int8)
-                                   :int16 `(make-list-writer ShortWriter ~'item :int16)
-                                   :int32 `(make-list-writer IntWriter ~'item :int32)
-                                   :int64 `(make-list-writer LongWriter ~'item :int64)
-                                   :float32 `(make-list-writer FloatWriter ~'item :float32)
-                                   :float64 `(make-list-writer DoubleWriter ~'item :float64)
-                                   :boolean `(make-list-writer BooleanWriter ~'item :boolean)
-                                   :object `(make-list-writer ObjectWriter ~'item :object)
-                                   )]
+                                   :int8 `(make-buffer-writer ByteWriter ~typename ~'item :int8 :int8 ~datatype true)
+                                   :int16 `(make-buffer-writer ShortWriter ~typename ~'item :int16 :int16 ~datatype true)
+                                   :int32 `(make-buffer-writer IntWriter ~typename ~'item :int32 :int32 ~datatype true)
+                                   :int64 `(make-buffer-writer LongWriter ~typename ~'item :int64 :int64 ~datatype true)
+                                   :float32 `(make-buffer-writer FloatWriter ~typename ~'item :float32 :float32 ~datatype true)
+                                   :float64 `(make-buffer-writer DoubleWriter ~typename ~'item :float64 :float64 ~datatype true)
+                                   :boolean `(make-buffer-writer BooleanWriter ~typename ~'item :boolean :boolean ~datatype true)
+                                   :object `(make-buffer-writer ObjectWriter ~typename ~'item :object :object ~datatype true))]
                             (writer/->marshalling-writer src-writer# datatype# unchecked?#)))}
 
      dtype-proto/PToReader
@@ -347,14 +293,14 @@
                           (let [~'item (datatype->list-cast-fn ~datatype item#)
                                 src-reader#
                                 ~(case datatype
-                                   :int8 `(make-list-reader ByteReader ~'item :int8)
-                                   :int16 `(make-list-reader ShortReader ~'item :int16)
-                                   :int32 `(make-list-reader IntReader ~'item :int32)
-                                   :int64 `(make-list-reader LongReader ~'item :int64)
-                                   :float32 `(make-list-reader FloatReader ~'item :float32)
-                                   :float64 `(make-list-reader DoubleReader ~'item :float64)
-                                   :boolean `(make-list-reader BooleanReader ~'item :boolean)
-                                   :object `(make-list-reader ObjectReader ~'item :object)
+                                   :int8 `(make-buffer-reader ByteReader ~typename ~'item :int8 :int8 ~datatype true)
+                                   :int16 `(make-buffer-reader ShortReader ~typename ~'item :int16 :int16 ~datatype true)
+                                   :int32 `(make-buffer-reader IntReader ~typename ~'item :int32 :int32 ~datatype true)
+                                   :int64 `(make-buffer-reader LongReader ~typename ~'item :int64 :int64 ~datatype true)
+                                   :float32 `(make-buffer-reader FloatReader ~typename ~'item :float32 :float32 ~datatype true)
+                                   :float64 `(make-buffer-reader DoubleReader ~typename ~'item :float64 :float64 ~datatype true)
+                                   :boolean `(make-buffer-reader BooleanReader ~typename ~'item :boolean :boolean ~datatype true)
+                                   :object `(make-buffer-reader ObjectReader ~typename ~'item :object :object ~datatype true)
                                    )]
                             (reader/->marshalling-reader src-reader# datatype# unchecked?#)))}))
 

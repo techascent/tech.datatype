@@ -69,7 +69,6 @@
 
 
   dtype-proto/PToArray
-  (->array [item] nil)
   (->sub-array [item] nil)
   (->array-copy [item]
     (dtype-proto/->array-copy (typed-buf/->typed-buffer item)))
@@ -83,14 +82,10 @@
     (dtype-proto/partially-alias? (typed-buf/->typed-buffer lhs-buffer) rhs-buffer))
 
   dtype-proto/PToWriter
-  (->object-writer [item]
-    (dtype-proto/->object-writer (typed-buf/->typed-buffer item)))
   (->writer-of-type [item datatype unchecked?]
     (dtype-proto/->writer-of-type (typed-buf/->typed-buffer item) datatype unchecked?))
 
   dtype-proto/PToReader
-  (->object-reader [item]
-    (dtype-proto/->object-reader (typed-buf/->typed-buffer item)))
   (->reader-of-type [item datatype unchecked?]
     (dtype-proto/->reader-of-type (typed-buf/->typed-buffer item) datatype unchecked?)))
 

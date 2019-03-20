@@ -2,10 +2,10 @@ package tech.datatype;
 import java.nio.*;
 
 
-public interface DoubleMutable
+public interface DoubleMutable extends MutableRemove
 {
   void insert(int idx, double value);
+  void insertConstant(int idx, double value, int count);
   void insertBlock(int idx, DoubleBuffer values);
   void insertIndexes(IntBuffer indexes, DoubleBuffer values);
-  void insertConstant(int idx, double value, int count);
 }

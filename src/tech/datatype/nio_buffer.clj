@@ -19,7 +19,7 @@
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
            [tech.datatype
-            ObjectReader ObjectWriter Mutable
+            ObjectReader ObjectWriter ObjectMutable
             ByteReader ByteWriter ByteMutable
             ShortReader ShortWriter ShortMutable
             IntReader IntWriter IntMutable
@@ -143,11 +143,13 @@
                         ~writer-datatype
                         ~intermediate-datatype
                         value#))
-               zero-val# (casting/datatype->unchecked-cast-fn :unknown ~buffer-datatype 0)]
+               zero-val# (casting/datatype->unchecked-cast-fn :unknown
+                                                              ~buffer-datatype 0)]
            (if (or (= value# zero-val#)
                    (= :int8 ~buffer-datatype))
              (memset (dtype-proto/sub-buffer ~buffer offset# count#)
-                     (int value#) (* count# (casting/numeric-byte-width ~buffer-datatype)))
+                     (int value#) (* count# (casting/numeric-byte-width
+                                             ~buffer-datatype)))
              (let [pos# (.position ~buffer)]
                (parallel/parallel-for
                 idx# count#
@@ -204,7 +206,8 @@
            (if (or (= value# zero-val#)
                    (= :int8 ~buffer-datatype))
              (memset (dtype-proto/sub-buffer ~buffer offset# count#)
-                     (int value#) (*  count# (casting/numeric-byte-width ~buffer-datatype)))
+                     (int value#) (* count# (casting/numeric-byte-width
+                                             ~buffer-datatype)))
              (let [pos# (.position ~buffer)]
                (parallel/parallel-for
                 idx# count#
@@ -223,7 +226,8 @@
                        ~writer-datatype
                        ~intermediate-datatype
                        (buf-get values# idx# values-pos#))))))
-         (dtype-io/dense-copy! (dtype-proto/sub-buffer ~buffer offset# (base/ecount values#))
+         (dtype-io/dense-copy! (dtype-proto/sub-buffer ~buffer
+                                                       offset# (base/ecount values#))
                                values# (base/ecount values#) ~unchecked? true))
        (writeIndexes [writer# indexes# values#]
          (let [n-elems# (base/ecount indexes#)
@@ -342,7 +346,8 @@
      {:get-datatype (fn [arg#] ~datatype)}
      dtype-proto/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
-                         (base/raw-dtype-copy! raw-data# ary-target# target-offset# options#))}
+                         (base/raw-dtype-copy! raw-data# ary-target#
+                                               target-offset# options#))}
      dtype-proto/PPrototype
      {:from-prototype (fn [src-ary# datatype# shape#]
                         (if-not (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
@@ -352,15 +357,7 @@
      {:->buffer-backing-store (fn [item#] item#)}
 
      dtype-proto/PToArray
-     {:->array (fn [item#]
-                 (let [item# (datatype->buffer-cast-fn ~datatype item#)]
-                   (when (and (= 0 (.position item#))
-                              (not (.isDirect item#)))
-                     (let [array-data# (.array item#)]
-                       (when (= (.limit item#)
-                                (alength array-data#))
-                         array-data#)))))
-      :->sub-array (fn [item#]
+     {:->sub-array (fn [item#]
                      (let [item# (datatype->buffer-cast-fn ~datatype item#)]
                        (when-not (.isDirect item#)
                          {:array-data (.array item#)
@@ -374,7 +371,8 @@
      dtype-proto/PNioBuffer
      {:position (fn [item#] (.position (datatype->buffer-cast-fn ~datatype item#)))
       :limit (fn [item#] (.limit (datatype->buffer-cast-fn ~datatype item#)))
-      :array-backed? (fn [item#] (not (.isDirect (datatype->buffer-cast-fn ~datatype item#))))}
+      :array-backed? (fn [item#] (not (.isDirect (datatype->buffer-cast-fn
+                                                  ~datatype item#))))}
 
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]
@@ -397,65 +395,88 @@
                         (if (.isDirect lhs-buffer#)
                           (= (jna/->ptr-backing-store lhs-buffer#)
                              (jna/->ptr-backing-store rhs-buffer#))
-                          (identical? (:array-data (dtype-proto/->sub-array lhs-buffer#))
-                                      (:array-data (dtype-proto/->sub-array rhs-buffer#)))))))))
-      :partially-alias? (fn [lhs-buffer# rhs-buffer#]
-                          (when-let [nio-buf# (dtype-proto/->buffer-backing-store rhs-buffer#)]
-                            (when (and (= (base/get-datatype lhs-buffer#)
-                                          (base/get-datatype rhs-buffer#))
-                                       (= (base/ecount lhs-buffer#)
-                                          (base/ecount rhs-buffer#)))
-                              (let [lhs-buffer# (datatype->buffer-cast-fn ~datatype lhs-buffer#)
-                                    rhs-buffer# (datatype->buffer-cast-fn ~datatype nio-buf#)]
-                                (when (= (.isDirect lhs-buffer#) (.isDirect rhs-buffer#))
-                                  (if (.isDirect lhs-buffer#)
-                                    (let [lhs-ptr# (Pointer/nativeValue ^Pointer (jna/->ptr-backing-store lhs-buffer#))
-                                          rhs-ptr# (Pointer/nativeValue ^Pointer (jna/->ptr-backing-store rhs-buffer#))]
-                                      (in-range? lhs-ptr# (base/ecount lhs-buffer#)
-                                                 rhs-ptr# (base/ecount rhs-buffer#)))
-                                    (let [lhs-sub# (dtype-proto/->sub-array lhs-buffer#)
-                                          rhs-sub# (dtype-proto/->sub-array rhs-buffer#)]
-                                      (and (identical? (:array-data lhs-sub#)
-                                                       (:array-data rhs-sub#))
-                                           (in-range? (:offset lhs-sub#) (:length lhs-sub#)
-                                                      (:offset rhs-sub#) (:length rhs-sub#))))))))))}
+                          (identical? (:array-data (dtype-proto/->sub-array
+                                                    lhs-buffer#))
+                                      (:array-data (dtype-proto/->sub-array
+                                                    rhs-buffer#)))))))))
+      :partially-alias?
+      (fn [lhs-buffer# rhs-buffer#]
+        (when-let [nio-buf# (dtype-proto/->buffer-backing-store
+                             rhs-buffer#)]
+          (when (and (= (base/get-datatype lhs-buffer#)
+                        (base/get-datatype rhs-buffer#))
+                     (= (base/ecount lhs-buffer#)
+                        (base/ecount rhs-buffer#)))
+            (let [lhs-buffer# (datatype->buffer-cast-fn ~datatype lhs-buffer#)
+                  rhs-buffer# (datatype->buffer-cast-fn ~datatype nio-buf#)]
+              (when (= (.isDirect lhs-buffer#) (.isDirect rhs-buffer#))
+                (if (.isDirect lhs-buffer#)
+                  (let [lhs-ptr# (Pointer/nativeValue
+                                  ^Pointer (jna/->ptr-backing-store lhs-buffer#))
+                        rhs-ptr# (Pointer/nativeValue
+                                  ^Pointer (jna/->ptr-backing-store rhs-buffer#))]
+                    (in-range? lhs-ptr# (base/ecount lhs-buffer#)
+                               rhs-ptr# (base/ecount rhs-buffer#)))
+                  (let [lhs-sub# (dtype-proto/->sub-array lhs-buffer#)
+                        rhs-sub# (dtype-proto/->sub-array rhs-buffer#)]
+                    (and (identical? (:array-data lhs-sub#)
+                                     (:array-data rhs-sub#))
+                         (in-range? (:offset lhs-sub#)
+                                    (:length lhs-sub#)
+                                    (:offset rhs-sub#)
+                                    (:length rhs-sub#))))))))))}
      dtype-proto/PToWriter
-     {:->object-writer (fn [item#]
-                         (-> (dtype-proto/->writer-of-type item# ~datatype false)
-                             (writer/make-marshalling-writer ~datatype :object :object ObjectWriter true)))
-      :->writer-of-type (fn [item# writer-datatype# unchecked?#]
-                          (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
-                            (case writer-datatype#
-                              :int8 (make-buffer-writer ByteWriter ~'buffer :int8 :int8 ~datatype unchecked?#)
-                              :uint8 (make-buffer-writer ShortWriter ~'buffer :int16 :uint8 ~datatype unchecked?#)
-                              :int16 (make-buffer-writer ShortWriter ~'buffer :int16 :int16 ~datatype unchecked?#)
-                              :uint16 (make-buffer-writer IntWriter ~'buffer :int32 :uint16 ~datatype unchecked?#)
-                              :int32 (make-buffer-writer IntWriter ~'buffer :int32 :int32 ~datatype unchecked?#)
-                              :uint32 (make-buffer-writer LongWriter ~'buffer :int64 :uint32 ~datatype unchecked?#)
-                              :int64 (make-buffer-writer LongWriter ~'buffer :int64 :int64 ~datatype unchecked?#)
-                              :uint64 (make-buffer-writer LongWriter ~'buffer :int64 :int64 ~datatype unchecked?#)
-                              :float32 (make-buffer-writer FloatWriter ~'buffer :float32 :float32 ~datatype unchecked?#)
-                              :float64 (make-buffer-writer DoubleWriter ~'buffer :float64 :float64 ~datatype unchecked?#)
-                              (writer/->marshalling-writer ~'buffer writer-datatype# unchecked?#))))}
+     {:->writer-of-type
+      (fn [item# writer-datatype# unchecked?#]
+        (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
+          (case writer-datatype#
+            :int8 (make-buffer-writer ByteWriter ~'buffer :int8
+                                      :int8 ~datatype unchecked?#)
+            :uint8 (make-buffer-writer ShortWriter ~'buffer :int16
+                                       :uint8 ~datatype unchecked?#)
+            :int16 (make-buffer-writer ShortWriter ~'buffer :int16
+                                       :int16 ~datatype unchecked?#)
+            :uint16 (make-buffer-writer IntWriter ~'buffer :int32
+                                        :uint16 ~datatype unchecked?#)
+            :int32 (make-buffer-writer IntWriter ~'buffer :int32
+                                       :int32 ~datatype unchecked?#)
+            :uint32 (make-buffer-writer LongWriter ~'buffer :int64
+                                        :uint32 ~datatype unchecked?#)
+            :int64 (make-buffer-writer LongWriter ~'buffer :int64
+                                       :int64 ~datatype unchecked?#)
+            :uint64 (make-buffer-writer LongWriter ~'buffer :int64
+                                        :int64 ~datatype unchecked?#)
+            :float32 (make-buffer-writer FloatWriter ~'buffer :float32
+                                         :float32 ~datatype unchecked?#)
+            :float64 (make-buffer-writer DoubleWriter ~'buffer :float64
+                                         :float64 ~datatype unchecked?#)
+            (writer/->marshalling-writer ~'buffer writer-datatype# unchecked?#))))}
      dtype-proto/PToReader
-     {:->object-reader (fn [item#]
-                         (-> (dtype-proto/->reader-of-type item# ~datatype false)
-                             (reader/make-marshalling-reader ~datatype :object :object ObjectReader true)))
-
-      :->reader-of-type (fn [item# reader-datatype# unchecked?#]
-                          (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
-                            (case reader-datatype#
-                              :int8 (make-buffer-reader ByteReader ~'buffer :int8 :int8 ~datatype unchecked?#)
-                              :uint8 (make-buffer-reader ShortReader ~'buffer :int16 :uint8 ~datatype unchecked?#)
-                              :int16 (make-buffer-reader ShortReader ~'buffer :int16 :int16 ~datatype unchecked?#)
-                              :uint16 (make-buffer-reader IntReader ~'buffer :int32 :uint16 ~datatype unchecked?#)
-                              :int32 (make-buffer-reader IntReader ~'buffer :int32 :int32 ~datatype unchecked?#)
-                              :uint32 (make-buffer-reader LongReader ~'buffer :int64 :uint32 ~datatype unchecked?#)
-                              :int64 (make-buffer-reader LongReader ~'buffer :int64 :int64 ~datatype unchecked?#)
-                              :uint64 (make-buffer-reader LongReader ~'buffer :int64 :int64 ~datatype unchecked?#)
-                              :float32 (make-buffer-reader FloatReader ~'buffer :float32 :float32 ~datatype unchecked?#)
-                              :float64 (make-buffer-reader DoubleReader ~'buffer :float64 :float64 ~datatype unchecked?#)
-                              (reader/->marshalling-reader ~'buffer reader-datatype# unchecked?#))))}))
+     {:->reader-of-type
+      (fn [item# reader-datatype# unchecked?#]
+        (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
+          (case reader-datatype#
+            :int8 (make-buffer-reader ByteReader ~'buffer :int8
+                                      :int8 ~datatype unchecked?#)
+            :uint8 (make-buffer-reader ShortReader ~'buffer :int16
+                                       :uint8 ~datatype unchecked?#)
+            :int16 (make-buffer-reader ShortReader ~'buffer :int16
+                                       :int16 ~datatype unchecked?#)
+            :uint16 (make-buffer-reader IntReader ~'buffer :int32
+                                        :uint16 ~datatype unchecked?#)
+            :int32 (make-buffer-reader IntReader ~'buffer :int32
+                                       :int32 ~datatype unchecked?#)
+            :uint32 (make-buffer-reader LongReader ~'buffer :int64
+                                        :uint32 ~datatype unchecked?#)
+            :int64 (make-buffer-reader LongReader ~'buffer :int64
+                                       :int64 ~datatype unchecked?#)
+            :uint64 (make-buffer-reader LongReader ~'buffer :int64
+                                        :int64 ~datatype unchecked?#)
+            :float32 (make-buffer-reader FloatReader ~'buffer :float32
+                                         :float32 ~datatype unchecked?#)
+            :float64 (make-buffer-reader DoubleReader ~'buffer :float64
+                                         :float64 ~datatype unchecked?#)
+            (reader/->marshalling-reader ~'buffer reader-datatype# unchecked?#))))}))
 
 
 (implement-buffer-type ByteBuffer :int8)

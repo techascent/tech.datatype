@@ -12,7 +12,7 @@
             [clojure.core.matrix.macros :refer [c-for]])
 
   (:import [tech.datatype
-            ObjectReader ObjectWriter Mutable
+            ObjectReader ObjectWriter ObjectMutable
             ByteReader ByteWriter ByteMutable
             ShortReader ShortWriter ShortMutable
             IntReader IntWriter IntMutable
@@ -28,7 +28,7 @@
 
 
 (extend-protocol dtype-proto/PDatatype
-  Mutable
+  ObjectMutable
   (get-datatype [item] :object)
   ByteMutable
   (get-datatype [item] :int8)

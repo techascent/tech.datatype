@@ -66,7 +66,8 @@
      {:get-datatype (fn [arg#] ~datatype)}
      dtype-proto/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
-                         (base/raw-dtype-copy! raw-data# ary-target# target-offset# options#))}
+                         (base/raw-dtype-copy! raw-data# ary-target#
+                                               target-offset# options#))}
      dtype-proto/PPrototype
      {:from-prototype (fn [src-ary# datatype# shape#]
                         (when-not (= 1 (count shape#))
@@ -77,13 +78,13 @@
      {:->buffer-backing-store (fn [item#] (datatype->buffer-creation ~datatype item#))}
 
      dtype-proto/PToArray
-     {:->array (fn [item#] item#)
-      :->sub-array (fn [item#]
+     {:->sub-array (fn [item#]
                      {:array-data item#
                       :offset 0
                       :length (base/ecount item#)})
       :->array-copy (fn [item#]
-                      (base/copy! item# (make-array-of-type ~datatype (base/ecount item#))))}
+                      (base/copy! item# (make-array-of-type ~datatype
+                                                            (base/ecount item#))))}
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]
                     (dtype-proto/sub-buffer (dtype-proto/->buffer-backing-store buffer#)
@@ -94,22 +95,21 @@
                                     rhs-buffer#))
 
       :partially-alias? (fn [lhs-buffer# rhs-buffer#]
-                          (dtype-proto/partially-alias? (dtype-proto/->buffer-backing-store lhs-buffer#)
-                                                        rhs-buffer#))}
+                          (dtype-proto/partially-alias?
+                           (dtype-proto/->buffer-backing-store lhs-buffer#)
+                           rhs-buffer#))}
      dtype-proto/PToReader
-     {:->object-reader (fn [item#]
-                         (dtype-proto/->object-reader (dtype-proto/->buffer-backing-store item#)))
-      :->reader-of-type (fn [item# datatype# unchecked?#]
-                          (dtype-proto/->reader-of-type (dtype-proto/->buffer-backing-store item#)
-                                                        datatype# unchecked?#))}
+     {:->reader-of-type (fn [item# datatype# unchecked?#]
+                          (dtype-proto/->reader-of-type
+                           (dtype-proto/->buffer-backing-store item#)
+                           datatype# unchecked?#))}
 
      dtype-proto/PToWriter
-     {:->object-writer (fn [item#]
-                         (dtype-proto/->object-writer (dtype-proto/->buffer-backing-store item#)))
-      :->writer-of-type (fn [item# datatype# unchecked?#]
-                          (dtype-proto/->writer-of-type (dtype-proto/->buffer-backing-store item#)
-                                                        datatype#
-                                                        unchecked?#))}))
+     {:->writer-of-type (fn [item# datatype# unchecked?#]
+                          (dtype-proto/->writer-of-type
+                           (dtype-proto/->buffer-backing-store item#)
+                           datatype#
+                           unchecked?#))}))
 
 
 (implement-numeric-array-type (Class/forName "[B") :int8)
@@ -145,24 +145,23 @@
     (dtype-proto/alias? lhs-buffer rhs-buffer))
 
   dtype-proto/PToArray
-  (->array [item] item)
   (->sub-array [item]
     {:array-data item
      :offset 0
      :length (alength ^booleans item)})
   (->array-copy [src-ary]
-    (base/copy! src-ary (make-array-of-type :boolean (alength (as-boolean-array src-ary)))))
+    (base/copy! src-ary (make-array-of-type
+                         :boolean
+                         (alength (as-boolean-array src-ary)))))
 
 
   dtype-proto/PToWriter
-  (->object-writer [item] (dtype-proto/->object-writer (dtype-proto/->list-backing-store item)))
   (->writer-of-type [item datatype unchecked?]
     (dtype-proto/->writer-of-type (dtype-proto/->list-backing-store item)
                                   datatype unchecked?))
 
 
   dtype-proto/PToReader
-  (->object-reader [item] (dtype-proto/->object-reader (dtype-proto/->list-backing-store item)))
   (->reader-of-type [item datatype unchecked?]
     (dtype-proto/->reader-of-type (dtype-proto/->list-backing-store item)
                                   datatype unchecked?)))

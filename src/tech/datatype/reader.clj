@@ -7,15 +7,9 @@
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m])
-  (:import [tech.datatype
-            ObjectReader ObjectWriter Mutable
-            ByteReader ByteWriter ByteMutable
-            ShortReader ShortWriter ShortMutable
-            IntReader IntWriter IntMutable
-            LongReader LongWriter LongMutable
-            FloatReader FloatWriter FloatMutable
-            DoubleReader DoubleWriter DoubleMutable
-            BooleanReader BooleanWriter BooleanMutable]))
+  (:import [tech.datatype ObjectReader ByteReader
+            ShortReader IntReader LongReader
+            FloatReader DoubleReader BooleanReader]))
 
 
 (set! *warn-on-reflection* true)
@@ -186,10 +180,7 @@
      dtype-proto/PDatatype
      {:get-datatype (fn [_#] ~datatype)}
      dtype-proto/PToReader
-     {:->object-reader (fn [item#]
-                         (make-marshalling-reader item# ~datatype
-                                                  :object :object ObjectReader true))
-      :->reader-of-type
+     {:->reader-of-type
       (fn [item# dtype# unchecked?#]
         (if (= dtype# ~datatype)
           item#
@@ -212,13 +203,17 @@
               :uint64 (make-marshalling-reader item# ~datatype
                                                :uint64 :int64 LongReader unchecked?#)
               :float32 (make-marshalling-reader item# ~datatype
-                                                :float32 :float32 FloatReader unchecked?#)
+                                                :float32 :float32 FloatReader
+                                                unchecked?#)
               :float64 (make-marshalling-reader item# ~datatype
-                                                :float64 :float64 DoubleReader unchecked?#)
+                                                :float64 :float64 DoubleReader
+                                                unchecked?#)
               :boolean (make-marshalling-reader item# ~datatype
-                                                :boolean :boolean BooleanReader unchecked?#)
+                                                :boolean :boolean BooleanReader
+                                                unchecked?#)
               :object (make-marshalling-reader item# ~datatype
-                                               :object :object ObjectReader unchecked?#)))))}))
+                                               :object :object ObjectReader
+                                               unchecked?#)))))}))
 
 
 (extend-reader-type ByteReader :int8)

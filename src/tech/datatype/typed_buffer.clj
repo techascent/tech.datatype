@@ -9,16 +9,7 @@
             [tech.datatype.writer :as writer]
             [tech.jna :as jna]
             [clojure.core.matrix.macros :refer [c-for]]
-            [clojure.core.matrix.protocols :as mp])
-  (:import [tech.datatype
-            ObjectReader ObjectWriter Mutable
-            ByteReader ByteWriter ByteMutable
-            ShortReader ShortWriter ShortMutable
-            IntReader IntWriter IntMutable
-            LongReader LongWriter LongMutable
-            FloatReader FloatWriter FloatMutable
-            DoubleReader DoubleWriter DoubleMutable
-            BooleanReader BooleanWriter BooleanMutable]))
+            [clojure.core.matrix.protocols :as mp]))
 
 
 (set! *warn-on-reflection* true)

@@ -1,4 +1,5 @@
-(ns tech.datatype.protocols)
+(ns tech.datatype.protocols
+  (:require [clojure.core.matrix.protocols :as mp]))
 
 
 (defprotocol PDatatype
@@ -47,12 +48,19 @@ data overlap?"))
 (defprotocol PToArray
   "Take a'thing' and convert it to an array that exactly represents the value
   of the data."
-  (->array [item]
-    "Convert to an array; both objects must share backing store")
   (->sub-array [item]
     "Noncopying convert to a map of {:array-data :offset :length} or nil if impossible")
   (->array-copy [item]
     "Convert to an array containing a copy of the data"))
+
+(defn ->array [item]
+  (if (satisfies? PToArray item)
+    (when-let [ary-data (->sub-array item)]
+      (let [{:keys [array-data offset length]} ary-data]
+        (when (and (= (int offset) 0)
+                   (= (int (mp/element-count array-data))
+                      (int length)))
+          array-data)))))
 
 
 (defprotocol PToList
@@ -61,17 +69,14 @@ data overlap?"))
 
 
 (defprotocol PToWriter
-  (->object-writer [item])
   (->writer-of-type [item datatype unchecked?]))
 
 
 (defprotocol PToReader
-  (->object-reader [item])
   (->reader-of-type [item datatype unchecked?]))
 
 
 (defprotocol PToMutable
-  (->object-mutable [item])
   (->mutable-of-type [item datatype]))
 
 

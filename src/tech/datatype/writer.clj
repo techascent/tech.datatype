@@ -8,15 +8,9 @@
             [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel]
             [clojure.core.matrix :as m])
-  (:import [tech.datatype
-            ObjectReader ObjectWriter Mutable
-            ByteReader ByteWriter ByteMutable
-            ShortReader ShortWriter ShortMutable
-            IntReader IntWriter IntMutable
-            LongReader LongWriter LongMutable
-            FloatReader FloatWriter FloatMutable
-            DoubleReader DoubleWriter DoubleMutable
-            BooleanReader BooleanWriter BooleanMutable]))
+  (:import [tech.datatype ObjectWriter ByteWriter
+            ShortWriter IntWriter LongWriter
+            FloatWriter DoubleWriter BooleanWriter]))
 
 
 (set! *warn-on-reflection* true)
@@ -160,7 +154,8 @@
              (c-for [idx# (int 0) (< idx# n-elems#) (inc idx#)]
                     (.write item# (buf-get indexes#
                                            idx# idx-pos#)
-                            (datatype->read-fn ~src-dtype values# idx# values-pos#)))))))))
+                            (datatype->read-fn ~src-dtype values# idx#
+                                               values-pos#)))))))))
 
 
 (defmacro extend-writer-type
@@ -170,10 +165,7 @@
      dtype-proto/PDatatype
      {:get-datatype (fn [_#] ~datatype)}
      dtype-proto/PToWriter
-     {:->object-writer (fn [item#]
-                         (make-marshalling-writer item# ~datatype
-                                                  :object :object ObjectWriter true))
-      :->writer-of-type
+     {:->writer-of-type
       (fn [item# dtype# unchecked?#]
         (if (= dtype# ~datatype)
           item#
@@ -199,9 +191,11 @@
             :float64 (make-marshalling-writer item# ~datatype
                                               :float64 :float64 DoubleWriter unchecked?#)
             :boolean (make-marshalling-writer item# ~datatype
-                                              :boolean :boolean BooleanWriter unchecked?#)
+                                              :boolean :boolean BooleanWriter
+                                              unchecked?#)
             :object (make-marshalling-writer item# ~datatype
-                                             :object :object ObjectWriter unchecked?#))))}))
+                                             :object :object ObjectWriter
+                                             unchecked?#))))}))
 
 
 (extend-writer-type ByteWriter :int8)

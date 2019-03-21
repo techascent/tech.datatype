@@ -144,11 +144,6 @@
     (if (satisfies? dtype-proto/PToArray src)
       (vec (or (dtype-proto/->array src)
                (dtype-proto/->array-copy src)))))
-  dtype-proto/PToNioBuffer
-  (->buffer-backing-store [src]
-    (when (satisfies? dtype-proto/PToArray src)
-      (when-let [ary-data (dtype-proto/->array src)]
-        (dtype-proto/->buffer-backing-store src))))
   dtype-proto/PToReader
   (->object-reader [item]
     (reify ObjectReader

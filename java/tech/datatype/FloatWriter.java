@@ -2,7 +2,7 @@ package tech.datatype;
 
 import java.nio.*;
 
-public interface FloatWriter
+public interface FloatWriter extends Datatype
 {
   void write(int idx, float value);
   void writeConstant(int idx, float value, int count);

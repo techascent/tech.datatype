@@ -56,6 +56,7 @@
    unchecked?]
   `(if ~unchecked?
      (reify ~writer-type
+       (getDatatype [writer#] ~intermediate-datatype)
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx#
           (cls-type->pos-fn ~buffer-type ~buffer)
@@ -87,8 +88,10 @@
          (let [~'buf-pos (cls-type->pos-fn ~buffer-type ~buffer)
                ~'values-pos (datatype->pos-fn ~writer-datatype ~'values)
                ~'count (base/ecount ~'values)]
+
            ~(if (and (nio-type? (resolve buffer-type))
                      (= buffer-datatype (casting/datatype->host-type writer-datatype)))
+
               `(fast-copy/copy! (dtype-proto/sub-buffer ~buffer ~'offset ~'count)
                                 ~'values)
               `(parallel/parallel-for
@@ -144,7 +147,8 @@
                ~'values-pos (datatype->pos-fn ~writer-datatype ~'values)
                ~'count (base/ecount ~'values)]
            ~(if (and (nio-type? (resolve buffer-type))
-                     (= buffer-datatype writer-datatype))
+                     (= buffer-datatype writer-datatype)
+                     (= buffer-datatype intermediate-datatype))
               `(fast-copy/copy! (dtype-proto/sub-buffer ~buffer ~'offset ~'count)
                                 ~'values)
               `(parallel/parallel-for
@@ -174,6 +178,7 @@
    unchecked?]
   `(if ~unchecked?
      (reify ~src-writer-type
+       (getDatatype [item#] ~intermediate-dtype)
        (write[item# idx# value#]
          (.write ~dst-writer idx#
                  (unchecked-full-cast value# ~src-dtype ~intermediate-dtype ~result-dtype)))
@@ -183,19 +188,17 @@
                          count#))
        (writeBlock [item# offset# ~'values]
          (let [n-elems# (ecount ~'values)
-               dst-values# ~(if (= (casting/datatype->host-datatype result-dtype)
-                                   (casting/datatype->host-datatype src-dtype))
-                              `~'values
-                              `(typecast/datatype->buffer-cast-fn
-                                ~result-dtype (dtype-proto/clone ~'values ~result-dtype)))]
+               dst-values# (typecast/datatype->buffer-cast-fn
+                            ~result-dtype (dtype-io/make-transfer-buffer
+                                           ~'values ~intermediate-dtype ~result-dtype
+                                           false ~unchecked?))]
            (.writeBlock ~dst-writer offset# dst-values#)))
        (writeIndexes [item# indexes# ~'values]
          (let [n-elems# (ecount ~'values)
-               dst-values# ~(if (= (casting/datatype->host-datatype result-dtype)
-                                   (casting/datatype->host-datatype src-dtype))
-                              `~'values
-                              `(typecast/datatype->buffer-cast-fn
-                                ~result-dtype (dtype-proto/clone ~'values ~result-dtype)))]
+               dst-values# (typecast/datatype->buffer-cast-fn
+                            ~result-dtype (dtype-io/make-transfer-buffer
+                                           ~'values ~intermediate-dtype ~result-dtype
+                                           false ~unchecked?))]
            (.writeIndexes ~dst-writer indexes# dst-values#))))
      (reify ~src-writer-type
        (write[item# idx# value#]
@@ -208,12 +211,16 @@
        (writeBlock [item# offset# ~'values]
          (let [n-elems# (ecount ~'values)
                dst-values# (typecast/datatype->buffer-cast-fn
-                            ~result-dtype (dtype-proto/clone ~'values ~result-dtype))]
+                            ~result-dtype (dtype-io/make-transfer-buffer
+                                           ~'values ~intermediate-dtype ~result-dtype
+                                           false ~unchecked?))]
            (.writeBlock ~dst-writer offset# dst-values#)))
        (writeIndexes [item# indexes# ~'values]
          (let [n-elems# (ecount ~'values)
                dst-values# (typecast/datatype->buffer-cast-fn
-                            ~result-dtype (dtype-proto/clone ~'values ~result-dtype))]
+                            ~result-dtype (dtype-io/make-transfer-buffer
+                                           ~'values ~intermediate-dtype ~result-dtype
+                                           false ~unchecked?))]
            (.writeIndexes ~dst-writer indexes# dst-values#))))))
 
 
@@ -222,8 +229,6 @@
   [writer-type datatype]
   `(clojure.core/extend
        ~writer-type
-     dtype-proto/PDatatype
-     {:get-datatype (fn [_#] ~datatype)}
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# dtype# unchecked?#]
@@ -267,12 +272,3 @@
 (extend-writer-type DoubleWriter :float64)
 (extend-writer-type BooleanWriter :boolean)
 (extend-writer-type ObjectWriter :object)
-
-
-(defn ->marshalling-writer
-  [src-item dest-dtype unchecked?]
-  (let [src-dtype (dtype-proto/get-datatype src-item)
-        src-writer (dtype-proto/->writer-of-type src-item src-dtype false)]
-    (if (= src-dtype dest-dtype)
-      src-writer
-      (dtype-proto/->writer-of-type src-writer dest-dtype unchecked?))))

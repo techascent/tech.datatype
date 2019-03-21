@@ -27,12 +27,10 @@
         src-ary (as-array src)
         src-buf (as-nio-buffer src)
         dst-buf (as-nio-buffer dst)
-        src-dtype (dtype-proto/get-datatype src)
-        dst-dtype (dtype-proto/get-datatype dst)
-        src-host-type (casting/datatype->host-datatype src-dtype)
+        src-dtype (dtype-proto/get-datatype src-buf)
+        dst-dtype (dtype-proto/get-datatype dst-buf)
         n-elems (long (mp/element-count dst))]
-    (when-not (= src-host-type
-                 (casting/datatype->host-datatype dst-dtype))
+    (when-not (= src-dtype dst-dtype)
       (throw (ex-info "Fast copy called inappropriately; datatypes do not match"
                       {:src-datatype src-dtype
                        :dst-datatype dst-dtype})))

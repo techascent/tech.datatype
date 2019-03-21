@@ -1,9 +1,15 @@
 (ns tech.datatype.protocols
-  (:require [clojure.core.matrix.protocols :as mp]))
+  (:require [clojure.core.matrix.protocols :as mp])
+  (:import [tech.datatype Datatype]))
 
+(set! *warn-on-reflection* true)
 
 (defprotocol PDatatype
   (get-datatype [item]))
+
+(extend-type Datatype
+  PDatatype
+  (get-datatype [item] (.getDatatype item)))
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."
@@ -66,6 +72,10 @@ data overlap?"))
 (defprotocol PToList
   "Generically implemented for anything that implements ->array"
   (->list-backing-store [item]))
+
+
+(defprotocol PToTypedBuffer
+  (->typed-buffer [item datatype]))
 
 
 (defprotocol PToWriter

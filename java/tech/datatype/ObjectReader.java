@@ -3,7 +3,7 @@ package tech.datatype;
 import java.util.*;
 import java.nio.*;
 
-public interface ObjectReader
+public interface ObjectReader extends Datatype
 {
   Object read(int idx);
   void readBlock(int offset, List destination);

@@ -175,7 +175,10 @@
                                          :float32 ~datatype unchecked?#)
             :float64 (make-buffer-writer DoubleWriter ~buffer-class ~'buffer :float64
                                          :float64 ~datatype unchecked?#)
-            (writer/->marshalling-writer ~'buffer writer-datatype# unchecked?#))))}
+            :boolean (make-buffer-writer BooleanWriter ~buffer-class ~'buffer :boolean
+                                         :boolean ~datatype unchecked?#)
+            :object (make-buffer-writer ObjectWriter ~buffer-class ~'buffer :object
+                                         :object ~datatype unchecked?#))))}
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
@@ -201,7 +204,10 @@
                                          :float32 ~datatype unchecked?#)
             :float64 (make-buffer-reader DoubleReader ~buffer-class ~'buffer :float64
                                          :float64 ~datatype unchecked?#)
-            (reader/->marshalling-reader ~'buffer reader-datatype# unchecked?#))))}))
+            :boolean (make-buffer-reader BooleanReader ~buffer-class ~'buffer :boolean
+                                         :boolean ~datatype unchecked?#)
+            :object (make-buffer-reader ObjectReader ~buffer-class ~'buffer :object
+                                        :object ~datatype unchecked?#))))}))
 
 
 (implement-buffer-type ByteBuffer :int8)

@@ -1,6 +1,8 @@
 (ns tech.datatype.typecast
   (:require [tech.datatype.protocols :as dtype-proto]
-            [tech.jna :as jna])
+            [tech.jna :as jna]
+            [tech.datatype.casting :as casting]
+            [clojure.core.matrix.protocols :as mp])
   (:import [tech.datatype
             ObjectWriter ObjectReader ObjectMutable
             ByteWriter ByteReader ByteMutable
@@ -173,9 +175,13 @@
   [datatype item]
   (case datatype
     :int8 `(byte-mutable-cast item)
+    :uint8 `(short-mutable-cast item)
     :int16 `(short-mutable-cast item)
+    :uint16 `(int-mutable-cast item)
     :int32 `(int-mutable-cast item)
+    :uint32 `(long-mutable-cast item)
     :int64 `(long-mutable-cast item)
+    :uint64 `(long-mutable-cast item)
     :float32 `(float-mutable-cast item)
     :float64 `(double-mutable-cast item)
     :boolean `(boolean-mutable-cast item)
@@ -258,28 +264,28 @@
 
 
 (defn as-byte-buffer
-  ^ByteBuffer [obj] obj)
+  ^ByteBuffer [obj] (dtype-proto/->buffer-backing-store obj))
 
 (defn as-short-buffer
-  ^ShortBuffer [obj] obj)
+  ^ShortBuffer [obj] (dtype-proto/->buffer-backing-store obj))
 
 (defn as-int-buffer
-  ^IntBuffer [obj] obj)
+  ^IntBuffer [obj] (dtype-proto/->buffer-backing-store obj))
 
 (defn as-long-buffer
-  ^LongBuffer [obj] obj)
+  ^LongBuffer [obj] (dtype-proto/->buffer-backing-store obj))
 
 (defn as-float-buffer
-  ^FloatBuffer [obj] obj)
+  ^FloatBuffer [obj] (dtype-proto/->buffer-backing-store obj))
 
 (defn as-double-buffer
-  ^DoubleBuffer [obj] obj)
+  ^DoubleBuffer [obj] (dtype-proto/->buffer-backing-store obj))
 
 (defn as-boolean-buffer
-  ^BooleanList [obj] obj)
+  ^BooleanList [obj] (dtype-proto/->list-backing-store obj))
 
 (defn as-object-buffer
-  ^ObjectList [obj] obj)
+  ^ObjectList [obj] (dtype-proto/->list-backing-store obj))
 
 
 
@@ -294,3 +300,21 @@
     :float64 `(as-double-buffer ~buf)
     :boolean `(as-boolean-buffer ~buf)
     :object `(as-object-buffer ~buf)))
+
+
+(defn make-interface-buffer-type
+  [dtype elem-count-or-seq & [options]]
+  ((case dtype
+     :int8 (partial dtype-proto/make-container :nio-buffer :int8)
+     :uint8 (partial dtype-proto/make-container :typed-buffer :uint8)
+     :int16 (partial dtype-proto/make-container :nio-buffer :int16)
+     :uint16 (partial dtype-proto/make-container :typed-buffer :uint16)
+     :int32 (partial dtype-proto/make-container :nio-buffer :int32)
+     :uint32 (partial dtype-proto/make-container :typed-buffer :uint32)
+     :int64 (partial dtype-proto/make-container :nio-buffer :int64)
+     :uint64 (partial dtype-proto/make-container :typed-buffer :uint64)
+     :float32 (partial dtype-proto/make-container :nio-buffer :float32)
+     :float64 (partial dtype-proto/make-container :nio-buffer :float64)
+     :boolean (partial dtype-proto/make-container :list :boolean)
+     :object (partial dtype-proto/make-container :list :object))
+   elem-count-or-seq options))

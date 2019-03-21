@@ -2,7 +2,7 @@ package tech.datatype;
 
 import java.nio.*;
 
-public interface LongReader
+public interface LongReader extends Datatype
 {
   long read(int idx);
   void readBlock(int offset, LongBuffer destination);

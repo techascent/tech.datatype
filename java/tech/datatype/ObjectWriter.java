@@ -3,7 +3,7 @@ package tech.datatype;
 import java.util.*;
 import java.nio.*;
 
-public interface ObjectWriter
+public interface ObjectWriter extends Datatype
 {
   void write(int idx, Object value);
   void writeConstant(int idx, Object value, int count);

@@ -41,6 +41,10 @@
   (->buffer-backing-store [item]
     (dtype-proto/->buffer-backing-store backing-store))
 
+  dtype-proto/PToList
+  (->list-backing-store [item]
+    (dtype-proto/->list-backing-store item))
+
 
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
@@ -68,22 +72,26 @@
   dtype-proto/PToWriter
   ;;No marshalling/casting on the writer side.
   (->writer-of-type [item writer-datatype unchecked?]
-    ;;If our datatype matches the datatype of the backing store
-    (if (= datatype (dtype-proto/get-datatype backing-store))
+    (if (or (= datatype (dtype-proto/get-datatype backing-store))
+            (= datatype writer-datatype))
       (dtype-proto/->writer-of-type backing-store writer-datatype unchecked?)
-      (-> (dtype-proto/->writer-of-type backing-store datatype true)
-          (dtype-proto/->writer-of-type writer-datatype unchecked?))))
+      ;;We will always check it as it goes into our buffer.
+      (-> (dtype-proto/->writer-of-type backing-store datatype unchecked?)
+          (dtype-proto/->writer-of-type writer-datatype true))))
 
   dtype-proto/PToReader
 
   (->reader-of-type [item reader-datatype unchecked?]
-    (if (= datatype (dtype-proto/get-datatype backing-store))
+    (if (or (= datatype (dtype-proto/get-datatype backing-store))
+            (= datatype reader-datatype))
       (dtype-proto/->reader-of-type backing-store reader-datatype unchecked?)
+      ;;We trust that we stored the data correctly.
       (-> (dtype-proto/->reader-of-type backing-store datatype true)
           (dtype-proto/->reader-of-type reader-datatype unchecked?))))
 
   mp/PElementCount
   (element-count [item] (mp/element-count backing-store)))
+
 
 (defn typed-buffer-like?
   [item]
@@ -125,3 +133,13 @@
 (defmethod dtype-proto/make-container :typed-buffer
   [container-type datatype elem-count-or-seq options]
   (make-typed-buffer datatype elem-count-or-seq options))
+
+
+(extend-type Object
+  dtype-proto/PToTypedBuffer
+  (->typed-buffer [item dtype]
+    (if (= dtype (dtype-proto/get-datatype item))
+      item
+      (assoc
+       (->typed-buffer item)
+       :datatype dtype))))

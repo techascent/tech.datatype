@@ -270,39 +270,82 @@
       :->array-copy (fn [item#]
                       (.toArray (datatype->list-cast-fn ~datatype item#)))}
      dtype-proto/PToWriter
-     {:->object-writer (fn [item#] (writer/->marshalling-writer item# :object true))
-
-      :->writer-of-type (fn [item# datatype# unchecked?#]
-                          (let [~'item (datatype->list-cast-fn ~datatype item#)
-                                src-writer#
-                                ~(case datatype
-                                   :int8 `(make-buffer-writer ByteWriter ~typename ~'item :int8 :int8 ~datatype true)
-                                   :int16 `(make-buffer-writer ShortWriter ~typename ~'item :int16 :int16 ~datatype true)
-                                   :int32 `(make-buffer-writer IntWriter ~typename ~'item :int32 :int32 ~datatype true)
-                                   :int64 `(make-buffer-writer LongWriter ~typename ~'item :int64 :int64 ~datatype true)
-                                   :float32 `(make-buffer-writer FloatWriter ~typename ~'item :float32 :float32 ~datatype true)
-                                   :float64 `(make-buffer-writer DoubleWriter ~typename ~'item :float64 :float64 ~datatype true)
-                                   :boolean `(make-buffer-writer BooleanWriter ~typename ~'item :boolean :boolean ~datatype true)
-                                   :object `(make-buffer-writer ObjectWriter ~typename ~'item :object :object ~datatype true))]
-                            (writer/->marshalling-writer src-writer# datatype# unchecked?#)))}
+     {:->writer-of-type
+      (fn [item# ~'writer-datatype ~'unchecked?]
+        (let [~'item (datatype->list-cast-fn ~datatype item#)]
+          ~(if (casting/numeric-type? datatype)
+             `(-> ~(case datatype
+                     :int8 `(make-buffer-writer ByteWriter ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :int16 `(make-buffer-writer ShortWriter ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :int32 `(make-buffer-writer IntWriter ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :int64 `(make-buffer-writer LongWriter ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :float32 `(make-buffer-writer FloatWriter ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :float64 `(make-buffer-writer DoubleWriter ~typename ~'item ~datatype ~datatype ~datatype true))
+                  (dtype-proto/->reader-of-type ~'writer-datatype ~'unchecked?))
+             `(case ~'writer-datatype
+                :int8 (make-buffer-writer ByteWriter ~typename ~'item :int8
+                                          :int8 ~datatype ~'unchecked?)
+                :uint8 (make-buffer-writer ShortWriter ~typename ~'item :int16
+                                           :uint8 ~datatype ~'unchecked?)
+                :int16 (make-buffer-writer ShortWriter ~typename ~'item :int16
+                                           :int16 ~datatype ~'unchecked?)
+                :uint16 (make-buffer-writer IntWriter ~typename ~'item :int32
+                                            :uint16 ~datatype ~'unchecked?)
+                :int32 (make-buffer-writer IntWriter ~typename ~'item :int32
+                                           :int32 ~datatype ~'unchecked?)
+                :uint32 (make-buffer-writer LongWriter ~typename ~'item :int64
+                                            :uint32 ~datatype ~'unchecked?)
+                :int64 (make-buffer-writer LongWriter ~typename ~'item :int64
+                                           :int64 ~datatype ~'unchecked?)
+                :uint64 (make-buffer-writer LongWriter ~typename ~'item :int64
+                                            :int64 ~datatype ~'unchecked?)
+                :float32 (make-buffer-writer FloatWriter ~typename ~'item :float32
+                                             :float32 ~datatype ~'unchecked?)
+                :float64 (make-buffer-writer DoubleWriter ~typename ~'item :float64
+                                             :float64 ~datatype ~'unchecked?)
+                :boolean (make-buffer-writer BooleanWriter ~typename ~'item :boolean
+                                             :boolean ~datatype ~'unchecked?)
+                :object (make-buffer-writer ObjectWriter ~typename ~'item :object
+                                            :object ~datatype ~'unchecked?)))))}
 
      dtype-proto/PToReader
-     {:->object-reader (fn [item#] (reader/->marshalling-reader item# :object true))
-
-      :->reader-of-type (fn [item# datatype# unchecked?#]
-                          (let [~'item (datatype->list-cast-fn ~datatype item#)
-                                src-reader#
-                                ~(case datatype
-                                   :int8 `(make-buffer-reader ByteReader ~typename ~'item :int8 :int8 ~datatype true)
-                                   :int16 `(make-buffer-reader ShortReader ~typename ~'item :int16 :int16 ~datatype true)
-                                   :int32 `(make-buffer-reader IntReader ~typename ~'item :int32 :int32 ~datatype true)
-                                   :int64 `(make-buffer-reader LongReader ~typename ~'item :int64 :int64 ~datatype true)
-                                   :float32 `(make-buffer-reader FloatReader ~typename ~'item :float32 :float32 ~datatype true)
-                                   :float64 `(make-buffer-reader DoubleReader ~typename ~'item :float64 :float64 ~datatype true)
-                                   :boolean `(make-buffer-reader BooleanReader ~typename ~'item :boolean :boolean ~datatype true)
-                                   :object `(make-buffer-reader ObjectReader ~typename ~'item :object :object ~datatype true)
-                                   )]
-                            (reader/->marshalling-reader src-reader# datatype# unchecked?#)))}))
+     {:->reader-of-type
+      (fn [item# ~'reader-datatype ~'unchecked?]
+        (let [~'item (datatype->list-cast-fn ~datatype item#)]
+          ~(if (casting/numeric-type? datatype)
+             `(-> ~(case datatype
+                     :int8 `(make-buffer-reader ByteReader ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :int16 `(make-buffer-reader ShortReader ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :int32 `(make-buffer-reader IntReader ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :int64 `(make-buffer-reader LongReader ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :float32 `(make-buffer-reader FloatReader ~typename ~'item ~datatype ~datatype ~datatype true)
+                     :float64 `(make-buffer-reader DoubleReader ~typename ~'item ~datatype ~datatype ~datatype true))
+                  (dtype-proto/->reader-of-type ~'reader-datatype ~'unchecked?))
+             `(case ~'reader-datatype
+                :int8 (make-buffer-reader ByteReader ~typename ~'item :int8
+                                          :int8 ~datatype ~'unchecked?)
+                :uint8 (make-buffer-reader ShortReader ~typename ~'item :int16
+                                           :uint8 ~datatype ~'unchecked?)
+                :int16 (make-buffer-reader ShortReader ~typename ~'item :int16
+                                           :int16 ~datatype ~'unchecked?)
+                :uint16 (make-buffer-reader IntReader ~typename ~'item :int32
+                                            :uint16 ~datatype ~'unchecked?)
+                :int32 (make-buffer-reader IntReader ~typename ~'item :int32
+                                           :int32 ~datatype ~'unchecked?)
+                :uint32 (make-buffer-reader LongReader ~typename ~'item :int64
+                                            :uint32 ~datatype ~'unchecked?)
+                :int64 (make-buffer-reader LongReader ~typename ~'item :int64
+                                           :int64 ~datatype ~'unchecked?)
+                :uint64 (make-buffer-reader LongReader ~typename ~'item :int64
+                                            :int64 ~datatype ~'unchecked?)
+                :float32 (make-buffer-reader FloatReader ~typename ~'item :float32
+                                             :float32 ~datatype ~'unchecked?)
+                :float64 (make-buffer-reader DoubleReader ~typename ~'item :float64
+                                             :float64 ~datatype ~'unchecked?)
+                :boolean (make-buffer-reader BooleanReader ~typename ~'item :boolean
+                                             :boolean ~datatype ~'unchecked?)
+                :object (make-buffer-reader ObjectReader ~typename ~'item :object
+                                            :object ~datatype ~'unchecked?)))))}))
 
 (extend-list ByteList :int8)
 (extend-list ShortList :int16)
@@ -314,10 +357,20 @@
 (extend-list ObjectList :object)
 
 
-(extend-type (Class/forName "[Z")
-  dtype-proto/PToList
-  (->list-backing-store [item]
-    (wrap-array item)))
+(defmacro extend-array-with-list
+  [ary-type]
+  `(clojure.core/extend
+       ~ary-type
+     dtype-proto/PToList
+     {:->list-backing-store (fn [item#] (wrap-array item#))}))
+
+(extend-array-with-list (Class/forName "[B"))
+(extend-array-with-list (Class/forName "[S"))
+(extend-array-with-list (Class/forName "[I"))
+(extend-array-with-list (Class/forName "[J"))
+(extend-array-with-list (Class/forName "[F"))
+(extend-array-with-list (Class/forName "[D"))
+(extend-array-with-list (Class/forName "[Z"))
 
 
 (defn make-list
@@ -328,79 +381,6 @@
    (make-list datatype elem-count-or-seq {})))
 
 
-(defmethod dtype-proto/make-container :fastutil-list
+(defmethod dtype-proto/make-container :list
   [container-type datatype elem-count-or-seq options]
   (make-list datatype elem-count-or-seq options))
-
-
-;; (defrecord TypedList [base-data datatype]
-;;   dtype-proto/PDatatype
-;;   (get-datatype [_] datatype)
-
-;;   dtype-proto/PCopyRawData
-;;   (copy-raw->item! [raw-data ary-target target-offset options]
-;;     (base/copy-raw->item! (unsigned/->typed-buffer raw-data) ary-target target-offset options))
-
-;;   dtype-proto/PPrototype
-;;   (from-prototype [item datatype shape]
-;;     (->TypedList (base/from-prototype base-data datatype shape) datatype))
-
-;;   dtype-proto/PClone
-;;   (clone [item datatype]
-;;     (let [retval (base/from-prototype item datatype (dtype/shape item))]
-;;       (dtype/copy! item retval)))
-
-;;   dtype-proto/PToBuffer
-;;   (->buffer-backing-store [item] (dtype-proto/->buffer-backing-store base-data))
-
-;;   dtype-proto/POffsetable
-;;   (offset-item [item offset]
-;;     (dtype-proto/offset-item (unsigned/->typed-buffer item) offset))
-
-;;   dtype-proto/PToArray
-;;   (->array [item]
-;;     (dtype-proto/->array (unsigned/->typed-buffer item)))
-;;   (->array-copy [item]
-;;     (dtype-proto/->array-copy (unsigned/->typed-buffer item)))
-
-;;   mp/PElementCount
-;;   (element-count [_] (mp/element-count base-data))
-
-;;   dtype-proto/PBuffer
-;;   (sub-buffer [buffer offset length]
-;;     (dtype-proto/sub-buffer (unsigned/->typed-buffer buffer) offset length))
-;;   (alias? [lhs-buffer rhs-buffer]
-;;     (dtype-proto/alias? (unsigned/->typed-buffer lhs-buffer) rhs-buffer))
-;;   (partially-alias? [lhs-buffer rhs-buffer]
-;;     (dtype-proto/partially-alias? (unsigned/->typed-buffer lhs-buffer) rhs-buffer))
-
-;;   PListConvertible
-;;   (->list-list-backing-store [item] (->list-list-backing-store base-data))
-
-
-;;   PDataMutate
-;;   (insert! [item idx value]
-;;     (insert! base-data idx (unsigned/jvm-cast value datatype)))
-;;   (append! [item value]
-;;     (append! base-data (unsigned/jvm-cast value datatype)))
-;;   (insert-constant! [item idx value n-elems]
-;;     (insert-constant! base-data idx (unsigned/jvm-cast value datatype) n-elems))
-;;   (insert-elems! [item idx elem-buf]
-;;     (insert-elems! base-data idx elem-buf))
-;;   (append-elems! [item elem-buf]
-;;     (append-elems! base-data elem-buf))
-;;   (remove-range! [item start-idx n-elems]
-;;     (remove-range! base-data start-idx n-elems)))
-
-
-;; (defn make-typed-list
-;;   "Make a 'list' datatype that supports unsigned types"
-;;   ([datatype elem-count-or-seq options]
-;;    ;;do conversions, load data
-;;    (-> (unsigned/make-typed-buffer datatype elem-count-or-seq options)
-;;        (dtype-proto/->buffer-backing-store)
-;;        (dtype-proto/->array)
-;;        (wrap-array)
-;;        (->TypedList datatype)))
-;;   ([datatype elem-count-or-seq]
-;;    (make-typed-list datatype elem-count-or-seq {})))

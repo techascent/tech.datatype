@@ -45,154 +45,38 @@
    unchecked?]
   `(if ~unchecked?
      (reify ~reader-type
+       (getDatatype [reader#] ~intermediate-datatype)
        (read [reader# idx#]
          (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx#
                                 (cls-type->pos-fn ~buffer-type ~buffer))
-             (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))
-       (readBlock [reader# ~'offset ~'dest]
-         (let [~'buf-pos (cls-type->pos-fn ~buffer-type ~buffer)
-               ~'dest-pos (datatype->pos-fn ~reader-datatype ~'dest)
-               ~'count (base/ecount ~'dest)]
-           ~(cond
-              ;;nio is fastest path
-              (and (nio-type? (resolve buffer-type))
-                   (= buffer-datatype (casting/datatype->host-datatype reader-datatype)))
-              `(fast-copy/copy! ~'dest (dtype-proto/sub-buffer ~buffer ~'offset ~'count))
-              (and (list-type? (resolve buffer-type))
-                   (= buffer-datatype (casting/datatype->host-datatype reader-datatype)))
-              `(if-let [ary-data# (dtype-proto/->sub-array ~'dest)]
-                 (.getElements ~buffer ~'offset
-                               (datatype->array-cast-fn ~buffer-datatype (:array-data ary-data#))
-                               (int (:offset ary-data#))
-                               (int (:length ary-data#)))
-                 (parallel/parallel-for
-                  idx# ~'count
-                  (datatype->write-fn
-                   ~reader-datatype ~'dest idx# ~'dest-pos
-                   (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer (+ ~'offset idx#) ~'dest-pos)
-                       (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))))
-              :else
-              `(parallel/parallel-for
-                idx# ~'count
-                (datatype->write-fn
-                 ~reader-datatype ~'dest idx# ~'dest-pos
-                 (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer (+ ~'offset idx#) ~'dest-pos)
-                     (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))))))
-       (readIndexes [reader# indexes# dest#]
-         (let [idx-pos# (.position indexes#)
-               dest-pos# (datatype->pos-fn ~reader-datatype dest#)
-               buf-pos# (cls-type->pos-fn ~buffer-type ~buffer)
-               n-elems# (base/ecount dest#)]
-           (parallel/parallel-for
-            idx#
-            n-elems#
-            (datatype->write-fn
-             ~reader-datatype dest# idx# dest-pos#
-             (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer (buf-get indexes# idx# idx-pos#) buf-pos#)
-                 (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))))))
+             (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))
      (reify ~reader-type
+       (getDatatype [reader#] ~intermediate-datatype)
        (read [reader# idx#]
          (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx#
                                 (cls-type->pos-fn ~buffer-type ~buffer))
-             (checked-full-read-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))
-       (readBlock [reader# ~'offset ~'dest]
-         (let [~'buf-pos (cls-type->pos-fn ~buffer-type ~buffer)
-               ~'dest-pos (datatype->pos-fn ~reader-datatype ~'dest)
-               ~'count (base/ecount ~'dest)]
-           ~(cond
-              ;;nio is fastest path
-              (and (nio-type? (resolve buffer-type))
-                   (= buffer-datatype reader-datatype))
-              `(fast-copy/copy! ~'dest (dtype-proto/sub-buffer ~buffer ~'offset ~'count))
-              (and (list-type? (resolve buffer-type))
-                   (= buffer-datatype reader-datatype))
-              `(if-let [ary-data# (dtype-proto/->sub-array ~'dest)]
-                 (.getElements ~buffer ~'offset
-                               (datatype->array-cast-fn ~buffer-datatype (:array-data ary-data#))
-                               (int (:offset ary-data#))
-                               (int (:length ary-data#)))
-                 (parallel/parallel-for
-                  idx# ~'count
-                  (datatype->write-fn
-                   ~reader-datatype ~'dest idx# ~'dest-pos
-                   (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer (+ ~'offset idx#) ~'dest-pos)
-                       (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))))
-              :else
-              `(parallel/parallel-for
-                idx# ~'count
-                (datatype->write-fn
-                 ~reader-datatype ~'dest idx# ~'dest-pos
-                 (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer (+ ~'offset idx#) ~'dest-pos)
-                     (checked-full-read-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))))))
-       (readIndexes [reader# indexes# dest#]
-         (let [idx-pos# (.position indexes#)
-               dest-pos# (datatype->pos-fn ~reader-datatype dest#)
-               buf-pos# (cls-type->pos-fn ~buffer-type ~buffer)
-               n-elems# (base/ecount dest#)]
-           (parallel/parallel-for
-            idx#
-            n-elems#
-            (datatype->write-fn
-             ~reader-datatype dest# idx# dest-pos#
-             (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer (buf-get indexes# idx# idx-pos#) buf-pos#)
-                 (checked-full-read-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype)))))))))
+             (checked-full-read-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))))
 
 
 (defmacro make-marshalling-reader
   [src-reader src-dtype intermediate-dtype result-dtype dst-reader-type unchecked?]
   `(if ~unchecked?
      (reify ~dst-reader-type
+       (getDatatype [reader#] ~intermediate-dtype)
        (read [item# idx#]
          (-> (.read ~src-reader idx#)
-             (unchecked-full-cast ~src-dtype ~intermediate-dtype ~result-dtype)))
-       (readBlock [item# offset# ~'dest]
-         (let [~'temp-dest ~(if (= (casting/datatype->host-datatype src-dtype)
-                                   (casting/datatype->host-datatype result-dtype))
-                              `~'dest
-                              `(typecast/datatype->buffer-cast-fn
-                                ~src-dtype (typecast/make-interface-buffer-type
-                                            ~src-dtype (mp/element-count ~'dest))))]
-           (.readBlock ~src-reader offset# ~'temp-dest)
-           ~(if (= (casting/datatype->host-datatype src-dtype)
-                   (casting/datatype->host-datatype result-dtype))
-              `~'temp-dest
-              `(dtype-io/dense-copy! ~'dest ~'temp-dest ~unchecked? true))))
-       (readIndexes [item# indexes# ~'dest]
-         (let [~'temp-dest ~(if (= (casting/datatype->host-datatype src-dtype)
-                                   (casting/datatype->host-datatype result-dtype))
-                              `~'dest
-                              `(typecast/datatype->buffer-cast-fn
-                                ~src-dtype (typecast/make-interface-buffer-type
-                                            ~src-dtype (mp/element-count ~'dest))))]
-           (.readIndexes ~src-reader indexes# ~'temp-dest)
-           ~(if (= (casting/datatype->host-datatype src-dtype)
-                   (casting/datatype->host-datatype result-dtype))
-              `~'temp-dest
-              `(dtype-io/dense-copy! ~'dest ~'temp-dest ~unchecked? true)))))
+             (unchecked-full-cast ~src-dtype ~intermediate-dtype ~result-dtype))))
      (reify ~dst-reader-type
+       (getDatatype [reader#] ~intermediate-dtype)
        (read [item# idx#]
          (-> (.read ~src-reader idx#)
-             (checked-full-read-cast ~src-dtype ~intermediate-dtype ~result-dtype)))
-       (readBlock [item# offset# ~'dest]
-         (let [~'temp-dest (typecast/datatype->buffer-cast-fn
-                            ~src-dtype (typecast/make-interface-buffer-type
-                                        ~src-dtype (mp/element-count ~'dest)))]
-           (.readBlock ~src-reader offset# ~'temp-dest)
-           (dtype-io/dense-copy! ~'dest ~'temp-dest ~unchecked? true)))
-       (readIndexes [item# indexes# ~'dest]
-         (let [~'temp-dest (typecast/datatype->buffer-cast-fn
-                            ~src-dtype (typecast/make-interface-buffer-type
-                                        ~src-dtype (mp/element-count ~'dest)))]
-           (.readIndexes ~src-reader indexes# ~'temp-dest)
-           (dtype-io/dense-copy! ~'dest ~'temp-dest ~unchecked? true))))))
+             (checked-full-read-cast ~src-dtype ~intermediate-dtype ~result-dtype))))))
 
 
 (defmacro extend-reader-type
   [reader-type datatype]
   `(clojure.core/extend
        ~reader-type
-     dtype-proto/PDatatype
-     {:get-datatype (fn [_#] ~datatype)}
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# dtype# unchecked?#]

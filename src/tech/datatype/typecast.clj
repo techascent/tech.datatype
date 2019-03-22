@@ -15,6 +15,12 @@
            [com.sun.jna Pointer]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
+           [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
+           [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
+           [it.unimi.dsi.fastutil.ints IntList IntArrayList]
+           [it.unimi.dsi.fastutil.longs LongList LongArrayList]
+           [it.unimi.dsi.fastutil.floats FloatList FloatArrayList]
+           [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
            [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
            [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]))
 
@@ -318,3 +324,26 @@
      :boolean (partial dtype-proto/make-container :list :boolean)
      :object (partial dtype-proto/make-container :list :object))
    elem-count-or-seq options))
+
+
+(defn byte-list-cast ^ByteList [item] item)
+(defn short-list-cast ^ShortList [item] item)
+(defn int-list-cast ^IntList [item] item)
+(defn long-list-cast ^LongList [item] item)
+(defn float-list-cast ^FloatList [item] item)
+(defn double-list-cast ^DoubleList [item] item)
+(defn boolean-list-cast ^BooleanList [item] item)
+(defn object-list-cast ^ObjectList [item] item)
+
+
+(defmacro datatype->list-cast-fn
+  [datatype item]
+  (case datatype
+    :int8 `(byte-list-cast ~item)
+    :int16 `(short-list-cast ~item)
+    :int32 `(int-list-cast ~item)
+    :int64 `(long-list-cast ~item)
+    :float32 `(float-list-cast ~item)
+    :float64 `(double-list-cast ~item)
+    :boolean `(boolean-list-cast ~item)
+    :object `(object-list-cast ~item)))

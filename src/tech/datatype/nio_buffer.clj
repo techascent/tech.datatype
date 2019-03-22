@@ -62,7 +62,6 @@
 
 
 
-
 (defmacro implement-buffer-type
   [buffer-class datatype]
   `(clojure.core/extend
@@ -98,6 +97,32 @@
       :limit (fn [item#] (.limit (datatype->buffer-cast-fn ~datatype item#)))
       :array-backed? (fn [item#] (not (.isDirect (datatype->buffer-cast-fn
                                                   ~datatype item#))))}
+
+     dtype-proto/PSetConstant
+     {:set-constant!
+      (fn [item# offset# value# elem-count#]
+        (let [item# (datatype->buffer-cast-fn ~datatype item#)
+              offset# (int offset#)
+              elem-count# (int elem-count#)
+              value# (casting/cast value# ~datatype)
+              zero-val# (casting/cast 0 ~datatype)]
+          (if (or (= value# zero-val#)
+                  (= ~datatype :int8))
+            (writer/memset (dtype-proto/sub-buffer item# offset# elem-count#)
+                           (int value#)
+                           (* elem-count# (casting/numeric-byte-width ~datatype)))
+            (let [buf-pos# (.position item#)]
+              (parallel/parallel-for
+               idx# elem-count#
+               (buf-put item# (+ idx# offset#) buf-pos# value#))))))}
+
+     dtype-proto/PWriteIndexes
+     {:write-indexes!
+      (fn [item# indexes# values# options#]
+        (let [values# (if-not (and (= ~datatype (dtype-proto/get-datatype values#))
+                                   (dtype-proto/->)))])
+        )
+      }
 
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]

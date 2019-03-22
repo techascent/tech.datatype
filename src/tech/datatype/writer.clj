@@ -62,115 +62,14 @@
           (cls-type->pos-fn ~buffer-type ~buffer)
           (unchecked-full-cast value# ~writer-datatype
                                ~intermediate-datatype
-                               ~buffer-datatype)))
-       (writeConstant [writer# ~'offset value# ~'n-elems]
-         (let [~'value (unchecked-full-cast value# ~writer-datatype
-                                            ~intermediate-datatype
-                                            ~buffer-datatype)]
-           ~(cond
-              (nio-type? (resolve buffer-type))
-              `(if (or (= ~'value (casting/datatype->unchecked-cast-fn :unknown ~buffer-datatype 0))
-                       (= :int8 ~buffer-datatype))
-                 (memset (dtype-proto/sub-buffer ~buffer ~'offset ~'n-elems)
-                         (int ~'value) (* ~'n-elems (casting/numeric-byte-width
-                                                     ~buffer-datatype)))
-                 (let [pos# (+ (.position ~buffer) ~'offset)]
-                   (parallel/parallel-for
-                    idx# ~'n-elems
-                    (buf-put ~buffer idx# pos# ~'value))))
-              (list-type? (resolve buffer-type))
-              `(parallel/parallel-for
-                idx# ~'n-elems
-                (.set ~buffer (+ ~'offset idx#) ~'value))
-              :else
-              (throw (ex-info (format "Unrecognized datatype %s" (type buffer-type)) {})))))
-       (writeBlock [writer# ~'offset ~'values]
-         (let [~'buf-pos (cls-type->pos-fn ~buffer-type ~buffer)
-               ~'values-pos (datatype->pos-fn ~writer-datatype ~'values)
-               ~'count (base/ecount ~'values)]
-
-           ~(if (and (nio-type? (resolve buffer-type))
-                     (= buffer-datatype (casting/datatype->host-type writer-datatype)))
-
-              `(fast-copy/copy! (dtype-proto/sub-buffer ~buffer ~'offset ~'count)
-                                ~'values)
-              `(parallel/parallel-for
-                idx# ~'count
-                (cls-type->write-fn ~buffer-type ~buffer (+ ~'offset idx#) ~'buf-pos
-                                    (-> (datatype->read-fn ~writer-datatype ~'values idx# ~'values-pos)
-                                        (unchecked-full-cast ~writer-datatype
-                                                             ~intermediate-datatype
-                                                             ~buffer-datatype)))))))
-       (writeIndexes [writer# indexes# values#]
-         (let [n-elems# (base/ecount indexes#)
-               buf-pos# (cls-type->pos-fn ~buffer-type ~buffer)
-               idx-pos# (.position indexes#)
-               val-pos# (datatype->pos-fn ~writer-datatype values#)]
-           (parallel/parallel-for
-            idx#
-            n-elems#
-            (cls-type->write-fn ~buffer-type ~buffer (buf-get indexes# idx-pos# idx#) buf-pos#
-                                (-> (datatype->read-fn ~writer-datatype values# idx# val-pos#)
-                                    (unchecked-full-cast ~writer-datatype
-                                                         ~intermediate-datatype
-                                                         ~buffer-datatype)))))))
+                               ~buffer-datatype))))
      (reify ~writer-type
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx#
                              (cls-type->pos-fn ~buffer-type ~buffer)
                              (checked-full-write-cast value# ~writer-datatype
                                                   ~intermediate-datatype
-                                                  ~buffer-datatype)))
-       (writeConstant [writer# ~'offset value# ~'n-elems]
-         (let [~'value (checked-full-write-cast value# ~writer-datatype
-                                            ~intermediate-datatype
-                                            ~buffer-datatype)]
-           ~(cond
-              (nio-type? (resolve buffer-type))
-              `(if (or (= ~'value (casting/datatype->unchecked-cast-fn :unknown ~buffer-datatype 0))
-                       (= :int8 ~buffer-datatype))
-                 (memset (dtype-proto/sub-buffer ~buffer ~'offset ~'n-elems)
-                         (int ~'value) (* ~'n-elems (casting/numeric-byte-width
-                                                     ~buffer-datatype)))
-                 (let [pos# (+ (.position ~buffer) ~'offset)]
-                   (parallel/parallel-for
-                    idx# ~'n-elems
-                    (buf-put ~buffer idx# pos# ~'value))))
-              (list-type? (resolve buffer-type))
-              `(parallel/parallel-for
-                idx# ~'n-elems
-                (.set ~buffer (+ ~'offset idx#) ~'value))
-              :else
-              (throw (ex-info (format "Unrecognized datatype %s" (type buffer-type)) {})))))
-       (writeBlock [writer# ~'offset ~'values]
-         (let [~'buf-pos (cls-type->pos-fn ~buffer-type ~buffer)
-               ~'values-pos (datatype->pos-fn ~writer-datatype ~'values)
-               ~'count (base/ecount ~'values)]
-           ~(if (and (nio-type? (resolve buffer-type))
-                     (= buffer-datatype writer-datatype)
-                     (= buffer-datatype intermediate-datatype))
-              `(fast-copy/copy! (dtype-proto/sub-buffer ~buffer ~'offset ~'count)
-                                ~'values)
-              `(parallel/parallel-for
-                idx# ~'count
-                (cls-type->write-fn ~buffer-type ~buffer (+ ~'offset idx#) ~'buf-pos
-                                    (-> (datatype->read-fn ~writer-datatype ~'values idx# ~'values-pos)
-                                        (checked-full-write-cast ~writer-datatype
-                                                                 ~intermediate-datatype
-                                                                 ~buffer-datatype)))))))
-       (writeIndexes [writer# indexes# values#]
-         (let [n-elems# (base/ecount indexes#)
-               buf-pos# (cls-type->pos-fn ~buffer-type ~buffer)
-               idx-pos# (.position indexes#)
-               val-pos# (datatype->pos-fn ~writer-datatype values#)]
-           (parallel/parallel-for
-            idx#
-            n-elems#
-            (cls-type->write-fn ~buffer-type ~buffer (buf-get indexes# idx-pos# idx#) buf-pos#
-                                (-> (datatype->read-fn ~writer-datatype values# idx# val-pos#)
-                                    (checked-full-write-cast ~writer-datatype
-                                                         ~intermediate-datatype
-                                                         ~buffer-datatype)))))))))
+                                                  ~buffer-datatype))))))
 
 
 (defmacro make-marshalling-writer
@@ -181,47 +80,11 @@
        (getDatatype [item#] ~intermediate-dtype)
        (write[item# idx# value#]
          (.write ~dst-writer idx#
-                 (unchecked-full-cast value# ~src-dtype ~intermediate-dtype ~result-dtype)))
-       (writeConstant [item# idx# value# count#]
-         (.writeConstant ~dst-writer idx#
-                         (unchecked-full-cast value# ~src-dtype ~intermediate-dtype ~result-dtype)
-                         count#))
-       (writeBlock [item# offset# ~'values]
-         (let [n-elems# (ecount ~'values)
-               dst-values# (typecast/datatype->buffer-cast-fn
-                            ~result-dtype (dtype-io/make-transfer-buffer
-                                           ~'values ~intermediate-dtype ~result-dtype
-                                           false ~unchecked?))]
-           (.writeBlock ~dst-writer offset# dst-values#)))
-       (writeIndexes [item# indexes# ~'values]
-         (let [n-elems# (ecount ~'values)
-               dst-values# (typecast/datatype->buffer-cast-fn
-                            ~result-dtype (dtype-io/make-transfer-buffer
-                                           ~'values ~intermediate-dtype ~result-dtype
-                                           false ~unchecked?))]
-           (.writeIndexes ~dst-writer indexes# dst-values#))))
+                 (unchecked-full-cast value# ~src-dtype ~intermediate-dtype ~result-dtype))))
      (reify ~src-writer-type
        (write[item# idx# value#]
          (.write ~dst-writer idx#
-                 (checked-full-write-cast value# ~src-dtype ~intermediate-dtype ~result-dtype)))
-       (writeConstant [item# idx# value# count#]
-         (.writeConstant ~dst-writer idx#
-                         (checked-full-write-cast value# ~src-dtype ~intermediate-dtype ~result-dtype)
-                         count#))
-       (writeBlock [item# offset# ~'values]
-         (let [n-elems# (ecount ~'values)
-               dst-values# (typecast/datatype->buffer-cast-fn
-                            ~result-dtype (dtype-io/make-transfer-buffer
-                                           ~'values ~intermediate-dtype ~result-dtype
-                                           false ~unchecked?))]
-           (.writeBlock ~dst-writer offset# dst-values#)))
-       (writeIndexes [item# indexes# ~'values]
-         (let [n-elems# (ecount ~'values)
-               dst-values# (typecast/datatype->buffer-cast-fn
-                            ~result-dtype (dtype-io/make-transfer-buffer
-                                           ~'values ~intermediate-dtype ~result-dtype
-                                           false ~unchecked?))]
-           (.writeIndexes ~dst-writer indexes# dst-values#))))))
+                 (checked-full-write-cast value# ~src-dtype ~intermediate-dtype ~result-dtype))))))
 
 
 

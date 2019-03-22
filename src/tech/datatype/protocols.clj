@@ -26,6 +26,23 @@
   "Clone an object.  Implemented generically for all objects."
   (clone [item datatype]))
 
+
+(defprotocol PSetConstant
+  (set-constant! [item offset value elem-count]))
+
+
+(defprotocol PWriteBlock
+  (write-block! [item offset values options]))
+
+(defprotocol PWriteIndexes
+  (write-indexes! [item indexes values options]))
+
+(defprotocol PReadBlock
+  (read-block! [item offset values options]))
+
+(defprotocol PReadIndexes
+  (read-indexes! [item indexes values options]))
+
 (defprotocol PToNioBuffer
   "Take a 'thing' and convert it to a nio buffer.  Only valid if the thing
   shares the backing store with the buffer.  Result may not exactly

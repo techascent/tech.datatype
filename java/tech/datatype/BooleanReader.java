@@ -6,6 +6,4 @@ import it.unimi.dsi.fastutil.booleans.BooleanList;
 public interface BooleanReader extends Datatype
 {
   boolean read(int idx);
-  void readBlock(int offset, BooleanList destination);
-  void readIndexes(IntBuffer indexes, BooleanList destination);
 };

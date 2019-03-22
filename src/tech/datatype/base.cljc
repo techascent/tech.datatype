@@ -6,6 +6,7 @@
   (:require [tech.datatype.base-macros :as base-macros]
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.casting :as casting]
+            [tech.datatype.typecast :as typecast]
             [tech.datatype.io :as dtype-io]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix :as m])
@@ -37,8 +38,7 @@
           offset value))
 
 (defn set-constant! [item offset value elem-count]
-  (.writeConstant ^ObjectWriter (dtype-proto/->writer-of-type item :object false)
-                  offset value elem-count))
+  (dtype-proto/set-constant! item offset value elem-count))
 
 (defn get-value [item offset]
   (.read ^ObjectReader (dtype-proto/->reader-of-type item :object false) offset))
@@ -165,23 +165,30 @@
               (throw (ex-info "Generic index access must be 0"
                               {:item item
                                :idx idx})))
-            item)))
-      (readBlock [item-reader off dest]
-        (let [n-elems (.size dest)]
-          (c-for [idx (int 0) (< idx n-elems) (inc idx)]
-                 (.set dest idx (.read item-reader (+ off idx))))
-          dest))
-      (readIndexes [item-reader idx-buf dest]
-        (let [n-elems (ecount idx-buf)
-              buf-pos (.position idx-buf)]
-          (c-for [idx (int 0) (< idx n-elems) (inc idx)]
-                 (.set dest idx (.read item-reader
-                                       (.get idx-buf
-                                             (+ idx buf-pos))))))
-        dest)))
+            item)))))
   (->reader-of-type [item datatype unchecked?]
     (-> (dtype-proto/->reader-of-type item :object unchecked?)
         (dtype-proto/->reader-of-type datatype unchecked?)))
+
+  dtype-proto/PSetConstant
+  (set-constant! [item offset value n-elems]
+    (let [n-elems (int n-elems)
+          offset (int offset)
+          item-dtype (dtype-proto/get-datatype item)
+          value (casting/cast value item-dtype)
+          ^ObjectWriter writer (dtype-proto/->writer-of-type item :object false)]
+      (c-for [idx (int 0) (< idx n-elems) (inc idx)]
+             (.write writer idx value))))
+
+
+  dtype-proto/PWriteBlock
+  (write-block! [item offset values options]
+    (copy! values 0 item offset (ecount values) options))
+
+  dtype-proto/PReadBlock
+  (read-block! [item offset values options]
+    (copy! item offset values 0 (ecount values) options))
+
   dtype-proto/PClone
   (clone [item datatype]
     (copy! item (dtype-proto/from-prototype item datatype

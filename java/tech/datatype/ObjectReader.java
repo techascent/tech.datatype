@@ -1,9 +1,7 @@
 package tech.datatype;
 
-import java.util.*;
-import java.nio.*;
 
-public interface ObjectReader extends Datatype
+public interface ObjectReader extends IOBase
 {
   Object read(int idx);
 };

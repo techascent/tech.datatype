@@ -1,6 +1,6 @@
 (ns tech.datatype.protocols
   (:require [clojure.core.matrix.protocols :as mp])
-  (:import [tech.datatype Datatype]))
+  (:import [tech.datatype Datatype Countable]))
 
 (set! *warn-on-reflection* true)
 
@@ -10,6 +10,10 @@
 (extend-type Datatype
   PDatatype
   (get-datatype [item] (.getDatatype item)))
+
+(extend-type Countable
+  mp/PElementCount
+  (element-count [item] (.size item)))
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."

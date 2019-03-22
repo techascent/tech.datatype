@@ -1,8 +1,7 @@
 package tech.datatype;
 
-import java.nio.*;
 
-public interface FloatWriter extends Datatype
+public interface FloatWriter extends IOBase
 {
   void write(int idx, float value);
 };

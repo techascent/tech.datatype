@@ -1,8 +1,7 @@
 package tech.datatype;
 
-import java.nio.*;
 
-public interface LongWriter extends Datatype
+public interface LongWriter extends IOBase
 {
   void write(int idx, long value);
 };

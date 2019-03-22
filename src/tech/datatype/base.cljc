@@ -75,6 +75,26 @@
    (dtype-proto/make-container container-type datatype elem-seq {})))
 
 
+(defn write-block!
+  [item offset values & [options]]
+  (dtype-proto/write-block! item offset values options))
+
+
+(defn read-block!
+  [item offset values & [options]]
+  (dtype-proto/read-block! item offset values options))
+
+
+(defn write-indexes!
+  [item indexes values & [options]]
+  (dtype-proto/write-indexes! item indexes values options))
+
+
+(defn read-indexes!
+  [item indexes values & [options]]
+  (dtype-proto/read-indexes! item indexes values options))
+
+
 (defn copy!
   "copy elem-count src items to dest items.  Options may contain unchecked in which you
   get unchecked operations."
@@ -83,9 +103,7 @@
    (base-macros/check-range dest dest-offset elem-count)
    (let [src (dtype-proto/sub-buffer src src-offset elem-count)
          dest (dtype-proto/sub-buffer dest dest-offset elem-count)]
-     (dtype-io/dense-copy! dest src elem-count
-                           (:unchecked? options)
-                           (:parallel? options)))
+     (dtype-io/dense-copy! dest src (:unchecked? options)))
    dest)
   ([src src-offset dst dst-offset elem-count]
    (copy! src src-offset dst dst-offset elem-count {:unchecked? false}))

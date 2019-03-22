@@ -1,8 +1,7 @@
 package tech.datatype;
 
-import java.nio.*;
 
-public interface DoubleReader extends Datatype
+public interface DoubleReader extends IOBase
 {
   double read(int idx);
 }

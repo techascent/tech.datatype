@@ -5,7 +5,7 @@
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto]
-            [tech.datatype.typecast :refer :all]
+            [tech.datatype.typecast :refer :all :as typecast]
             [tech.datatype.nio-access
              :refer [buf-put buf-get
                      datatype->pos-fn
@@ -19,8 +19,9 @@
                      cls-type->write-fn
                      cls-type->pos-fn]]
             [clojure.core.matrix.protocols :as mp]
-            [tech.datatype.reader :refer [make-buffer-reader] :as reader]
-            [tech.datatype.writer :refer [make-buffer-writer] :as writer]
+            [tech.datatype.reader :as reader]
+            [tech.datatype.writer :as writer]
+            [tech.datatype.fast-copy :as fast-copy]
             [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel]
             [tech.datatype.array])
@@ -59,6 +60,14 @@
            (< rhs-off (+ lhs-off lhs-len)))
       (and (>= lhs-off rhs-off)
            (< lhs-off (+ rhs-off rhs-len)))))
+
+
+(jna/def-jna-fn "c" memset
+  "Set a block of memory to a value"
+  Pointer
+  [data ensure-ptr-like]
+  [val int]
+  [num-bytes int])
 
 
 
@@ -108,9 +117,9 @@
               zero-val# (casting/cast 0 ~datatype)]
           (if (or (= value# zero-val#)
                   (= ~datatype :int8))
-            (writer/memset (dtype-proto/sub-buffer item# offset# elem-count#)
-                           (int value#)
-                           (* elem-count# (casting/numeric-byte-width ~datatype)))
+            (memset (dtype-proto/sub-buffer item# offset# elem-count#)
+                    (int value#)
+                    (* elem-count# (casting/numeric-byte-width ~datatype)))
             (let [buf-pos# (.position item#)]
               (parallel/parallel-for
                idx# elem-count#
@@ -171,61 +180,16 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
-          (case writer-datatype#
-            :int8 (make-buffer-writer ByteWriter ~buffer-class ~'buffer :int8
-                                      :int8 ~datatype unchecked?#)
-            :uint8 (make-buffer-writer ShortWriter ~buffer-class ~'buffer :int16
-                                       :uint8 ~datatype unchecked?#)
-            :int16 (make-buffer-writer ShortWriter ~buffer-class ~'buffer :int16
-                                       :int16 ~datatype unchecked?#)
-            :uint16 (make-buffer-writer IntWriter ~buffer-class ~'buffer :int32
-                                        :uint16 ~datatype unchecked?#)
-            :int32 (make-buffer-writer IntWriter ~buffer-class ~'buffer :int32
-                                       :int32 ~datatype unchecked?#)
-            :uint32 (make-buffer-writer LongWriter ~buffer-class ~'buffer :int64
-                                        :uint32 ~datatype unchecked?#)
-            :int64 (make-buffer-writer LongWriter ~buffer-class ~'buffer :int64
-                                       :int64 ~datatype unchecked?#)
-            :uint64 (make-buffer-writer LongWriter ~buffer-class ~'buffer :int64
-                                        :int64 ~datatype unchecked?#)
-            :float32 (make-buffer-writer FloatWriter ~buffer-class ~'buffer :float32
-                                         :float32 ~datatype unchecked?#)
-            :float64 (make-buffer-writer DoubleWriter ~buffer-class ~'buffer :float64
-                                         :float64 ~datatype unchecked?#)
-            :boolean (make-buffer-writer BooleanWriter ~buffer-class ~'buffer :boolean
-                                         :boolean ~datatype unchecked?#)
-            :object (make-buffer-writer ObjectWriter ~buffer-class ~'buffer :object
-                                         :object ~datatype unchecked?#))))}
+        (if-let [writer-fn# (get writer/buffer-writer-table [~datatype writer-datatype#])]
+          (writer-fn# item# unchecked?#)
+          (throw (ex-info (format "Failed to find writer %s->%s" ~datatype writer-datatype#) {}))))}
+
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (let [~'buffer (datatype->buffer-cast-fn ~datatype item#)]
-          (case reader-datatype#
-            :int8 (make-buffer-reader ByteReader ~buffer-class ~'buffer :int8
-                                      :int8 ~datatype unchecked?#)
-            :uint8 (make-buffer-reader ShortReader ~buffer-class ~'buffer :int16
-                                       :uint8 ~datatype unchecked?#)
-            :int16 (make-buffer-reader ShortReader ~buffer-class ~'buffer :int16
-                                       :int16 ~datatype unchecked?#)
-            :uint16 (make-buffer-reader IntReader ~buffer-class ~'buffer :int32
-                                        :uint16 ~datatype unchecked?#)
-            :int32 (make-buffer-reader IntReader ~buffer-class ~'buffer :int32
-                                       :int32 ~datatype unchecked?#)
-            :uint32 (make-buffer-reader LongReader ~buffer-class ~'buffer :int64
-                                        :uint32 ~datatype unchecked?#)
-            :int64 (make-buffer-reader LongReader ~buffer-class ~'buffer :int64
-                                       :int64 ~datatype unchecked?#)
-            :uint64 (make-buffer-reader LongReader ~buffer-class ~'buffer :int64
-                                        :int64 ~datatype unchecked?#)
-            :float32 (make-buffer-reader FloatReader ~buffer-class ~'buffer :float32
-                                         :float32 ~datatype unchecked?#)
-            :float64 (make-buffer-reader DoubleReader ~buffer-class ~'buffer :float64
-                                         :float64 ~datatype unchecked?#)
-            :boolean (make-buffer-reader BooleanReader ~buffer-class ~'buffer :boolean
-                                         :boolean ~datatype unchecked?#)
-            :object (make-buffer-reader ObjectReader ~buffer-class ~'buffer :object
-                                        :object ~datatype unchecked?#))))}))
+        (if-let [reader-fn# (get reader/buffer-reader-table [~datatype reader-datatype#])]
+          (reader-fn# item# unchecked?#)
+          (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}))
 
 
 (implement-buffer-type ByteBuffer :int8)

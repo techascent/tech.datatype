@@ -11,6 +11,7 @@
                                               datatype->read-fn
                                               datatype->write-fn
                                               datatype->list-read-fn]]
+            [tech.datatype.mutable :as mutable]
             [clojure.core.matrix.protocols :as mp]
             [tech.parallel :as parallel])
   (:import [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
@@ -183,16 +184,12 @@
       :->array-copy (fn [item#]
                       (.toArray (datatype->array-list-cast-fn ~datatype item#)))}
      dtype-proto/PToWriter
-     {:->object-writer (fn [item#] (writer/->marshalling-writer item# :object true))
-
-      :->writer-of-type (fn [item# datatype# unchecked?#]
+     {:->writer-of-type (fn [item# datatype# unchecked?#]
                           (-> (dtype-proto/->buffer-backing-store item#)
                               (dtype-proto/->writer-of-type datatype# unchecked?#)))}
 
      dtype-proto/PToReader
-     {:->object-reader (fn [item#] (reader/->marshalling-reader item# :object true))
-
-      :->reader-of-type (fn [item# datatype# unchecked?#]
+     {:->reader-of-type (fn [item# datatype# unchecked?#]
                           (-> (dtype-proto/->buffer-backing-store item#)
                               (dtype-proto/->reader-of-type datatype# unchecked?#)))}))
 
@@ -271,81 +268,25 @@
                       (.toArray (datatype->list-cast-fn ~datatype item#)))}
      dtype-proto/PToWriter
      {:->writer-of-type
-      (fn [item# ~'writer-datatype ~'unchecked?]
-        (let [~'item (datatype->list-cast-fn ~datatype item#)]
-          ~(if (casting/numeric-type? datatype)
-             `(-> ~(case datatype
-                     :int8 `(make-buffer-writer ByteWriter ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :int16 `(make-buffer-writer ShortWriter ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :int32 `(make-buffer-writer IntWriter ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :int64 `(make-buffer-writer LongWriter ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :float32 `(make-buffer-writer FloatWriter ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :float64 `(make-buffer-writer DoubleWriter ~typename ~'item ~datatype ~datatype ~datatype true))
-                  (dtype-proto/->reader-of-type ~'writer-datatype ~'unchecked?))
-             `(case ~'writer-datatype
-                :int8 (make-buffer-writer ByteWriter ~typename ~'item :int8
-                                          :int8 ~datatype ~'unchecked?)
-                :uint8 (make-buffer-writer ShortWriter ~typename ~'item :int16
-                                           :uint8 ~datatype ~'unchecked?)
-                :int16 (make-buffer-writer ShortWriter ~typename ~'item :int16
-                                           :int16 ~datatype ~'unchecked?)
-                :uint16 (make-buffer-writer IntWriter ~typename ~'item :int32
-                                            :uint16 ~datatype ~'unchecked?)
-                :int32 (make-buffer-writer IntWriter ~typename ~'item :int32
-                                           :int32 ~datatype ~'unchecked?)
-                :uint32 (make-buffer-writer LongWriter ~typename ~'item :int64
-                                            :uint32 ~datatype ~'unchecked?)
-                :int64 (make-buffer-writer LongWriter ~typename ~'item :int64
-                                           :int64 ~datatype ~'unchecked?)
-                :uint64 (make-buffer-writer LongWriter ~typename ~'item :int64
-                                            :int64 ~datatype ~'unchecked?)
-                :float32 (make-buffer-writer FloatWriter ~typename ~'item :float32
-                                             :float32 ~datatype ~'unchecked?)
-                :float64 (make-buffer-writer DoubleWriter ~typename ~'item :float64
-                                             :float64 ~datatype ~'unchecked?)
-                :boolean (make-buffer-writer BooleanWriter ~typename ~'item :boolean
-                                             :boolean ~datatype ~'unchecked?)
-                :object (make-buffer-writer ObjectWriter ~typename ~'item :object
-                                            :object ~datatype ~'unchecked?)))))}
+      (fn [item# writer-datatype# unchecked?#]
+        (if-let [writer-fn# (get writer/list-writer-table [~datatype writer-datatype#])]
+          (writer-fn# item# unchecked?#)
+          (throw (ex-info (format "Failed to find writer %s->%s" ~datatype writer-datatype#) {}))))}
 
      dtype-proto/PToReader
      {:->reader-of-type
-      (fn [item# ~'reader-datatype ~'unchecked?]
-        (let [~'item (datatype->list-cast-fn ~datatype item#)]
-          ~(if (casting/numeric-type? datatype)
-             `(-> ~(case datatype
-                     :int8 `(make-buffer-reader ByteReader ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :int16 `(make-buffer-reader ShortReader ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :int32 `(make-buffer-reader IntReader ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :int64 `(make-buffer-reader LongReader ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :float32 `(make-buffer-reader FloatReader ~typename ~'item ~datatype ~datatype ~datatype true)
-                     :float64 `(make-buffer-reader DoubleReader ~typename ~'item ~datatype ~datatype ~datatype true))
-                  (dtype-proto/->reader-of-type ~'reader-datatype ~'unchecked?))
-             `(case ~'reader-datatype
-                :int8 (make-buffer-reader ByteReader ~typename ~'item :int8
-                                          :int8 ~datatype ~'unchecked?)
-                :uint8 (make-buffer-reader ShortReader ~typename ~'item :int16
-                                           :uint8 ~datatype ~'unchecked?)
-                :int16 (make-buffer-reader ShortReader ~typename ~'item :int16
-                                           :int16 ~datatype ~'unchecked?)
-                :uint16 (make-buffer-reader IntReader ~typename ~'item :int32
-                                            :uint16 ~datatype ~'unchecked?)
-                :int32 (make-buffer-reader IntReader ~typename ~'item :int32
-                                           :int32 ~datatype ~'unchecked?)
-                :uint32 (make-buffer-reader LongReader ~typename ~'item :int64
-                                            :uint32 ~datatype ~'unchecked?)
-                :int64 (make-buffer-reader LongReader ~typename ~'item :int64
-                                           :int64 ~datatype ~'unchecked?)
-                :uint64 (make-buffer-reader LongReader ~typename ~'item :int64
-                                            :int64 ~datatype ~'unchecked?)
-                :float32 (make-buffer-reader FloatReader ~typename ~'item :float32
-                                             :float32 ~datatype ~'unchecked?)
-                :float64 (make-buffer-reader DoubleReader ~typename ~'item :float64
-                                             :float64 ~datatype ~'unchecked?)
-                :boolean (make-buffer-reader BooleanReader ~typename ~'item :boolean
-                                             :boolean ~datatype ~'unchecked?)
-                :object (make-buffer-reader ObjectReader ~typename ~'item :object
-                                            :object ~datatype ~'unchecked?)))))}))
+      (fn [item# reader-datatype# unchecked?#]
+        (if-let [reader-fn# (get reader/list-reader-table [~datatype reader-datatype#])]
+          (reader-fn# item# unchecked?#)
+          (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}
+
+     dtype-proto/PToMutable
+     {:->mutable-of-type
+      (fn [list-item# mut-dtype# unchecked?#]
+        (if-let [mutable-fn# (get mutable/list-mutable-table [~datatype mut-dtype#])]
+          (mutable-fn# list-item# unchecked?#)
+          (throw (ex-info (format "Failed to find mutable %s->%s" ~datatype mut-dtype#) {}))))}))
+
 
 (extend-list ByteList :int8)
 (extend-list ShortList :int16)

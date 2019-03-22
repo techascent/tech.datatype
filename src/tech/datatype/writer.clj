@@ -17,6 +17,7 @@
             [tech.parallel :as parallel]
             [tech.jna :as jna]
             [clojure.core.matrix :as m]
+            [clojure.core.matrix.protocols :as mp]
             [tech.datatype.typecast :refer :all]
             [tech.datatype.fast-copy :as fast-copy]
             [tech.datatype.io :as dtype-io]
@@ -24,32 +25,26 @@
   (:import [tech.datatype ObjectWriter ByteWriter
             ShortWriter IntWriter LongWriter
             FloatWriter DoubleWriter BooleanWriter]
+           [java.nio Buffer ByteBuffer ShortBuffer
+            IntBuffer LongBuffer FloatBuffer DoubleBuffer]
+           [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
+           [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
+           [it.unimi.dsi.fastutil.ints IntList IntArrayList]
+           [it.unimi.dsi.fastutil.longs LongList LongArrayList]
+           [it.unimi.dsi.fastutil.floats FloatList FloatArrayList]
+           [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
+           [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
+           [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]
            [com.sun.jna Pointer]))
 
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(defn ecount
-  "Type hinted ecount."
-  ^long [item]
-  (m/ecount item))
-
-
-(declare ->marshalling-writer)
-
-
-(jna/def-jna-fn "c" memset
-  "Set a block of memory to a value"
-  Pointer
-  [data ensure-ptr-like]
-  [val int]
-  [num-bytes int])
-
 
 (defmacro make-buffer-writer
   "Make a writer from a nio buffer or a fastutil list backing store.  "
-  [writer-type buffer-type buffer
+  [writer-type buffer-type buffer buffer-pos
    writer-datatype
    intermediate-datatype
    buffer-datatype
@@ -57,19 +52,63 @@
   `(if ~unchecked?
      (reify ~writer-type
        (getDatatype [writer#] ~intermediate-datatype)
+       (size [writer#] (int (mp/element-count ~buffer)))
        (write [writer# idx# value#]
-         (cls-type->write-fn ~buffer-type ~buffer idx#
-          (cls-type->pos-fn ~buffer-type ~buffer)
+         (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
           (unchecked-full-cast value# ~writer-datatype
                                ~intermediate-datatype
                                ~buffer-datatype))))
      (reify ~writer-type
+       (getDatatype [writer#] ~intermediate-datatype)
+       (size [writer#] (int (mp/element-count ~buffer)))
        (write [writer# idx# value#]
-         (cls-type->write-fn ~buffer-type ~buffer idx#
-                             (cls-type->pos-fn ~buffer-type ~buffer)
+         (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
                              (checked-full-write-cast value# ~writer-datatype
-                                                  ~intermediate-datatype
-                                                  ~buffer-datatype))))))
+                                                      ~intermediate-datatype
+                                                      ~buffer-datatype))))))
+
+
+(defmacro make-buffer-writer-table
+  []
+  `(->> [~@(for [dtype (casting/all-datatypes)
+                 buffer-datatype casting/host-numeric-types]
+            [[buffer-datatype dtype]
+             `(fn [buffer# unchecked?#]
+                (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype buffer#)
+                      buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
+                  (make-buffer-writer
+                   ~(typecast/datatype->writer-type dtype)
+                   ~(typecast/datatype->buffer-type buffer-datatype)
+                   buffer# buffer-pos#
+                   ~(casting/datatype->safe-host-type dtype) ~dtype
+                   ~buffer-datatype
+                   unchecked?#)))])]
+        (into {})))
+
+
+
+(def buffer-writer-table (make-buffer-writer-table))
+
+
+(defmacro make-list-writer-table
+  []
+  `(->> [~@(for [dtype (casting/all-datatypes)
+                 buffer-datatype casting/all-host-datatypes]
+            [[buffer-datatype dtype]
+             `(fn [buffer# unchecked?#]
+                (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype buffer#)]
+                  (make-buffer-writer
+                   ~(typecast/datatype->writer-type dtype)
+                   ~(typecast/datatype->list-type buffer-datatype)
+                   buffer# buffer-pos#
+                   ~(casting/datatype->safe-host-type dtype) ~dtype
+                   ~buffer-datatype
+                   unchecked?#)))])]
+        (into {})))
+
+
+(def list-writer-table (make-list-writer-table))
+
 
 
 (defmacro make-marshalling-writer
@@ -78,13 +117,37 @@
   `(if ~unchecked?
      (reify ~src-writer-type
        (getDatatype [item#] ~intermediate-dtype)
+       (size [item#] (.size ~dst-writer))
        (write[item# idx# value#]
          (.write ~dst-writer idx#
                  (unchecked-full-cast value# ~src-dtype ~intermediate-dtype ~result-dtype))))
      (reify ~src-writer-type
+       (getDatatype [item#] ~intermediate-dtype)
+       (size [item#] (.size ~dst-writer))
        (write[item# idx# value#]
          (.write ~dst-writer idx#
                  (checked-full-write-cast value# ~src-dtype ~intermediate-dtype ~result-dtype))))))
+
+
+(defmacro make-marshalling-writer-table
+  []
+  `(->> [~@(for [dtype (casting/all-datatypes)
+                 dst-writer-datatype casting/all-host-datatypes]
+            [[dtype dst-writer-datatype]
+             `(fn [dst-writer# unchecked?#]
+                (let [dst-writer# (typecast/datatype->writer ~dst-writer-datatype dst-writer# true)]
+                  (make-marshalling-writer
+                   dst-writer#
+                   ~dst-writer-datatype
+                   ~dtype
+                   ~(casting/datatype->safe-host-type dtype)
+                   ~(typecast/datatype->writer-type (casting/datatype->safe-host-type dtype))
+                   unchecked?#)))])]
+        (into {})))
+
+
+
+(def marshalling-writer-table (make-marshalling-writer-table))
 
 
 
@@ -95,36 +158,13 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# dtype# unchecked?#]
-        (let [dst-writer# (datatype->writer ~datatype item# true)]
-          (if (= dtype# ~datatype)
-            item#
-            (case dtype#
-              :int8 (make-marshalling-writer dst-writer# ~datatype
-                                             :int8 :int8 ByteWriter unchecked?#)
-              :uint8 (make-marshalling-writer dst-writer# ~datatype
-                                              :uint8 :int16 ShortWriter unchecked?#)
-              :int16 (make-marshalling-writer dst-writer# ~datatype
-                                              :int16 :int16 ShortWriter unchecked?#)
-              :uint16 (make-marshalling-writer dst-writer# ~datatype
-                                               :uint16 :int32 IntWriter unchecked?#)
-              :int32 (make-marshalling-writer dst-writer# ~datatype
-                                              :int32 :int32 IntWriter unchecked?#)
-              :uint32 (make-marshalling-writer dst-writer# ~datatype
-                                               :uint32 :int64 LongWriter unchecked?#)
-              :int64 (make-marshalling-writer dst-writer# ~datatype
-                                              :int64 :int64 LongWriter unchecked?#)
-              :uint64 (make-marshalling-writer dst-writer# ~datatype
-                                               :uint64 :int64 LongWriter unchecked?#)
-              :float32 (make-marshalling-writer dst-writer# ~datatype
-                                                :float32 :float32 FloatWriter unchecked?#)
-              :float64 (make-marshalling-writer dst-writer# ~datatype
-                                                :float64 :float64 DoubleWriter unchecked?#)
-              :boolean (make-marshalling-writer dst-writer# ~datatype
-                                                :boolean :boolean BooleanWriter
-                                                unchecked?#)
-              :object (make-marshalling-writer dst-writer# ~datatype
-                                               :object :object ObjectWriter
-                                               unchecked?#)))))}))
+        (if (= dtype# (dtype-proto/get-datatype item#))
+          item#
+          (if-let [writer-fn# (get marshalling-writer-table [~datatype dtype#])]
+            (writer-fn# item# unchecked?#)
+            (throw (ex-info (format "Failed to find marshalling writer: %s %s" ~datatype dtype#)
+                            {:src-datatype ~datatype
+                             :dst-datatype dtype#})))))}))
 
 
 (extend-writer-type ByteWriter :int8)

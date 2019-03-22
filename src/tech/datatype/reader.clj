@@ -25,7 +25,17 @@
             [tech.datatype.typecast :as typecast])
   (:import [tech.datatype ObjectReader ByteReader
             ShortReader IntReader LongReader
-            FloatReader DoubleReader BooleanReader]))
+            FloatReader DoubleReader BooleanReader]
+           [java.nio Buffer ByteBuffer ShortBuffer
+            IntBuffer LongBuffer FloatBuffer DoubleBuffer]
+           [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
+           [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
+           [it.unimi.dsi.fastutil.ints IntList IntArrayList]
+           [it.unimi.dsi.fastutil.longs LongList LongArrayList]
+           [it.unimi.dsi.fastutil.floats FloatList FloatArrayList]
+           [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
+           [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
+           [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]))
 
 
 (set! *warn-on-reflection* true)
@@ -38,7 +48,7 @@
 
 
 (defmacro make-buffer-reader
-  [reader-type buffer-type buffer
+  [reader-type buffer-type buffer buffer-pos
    reader-datatype
    intermediate-datatype
    buffer-datatype
@@ -46,16 +56,58 @@
   `(if ~unchecked?
      (reify ~reader-type
        (getDatatype [reader#] ~intermediate-datatype)
+       (size [reader#] (int (mp/element-count ~buffer)))
        (read [reader# idx#]
-         (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx#
-                                (cls-type->pos-fn ~buffer-type ~buffer))
+         (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
              (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))
      (reify ~reader-type
        (getDatatype [reader#] ~intermediate-datatype)
+       (size [reader#] (int (mp/element-count ~buffer)))
        (read [reader# idx#]
-         (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx#
-                                (cls-type->pos-fn ~buffer-type ~buffer))
+         (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
              (checked-full-read-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))))
+
+
+(defmacro make-buffer-reader-table
+  []
+  `(->> [~@(for [dtype (casting/all-datatypes)
+                 buffer-datatype casting/host-numeric-types]
+            [[buffer-datatype dtype]
+             `(fn [buffer# unchecked?#]
+                (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype buffer#)
+                      buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
+                  (make-buffer-reader
+                   ~(typecast/datatype->reader-type dtype)
+                   ~(typecast/datatype->buffer-type buffer-datatype)
+                   buffer# buffer-pos#
+                   ~(casting/datatype->safe-host-type dtype) ~dtype
+                   ~buffer-datatype
+                   unchecked?#)))])]
+        (into {})))
+
+
+(def buffer-reader-table (make-buffer-reader-table))
+
+
+(defmacro make-list-reader-table
+  []
+  `(->> [~@(for [dtype (casting/all-datatypes)
+                 buffer-datatype casting/all-host-datatypes]
+            [[buffer-datatype dtype]
+             `(fn [buffer# unchecked?#]
+                (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype buffer#)]
+                  (make-buffer-reader
+                   ~(typecast/datatype->reader-type dtype)
+                   ~(typecast/datatype->list-type buffer-datatype)
+                   buffer# 0
+                   ~(casting/datatype->safe-host-type dtype) ~dtype
+                   ~buffer-datatype
+                   unchecked?#)))])]
+        (into {})))
+
+
+(def list-reader-table (make-list-reader-table))
+
 
 
 (defmacro make-marshalling-reader
@@ -63,14 +115,37 @@
   `(if ~unchecked?
      (reify ~dst-reader-type
        (getDatatype [reader#] ~intermediate-dtype)
+       (size [reader#] (.size ~src-reader))
        (read [item# idx#]
          (-> (.read ~src-reader idx#)
              (unchecked-full-cast ~src-dtype ~intermediate-dtype ~result-dtype))))
      (reify ~dst-reader-type
        (getDatatype [reader#] ~intermediate-dtype)
+       (size [reader#] (.size ~src-reader))
        (read [item# idx#]
          (-> (.read ~src-reader idx#)
              (checked-full-read-cast ~src-dtype ~intermediate-dtype ~result-dtype))))))
+
+
+(defmacro make-marshalling-reader-table
+  []
+  `(->> [~@(for [dtype (casting/all-datatypes)
+                 src-reader-datatype casting/all-host-datatypes]
+            [[dtype src-reader-datatype]
+             `(fn [src-reader# unchecked?#]
+                (let [src-reader# (typecast/datatype->reader ~src-reader-datatype src-reader# true)]
+                  (make-marshalling-reader
+                   src-reader#
+                   ~src-reader-datatype
+                   ~dtype
+                   ~(casting/datatype->safe-host-type dtype)
+                   ~(typecast/datatype->reader-type (casting/datatype->safe-host-type dtype))
+                   unchecked?#)))])]
+        (into {})))
+
+
+
+(def marshalling-reader-table (make-marshalling-reader-table))
 
 
 (defmacro extend-reader-type
@@ -80,39 +155,11 @@
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# dtype# unchecked?#]
-        (if (= dtype# ~datatype)
-          item#
-          (let [src-reader# (datatype->reader ~datatype item# true)]
-            (let [item# (datatype->reader ~datatype item# true)]
-              (case dtype#
-                :int8 (make-marshalling-reader src-reader# ~datatype
-                                               :int8 :int8 ByteReader unchecked?#)
-                :uint8 (make-marshalling-reader src-reader# ~datatype
-                                                :uint8 :int16 ShortReader unchecked?#)
-                :int16 (make-marshalling-reader src-reader# ~datatype
-                                                :int16 :int16 ShortReader unchecked?#)
-                :uint16 (make-marshalling-reader src-reader# ~datatype
-                                                 :uint16 :int32 IntReader unchecked?#)
-                :int32 (make-marshalling-reader src-reader# ~datatype
-                                                :int32 :int32 IntReader unchecked?#)
-                :uint32 (make-marshalling-reader src-reader# ~datatype
-                                                 :uint32 :int64 LongReader unchecked?#)
-                :int64 (make-marshalling-reader src-reader# ~datatype
-                                                :int64 :int64 LongReader unchecked?#)
-                :uint64 (make-marshalling-reader src-reader# ~datatype
-                                                 :uint64 :int64 LongReader unchecked?#)
-                :float32 (make-marshalling-reader src-reader# ~datatype
-                                                  :float32 :float32 FloatReader
-                                                  unchecked?#)
-                :float64 (make-marshalling-reader src-reader# ~datatype
-                                                  :float64 :float64 DoubleReader
-                                                  unchecked?#)
-                :boolean (make-marshalling-reader src-reader# ~datatype
-                                                  :boolean :boolean BooleanReader
-                                                  unchecked?#)
-                :object (make-marshalling-reader src-reader# ~datatype
-                                                 :object :object ObjectReader
-                                                 unchecked?#))))))}))
+        (if (= dtype# (dtype-proto/get-datatype item#))
+          dtype#
+          (if-let [reader-fn# (get marshalling-reader-table [~datatype dtype#])]
+            (reader-fn# item# unchecked?#)
+            (throw (ex-info (format "Failed to find marshalling reader %s->%s" ~datatype dtype#))))))}))
 
 
 (extend-reader-type ByteReader :int8)
@@ -123,12 +170,3 @@
 (extend-reader-type DoubleReader :float64)
 (extend-reader-type BooleanReader :boolean)
 (extend-reader-type ObjectReader :object)
-
-
-(defn ->marshalling-reader
-  [src-item dest-dtype unchecked?]
-  (let [src-dtype (dtype-proto/get-datatype src-item)
-        src-reader (dtype-proto/->reader-of-type src-item src-dtype false)]
-    (if (= src-dtype dest-dtype)
-      src-reader
-      (dtype-proto/->reader-of-type src-reader dest-dtype unchecked?))))

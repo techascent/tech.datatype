@@ -1,8 +1,7 @@
 package tech.datatype;
 
-import java.nio.*;
 
-public interface DoubleWriter extends Datatype
+public interface DoubleWriter extends IOBase
 {
   void write(int idx, double value);
 }

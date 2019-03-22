@@ -80,7 +80,6 @@
           (dtype-proto/->writer-of-type writer-datatype true))))
 
   dtype-proto/PToReader
-
   (->reader-of-type [item reader-datatype unchecked?]
     (if (or (= datatype (dtype-proto/get-datatype backing-store))
             (= datatype reader-datatype))
@@ -88,6 +87,16 @@
       ;;We trust that we stored the data correctly.
       (-> (dtype-proto/->reader-of-type backing-store datatype true)
           (dtype-proto/->reader-of-type reader-datatype unchecked?))))
+
+
+  dtype-proto/PToMutable
+  (->mutable-of-type [item mutable-datatype unchecked?]
+    (if (or (= datatype (dtype-proto/get-datatype backing-store))
+            (= datatype mutable-datatype))
+      (dtype-proto/->mutable-of-type backing-store mutable-datatype unchecked?)
+      ;;We trust that we stored the data correctly.
+      (-> (dtype-proto/->mutable-of-type backing-store datatype true)
+          (dtype-proto/->mutable-of-type mutable-datatype unchecked?))))
 
   mp/PElementCount
   (element-count [item] (mp/element-count backing-store)))
@@ -99,7 +108,6 @@
           [dtype-proto/PDatatype
            dtype-proto/PCopyRawData
            dtype-proto/PPersistentVector dtype-proto/PPrototype
-           dtype-proto/PToNioBuffer
            dtype-proto/PBuffer dtype-proto/PToArray
            dtype-proto/PToWriter dtype-proto/PToReader]))
 
@@ -107,7 +115,9 @@
 (defn convertible-to-typed-buffer?
   [item]
   (or (instance? TypedBuffer item)
-      (satisfies? dtype-proto/PToNioBuffer item)))
+      (or
+       (satisfies? dtype-proto/PToNioBuffer item)
+       (satisfies? dtype-proto/PToList))))
 
 
 (defn ->typed-buffer

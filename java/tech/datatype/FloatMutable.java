@@ -1,5 +1,4 @@
 package tech.datatype;
-import java.nio.*;
 
 
 public interface FloatMutable extends MutableRemove

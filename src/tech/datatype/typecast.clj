@@ -63,7 +63,7 @@
 
 (defmacro implement-writer-cast
   [datatype]
-  `(if (instance? (datatype->writer-type ~datatype) ~'item)
+  `(if (instance? ~(resolve (datatype->writer-type datatype)) ~'item)
      ~'item
      (dtype-proto/->writer-of-type ~'item ~datatype ~'unchecked?)))
 
@@ -127,7 +127,7 @@
 
 (defmacro implement-reader-cast
   [datatype]
-  `(if (instance? (datatype->reader-type ~datatype) ~'item)
+  `(if (instance? ~(resolve (datatype->reader-type datatype)) ~'item)
      ~'item
      (dtype-proto/->reader-of-type ~'item ~datatype ~'unchecked?)))
 
@@ -180,18 +180,18 @@
 (defmacro datatype->mutable
   [datatype item]
   (case datatype
-    :int8 `(byte-mutable-cast item)
-    :uint8 `(short-mutable-cast item)
-    :int16 `(short-mutable-cast item)
-    :uint16 `(int-mutable-cast item)
-    :int32 `(int-mutable-cast item)
-    :uint32 `(long-mutable-cast item)
-    :int64 `(long-mutable-cast item)
-    :uint64 `(long-mutable-cast item)
-    :float32 `(float-mutable-cast item)
-    :float64 `(double-mutable-cast item)
-    :boolean `(boolean-mutable-cast item)
-    :object `(object-mutable-cast item)))
+    :int8 `(byte-mutable-cast ~item)
+    :uint8 `(short-mutable-cast ~item)
+    :int16 `(short-mutable-cast ~item)
+    :uint16 `(int-mutable-cast ~item)
+    :int32 `(int-mutable-cast ~item)
+    :uint32 `(long-mutable-cast ~item)
+    :int64 `(long-mutable-cast ~item)
+    :uint64 `(long-mutable-cast ~item)
+    :float32 `(float-mutable-cast ~item)
+    :float64 `(double-mutable-cast ~item)
+    :boolean `(boolean-mutable-cast ~item)
+    :object `(object-mutable-cast ~item)))
 
 
 (defn as-byte-array
@@ -297,7 +297,7 @@
 
 (defmacro datatype->buffer-cast-fn
   [dtype buf]
-  (condp = dtype
+  (case dtype
     :int8 `(as-byte-buffer ~buf)
     :int16 `(as-short-buffer ~buf)
     :int32 `(as-int-buffer ~buf)
@@ -306,6 +306,19 @@
     :float64 `(as-double-buffer ~buf)
     :boolean `(as-boolean-buffer ~buf)
     :object `(as-object-buffer ~buf)))
+
+
+(defn datatype->buffer-type
+  [dtype]
+  (case dtype
+    :int8 'ByteBuffer
+    :int16 'ShortBuffer
+    :int32 'IntBuffer
+    :int64 'LongBuffer
+    :float32 'FloatBuffer
+    :float64 'DoubleBuffer
+    :boolean 'BooleanList
+    :object 'ObjectList))
 
 
 (defn make-interface-buffer-type
@@ -347,3 +360,33 @@
     :float64 `(double-list-cast ~item)
     :boolean `(boolean-list-cast ~item)
     :object `(object-list-cast ~item)))
+
+
+(defn datatype->list-type
+  [datatype]
+  (case datatype
+    :int8 'ByteList
+    :int16 'ShortList
+    :int32 'IntList
+    :int64 'LongList
+    :float32 'FloatList
+    :float64 'DoubleList
+    :boolean 'BooleanList
+    :object 'ObjectList))
+
+
+(defn datatype->mutable-type
+  [datatype]
+  (case datatype
+    :int8 'ByteMutable
+    :uint8 'ShortMutable
+    :int16 'ShortMutable
+    :uint16 'IntMutable
+    :int32 'IntMutable
+    :uint32 'LongMutable
+    :int64 'LongMutable
+    :uint64 'LongMutable
+    :float32 'FloatMutable
+    :float64 'DoubleMutable
+    :boolean 'BooleanMutable
+    :object 'ObjectMutable))

@@ -1,9 +1,7 @@
 package tech.datatype;
 
-import java.nio.*;
 
-public interface LongReader extends Datatype
+public interface LongReader extends IOBase
 {
   long read(int idx);
 }
-

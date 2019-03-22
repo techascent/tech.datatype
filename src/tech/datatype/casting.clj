@@ -250,6 +250,10 @@
   []
   (keys @*cast-table*))
 
+(def all-host-datatypes
+  (set (concat host-numeric-types
+               [:boolean :object])))
+
 
 (defn datatype->host-type
   "Get the signed analog of an unsigned type or return datatype unchanged."

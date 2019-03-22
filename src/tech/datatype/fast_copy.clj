@@ -147,8 +147,8 @@
   (let [item-dtype (cond-> (dtype-proto/get-datatype item)
                      unchecked?
                      casting/datatype->host-datatype)
-        item-buf (dtype-proto/->buffer-backing-store item)
-        item-list (dtype-proto/->list-backing-store item)]
+        item-buf (typecast/as-nio-buffer item)
+        item-list (typecast/as-list item)]
     (cond
       (and item-buf (= item-dtype (dtype-proto/get-datatype item-buf)))
       (parallel-nio-write! item src unchecked?)
@@ -163,7 +163,7 @@
   `(let [src-buf# (typecast/datatype->buffer-cast-fn ~datatype ~src)
          dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
          src-pos# (.position src-buf#)
-         n-elems# (int (mp/element-count ~dst))]
+         n-elems# (int (mp/element-count ~src))]
      (parallel/parallel-for
       idx# n-elems#
       (.write dst-writer# idx# (buf-get src-buf# idx# src-pos#)))))
@@ -184,7 +184,7 @@
   [datatype dst src unchecked?]
   `(let [dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
          src-buf# (typecast/datatype->list-cast-fn ~datatype ~src)
-         n-elems# (int (mp/element-count ~dst))]
+         n-elems# (int (mp/element-count ~src))]
      (parallel/parallel-for
       idx# n-elems#
       (.write dst-writer# idx# (datatype->list-read-fn ~datatype src-buf# idx#)))))
@@ -192,7 +192,7 @@
 
 (defn parallel-list-read!
   [dst src unchecked?]
-  (case (dtype-proto/get-datatype dst)
+  (case (dtype-proto/get-datatype src)
     :int8 (impl-list-read :int8 dst src unchecked?)
     :int16 (impl-list-read :int16 dst src unchecked?)
     :int32 (impl-list-read :int32 dst src unchecked?)
@@ -201,6 +201,22 @@
     :float64 (impl-list-read :float64 dst src unchecked?)
     :boolean (impl-list-read :boolean dst src unchecked?)
     (impl-list-read :object dst src unchecked?)))
+
+
+(defn parallel-read!
+  [item src unchecked?]
+  (let [src-dtype (cond-> (dtype-proto/get-datatype src)
+                     unchecked?
+                     casting/datatype->host-datatype)
+        src-buf (typecast/as-nio-buffer src)
+        src-list (typecast/as-list src)]
+    (cond
+      (and src-buf (= src-dtype (dtype-proto/get-datatype src-buf)))
+      (parallel-nio-read! item src unchecked?)
+      (and src-list (= src-dtype (dtype-proto/get-datatype src-list)))
+      (parallel-list-read! item src unchecked?)
+      :else
+      (parallel-slow-copy! item src unchecked?))))
 
 
 (defn copy!

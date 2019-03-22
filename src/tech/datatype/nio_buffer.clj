@@ -85,8 +85,10 @@
      {:from-prototype (fn [src-ary# datatype# shape#]
                         (let [n-elems# (base/shape->ecount shape#)]
                           (if (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
-                            (dtype-proto/make-container :native-buffer datatype# n-elems# {})
-                            (dtype-proto/make-container :nio-buffer datatype# n-elems# {}))))}
+                            (dtype-proto/make-container :native-buffer datatype#
+                                                        n-elems# {})
+                            (dtype-proto/make-container :nio-buffer datatype#
+                                                        n-elems# {}))))}
      dtype-proto/PToNioBuffer
      {:->buffer-backing-store (fn [item#] item#)}
 
@@ -181,23 +183,30 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (if-let [writer-fn# (get writer/buffer-writer-table [~datatype writer-datatype#])]
+        (if-let [writer-fn# (get writer/buffer-writer-table
+                                 [~datatype writer-datatype#])]
           (writer-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find writer %s->%s" ~datatype (casting/flatten-datatype writer-datatype#)) {}))))}
+          (throw (ex-info (format "Failed to find writer %s->%s"
+                                  ~datatype writer-datatype#) {}))))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (if-let [reader-fn# (get reader/buffer-reader-table [~datatype (casting/flatten-datatype reader-datatype#)])]
+        (if-let [reader-fn# (get reader/buffer-reader-table
+                                 [~datatype
+                                  (casting/flatten-datatype reader-datatype#)])]
           (reader-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}
+          (throw (ex-info (format "Failed to find reader %s->%s"
+                                  ~datatype reader-datatype#) {}))))}
 
      jna/PToPtr
      {:->ptr-backing-store
       (fn [item#]
         (let [item# (datatype->buffer-cast-fn ~datatype item#)]
           (when (.isDirect item#)
-            (Native/getDirectBufferPointer item#))))}))
+            (let [ptr-addr# (Pointer/nativeValue (Native/getDirectBufferPointer item#))]
+              (Pointer. (+ ptr-addr# (* (.position item#)
+                                        (casting/numeric-byte-width ~datatype))))))))}))
 
 
 (implement-buffer-type ByteBuffer :int8)

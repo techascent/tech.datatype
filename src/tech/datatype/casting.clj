@@ -21,6 +21,10 @@
 
 (def host-numeric-types (set (concat signed-int-types float-types)))
 
+(def numeric-types (set (concat host-numeric-types unsigned-int-types)))
+
+(def primitive-types (set (concat numeric-types [:boolean])))
+
 (def base-datatypes (set (concat host-numeric-types
                                  unsigned-int-types
                                  [:boolean :object])))

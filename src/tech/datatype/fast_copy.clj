@@ -233,7 +233,7 @@
         dst-list (as-list dst)
         _ (when-not (and (or src-buf src-list)
                          (or dst-buf dst-list))
-            (throw (ex-info "Fast copy called inappropriatedly; convertible to list or nio"
+            (throw (ex-info "convertible to list or nio"
                             {})))
         src-dtype (dtype-proto/get-datatype (or src-buf src-list))
         dst-dtype (dtype-proto/get-datatype (or dst-buf dst-list))
@@ -270,14 +270,22 @@
       (let [{:keys [array-data offset]} dst-ary
             array-offset (int offset)]
         (case src-dtype
-          :int8 (.getElements ^ByteList src-list 0 ^bytes array-data array-offset n-elems)
-          :int16 (.getElements ^ShortList src-list 0 ^shorts array-data array-offset n-elems)
-          :int32 (.getElements ^IntList src-list 0 ^ints array-data array-offset n-elems)
-          :int64 (.getElements ^LongList src-list 0 ^longs array-data array-offset n-elems)
-          :float32 (.getElements ^FloatList src-list 0 ^floats array-data array-offset n-elems)
-          :float64 (.getElements ^DoubleList src-list 0 ^doubles array-data array-offset n-elems)
-          :boolean (.getElements ^BooleanList src-list 0 ^booleans array-data array-offset n-elems)
-          (.getElements ^ObjectList src-list 0 ^objects array-data array-offset n-elems)))
+          :int8 (.getElements ^ByteList src-list 0
+                              ^bytes array-data array-offset n-elems)
+          :int16 (.getElements ^ShortList src-list 0
+                               ^shorts array-data array-offset n-elems)
+          :int32 (.getElements ^IntList src-list 0
+                               ^ints array-data array-offset n-elems)
+          :int64 (.getElements ^LongList src-list 0
+                               ^longs array-data array-offset n-elems)
+          :float32 (.getElements ^FloatList src-list 0
+                                 ^floats array-data array-offset n-elems)
+          :float64 (.getElements ^DoubleList src-list 0
+                                 ^doubles array-data array-offset n-elems)
+          :boolean (.getElements ^BooleanList src-list 0
+                                 ^booleans array-data array-offset n-elems)
+          (.getElements ^ObjectList src-list 0
+                        ^objects array-data array-offset n-elems)))
       (and src-list dst-list)
       (case src-dtype
           :int8 (.addAll ^ByteList src-list 0 ^ByteList dst-list)

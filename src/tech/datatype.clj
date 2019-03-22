@@ -1,17 +1,21 @@
 (ns tech.datatype
   "Generalized efficient manipulations of sequences of primitive datatype.  Includes
-  specializations for java arrays and nio buffers.  There are specializations to allow
-  implementations to provide efficient full typed copy functions when the types can be
-  ascertained.  Usually this involves a double-dispatch on both the src and dest
-  arguments:
-
-  https://en.wikipedia.org/wiki/Double_dispatch.
+  specializations for java arrays and nio buffers, fastutil lists, and native buffers.
+  There are specializations to allow implementations to provide efficient full typed
+  copy functions when the types can be ascertained.
 
   Generic operations include:
   1. datatype of this sequence.
   2. Writing to, reading from.
   3. Construction.
-  4. Efficient mutable copy from one sequence to another."
+  4. Efficient mutable copy from one sequence to another.
+  5. Mutation of underlying storage amount assuming list based.
+
+  Lists furthermore support add/removing elements at arbitrary indexes.
+
+  Base datatypes are:
+  :int8 :uint8 :int16 :uint16 :int32 :uint32 :int64 :uint64
+  :float32 :float64 :boolean :string :object"
   (:require [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m]
@@ -129,12 +133,32 @@ Calls clojure.core.matrix/ecount."
    (base/copy! src 0 dst 0 (ecount src) {})))
 
 
-;; Primitive functions.  Would be different for clojurescript.
+(defn write-block!
+  "Write a block of data to an object.  Values must support ->reader-of-type,
+  get-datatype, and core.matrix.protocols/element-count."
+  [item offset values & [options]]
+  (dtype-proto/write-block! item offset values options))
 
-(defn make-array-of-type
-  [datatype elem-count-or-seq & [options]]
-  (dtype-array/make-array-of-type datatype elem-count-or-seq
-                                (or options {})))
+
+(defn read-block!
+  "Read a block from an object.  Values must support ->writer-of-type,
+  get-datatype, and core.matrix.protocols/element-count."
+  [item offset values & [options]]
+  (dtype-proto/read-block! item offset values options))
+
+
+(defn write-indexes!
+  "Write a block of data to specific indexes in the object.
+  indexes, values must support same protocols as write and read block."
+  [item indexes values & [options]]
+  (dtype-proto/write-indexes! item indexes values options))
+
+
+(defn read-indexes!
+  "Write a block of data to specific indexes in the object.
+  indexes, values must support same protocols as write and read block."
+  [item indexes values & [options]]
+  (dtype-proto/read-indexes! item indexes values options))
 
 
 (defn ->array
@@ -145,7 +169,8 @@ Calls clojure.core.matrix/ecount."
 
 (defn ->sub-array
   "Returns map of the backing array plus a length and offset
-  of nil of this item is not array backed.
+  of nil of this item is not array backed.  The sub array may not match
+  the container in datatype.
   {:array-data :offset :length}"
   [item]
   (dtype-proto/->sub-array item))
@@ -171,6 +196,52 @@ Calls clojure.core.matrix/ecount."
   (dtype-proto/->buffer-backing-store src-ary))
 
 
+(defn ->list-backing-store
+  "Convert to a list that stores data for the object.  This may have a different
+  datatype than the object."
+  [src-item]
+  (dtype-proto/->list-backing-store src-item))
+
+
+(defn sub-buffer
+  "Create a sub buffer that shares the backing store with the main buffer."
+  [buffer offset & [length]]
+  (let [length (or length (max 0 (- (ecount buffer)
+                                    (long offset))))]
+    (dtype-proto/sub-buffer buffer offset length)))
+
+(defn alias?
+  "Do these two buffers alias each other?  Meaning do they start at the same address
+  and overlap completely?"
+  [lhs-buffer rhs-buffer]
+  (dtype-proto/alias? lhs-buffer rhs-buffer))
+
+(defn partially-alias?
+  "Do these two buffers partially alias each other?  Does some sub-range of their
+  data overlap?"
+  [lhs-buffer rhs-buffer]
+  (dtype-proto/partially-alias? lhs-buffer rhs-buffer))
+
+
+(defn ->writer-of-type
+  "Create a writer of a specific type."
+  [src-item datatype & [options]]
+  (dtype-proto/->writer-of-type src-item datatype (:unchecked? options)))
+
+
+(defn ->reader-of-type
+  "Create a reader of a specific type."
+  [src-item datatype & [options]]
+  (dtype-proto/->reader-of-type src-item datatype (:unchecked? options)))
+
+
+(defn ->mutable-of-type
+  "Create an object capable of mutating the underlying structure of the data storage.
+  Only works for list-backed types."
+  [src-item datatype & [options]]
+  (dtype-proto/->mutable-of-type src-item datatype (:unchecked? options)))
+
+
 (defn make-typed-buffer
   "Support for unsigned datatypes comes via the typed buffer mechanism"
   [datatype elem-count-or-seq & [options]]
@@ -182,22 +253,45 @@ Calls clojure.core.matrix/ecount."
   [item & {:keys [datatype]}]
   (let [datatype (or datatype (get-datatype item))]
     (-> (dtype-tbuf/->typed-buffer item)
-        (assoc :datatype datatype))))
+        (dtype-tbuf/set-datatype datatype))))
 
 
 (defn make-container
   "Generically make a container of the given type.  Built in types are:
-  - Support for host primitive types, boolean, and all object types:
-  :java-array
 
-  - Support for host primitive types
-  :nio-buffer
+  :java-array - Support for host primitive types, boolean, and all object types:
 
-  - Support for all (including unsigned) primitive numeric types
-  :native-buffer
+  :nio-buffer - Support for host primitive types.
 
-  (support all known datatypes, java array or list backed)
-  :typed-buffer"
+  :native-buffer - Support for all (including unsigned) numeric types.  Native backed.
+
+  :typed-buffer - Support all known datatypes, java array backend
+
+  :list - Support all known datatypes and allow mutation.  fastutil array-list backed"
   [container-type datatype elem-count-or-seq & [options]]
   (dtype-proto/make-container container-type datatype
                               elem-count-or-seq options))
+
+
+(defn make-jvm-container
+  "Jvm container of fixed element count."
+  [datatype elem-count-or-seq & [options]]
+  (make-container :typed-buffer datatype elem-count-or-seq options))
+
+
+(defn make-array-of-type
+  [datatype elem-count-or-seq & [options]]
+  (dtype-proto/make-container :java-array datatype
+                              elem-count-or-seq options))
+
+
+(defn make-native-container
+  "Native container of fixed element count."
+  [datatype elem-count-or-seq & [options]]
+  (make-container :native-buffer datatype elem-count-or-seq options))
+
+
+(defn make-jvm-list
+  "Jvm container that allows adding/removing of elements."
+  [datatype elem-count-or-seq & [options]]
+  (make-container :list datatype elem-count-or-seq options))

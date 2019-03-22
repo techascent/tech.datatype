@@ -75,8 +75,10 @@
         byte-len (* n-elems (dtype-base/datatype->byte-size datatype))
         data (Native/malloc byte-len)
         retval (unsafe-address->typed-pointer data byte-len datatype)]
-    (when-not (number? elem-count-or-seq)
-      (dtype-proto/copy-raw->item! elem-count-or-seq retval 0 options))
+    (if-not (number? elem-count-or-seq)
+      (dtype-proto/copy-raw->item! elem-count-or-seq retval 0 options)
+      (when-not (:skip-init? options)
+        (dtype-proto/set-constant! retval 0 0 n-elems)))
     ;;This will be freed if either the resource context is released *or* the return
     ;;value goes out of scope.  In For some use-cases, the returned item should be
     ;;untracked and the callers will assume resposibility for freeing the data.

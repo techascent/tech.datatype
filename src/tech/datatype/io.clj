@@ -50,8 +50,10 @@
                                  (= src-buf-dtype src-dtype))
                             (and (integer-type? dst-dtype)
                                  (integer-type? src-dtype)
-                                 (= (casting/datatype->host-datatype dst-dtype) dst-buf-dtype)
-                                 (= (casting/datatype->host-datatype src-dtype) src-buf-dtype)
+                                 (= (casting/datatype->host-datatype dst-dtype)
+                                    dst-buf-dtype)
+                                 (= (casting/datatype->host-datatype src-dtype)
+                                    src-buf-dtype)
                                  unchecked?
                                  (= (numeric-byte-width dst-dtype)
                                     (numeric-byte-width src-dtype)))))

@@ -49,6 +49,15 @@
       (dtype-proto/->list-backing-store backing-store)))
 
 
+  dtype-proto/PSetConstant
+  (set-constant! [item offset value n-elems]
+    (let [value (-> value
+                    (casting/cast datatype)
+                    (casting/unchecked-cast (dtype-proto/get-datatype
+                                             backing-store)))]
+      (dtype-proto/set-constant! backing-store offset value n-elems)))
+
+
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
     (->TypedBuffer datatype (dtype-proto/sub-buffer backing-store offset length)))
@@ -134,9 +143,9 @@
     (instance? TypedBuffer item)
     item
     (satisfies? dtype-proto/PToNioBuffer item)
-    (->TypedBuffer (dtype-proto/get-datatype item) (dtype-proto/->buffer-backing-store item))
+    (->TypedBuffer (dtype-proto/get-datatype item) item)
     (satisfies? dtype-proto/PToList item)
-    (->TypedBuffer (dtype-proto/get-datatype item) (dtype-proto/->list-backing-store item))
+    (->TypedBuffer (dtype-proto/get-datatype item) item)
     :else
     (throw (ex-info "Item is not convertible to typed buffer"
                     {:item-type (type item)}))))
@@ -162,8 +171,10 @@
            (let [n-elems (if (number? elem-count-or-seq)
                            elem-count-or-seq
                            (base/ecount elem-count-or-seq))
-                 container (dtype-proto/make-container :java-array host-dtype n-elems {})]
-             (dtype-proto/copy-raw->item! elem-count-or-seq container 0 options)
+                 container (dtype-proto/make-container :java-array host-dtype
+                                                       n-elems {})]
+             (when-not (number? elem-count-or-seq)
+               (dtype-proto/copy-raw->item! elem-count-or-seq container 0 options))
              container))]
      (->TypedBuffer datatype backing-store)))
   ([datatype elem-count-or-seq]
@@ -173,8 +184,10 @@
 (defn set-datatype
   "Use this one with care."
   [item dtype]
-  (assoc (convert-to-typed-buffer item)
-         :datatype dtype))
+  (if (= dtype (dtype-proto/get-datatype item))
+    item
+    (assoc (convert-to-typed-buffer item)
+           :datatype dtype)))
 
 
 (defmethod dtype-proto/make-container :typed-buffer

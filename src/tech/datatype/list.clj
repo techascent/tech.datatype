@@ -3,6 +3,7 @@
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype :as dtype]
             [tech.datatype.array :as dtype-array]
+            [tech.datatype.typed-buffer :as typed-buffer]
             [tech.datatype.reader :refer [make-buffer-reader] :as reader]
             [tech.datatype.writer :refer [make-buffer-writer] :as writer]
             [tech.datatype.casting :as casting]
@@ -26,7 +27,7 @@
             FloatBuffer DoubleBuffer Buffer]
            [java.util List ArrayList Arrays]
            [tech.datatype
-            ObjectReader ObjectWriter Mutable
+            ObjectReader ObjectWriter ObjectMutable
             ByteReader ByteWriter ByteMutable
             ShortReader ShortWriter ShortMutable
             IntReader IntWriter IntMutable
@@ -238,7 +239,8 @@
        ~typename
      dtype-proto/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
-                         (base/raw-dtype-copy! raw-data# ary-target# target-offset# options#))}
+                         (base/raw-dtype-copy! raw-data# ary-target#
+                                               target-offset# options#))}
 
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]
@@ -269,23 +271,29 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (if-let [writer-fn# (get writer/list-writer-table [~datatype (casting/flatten-datatype writer-datatype#)])]
+        (if-let [writer-fn# (get writer/list-writer-table
+                                 [~datatype (casting/flatten-datatype writer-datatype#)])]
           (writer-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find writer %s->%s" ~datatype writer-datatype#) {}))))}
+          (throw (ex-info (format "Failed to find writer %s->%s"
+                                  ~datatype writer-datatype#) {}))))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (if-let [reader-fn# (get reader/list-reader-table [~datatype (casting/flatten-datatype reader-datatype#)])]
+        (if-let [reader-fn# (get reader/list-reader-table
+                                 [~datatype (casting/flatten-datatype reader-datatype#)])]
           (reader-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}
+          (throw (ex-info (format "Failed to find reader %s->%s"
+                                  ~datatype reader-datatype#) {}))))}
 
      dtype-proto/PToMutable
      {:->mutable-of-type
       (fn [list-item# mut-dtype# unchecked?#]
-        (if-let [mutable-fn# (get mutable/list-mutable-table [~datatype (casting/flatten-datatype mut-dtype#)])]
+        (if-let [mutable-fn# (get mutable/list-mutable-table
+                                  [~datatype (casting/flatten-datatype mut-dtype#)])]
           (mutable-fn# list-item# unchecked?#)
-          (throw (ex-info (format "Failed to find mutable %s->%s" ~datatype mut-dtype#) {}))))}))
+          (throw (ex-info (format "Failed to find mutable %s->%s"
+                                  ~datatype mut-dtype#) {}))))}))
 
 
 (extend-list ByteList :int8)
@@ -324,4 +332,8 @@
 
 (defmethod dtype-proto/make-container :list
   [container-type datatype elem-count-or-seq options]
-  (make-list datatype elem-count-or-seq options))
+  (let [typed-buf (typed-buffer/make-typed-buffer
+                   datatype
+                   elem-count-or-seq options)]
+    (-> (dtype-proto/->list-backing-store typed-buf)
+        (typed-buffer/set-datatype datatype))))

@@ -189,6 +189,17 @@
   (read-block! [item offset values options]
     (copy! item offset values 0 (ecount values) options))
 
+  dtype-proto/PWriteIndexes
+  (write-indexes! [item indexes values options]
+    (dtype-io/write-indexes! (dtype-proto/get-datatype item)
+                             item indexes values options))
+
+  dtype-proto/PReadIndexes
+  (write-indexes! [item indexes values options]
+    (dtype-io/read-indexes! (dtype-proto/get-datatype item)
+                            item indexes values options))
+
+
   dtype-proto/PClone
   (clone [item datatype]
     (copy! item (dtype-proto/from-prototype item datatype

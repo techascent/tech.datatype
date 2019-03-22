@@ -43,21 +43,21 @@
     BooleanWriter `:boolean))
 
 
-(defmacro datatype->writer-type
+(defn datatype->writer-type
   [datatype]
   (case datatype
-    :int8 `ByteWriter
-    :uint8 `ShortWriter
-    :int16 `ShortWriter
-    :uint16 `IntWriter
-    :int32 `IntWriter
-    :uint32 `LongWriter
-    :int64 `LongWriter
-    :uint64 `LongWriter
-    :float32 `FloatWriter
-    :float64 `DoubleWriter
-    :boolean `BooleanWriter
-    :object `ObjectWriter))
+    :int8 'ByteWriter
+    :uint8 'ShortWriter
+    :int16 'ShortWriter
+    :uint16 'IntWriter
+    :int32 'IntWriter
+    :uint32 'LongWriter
+    :int64 'LongWriter
+    :uint64 'LongWriter
+    :float32 'FloatWriter
+    :float64 'DoubleWriter
+    :boolean 'BooleanWriter
+    :object 'ObjectWriter))
 
 
 
@@ -108,21 +108,21 @@
     BooleanReader `:boolean))
 
 
-(defmacro datatype->reader-type
+(defn datatype->reader-type
   [datatype]
   (case datatype
-    :int8 `ByteReader
-    :uint8 `ShortReader
-    :int16 `ShortReader
-    :uint16 `IntReader
-    :int32 `IntReader
-    :uint32 `LongReader
-    :int64 `LongReader
-    :uint64 `LongReader
-    :float32 `FloatReader
-    :float64 `DoubleReader
-    :boolean `BooleanReader
-    :object `ObjectReader))
+    :int8 'ByteReader
+    :uint8 'ShortReader
+    :int16 'ShortReader
+    :uint16 'IntReader
+    :int32 'IntReader
+    :uint32 'LongReader
+    :int64 'LongReader
+    :uint64 'LongReader
+    :float32 'FloatReader
+    :float64 'DoubleReader
+    :boolean 'BooleanReader
+    :object 'ObjectReader))
 
 
 (defmacro implement-reader-cast

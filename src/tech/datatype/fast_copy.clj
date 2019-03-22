@@ -6,7 +6,8 @@
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.typecast :as typecast]
             [tech.parallel :as parallel]
-            [tech.datatype.nio-access :refer [buf-put]]
+            [tech.datatype.nio-access :refer [buf-put buf-get
+                                              datatype->list-read-fn]]
             [clojure.core.matrix.macros :refer [c-for]])
   (:import  [com.sun.jna Pointer]
             [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
@@ -99,7 +100,7 @@
 (defmacro impl-nio-write
   [datatype dst src unchecked?]
   `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
-         dst-buf# (typecast/datatype->buffer-cast-fn ~datatype ~src)
+         dst-buf# (typecast/datatype->buffer-cast-fn ~datatype ~dst)
          dst-pos# (.position dst-buf#)
          n-elems# (int (mp/element-count ~dst))]
      (parallel/parallel-for
@@ -121,7 +122,7 @@
 (defmacro impl-list-write
   [datatype dst src unchecked?]
   `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
-         dst-buf# (typecast/datatype->list-cast-fn ~datatype ~src)
+         dst-buf# (typecast/datatype->list-cast-fn ~datatype ~dst)
          n-elems# (int (mp/element-count ~dst))]
      (parallel/parallel-for
       idx# n-elems#
@@ -139,6 +140,67 @@
     :float64 (impl-list-write :float64 dst src unchecked?)
     :boolean (impl-list-write :boolean dst src unchecked?)
     (impl-list-write :object dst src unchecked?)))
+
+
+(defn parallel-write!
+  [item src unchecked?]
+  (let [item-dtype (cond-> (dtype-proto/get-datatype item)
+                     unchecked?
+                     casting/datatype->host-datatype)
+        item-buf (dtype-proto/->buffer-backing-store item)
+        item-list (dtype-proto/->list-backing-store item)]
+    (cond
+      (and item-buf (= item-dtype (dtype-proto/get-datatype item-buf)))
+      (parallel-nio-write! item src unchecked?)
+      (and item-list (= item-dtype (dtype-proto/get-datatype item-list)))
+      (parallel-list-write! item src unchecked?)
+      :else
+      (parallel-slow-copy! item src unchecked?))))
+
+
+(defmacro impl-nio-read
+  [datatype dst src unchecked?]
+  `(let [src-buf# (typecast/datatype->buffer-cast-fn ~datatype ~src)
+         dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
+         src-pos# (.position src-buf#)
+         n-elems# (int (mp/element-count ~dst))]
+     (parallel/parallel-for
+      idx# n-elems#
+      (.write dst-writer# idx# (buf-get src-buf# idx# src-pos#)))))
+
+
+(defn parallel-nio-read!
+  [dst src unchecked?]
+  (case (dtype-proto/get-datatype src)
+    :int8 (impl-nio-read :int8 dst src unchecked?)
+    :int16 (impl-nio-read :int16 dst src unchecked?)
+    :int32 (impl-nio-read :int32 dst src unchecked?)
+    :int64 (impl-nio-read :int64 dst src unchecked?)
+    :float32 (impl-nio-read :float32 dst src unchecked?)
+    :float64 (impl-nio-read :float64 dst src unchecked?)))
+
+
+(defmacro impl-list-read
+  [datatype dst src unchecked?]
+  `(let [dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
+         src-buf# (typecast/datatype->list-cast-fn ~datatype ~src)
+         n-elems# (int (mp/element-count ~dst))]
+     (parallel/parallel-for
+      idx# n-elems#
+      (.write dst-writer# idx# (datatype->list-read-fn ~datatype src-buf# idx#)))))
+
+
+(defn parallel-list-read!
+  [dst src unchecked?]
+  (case (dtype-proto/get-datatype dst)
+    :int8 (impl-list-read :int8 dst src unchecked?)
+    :int16 (impl-list-read :int16 dst src unchecked?)
+    :int32 (impl-list-read :int32 dst src unchecked?)
+    :int64 (impl-list-read :int64 dst src unchecked?)
+    :float32 (impl-list-read :float32 dst src unchecked?)
+    :float64 (impl-list-read :float64 dst src unchecked?)
+    :boolean (impl-list-read :boolean dst src unchecked?)
+    (impl-list-read :object dst src unchecked?)))
 
 
 (defn copy!
@@ -213,6 +275,10 @@
       (parallel-nio-write! dst-buf src)
       dst-list
       (parallel-list-write! dst-list src)
+      src-buf
+      (parallel-nio-read! dst-buf src)
+      src-list
+      (parallel-list-read! dst-buf src)
       :else
       (parallel-slow-copy! dst src true)))
   dst)

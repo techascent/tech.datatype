@@ -116,13 +116,6 @@
                idx# elem-count#
                (buf-put item# (+ idx# offset#) buf-pos# value#))))))}
 
-     dtype-proto/PWriteIndexes
-     {:write-indexes!
-      (fn [item# indexes# values# options#]
-        (let [values# (if-not (and (= ~datatype (dtype-proto/get-datatype values#))
-                                   (dtype-proto/->)))])
-        )
-      }
 
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]

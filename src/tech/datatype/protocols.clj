@@ -43,6 +43,7 @@
 (defprotocol PReadIndexes
   (read-indexes! [item indexes values options]))
 
+
 (defprotocol PToNioBuffer
   "Take a 'thing' and convert it to a nio buffer.  Only valid if the thing
   shares the backing store with the buffer.  Result may not exactly

@@ -3,6 +3,8 @@
             [tech.datatype :as dtype]
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
+            [tech.datatype.primitive]
+            [tech.datatype.list]
             [clojure.core.matrix :as m]
             [clojure.core.matrix.macros :refer [c-for]])
   (:import [java.nio FloatBuffer]))

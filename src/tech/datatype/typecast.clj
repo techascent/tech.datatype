@@ -239,10 +239,13 @@
   to a nio buffer, be it direct or array backend is fine."
   [item]
   (cond
-    (satisfies? jna/PToPtr item)
+    (and (satisfies? jna/PToPtr item)
+         (jna/->ptr-backing-store item))
     (jna/->ptr-backing-store item)
     :else
-    (dtype-proto/->buffer-backing-store item)))
+    (if-let [retval (dtype-proto/->buffer-backing-store item)]
+      retval
+      (throw (ex-info "Object is not convertible to a pointer" {:item item})))))
 
 
 (defn as-ptr

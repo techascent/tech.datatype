@@ -15,8 +15,7 @@
      dtype-proto/PDatatype
      {:get-datatype (fn [item#] ~datatype)}
      dtype-proto/PToReader
-     {:->object-reader #(reader/->marshalling-reader % :object true)
-      :->reader-of-type (fn [item# reader-dtype# unsigned?#]
+     {:->reader-of-type (fn [item# reader-dtype# unsigned?#]
                           (-> (dtype-ary/make-array-of-type ~datatype [item#] true)
                               (dtype-proto/->reader-of-type reader-dtype# unsigned?#)))}
      mp/PElementCount

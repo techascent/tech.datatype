@@ -1,9 +1,10 @@
 (ns tech.datatype.jna-test
   (:require [clojure.test :refer :all]
-            [tech.datatype.java-unsigned :as unsigned]
             [tech.datatype :as dtype]
             [tech.datatype.base :as base]
             [tech.datatype.jna :as dtype-jna]
+            [tech.jna :as jna]
+            [tech.datatype.typed-buffer :as typed-buffer]
             [clojure.core.matrix.macros :refer [c-for]]))
 
 
@@ -13,8 +14,8 @@
 
 (deftest jna-things-are-typed-pointers
   (let [test-buf (dtype-jna/make-typed-pointer :uint8 (range 255 245 -1))]
-    (is (unsigned/typed-buffer? test-buf))
-    (is (identical? test-buf (unsigned/as-typed-buffer test-buf)))
+    (is (typed-buffer/typed-buffer? test-buf))
+    (is (identical? test-buf (typed-buffer/->typed-buffer test-buf)))
     (let [data-buf (int-array (dtype/ecount test-buf))]
       (dtype/copy! test-buf data-buf)
       (is (= (vec (range 255 245 -1))
@@ -60,7 +61,9 @@
     (is (= [1 1 1 1 1] (dtype/->vector test-buf)))
     (is (= [1 1 1 1 1] (-> (dtype/clone test-buf :datatype :uint8)
                            dtype/->vector)))
-    (is (dtype-jna/typed-pointer? (dtype/from-prototype test-buf)))))
+    (is (not= 0 (-> (dtype/clone test-buf :datatype :uint8)
+                    jna/->ptr-backing-store
+                    dtype-jna/pointer->address)))))
 
 
 (deftest simple-init-ptr

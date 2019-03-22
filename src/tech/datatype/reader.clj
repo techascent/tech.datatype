@@ -65,7 +65,7 @@
        (size [reader#] (int (mp/element-count ~buffer)))
        (read [reader# idx#]
          (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
-             (checked-full-read-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))))
+             (checked-full-write-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))))
 
 
 (defmacro make-buffer-reader-table
@@ -124,14 +124,14 @@
        (size [reader#] (.size ~src-reader))
        (read [item# idx#]
          (-> (.read ~src-reader idx#)
-             (checked-full-read-cast ~src-dtype ~intermediate-dtype ~result-dtype))))))
+             (checked-full-write-cast ~src-dtype ~intermediate-dtype ~result-dtype))))))
 
 
 (defmacro make-marshalling-reader-table
   []
   `(->> [~@(for [dtype (casting/all-datatypes)
                  src-reader-datatype casting/all-host-datatypes]
-            [[dtype src-reader-datatype]
+            [[src-reader-datatype dtype]
              `(fn [src-reader# unchecked?#]
                 (let [src-reader# (typecast/datatype->reader ~src-reader-datatype src-reader# true)]
                   (make-marshalling-reader
@@ -156,10 +156,10 @@
      {:->reader-of-type
       (fn [item# dtype# unchecked?#]
         (if (= dtype# (dtype-proto/get-datatype item#))
-          dtype#
+          item#
           (if-let [reader-fn# (get marshalling-reader-table [~datatype dtype#])]
             (reader-fn# item# unchecked?#)
-            (throw (ex-info (format "Failed to find marshalling reader %s->%s" ~datatype dtype#))))))}))
+            (throw (ex-info (format "Failed to find marshalling reader %s->%s" ~datatype dtype#) {})))))}))
 
 
 (extend-reader-type ByteReader :int8)

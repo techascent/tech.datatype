@@ -4,13 +4,15 @@
             [tech.datatype.io :as dtype-io]
             [tech.datatype.base :as base]
             [tech.datatype.nio-buffer]
+            [tech.jna :as jna]
             [tech.parallel :as parallel]
             [tech.datatype.reader :as reader]
             [tech.datatype.writer :as writer]
             [tech.datatype.typecast :as typecast]
             [tech.jna :as jna]
             [clojure.core.matrix.macros :refer [c-for]]
-            [clojure.core.matrix.protocols :as mp]))
+            [clojure.core.matrix.protocols :as mp])
+  (:import [com.sun.jna Pointer]))
 
 
 (set! *warn-on-reflection* true)
@@ -39,11 +41,13 @@
                                                shape)))
   dtype-proto/PToNioBuffer
   (->buffer-backing-store [item]
-    (dtype-proto/->buffer-backing-store backing-store))
+    (when (satisfies? dtype-proto/PToNioBuffer backing-store)
+      (dtype-proto/->buffer-backing-store backing-store)))
 
   dtype-proto/PToList
   (->list-backing-store [item]
-    (dtype-proto/->list-backing-store item))
+    (when (satisfies? dtype-proto/PToList backing-store)
+      (dtype-proto/->list-backing-store backing-store)))
 
 
   dtype-proto/PBuffer
@@ -59,14 +63,14 @@
 
   dtype-proto/PToArray
   (->sub-array [item]
-    (when (= datatype (dtype-proto/get-datatype backing-store))
-      (dtype-proto/->sub-array backing-store)))
+    (dtype-proto/->sub-array backing-store))
   (->array-copy [item]
     (if (= datatype (dtype-proto/get-datatype backing-store))
       (dtype-proto/->array-copy backing-store)
       (let [data-buf (dtype-proto/make-container
                       :java-array (casting/datatype->safe-host-type datatype)
-                      (base/ecount backing-store))]
+                      (base/ecount backing-store)
+                      {})]
         (base/copy! item 0 data-buf 0 (base/ecount item)))))
 
   dtype-proto/PToWriter
@@ -98,11 +102,16 @@
       (-> (dtype-proto/->mutable-of-type backing-store datatype true)
           (dtype-proto/->mutable-of-type mutable-datatype unchecked?))))
 
+  jna/PToPtr
+  (->ptr-backing-store [item]
+    (when (satisfies? jna/PToPtr backing-store)
+      (jna/->ptr-backing-store backing-store)))
+
   mp/PElementCount
   (element-count [item] (mp/element-count backing-store)))
 
 
-(defn typed-buffer-like?
+(defn typed-buffer?
   [item]
   (every? #(satisfies? % item)
           [dtype-proto/PDatatype
@@ -120,24 +129,53 @@
        (satisfies? dtype-proto/PToList))))
 
 
-(defn ->typed-buffer
+(defn convert-to-typed-buffer
   [item]
   (cond
     (instance? TypedBuffer item)
     item
     (satisfies? dtype-proto/PToNioBuffer item)
     (->TypedBuffer (dtype-proto/get-datatype item) (dtype-proto/->buffer-backing-store item))
+    (satisfies? dtype-proto/PToList item)
+    (->TypedBuffer (dtype-proto/get-datatype item) (dtype-proto/->list-backing-store item))
     :else
     (throw (ex-info "Item is not convertible to typed buffer"
                     {:item-type (type item)}))))
 
 
+(defn ->typed-buffer
+  [item]
+  (cond
+    (typed-buffer? item)
+    item
+    :else
+    (convert-to-typed-buffer item)))
+
+
 (defn make-typed-buffer
   ([datatype elem-count-or-seq options]
-   (->typed-buffer (dtype-proto/make-container
-                    :java-array datatype elem-count-or-seq options)))
+   (let [host-dtype (casting/datatype->host-datatype datatype)
+         backing-store
+         (if (or (:unchecked? options)
+                 (= host-dtype datatype))
+           (dtype-proto/make-container
+            :java-array host-dtype elem-count-or-seq options)
+           (let [n-elems (if (number? elem-count-or-seq)
+                           elem-count-or-seq
+                           (base/ecount elem-count-or-seq))
+                 container (dtype-proto/make-container :java-array host-dtype n-elems {})]
+             (dtype-proto/copy-raw->item! elem-count-or-seq container 0 options)
+             container))]
+     (->TypedBuffer datatype backing-store)))
   ([datatype elem-count-or-seq]
    (make-typed-buffer datatype elem-count-or-seq {})))
+
+
+(defn set-datatype
+  "Use this one with care."
+  [item dtype]
+  (assoc (convert-to-typed-buffer item)
+         :datatype dtype))
 
 
 (defmethod dtype-proto/make-container :typed-buffer

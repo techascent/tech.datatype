@@ -46,7 +46,8 @@
                         dst-buf
                         (or (and (numeric-type? dst-dtype)
                                  (= dst-dtype src-dtype)
-                                 (= dst-buf-dtype dst-dtype))
+                                 (= dst-buf-dtype dst-dtype)
+                                 (= src-buf-dtype src-dtype))
                             (and (integer-type? dst-dtype)
                                  (integer-type? src-dtype)
                                  (= (casting/datatype->host-datatype dst-dtype) dst-buf-dtype)

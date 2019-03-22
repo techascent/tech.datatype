@@ -245,8 +245,8 @@
     (cond
       ;;Very fast path
       (and dst-ptr src-ary)
-      (let [{:keys [array-data array-offset]} src-ary
-            array-offset (int array-offset)]
+      (let [{:keys [array-data offset]} src-ary
+            array-offset (int offset)]
         (case src-dtype
           :int8 (.write dst-ptr 0 ^bytes array-data array-offset n-elems)
           :int16 (.write dst-ptr 0 ^shorts array-data array-offset n-elems)
@@ -255,8 +255,8 @@
           :float32 (.write dst-ptr 0 ^floats array-data array-offset n-elems)
           :float64 (.write dst-ptr 0 ^doubles array-data array-offset n-elems)))
       (and dst-ary src-ptr)
-      (let [{:keys [array-data array-offset]} dst-ary
-            array-offset (int array-offset)]
+      (let [{:keys [array-data offset]} dst-ary
+            array-offset (int offset)]
         (case src-dtype
           :int8 (.read src-ptr 0 ^bytes array-data array-offset n-elems)
           :int16 (.read src-ptr 0 ^shorts array-data array-offset n-elems)
@@ -267,7 +267,8 @@
       (and src-buf dst-buf)
       (memcpy dst-buf src-buf (* n-elems (casting/numeric-byte-width src-dtype)))
       (and src-list dst-ary)
-      (let [{:keys [array-data array-offset]} dst-ary]
+      (let [{:keys [array-data offset]} dst-ary
+            array-offset (int offset)]
         (case src-dtype
           :int8 (.getElements ^ByteList src-list 0 ^bytes array-data array-offset n-elems)
           :int16 (.getElements ^ShortList src-list 0 ^shorts array-data array-offset n-elems)

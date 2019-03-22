@@ -25,7 +25,7 @@
             [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel]
             [tech.datatype.array])
-  (:import [com.sun.jna Pointer]
+  (:import [com.sun.jna Pointer Native]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
            [tech.datatype
@@ -83,9 +83,10 @@
                                                target-offset# options#))}
      dtype-proto/PPrototype
      {:from-prototype (fn [src-ary# datatype# shape#]
-                        (if-not (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
-                          (make-buffer-of-type datatype# (base/shape->ecount shape#))
-                          (throw (ex-info "Cannot clone direct nio buffers" {}))))}
+                        (let [n-elems# (base/shape->ecount shape#)]
+                          (if (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
+                            (dtype-proto/make-container :native-buffer datatype# n-elems# {})
+                            (dtype-proto/make-container :nio-buffer datatype# n-elems# {}))))}
      dtype-proto/PToNioBuffer
      {:->buffer-backing-store (fn [item#] item#)}
 
@@ -189,7 +190,14 @@
       (fn [item# reader-datatype# unchecked?#]
         (if-let [reader-fn# (get reader/buffer-reader-table [~datatype reader-datatype#])]
           (reader-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}))
+          (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}
+
+     jna/PToPtr
+     {:->ptr-backing-store
+      (fn [item#]
+        (let [item# (datatype->buffer-cast-fn ~datatype item#)]
+          (when (.isDirect item#)
+            (Native/getDirectBufferPointer item#))))}))
 
 
 (implement-buffer-type ByteBuffer :int8)

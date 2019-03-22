@@ -133,7 +133,7 @@
   []
   `(->> [~@(for [dtype (casting/all-datatypes)
                  dst-writer-datatype casting/all-host-datatypes]
-            [[dtype dst-writer-datatype]
+            [[dst-writer-datatype dtype]
              `(fn [dst-writer# unchecked?#]
                 (let [dst-writer# (typecast/datatype->writer ~dst-writer-datatype dst-writer# true)]
                   (make-marshalling-writer

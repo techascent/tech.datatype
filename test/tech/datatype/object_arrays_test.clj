@@ -1,7 +1,9 @@
 (ns tech.datatype.object-arrays-test
   (:require [clojure.test :refer :all]
-            [tech.datatype.java-primitive :as java-primitive]
-            [tech.datatype :as dtype]))
+            [tech.datatype.typed-buffer :as typed-buffer]
+            [tech.datatype :as dtype]
+            [tech.datatype.list]
+            [tech.datatype.protocols :as dtype-proto]))
 
 
 (deftest boolean-array-test
@@ -25,7 +27,15 @@
     (is (= :string (dtype/get-datatype test-ary)))
     (dtype/set-value! test-ary 3 "hi")
     (is (= ["" "" "" "hi" ""]
-           (dtype/->vector test-ary)))))
+           (dtype/->vector test-ary)))
+
+    (let [sub-buf (dtype-proto/sub-buffer test-ary 2 3)]
+      (is (= :string (dtype/get-datatype sub-buf)))
+      (dtype/set-value! sub-buf 0 "bye!")
+      (is (= ["" "" "bye!" "hi" ""]
+             (dtype/->vector test-ary)))
+      (is (= ["bye!" "hi" ""]
+             (dtype/->vector sub-buf))))))
 
 
 (deftest object-array-test
@@ -35,4 +45,11 @@
     (is (= Object (dtype/get-datatype test-ary)))
     (dtype/set-value! test-ary 3 "hi")
     (is (= [nil nil nil "hi" nil]
-           (dtype/->vector test-ary)))))
+           (dtype/->vector test-ary)))
+    (let [sub-buf (dtype-proto/sub-buffer test-ary 2 3)]
+      (is (= Object (dtype/get-datatype sub-buf)))
+      (dtype/set-value! sub-buf 0 "bye!")
+      (is (= [nil nil "bye!" "hi" nil]
+             (dtype/->vector test-ary)))
+      (is (= ["bye!" "hi" nil]
+             (dtype/->vector sub-buf))))))

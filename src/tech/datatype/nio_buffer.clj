@@ -183,12 +183,12 @@
       (fn [item# writer-datatype# unchecked?#]
         (if-let [writer-fn# (get writer/buffer-writer-table [~datatype writer-datatype#])]
           (writer-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find writer %s->%s" ~datatype writer-datatype#) {}))))}
+          (throw (ex-info (format "Failed to find writer %s->%s" ~datatype (casting/flatten-datatype writer-datatype#)) {}))))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (if-let [reader-fn# (get reader/buffer-reader-table [~datatype reader-datatype#])]
+        (if-let [reader-fn# (get reader/buffer-reader-table [~datatype (casting/flatten-datatype reader-datatype#)])]
           (reader-fn# item# unchecked?#)
           (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}
 

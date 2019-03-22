@@ -3,7 +3,6 @@
             [tech.datatype.casting :as casting]
             [tech.datatype.io :as dtype-io]
             [tech.datatype.base :as base]
-            [tech.datatype.nio-buffer]
             [tech.jna :as jna]
             [tech.parallel :as parallel]
             [tech.datatype.reader :as reader]

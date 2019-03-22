@@ -269,21 +269,21 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (if-let [writer-fn# (get writer/list-writer-table [~datatype writer-datatype#])]
+        (if-let [writer-fn# (get writer/list-writer-table [~datatype (casting/flatten-datatype writer-datatype#)])]
           (writer-fn# item# unchecked?#)
           (throw (ex-info (format "Failed to find writer %s->%s" ~datatype writer-datatype#) {}))))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (if-let [reader-fn# (get reader/list-reader-table [~datatype reader-datatype#])]
+        (if-let [reader-fn# (get reader/list-reader-table [~datatype (casting/flatten-datatype reader-datatype#)])]
           (reader-fn# item# unchecked?#)
           (throw (ex-info (format "Failed to find reader %s->%s" ~datatype reader-datatype#) {}))))}
 
      dtype-proto/PToMutable
      {:->mutable-of-type
       (fn [list-item# mut-dtype# unchecked?#]
-        (if-let [mutable-fn# (get mutable/list-mutable-table [~datatype mut-dtype#])]
+        (if-let [mutable-fn# (get mutable/list-mutable-table [~datatype (casting/flatten-datatype mut-dtype#)])]
           (mutable-fn# list-item# unchecked?#)
           (throw (ex-info (format "Failed to find mutable %s->%s" ~datatype mut-dtype#) {}))))}))
 

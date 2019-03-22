@@ -377,6 +377,34 @@
     :boolean 'BooleanList
     :object 'ObjectList))
 
+(defn datatype->array-list-type
+  [datatype]
+  (case datatype
+    :int8 'ByteArrayList
+    :int16 'ShortArrayList
+    :int32 'IntArrayList
+    :int64 'LongArrayList
+    :float32 'FloatArrayList
+    :float64 'DoubleArrayList
+    :boolean 'BooleanArrayList
+    :object 'ObjectArrayList))
+
+
+
+(defn wrap-array-with-list
+  [src-data]
+  (if (satisfies? dtype-proto/PDatatype src-data)
+    (case (dtype-proto/get-datatype src-data)
+      :int8 (ByteArrayList/wrap ^bytes src-data)
+      :int16 (ShortArrayList/wrap ^shorts src-data)
+      :int32 (IntArrayList/wrap ^ints src-data)
+      :int64 (LongArrayList/wrap ^longs src-data)
+      :float32 (FloatArrayList/wrap ^floats src-data)
+      :float64 (DoubleArrayList/wrap ^doubles src-data)
+      :boolean (BooleanArrayList/wrap ^booleans src-data)
+      (ObjectArrayList/wrap (as-object-array src-data)))
+    (ObjectArrayList/wrap (as-object-array src-data))))
+
 
 (defn datatype->mutable-type
   [datatype]

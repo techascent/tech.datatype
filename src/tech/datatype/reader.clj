@@ -157,7 +157,7 @@
       (fn [item# dtype# unchecked?#]
         (if (= dtype# (dtype-proto/get-datatype item#))
           item#
-          (if-let [reader-fn# (get marshalling-reader-table [~datatype dtype#])]
+          (if-let [reader-fn# (get marshalling-reader-table [~datatype (casting/flatten-datatype dtype#)])]
             (reader-fn# item# unchecked?#)
             (throw (ex-info (format "Failed to find marshalling reader %s->%s" ~datatype dtype#) {})))))}))
 

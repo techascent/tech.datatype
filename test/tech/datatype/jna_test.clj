@@ -1,6 +1,7 @@
 (ns tech.datatype.jna-test
   (:require [clojure.test :refer :all]
             [tech.datatype :as dtype]
+            [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.base :as base]
             [tech.datatype.jna :as dtype-jna]
             [tech.jna :as jna]
@@ -14,6 +15,7 @@
 
 (deftest jna-things-are-typed-pointers
   (let [test-buf (dtype-jna/make-typed-pointer :uint8 (range 255 245 -1))]
+    (is (= :uint8 (dtype-proto/get-datatype test-buf)))
     (is (typed-buffer/typed-buffer? test-buf))
     (is (identical? test-buf (typed-buffer/->typed-buffer test-buf)))
     (let [data-buf (int-array (dtype/ecount test-buf))]

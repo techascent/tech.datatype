@@ -4,11 +4,20 @@
             [tech.datatype.reader :as reader]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.casting :as casting]
-            [tech.datatype.typecast :refer :all]
+            [tech.datatype.typecast :refer :all :as typecast]
+            [tech.datatype.typed-buffer :as typed-buffer]
             [tech.jna :as jna])
   (:import [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
-           [java.lang.reflect Constructor]))
+           [java.lang.reflect Constructor]
+           [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
+           [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
+           [it.unimi.dsi.fastutil.ints IntList IntArrayList]
+           [it.unimi.dsi.fastutil.longs LongList LongArrayList]
+           [it.unimi.dsi.fastutil.floats FloatList FloatArrayList]
+           [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
+           [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
+           [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]))
 
 
 (set! *warn-on-reflection* true)
@@ -69,6 +78,9 @@
                           (dtype-proto/partially-alias?
                            (dtype-proto/->buffer-backing-store lhs-buffer#)
                            rhs-buffer#))}
+     dtype-proto/PToList
+     {:->list-backing-store (fn [item#]
+                              (typecast/wrap-array-with-list item#))}
      dtype-proto/PToReader
      {:->reader-of-type (fn [item# datatype# unchecked?#]
                           (dtype-proto/->reader-of-type
@@ -120,6 +132,10 @@
     (base/copy! src-ary (make-array-of-type
                          :boolean
                          (alength (as-boolean-array src-ary)))))
+
+  dtype-proto/PToList
+  (->list-backing-store [item]
+    (typecast/wrap-array-with-list item))
 
 
   dtype-proto/PToWriter
@@ -212,3 +228,79 @@
 (defmethod dtype-proto/make-container :java-array
   [container-type datatype elem-count-or-seq options]
   (make-array-of-type datatype elem-count-or-seq options))
+
+
+(defonce ^:dynamic *object-array-datatype-override* (atom nil))
+
+
+(defn add-object-array-datatype-override!
+  [cls-dtype override-val]
+  (swap! *object-array-datatype-override* assoc cls-dtype override-val)
+  (keys @*object-array-datatype-override*))
+
+
+(defn extend-object-array-type
+  [obj-ary-cls]
+  (when-not (.isArray ^Class obj-ary-cls)
+    (throw (ex-info "Obj class is not an array class" {})))
+
+  (clojure.core/extend
+      obj-ary-cls
+    dtype-proto/PDatatype
+    {:get-datatype (fn [item]
+                     (let [ary-data-cls (.getComponentType ^Class (type item))]
+                       (get @*object-array-datatype-override* ary-data-cls ary-data-cls)))}
+
+    dtype-proto/PBuffer
+    {:sub-buffer
+     (fn [buffer offset length]
+       (-> (dtype-proto/sub-buffer (dtype-proto/->list-backing-store buffer) offset length)
+           (typed-buffer/set-datatype (dtype-proto/get-datatype buffer))))
+     :alias? (fn [lhs-buffer rhs-buffer]
+               (identical? lhs-buffer (dtype-proto/->array rhs-buffer)))
+     :partially-alias? (fn [lhs-buffer rhs-buffer]
+                         (dtype-proto/alias? lhs-buffer rhs-buffer))}
+
+    dtype-proto/PToList
+    {:->list-backing-store (fn [item#]
+                             (ObjectArrayList/wrap item# (base/ecount item#)))}
+
+
+    dtype-proto/PCopyRawData
+    {:copy-raw->item! (fn [raw-data ary-target offset options]
+                        (base/raw-dtype-copy! raw-data 0 ary-target offset
+                                              (base/ecount raw-data) options))}
+
+    dtype-proto/PPersistentVector
+    {:->vector (fn [item] (vec item))}
+
+    dtype-proto/PPrototype
+    {:from-prototype (fn [src-ary datatype shape]
+                       (make-array-of-type datatype (base/shape->ecount shape)))}
+
+    dtype-proto/PToArray
+    {:->sub-array (fn [item] {:array-data item
+                              :offset 0
+                              :length (base/ecount item)})
+     :->array-copy (fn [src-ary]
+                     (base/copy! src-ary
+                                 (make-array-of-type (base/get-datatype src-ary)
+                                                     (alength (as-object-array src-ary)))))}
+    dtype-proto/PToWriter
+    {:->writer-of-type
+     (fn [item# datatype# unchecked?#]
+       (dtype-proto/->writer-of-type (dtype-proto/->list-backing-store item#)
+                                     datatype# unchecked?#))}
+
+
+    dtype-proto/PToReader
+    {:->reader-of-type
+     (fn [item# datatype# unchecked?#]
+       (dtype-proto/->reader-of-type (dtype-proto/->list-backing-store item#)
+                                     datatype# unchecked?#))}))
+
+
+(extend-object-array-type (Class/forName "[Ljava.lang.Object;"))
+(extend-object-array-type (Class/forName "[Ljava.lang.String;"))
+(add-object-array-datatype-override! String :string)
+(add-numeric-array-constructor :string #(make-object-array-of-type String % {:construct? true}))

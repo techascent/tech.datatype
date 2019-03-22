@@ -150,7 +150,7 @@
       (fn [item# mut-dtype# unchecked?#]
         (if (= mut-dtype# (dtype-proto/get-datatype item#))
           item#
-          (if-let [mutable-fn# (get marshalling-mutable-table [~datatype mut-dtype#])]
+          (if-let [mutable-fn# (get marshalling-mutable-table [~datatype (casting/flatten-datatype mut-dtype#)])]
             (mutable-fn# item# unchecked?#)
             (throw (ex-info (format "Failed to find marshalling mutable: %s %s" ~datatype dtype#)
                             {:src-datatype ~datatype

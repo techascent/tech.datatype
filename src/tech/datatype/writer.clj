@@ -160,7 +160,7 @@
       (fn [item# dtype# unchecked?#]
         (if (= dtype# (dtype-proto/get-datatype item#))
           item#
-          (if-let [writer-fn# (get marshalling-writer-table [~datatype dtype#])]
+          (if-let [writer-fn# (get marshalling-writer-table [~datatype (casting/flatten-datatype dtype#)])]
             (writer-fn# item# unchecked?#)
             (throw (ex-info (format "Failed to find marshalling writer: %s %s" ~datatype dtype#)
                             {:src-datatype ~datatype

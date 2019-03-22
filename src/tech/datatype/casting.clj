@@ -112,9 +112,11 @@
 
 (defn ->number
   [item]
-  (if (not (number? item))
-    (bool->number item)
-    item))
+  (cond
+    (number? item) item
+    (boolean? item) (bool->number item)
+    :else ;;punt!!
+    (double item)))
 
 
 (defmacro datatype->number
@@ -290,3 +292,11 @@
     `(datatype->unchecked-cast-fn
       :ignored ~host-type
       (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
+
+
+(defn flatten-datatype
+  "Move a datatype into the canonical set"
+  [dtype]
+  (if (base-datatypes dtype)
+    dtype
+    :object))

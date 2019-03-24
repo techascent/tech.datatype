@@ -22,7 +22,9 @@
             [tech.datatype.fast-copy :as fast-copy]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.io :as dtype-io]
-            [tech.datatype.typecast :as typecast])
+            [tech.datatype.typecast :as typecast]
+            ;;Load all iterator bindings
+            [tech.datatype.iterator])
   (:import [tech.datatype ObjectReader ObjectReaderIter
             ByteReader ByteReaderIter
             ShortReader ShortReaderIter
@@ -166,6 +168,11 @@
   [reader-type datatype]
   `(clojure.core/extend
        ~reader-type
+     dtype-proto/PToIterator
+     {:->iterator-of-type
+      (fn [item# dtype# unchecked?#]
+        (.iterator ^Iterable (dtype-proto/->reader-of-type
+                              item# dtype# unchecked?#)))}
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# dtype# unchecked?#]
@@ -186,3 +193,33 @@
 (extend-reader-type DoubleReader :float64)
 (extend-reader-type BooleanReader :boolean)
 (extend-reader-type ObjectReader :object)
+
+
+(defmacro make-const-reader
+  [datatype]
+  `(fn [item# num-elems#]
+     (let [num-elems# (int (or num-elems# Integer/MAX_VALUE))
+           item# (checked-full-write-cast
+                  item# :unknown ~datatype
+                  ~(casting/datatype->safe-host-type datatype))]
+       (reify ~(typecast/datatype->reader-type datatype)
+         (getDatatype [reader#] ~datatype)
+         (size [reader#] num-elems#)
+         (read [reader# idx#] item#)
+         (iterator [reader#] (typecast/reader->iterator reader#))))))
+
+(defmacro make-const-reader-table
+  []
+  `(->> [~@(for [dtype casting/base-datatypes]
+             [dtype `(make-const-reader ~dtype)])]
+        (into {})))
+
+
+(def const-reader-table (make-const-reader-table))
+
+
+(defn make-const-reader
+  [item datatype & [num-elems]]
+  (if-let [reader-fn (get const-reader-table (casting/flatten-datatype datatype))]
+    (reader-fn item num-elems)
+    (throw (ex-info (format "Failed to find reader for datatype %s" datatype) {}))))

@@ -80,3 +80,34 @@
 (extend-iter-type DoubleIter :float64)
 (extend-iter-type BooleanIter :boolean)
 (extend-iter-type ObjectIter :object)
+
+
+(defmacro make-const-iter
+  [datatype]
+  (let [host-type (casting/datatype->safe-host-type datatype)]
+    `(fn [item#]
+       (let [item# (checked-full-write-cast
+                    item# :unknown ~datatype
+                    ~host-type)]
+         (reify ~(typecast/datatype->iter-type host-type)
+           (getDatatype [iter#] ~datatype)
+           (hasNext [iter#] true)
+           (~(typecast/datatype->iter-next-fn-name host-type) [iter#] item#)
+           (current [iter#] item#))))))
+
+
+(defmacro make-const-iter-table
+  []
+  `(->> [~@(for [dtype casting/base-datatypes]
+             [dtype `(make-const-iter ~dtype)])]
+        (into {})))
+
+
+(def const-iter-table (make-const-iter-table))
+
+
+(defn make-const-iterator
+  [item datatype]
+  (if-let [iter-fn (get const-iter-table (casting/flatten-datatype datatype))]
+    (iter-fn item)
+    (throw (ex-info (format "Failed to find iter for datatype %s" datatype) {}))))

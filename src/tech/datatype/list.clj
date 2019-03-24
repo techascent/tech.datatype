@@ -286,6 +286,12 @@
           (throw (ex-info (format "Failed to find reader %s->%s"
                                   ~datatype reader-datatype#) {}))))}
 
+     dtype-proto/PToIterator
+     {:->iterator-of-type
+      (fn [item# datatype# unchecked?#]
+        (.iterator ^Iterable (dtype-proto/->reader-of-type
+                              item# datatype# unchecked?#)))}
+
      dtype-proto/PToMutable
      {:->mutable-of-type
       (fn [list-item# mut-dtype# unchecked?#]

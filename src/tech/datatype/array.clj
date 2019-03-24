@@ -151,7 +151,12 @@
   dtype-proto/PToReader
   (->reader-of-type [item datatype unchecked?]
     (dtype-proto/->reader-of-type (dtype-proto/->list-backing-store item)
-                                  datatype unchecked?)))
+                                  datatype unchecked?))
+
+  dtype-proto/PToIterator
+  (->iterator-of-type [item datatype unchecked?]
+    (-> (dtype-proto/->list-backing-store item)
+        (dtype-proto/->iterator-of-type datatype unchecked?))))
 
 
 (defonce ^:dynamic *array-constructors* (atom {}))
@@ -301,7 +306,13 @@
     {:->reader-of-type
      (fn [item# datatype# unchecked?#]
        (dtype-proto/->reader-of-type (dtype-proto/->list-backing-store item#)
-                                     datatype# unchecked?#))}))
+                                     datatype# unchecked?#))}
+
+    dtype-proto/PToIterator
+    {:->iterator-of-type
+     (fn [item# datatype# unchecked?#]
+       (-> (dtype-proto/->list-backing-store item#)
+           (dtype-proto/->iterator-of-type datatype# unchecked?#)))}))
 
 
 (extend-object-array-type (Class/forName "[Ljava.lang.Object;"))

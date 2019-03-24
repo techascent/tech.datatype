@@ -14,7 +14,8 @@
                      cls-type->write-fn
                      cls-type->pos-fn]]
             [tech.datatype.typecast :as typecast]
-            [clojure.core.matrix.protocols :as mp])
+            [clojure.core.matrix.protocols :as mp]
+            [tech.datatype.iterator :as dtype-iter])
   (:import [tech.datatype ObjectMutable ByteMutable
             ShortMutable IntMutable LongMutable
             FloatMutable DoubleMutable BooleanMutable]
@@ -182,3 +183,32 @@
                                     ~datatype dtype#)
                             {:src-datatype ~datatype
                              :dst-datatype dtype#})))))}))
+
+
+(defmacro make-iter->list-table
+  []
+  `(->> [~@(for [dtype casting/base-datatypes]
+             [dtype `(fn [iter# output#]
+                       (let [iter# (typecast/datatype->iter ~dtype iter#)
+                             output# (or output#
+                                         (dtype-proto/make-container
+                                          :list ~dtype 0))
+                             mutable# (typecast/datatype->mutable ~dtype output#)]
+                         (while (.hasNext iter#)
+                           (.append mutable# (typecast/datatype->iter-next-fn
+                                              ~dtype iter#)))
+                         output#))]
+             )]
+        (into {})))
+
+
+(def iter->list-table)
+
+
+(defn iter->list
+  [item & [existing-list]]
+  (let [item-dtype (dtype-proto/get-datatype item)]
+    (if-let [iter-fn (get iter->list-table (casting/flatten-datatype item-dtype))]
+      (iter-fn item existing-list)
+      (throw (ex-info (format "Failed to find iter->list fn for datatype %s"
+                              item-dtype))))))

@@ -1,18 +1,12 @@
 (ns tech.sparse.index-buffer
-  (:require [tech.libs.fastutil.datatype :as fu-dtype]
-            [tech.compute.driver :as compute-drv]
-            [tech.datatype.base :as dtype-base]
-            [tech.datatype.java-primitive :as primitive]
+  (:require [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.dtype-base :as dtype-base]
             [tech.sparse.protocols :as sparse-proto]
             [clojure.core.matrix.protocols :as mp]
             [tech.sparse.utils :as utils]
             [tech.datatype :as dtype]
             [tech.sparse.set-ops :as set-ops]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [tech.compute.tensor :as ct]
-            [tech.compute.cpu.tensor-math :as cpu-tm]
-            [tech.compute.tensor.operations :as ct-ops]
-            [tech.libs.fastutil.compute])
+            [clojure.core.matrix.macros :refer [c-for]])
   (:import [it.unimi.dsi.fastutil.ints IntArrayList]))
 
 

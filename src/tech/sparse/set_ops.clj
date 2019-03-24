@@ -20,23 +20,23 @@
 
 (defmacro make-buffer-adder
   [datatype lhs-data-buf rhs-data-buf unchecked?]
-  `(let [lhs-iter# (typecast/datatype->reader-iter ~datatype ~lhs-data-buf ~unchecked?)
-         rhs-iter# (typecast/datatype->reader-iter ~datatype ~rhs-data-buf ~unchecked?)
+  `(let [lhs-iter# (typecast/datatype->iter ~datatype ~lhs-data-buf ~unchecked?)
+         rhs-iter# (typecast/datatype->iter ~datatype ~rhs-data-buf ~unchecked?)
          result# (dtype/make-container :list ~datatype 0)
          result-mut# (typecast/datatype->mutable ~datatype result# ~unchecked?)
          zero-val# (casting/datatype->sparse-value ~datatype)]
      (reify PBufferAdder
        (add-left [item#]
-         (let [temp-val# (typecast/datatype->reader-iter-next-fn ~datatype lhs-iter#)
+         (let [temp-val# (typecast/datatype->iter-next-fn ~datatype lhs-iter#)
                is-not-zero?# (not= temp-val# zero-val#)]
            (when is-not-zero?#
              (.append result-mut# temp-val#))
            is-not-zero?#))
        (ignore-left [item#]
-         (typecast/datatype->reader-iter-next-fn ~datatype lhs-iter#)
+         (typecast/datatype->iter-next-fn ~datatype lhs-iter#)
          true)
        (add-right [item#]
-         (let [temp-val# (typecast/datatype->reader-iter-next-fn ~datatype rhs-iter#)
+         (let [temp-val# (typecast/datatype->iter-next-fn ~datatype rhs-iter#)
                is-not-zero?# (not= temp-val# zero-val#)]
            (when is-not-zero?#
              (.append result-mut# temp-val#))
@@ -67,8 +67,8 @@
   (if (= 0 (dtype/ecount lhs-idx-buf))
     {:indexes (dtype/make-container :list :int32 0)
      :values (dtype/make-container :list (dtype/get-datatype lhs-idx-buf) 0)}
-    (let [lhs-iter (typecast/datatype->reader-iter :int32 lhs-idx-buf true)
-          rhs-iter (typecast/datatype->reader-iter :int32 rhs-idx-buf true)
+    (let [lhs-iter (typecast/datatype->iter :int32 lhs-idx-buf true)
+          rhs-iter (typecast/datatype->iter :int32 rhs-idx-buf true)
           result-idx-buf (dtype/make-container :list :int32 0)
           result-mut (typecast/datatype->mutable :int32 result-idx-buf true)
           dtype (dtype/get-datatype lhs-data-buf)

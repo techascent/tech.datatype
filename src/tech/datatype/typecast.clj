@@ -83,7 +83,7 @@
 
 
 (defmacro datatype->writer
-  [datatype writer unchecked?]
+  [datatype writer & [unchecked?]]
   (case datatype
     :int8 `(->int8-writer ~writer ~unchecked?)
     :uint8 `(->uint8-writer ~writer ~unchecked?)
@@ -151,7 +151,7 @@
 
 
 (defmacro datatype->reader
-  [datatype reader unchecked?]
+  [datatype reader & [unchecked?]]
   (case datatype
     :int8 `(->int8-reader ~reader ~unchecked?)
     :uint8 `(->uint8-reader ~reader ~unchecked?)
@@ -316,7 +316,7 @@
 
 
 (defmacro datatype->mutable
-  [datatype mutable unchecked?]
+  [datatype mutable & [unchecked?]]
   (case datatype
     :int8 `(->int8-mutable ~mutable ~unchecked?)
     :uint8 `(->uint8-mutable ~mutable ~unchecked?)

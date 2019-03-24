@@ -4,14 +4,14 @@
             [tech.datatype.casting :as casting]
             [clojure.core.matrix.protocols :as mp])
   (:import [tech.datatype
-            ObjectWriter ObjectReader ObjectMutable ObjectReaderIter
-            ByteWriter ByteReader ByteMutable ByteReaderIter
-            ShortWriter ShortReader ShortMutable ShortReaderIter
-            IntWriter IntReader IntMutable IntReaderIter
-            LongWriter LongReader LongMutable LongReaderIter
-            FloatWriter FloatReader FloatMutable FloatReaderIter
-            DoubleWriter DoubleReader DoubleMutable DoubleReaderIter
-            BooleanWriter BooleanReader BooleanMutable BooleanReaderIter]
+            ObjectWriter ObjectReader ObjectMutable ObjectReaderIter ObjectIter
+            ByteWriter ByteReader ByteMutable ByteReaderIter ByteIter
+            ShortWriter ShortReader ShortMutable ShortReaderIter ShortIter
+            IntWriter IntReader IntMutable IntReaderIter IntIter
+            LongWriter LongReader LongMutable LongReaderIter LongIter
+            FloatWriter FloatReader FloatMutable FloatReaderIter FloatIter
+            DoubleWriter DoubleReader DoubleMutable DoubleReaderIter DoubleIter
+            BooleanWriter BooleanReader BooleanMutable BooleanReaderIter BooleanIter]
            [com.sun.jna Pointer]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
@@ -167,72 +167,59 @@
     :object `(->object-reader ~reader ~unchecked?)))
 
 
-(defn datatype->reader-iter-type
+(defn datatype->iter-type
   [datatype]
   (case datatype
-    :int8 'ByteReaderIter
-    :uint8 'ShortReaderIter
-    :int16 'ShortReaderIter
-    :uint16 'IntReaderIter
-    :int32 'IntReaderIter
-    :uint32 'LongReaderIter
-    :int64 'LongReaderIter
-    :uint64 'LongReaderIter
-    :float32 'FloatReaderIter
-    :float64 'DoubleReaderIter
-    :boolean 'BooleanReaderIter
-    :object 'ObjectReaderIter))
+    :int8 'ByteIter
+    :uint8 'ShortIter
+    :int16 'ShortIter
+    :uint16 'IntIter
+    :int32 'IntIter
+    :uint32 'LongIter
+    :int64 'LongIter
+    :uint64 'LongIter
+    :float32 'FloatIter
+    :float64 'DoubleIter
+    :boolean 'BooleanIter
+    :object 'ObjectIter))
 
 
-(defmacro implement-reader-iter-cast
+(defmacro implement-iter-cast
   [datatype]
   `(if (instance? ~(resolve (datatype->reader-type datatype)) ~'item)
      ~'item
-     (-> (datatype->reader ~datatype ~'item ~'unchecked?)
-         (.iterator))))
+     (dtype-proto/->iterator-of-type ~'item ~datatype ~'unchecked?)))
 
 
-(defn ->int8-reader-iter
-  ^ByteReaderIter [item unchecked?] (implement-reader-iter-cast :int8))
-(defn ->uint8-reader-iter
-  ^ShortReaderIter [item unchecked?] (implement-reader-iter-cast :uint8))
-(defn ->int16-reader-iter
-  ^ShortReaderIter [item unchecked?] (implement-reader-iter-cast :int16))
-(defn ->uint16-reader-iter
-  ^IntReaderIter [item unchecked?] (implement-reader-iter-cast :uint16))
-(defn ->int32-reader-iter
-  ^IntReaderIter [item unchecked?] (implement-reader-iter-cast :int32))
-(defn ->uint32-reader-iter
-  ^LongReaderIter [item unchecked?] (implement-reader-iter-cast :uint32))
-(defn ->int64-reader-iter
-  ^LongReaderIter [item unchecked?] (implement-reader-iter-cast :int64))
-(defn ->uint64-reader-iter
-  ^LongReaderIter [item unchecked?] (implement-reader-iter-cast :uint64))
-(defn ->float32-reader-iter
-  ^FloatReaderIter [item unchecked?] (implement-reader-iter-cast :float32))
-(defn ->float64-reader-iter
-  ^DoubleReaderIter [item unchecked?] (implement-reader-iter-cast :float64))
-(defn ->boolean-reader-iter
-  ^BooleanReaderIter [item unchecked?] (implement-reader-iter-cast :boolean))
-(defn ->object-reader-iter
-  ^ObjectReaderIter [item unchecked?] (implement-reader-iter-cast :object))
+(defn ->int8-iter ^ByteIter [item unchecked?] (implement-iter-cast :int8))
+(defn ->uint8-iter ^ShortIter [item unchecked?] (implement-iter-cast :uint8))
+(defn ->int16-iter ^ShortIter [item unchecked?] (implement-iter-cast :int16))
+(defn ->uint16-iter ^IntIter [item unchecked?] (implement-iter-cast :uint16))
+(defn ->int32-iter ^IntIter [item unchecked?] (implement-iter-cast :int32))
+(defn ->uint32-iter ^LongIter [item unchecked?] (implement-iter-cast :uint32))
+(defn ->int64-iter ^LongIter [item unchecked?] (implement-iter-cast :int64))
+(defn ->uint64-iter ^LongIter [item unchecked?] (implement-iter-cast :uint64))
+(defn ->float32-iter ^FloatIter [item unchecked?] (implement-iter-cast :float32))
+(defn ->float64-iter ^DoubleIter [item unchecked?] (implement-iter-cast :float64))
+(defn ->boolean-iter ^BooleanIter [item unchecked?] (implement-iter-cast :boolean))
+(defn ->object-iter ^ObjectIter [item unchecked?] (implement-iter-cast :object))
 
 
-(defmacro datatype->reader-iter
+(defmacro datatype->iter
   [datatype reader unchecked?]
   (case datatype
-    :int8 `(->int8-reader-iter ~reader ~unchecked?)
-    :uint8 `(->uint8-reader-iter ~reader ~unchecked?)
-    :int16 `(->int16-reader-iter ~reader ~unchecked?)
-    :uint16 `(->uint16-reader-iter ~reader ~unchecked?)
-    :int32 `(->int32-reader-iter ~reader ~unchecked?)
-    :uint32 `(->uint32-reader-iter ~reader ~unchecked?)
-    :int64 `(->int64-reader-iter ~reader ~unchecked?)
-    :uint64 `(->uint64-reader-iter ~reader ~unchecked?)
-    :float32 `(->float32-reader-iter ~reader ~unchecked?)
-    :float64 `(->float64-reader-iter ~reader ~unchecked?)
-    :boolean `(->boolean-reader-iter ~reader ~unchecked?)
-    :object `(->object-reader-iter ~reader ~unchecked?)))
+    :int8 `(->int8-iter ~reader ~unchecked?)
+    :uint8 `(->uint8-iter ~reader ~unchecked?)
+    :int16 `(->int16-iter ~reader ~unchecked?)
+    :uint16 `(->uint16-iter ~reader ~unchecked?)
+    :int32 `(->int32-iter ~reader ~unchecked?)
+    :uint32 `(->uint32-iter ~reader ~unchecked?)
+    :int64 `(->int64-iter ~reader ~unchecked?)
+    :uint64 `(->uint64-iter ~reader ~unchecked?)
+    :float32 `(->float32-iter ~reader ~unchecked?)
+    :float64 `(->float64-iter ~reader ~unchecked?)
+    :boolean `(->boolean-iter ~reader ~unchecked?)
+    :object `(->object-iter ~reader ~unchecked?)))
 
 
 (defn reader->iterator
@@ -248,7 +235,23 @@
     (instance? ObjectReader reader-item) (ObjectReaderIter. reader-item)))
 
 
-(defmacro datatype->reader-iter-next-fn
+(defn datatype->iter-next-fn-name
+  [datatype]
+  (case datatype
+    :int8 'nextByte
+    :uint8 'nextShort
+    :int16 'nextShort
+    :uint16 'nextInt
+    :int32 'nextInt
+    :uint32 'nextLong
+    :int64 'nextLong
+    :uint64 'nextLong
+    :float32 'nextFloat
+    :float64 'nextDouble
+    :boolean 'nextBoolean
+    :object 'next))
+
+(defmacro datatype->iter-next-fn
   [datatype reader-iter]
   (case datatype
     :int8 `(.nextByte ~reader-iter)

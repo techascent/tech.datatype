@@ -1,10 +1,9 @@
 package tech.datatype;
 
-import it.unimi.dsi.fastutil.ints.IntIterator;
 import clojure.lang.Keyword;
 
 
-public class IntReaderIter implements IOBase, IntIterator
+public class IntReaderIter implements IOBase, IntIter
 {
   int idx;
   int num_elems;

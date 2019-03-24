@@ -1,10 +1,9 @@
 package tech.datatype;
 
-import it.unimi.dsi.fastutil.longs.LongIterator;
 import clojure.lang.Keyword;
 
 
-public class LongReaderIter implements IOBase, LongIterator
+public class LongReaderIter implements IOBase, LongIter
 {
   int idx;
   int num_elems;

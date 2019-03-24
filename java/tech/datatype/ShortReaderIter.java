@@ -1,10 +1,9 @@
 package tech.datatype;
 
-import it.unimi.dsi.fastutil.shorts.ShortIterator;
 import clojure.lang.Keyword;
 
 
-public class ShortReaderIter implements IOBase, ShortIterator
+public class ShortReaderIter implements IOBase, ShortIter
 {
   int idx;
   int num_elems;

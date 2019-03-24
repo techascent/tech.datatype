@@ -1,10 +1,9 @@
 package tech.datatype;
 
-import it.unimi.dsi.fastutil.booleans.BooleanIterator;
 import clojure.lang.Keyword;
 
 
-public class BooleanReaderIter implements IOBase, BooleanIterator
+public class BooleanReaderIter implements IOBase, BooleanIter
 {
   int idx;
   int num_elems;

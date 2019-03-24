@@ -112,6 +112,10 @@ data overlap?"))
   (->mutable-of-type [item datatype unchecked?]))
 
 
+(defprotocol PToIterator
+  (->iterator-of-type [item datatype unchecked?]))
+
+
 (defmulti make-container
   (fn [container-type datatype elem-seq-or-count options]
     container-type))

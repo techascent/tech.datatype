@@ -1,10 +1,9 @@
 package tech.datatype;
 
-import it.unimi.dsi.fastutil.doubles.DoubleIterator;
 import clojure.lang.Keyword;
 
 
-public class DoubleReaderIter implements IOBase, DoubleIterator
+public class DoubleReaderIter implements IOBase, DoubleIter
 {
   int idx;
   int num_elems;

@@ -86,6 +86,11 @@
                            (dtype-proto/->buffer-backing-store item#)
                            datatype# unchecked?#))}
 
+     dtype-proto/PToIterator
+     {:->iterator-of-type (fn [item# datatype# unchecked?#]
+                            (-> (dtype-proto/->buffer-backing-store item#)
+                                (dtype-proto/->iterator-of-type datatype# unchecked?#)))}
+
      dtype-proto/PToWriter
      {:->writer-of-type (fn [item# datatype# unchecked?#]
                           (dtype-proto/->writer-of-type

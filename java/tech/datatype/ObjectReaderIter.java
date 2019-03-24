@@ -1,9 +1,9 @@
 package tech.datatype;
 
 import clojure.lang.Keyword;
-import java.util.Iterator;
 
-public class ObjectReaderIter implements IOBase, Iterator
+
+public class ObjectReaderIter implements IOBase, ObjectIter
 {
   int idx;
   int num_elems;

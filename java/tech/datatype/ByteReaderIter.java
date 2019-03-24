@@ -1,10 +1,9 @@
 package tech.datatype;
 
-import it.unimi.dsi.fastutil.bytes.ByteIterator;
 import clojure.lang.Keyword;
 
 
-public class ByteReaderIter implements IOBase, ByteIterator
+public class ByteReaderIter implements IOBase, ByteIter
 {
   int idx;
   int num_elems;

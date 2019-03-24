@@ -70,7 +70,7 @@
 
 (defmacro make-buffer-writer-table
   []
-  `(->> [~@(for [dtype (casting/all-datatypes)
+  `(->> [~@(for [dtype casting/base-datatypes
                  buffer-datatype casting/host-numeric-types]
             [[buffer-datatype dtype]
              `(fn [buffer# unchecked?#]
@@ -92,7 +92,7 @@
 
 (defmacro make-list-writer-table
   []
-  `(->> [~@(for [dtype (casting/all-datatypes)
+  `(->> [~@(for [dtype casting/base-datatypes
                  buffer-datatype casting/all-host-datatypes]
             [[buffer-datatype dtype]
              `(fn [buffer# unchecked?#]

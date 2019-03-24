@@ -160,9 +160,10 @@
     (dtype-proto/copy-raw->item! (seq src-data) dst-data offset options))
   dtype-proto/PPersistentVector
   (->vector [src]
-    (if (satisfies? dtype-proto/PToArray src)
-      (vec (or (dtype-proto/->array src)
-               (dtype-proto/->array-copy src)))))
+    (if (satisfies? dtype-proto/PToReader src)
+      ;;Readers implement iterable which gives them seq and friends
+      (vec (dtype-proto/->reader-of-type
+            src (dtype-proto/get-datatype src) true))))
   dtype-proto/PToReader
   (->reader-of-type [item datatype unchecked?]
     (-> (reify ObjectReader

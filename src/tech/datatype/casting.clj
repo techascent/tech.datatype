@@ -195,16 +195,20 @@
     (case dst-dtype
       :uint8 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                            (check (short 0xff) (short 0)
-                                                  (short (datatype->number ~src-dtype ~val))))
+                                                  (short (datatype->number ~src-dtype
+                                                                           ~val))))
       :uint16 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                             (check (int 0xffff) (int 0)
-                                                   (int (datatype->number ~src-dtype ~val))))
+                                                   (int (datatype->number ~src-dtype
+                                                                          ~val))))
       :uint32 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                             (check (long 0xffffffff) (int 0)
-                                                   (long (datatype->number ~src-dtype ~val))))
+                                                   (long (datatype->number ~src-dtype
+                                                                           ~val))))
       :uint64 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                             (check (long Long/MAX_VALUE) (long 0)
-                                                   (long (datatype->number ~src-dtype ~val))))
+                                                   (long (datatype->number ~src-dtype
+                                                                           ~val))))
       :int8 `(unchecked-byte (int8-cast ~val))
       :int16 `(unchecked-short (int16-cast ~val))
       :int32 `(unchecked-int (int32-cast ~val))
@@ -304,3 +308,11 @@
   (if (base-datatypes dtype)
     dtype
     :object))
+
+
+(defmacro datatype->sparse-value
+  [datatype]
+  (cond
+    (= datatype :object) `nil
+    (= datatype :boolean `false)
+    `(datatype->unchecked-cast-fn ~datatype 0)))

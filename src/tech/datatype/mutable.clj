@@ -47,7 +47,8 @@
 
 
 (defmacro make-mutable
-  [mutable-cls buffer-cls buffer mutable-dtype intermediate-dtype buffer-dtype unchecked?]
+  [mutable-cls buffer-cls buffer mutable-dtype
+   intermediate-dtype buffer-dtype unchecked?]
   `(if ~unchecked?
      (reify ~mutable-cls
        (getDatatype [mut-item#] ~intermediate-dtype)
@@ -55,6 +56,11 @@
        (insert [mut-item# idx# value#]
          (.add ~buffer idx# (unchecked-full-cast
                              value# ~mutable-dtype ~intermediate-dtype ~buffer-dtype)))
+       (append [mut-item# ~'value]
+         (.add ~buffer ~(if (= buffer-dtype :object)
+                          `(identity ~'value)
+                          `(unchecked-full-cast
+                            ~'value ~mutable-dtype ~intermediate-dtype ~buffer-dtype))))
        (remove [mut-item# idx#]
          (datatype->single-remove-fn ~buffer-dtype ~buffer idx#))
        (removeRange [mut-item# idx# count#]
@@ -65,6 +71,11 @@
        (insert [mut-item# idx# value#]
          (.add ~buffer idx# (checked-full-write-cast
                              value# ~mutable-dtype ~intermediate-dtype ~buffer-dtype)))
+       (append [mut-item# ~'value]
+         (.add ~buffer ~(if (= buffer-dtype :object)
+                          `(identity ~'value)
+                          `(checked-full-write-cast
+                            ~'value ~mutable-dtype ~intermediate-dtype ~buffer-dtype))))
        (remove [mut-item# idx#]
          (datatype->single-remove-fn ~buffer-dtype ~buffer idx#))
        (removeRange [mut-item# idx# count#]
@@ -73,11 +84,12 @@
 
 (defmacro make-list-mutable-table
   []
-  `(->> [~@(for [dtype (casting/all-datatypes)
+  `(->> [~@(for [dtype casting/base-datatypes
                  buffer-datatype casting/all-host-datatypes]
              [[buffer-datatype dtype]
               `(fn [buffer# unchecked?#]
-                 (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype buffer#)]
+                 (let [buffer# (typecast/datatype->list-cast-fn
+                                ~buffer-datatype buffer#)]
                   (make-mutable
                    ~(typecast/datatype->mutable-type dtype)
                    ~(typecast/datatype->list-type buffer-datatype)
@@ -104,6 +116,12 @@
                                        ~outer-dtype
                                        ~intermediate-dtype
                                        ~inner-dtype)))
+       (append [mut-item# value#]
+         (.append ~inner-mutable
+                  (unchecked-full-cast value#
+                                       ~outer-dtype
+                                       ~intermediate-dtype
+                                       ~inner-dtype)))
        (remove [item# idx#]
          (.remove ~inner-mutable idx#))
        (removeRange [item# idx# count#]
@@ -115,6 +133,12 @@
          (.insert ~inner-mutable idx#
                   (checked-full-write-cast value# ~outer-dtype
                                            ~outer-dtype ~inner-dtype)))
+       (append [mut-item# value#]
+         (.append ~inner-mutable
+                  (checked-full-write-cast value#
+                                           ~outer-dtype
+                                           ~intermediate-dtype
+                                           ~inner-dtype)))
        (remove [item# idx#]
          (.remove ~inner-mutable idx#))
        (removeRange [item# idx# count#]
@@ -123,11 +147,12 @@
 
 (defmacro make-marshal-mutable-table
   []
-  `(->> [~@(for [dtype (casting/all-datatypes)
+  `(->> [~@(for [dtype casting/base-datatypes
                  buffer-datatype casting/all-host-datatypes]
              [[buffer-datatype dtype]
               `(fn [buffer# unchecked?#]
-                 (let [buffer# (typecast/datatype->mutable ~buffer-datatype buffer#)]
+                 (let [buffer# (typecast/datatype->mutable ~buffer-datatype buffer#
+                                                           unchecked?#)]
                    (reify-marshalling-mutable
                     ~(typecast/datatype->mutable-type dtype)
                     ~(casting/datatype->safe-host-type dtype)
@@ -150,8 +175,10 @@
       (fn [item# mut-dtype# unchecked?#]
         (if (= mut-dtype# (dtype-proto/get-datatype item#))
           item#
-          (if-let [mutable-fn# (get marshalling-mutable-table [~datatype (casting/flatten-datatype mut-dtype#)])]
+          (if-let [mutable-fn# (get marshalling-mutable-table
+                                    [~datatype (casting/flatten-datatype mut-dtype#)])]
             (mutable-fn# item# unchecked?#)
-            (throw (ex-info (format "Failed to find marshalling mutable: %s %s" ~datatype dtype#)
+            (throw (ex-info (format "Failed to find marshalling mutable: %s %s"
+                                    ~datatype dtype#)
                             {:src-datatype ~datatype
                              :dst-datatype dtype#})))))}))

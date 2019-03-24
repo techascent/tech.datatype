@@ -23,9 +23,14 @@
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.io :as dtype-io]
             [tech.datatype.typecast :as typecast])
-  (:import [tech.datatype ObjectReader ByteReader
-            ShortReader IntReader LongReader
-            FloatReader DoubleReader BooleanReader]
+  (:import [tech.datatype ObjectReader ObjectReaderIter
+            ByteReader ByteReaderIter
+            ShortReader ShortReaderIter
+            IntReader IntReaderIter
+            LongReader LongReaderIter
+            FloatReader FloatReaderIter
+            DoubleReader DoubleReaderIter
+            BooleanReader BooleanReaderIter]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
            [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
@@ -59,22 +64,27 @@
        (size [reader#] (int (mp/element-count ~buffer)))
        (read [reader# idx#]
          (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
-             (unchecked-full-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))
+             (unchecked-full-cast ~buffer-datatype ~intermediate-datatype
+                                  ~reader-datatype)))
+       (iterator [reader#] (reader->iterator reader#)))
      (reify ~reader-type
        (getDatatype [reader#] ~intermediate-datatype)
        (size [reader#] (int (mp/element-count ~buffer)))
        (read [reader# idx#]
          (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
-             (checked-full-write-cast ~buffer-datatype ~intermediate-datatype ~reader-datatype))))))
+             (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
+                                      ~reader-datatype)))
+       (iterator [reader#] (reader->iterator reader#)))))
 
 
 (defmacro make-buffer-reader-table
   []
-  `(->> [~@(for [dtype (casting/all-datatypes)
+  `(->> [~@(for [dtype casting/base-datatypes
                  buffer-datatype casting/host-numeric-types]
             [[buffer-datatype dtype]
              `(fn [buffer# unchecked?#]
-                (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype buffer#)
+                (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
+                                                                 buffer#)
                       buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
                   (make-buffer-reader
                    ~(typecast/datatype->reader-type dtype)
@@ -91,7 +101,7 @@
 
 (defmacro make-list-reader-table
   []
-  `(->> [~@(for [dtype (casting/all-datatypes)
+  `(->> [~@(for [dtype casting/base-datatypes
                  buffer-datatype casting/all-host-datatypes]
             [[buffer-datatype dtype]
              `(fn [buffer# unchecked?#]
@@ -118,13 +128,15 @@
        (size [reader#] (.size ~src-reader))
        (read [item# idx#]
          (-> (.read ~src-reader idx#)
-             (unchecked-full-cast ~src-dtype ~intermediate-dtype ~result-dtype))))
+             (unchecked-full-cast ~src-dtype ~intermediate-dtype ~result-dtype)))
+       (iterator [reader#] (reader->iterator reader#)))
      (reify ~dst-reader-type
        (getDatatype [reader#] ~intermediate-dtype)
        (size [reader#] (.size ~src-reader))
        (read [item# idx#]
          (-> (.read ~src-reader idx#)
-             (checked-full-write-cast ~src-dtype ~intermediate-dtype ~result-dtype))))))
+             (checked-full-write-cast ~src-dtype ~intermediate-dtype ~result-dtype)))
+       (iterator [reader#] (reader->iterator reader#)))))
 
 
 (defmacro make-marshalling-reader-table
@@ -133,13 +145,15 @@
                  src-reader-datatype casting/all-host-datatypes]
             [[src-reader-datatype dtype]
              `(fn [src-reader# unchecked?#]
-                (let [src-reader# (typecast/datatype->reader ~src-reader-datatype src-reader# true)]
+                (let [src-reader# (typecast/datatype->reader ~src-reader-datatype
+                                                             src-reader# true)]
                   (make-marshalling-reader
                    src-reader#
                    ~src-reader-datatype
                    ~dtype
                    ~(casting/datatype->safe-host-type dtype)
-                   ~(typecast/datatype->reader-type (casting/datatype->safe-host-type dtype))
+                   ~(typecast/datatype->reader-type
+                     (casting/datatype->safe-host-type dtype))
                    unchecked?#)))])]
         (into {})))
 
@@ -157,9 +171,11 @@
       (fn [item# dtype# unchecked?#]
         (if (= dtype# (dtype-proto/get-datatype item#))
           item#
-          (if-let [reader-fn# (get marshalling-reader-table [~datatype (casting/flatten-datatype dtype#)])]
+          (if-let [reader-fn# (get marshalling-reader-table
+                                   [~datatype (casting/flatten-datatype dtype#)])]
             (reader-fn# item# unchecked?#)
-            (throw (ex-info (format "Failed to find marshalling reader %s->%s" ~datatype dtype#) {})))))}))
+            (throw (ex-info (format "Failed to find marshalling reader %s->%s"
+                                    ~datatype dtype#) {})))))}))
 
 
 (extend-reader-type ByteReader :int8)

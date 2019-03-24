@@ -11,7 +11,8 @@
             [tech.datatype.fast-copy :as fast-copy]
             [tech.datatype.typecast
              :refer [datatype->reader
-                     datatype->writer]
+                     datatype->writer
+                     reader->iterator]
              :as typecast]
             [clojure.core.matrix.protocols :as mp])
 
@@ -84,7 +85,8 @@
        (getDatatype [item#] ~datatype)
        (size [item#] (int (mp/element-count ~indexes)))
        (read [item# idx#]
-         (.read values# (.read idx-reader# idx#))))))
+         (.read values# (.read idx-reader# idx#)))
+       (iterator [item#] (reader->iterator item#)))))
 
 (defmacro make-indexed-reader-creators
   []

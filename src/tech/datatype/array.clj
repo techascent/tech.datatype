@@ -1,7 +1,6 @@
 (ns tech.datatype.array
   (:require [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.base :as base]
-            [tech.datatype.reader :as reader]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.casting :as casting]
             [tech.datatype.typecast :refer :all :as typecast]

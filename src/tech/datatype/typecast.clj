@@ -186,7 +186,7 @@
 
 (defmacro implement-iter-cast
   [datatype]
-  `(if (instance? ~(resolve (datatype->reader-type datatype)) ~'item)
+  `(if (instance? ~(resolve (datatype->iter-type datatype)) ~'item)
      ~'item
      (dtype-proto/->iterator-of-type ~'item ~datatype ~'unchecked?)))
 
@@ -206,7 +206,7 @@
 
 
 (defmacro datatype->iter
-  [datatype reader unchecked?]
+  [datatype reader & [unchecked?]]
   (case datatype
     :int8 `(->int8-iter ~reader ~unchecked?)
     :uint8 `(->uint8-iter ~reader ~unchecked?)

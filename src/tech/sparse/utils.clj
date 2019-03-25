@@ -1,7 +1,9 @@
 (ns tech.sparse.utils
   (:require [tech.datatype.typecast :as typecast]
             [tech.datatype.casting :as casting]
-            [tech.datatype :as dtype]))
+            [tech.datatype :as dtype]
+            [tech.datatype.unary-op :as unary-op])
+  (:import [tech.datatype UnaryOperators$IntUnary]))
 
 
 (set! *warn-on-reflection* true)
@@ -45,22 +47,30 @@
   [data-offset data-stride index-buf]
   (let [data-offset (int data-offset)
         data-stride (int data-stride)
-        [first-idx index-buf]
+        n-elems (dtype/ecount index-buf)
+        [first-idx adj-index-buf]
         (if (= 0 data-offset)
           [0 index-buf]
           (let [off-idx (binary-search index-buf data-offset)]
             [off-idx (dtype/sub-buffer index-buf off-idx)]))
         first-idx (int first-idx)
-        index-seq (->> index-buf
-                       (typecast/datatype->reader :int32)
-                       (map ->IndexSeqRec
-                            (range first-idx)))]
+        index-seq (if (= 0 data-offset)
+                    (typecast/datatype->reader :int32 adj-index-buf)
+                    (unary-op/unary-reader-map
+                     (unary-op/make-unary-op :int32 (- arg data-offset))
+                     adj-index-buf))
+        index-seq (map ->IndexSeqRec
+                       (range first-idx n-elems)
+                       index-seq)]
     (if (= 1 data-stride)
       index-seq
-      (map (fn [record]
-             (let [global-index (int (:global-index ^IndexSeqRec record))]
-               (when (= 0 (rem global-index data-stride))
-                 (assoc record :global-index (quot global-index data-stride)))))))))
+      (->> index-seq
+           (map (fn [record]
+                  (let [global-index (int (:global-index record))]
+                    (when (= 0 (rem global-index data-stride))
+                      (assoc record :global-index
+                             (quot global-index data-stride))))))
+           (remove nil?)))))
 
 
 
@@ -69,9 +79,10 @@
   `(fn [lhs-buffer# rhs-buffer# index-seq#]
      (let [lhs-buffer# (typecast/datatype->reader ~datatype lhs-buffer#)
            rhs-buffer# (typecast/datatype->writer ~datatype rhs-buffer#)]
-       (doseq [{:keys [data-index# global-index#]} index-seq#]
-         (.write rhs-buffer# (int global-index#)
-                 (.read lhs-buffer# (int data-index#)))))))
+       (doseq [{:keys [~'data-index ~'global-index]} index-seq#]
+         (.write rhs-buffer# (int ~'global-index)
+                 (.read lhs-buffer# (int ~'data-index)))))
+     rhs-buffer#))
 
 
 (defmacro make-sparse-copier-table

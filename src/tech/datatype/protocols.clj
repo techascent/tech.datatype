@@ -1,6 +1,8 @@
 (ns tech.datatype.protocols
   (:require [clojure.core.matrix.protocols :as mp])
-  (:import [tech.datatype Datatype Countable ObjectIter]))
+  (:import [tech.datatype Datatype Countable
+            ObjectIter IteratorObjectIter
+            DatatypeIterable]))
 
 (set! *warn-on-reflection* true)
 
@@ -119,19 +121,20 @@ data overlap?"))
 (extend-type Iterable
   PToIterator
   (->iterator-of-type [item datatype unchecked?]
-    (let [src-iter (.iterator item)
-          has-next (atom (.hasNext src-iter))
-          current-obj (atom (when @has-next
-                              (.next src-iter)))]
-      (-> (reify ObjectIter
-            (getDatatype [this] :object)
-            (hasNext [this] (.hasNext src-iter))
-            (next [this]
-              (let [retval (.next src-iter)]
-                (swap! last-obj retval)
-                retval))
-            ())))))
+    (-> (IteratorObjectIter. (.iterator item) :object)
+        (->iterator-of-type datatype unchecked?))))
 
+(extend-type DatatypeIterable
+  PToIterator
+  (->iterator-of-type [item datatype unchecked?]
+    (.iteratorOfType item datatype unchecked?)))
+
+
+(defprotocol PToUnaryOp
+  (->unary-op [item datatype unchecked?]))
+
+(defprotocol PToBinaryOp
+  (->binary-op [item datatype unchecked?]))
 
 (defmulti make-container
   (fn [container-type datatype elem-seq-or-count options]

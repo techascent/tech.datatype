@@ -1,7 +1,8 @@
 (ns tech.datatype.unary-op
   (:require [tech.datatype.typecast :as typecast]
             [tech.datatype.casting :as casting]
-            [tech.datatype.protocols :as dtype-proto])
+            [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.iterator :as iterator])
   (:import [tech.datatype DatatypeIterable
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
@@ -114,9 +115,9 @@
        (hasNext [item#] (.hasNext src-iter#))
        (~(typecast/datatype->iter-next-fn-name dtype)
         [item#]
-        (->> (typecast/datatype->iter-next-fn
-              ~dtype src-iter#)
-             (.op un-op#)))
+        (let [data-val# (typecast/datatype->iter-next-fn
+                         ~dtype src-iter#)]
+          (.op un-op# data-val#)))
        (current [item#]
          (->> (.current src-iter#)
               (.op un-op#))))))
@@ -128,14 +129,12 @@
              (let [host-dtype (casting/datatype->safe-host-type dtype)]
                [dtype
                 `(fn [item# un-op#]
-                   (-> (reify DatatypeIterable
-                         (getDatatype [iter-item#] ~dtype)
-                         (iterator [iter-item#]
-                           (make-unary-op-iterator ~dtype item# un-op#))
-                         (iteratorOfType [item# iter-datatype# unchecked?#]
-                           (-> (.iterator item#)
-                               (dtype-proto/->iterator-of-type
-                                iter-datatype# unchecked?#))))))]))]
+                   (reify
+                     dtype-proto/PDatatype
+                     (get-datatype [iter-item#] ~dtype)
+                     Iterable
+                     (iterator [iter-item#]
+                       (make-unary-op-iterator ~dtype item# un-op#))))]))]
         (into {})))
 
 (def unary-op-iter-table (make-unary-op-iter-table))
@@ -147,6 +146,15 @@
     (if-let [iter-fn (get unary-op-iter-table (casting/flatten-datatype dtype))]
       (iter-fn item un-op)
       (throw (ex-info (format "Cannot unary map datatype %s" dtype) {})))))
+
+
+(defn iterable-remove
+  [options filter-iter values]
+  (iterator/iterable-filter options
+                            (unary-iterable-map
+                             (make-unary-op :boolean (not arg))
+                             filter-iter)
+                            values))
 
 
 (defmacro make-unary-op-reader-table
@@ -164,7 +172,9 @@
                              (->> (.read src-reader# idx#)
                                   (.op un-op#)))
                            (iterator [item#]
-                             (make-unary-op-iterator ~dtype src-reader# un-op#))))))]))]
+                             (make-unary-op-iterator ~dtype src-reader# un-op#))
+                           (invoke [item# idx#]
+                             (.read item# (int idx#)))))))]))]
         (into {})))
 
 (def unary-op-reader-table (make-unary-op-reader-table))

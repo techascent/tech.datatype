@@ -178,9 +178,7 @@
                                                         (dtype-proto/->buffer-backing-store rhs-dev-buffer#)))}
 
      dtype-proto/PToArray
-     {:->array (fn [item#]
-                 (dtype-proto/->array (dtype-proto/->buffer-backing-store item#)))
-      :->sub-array (fn [item#]
+     {:->sub-array (fn [item#]
                      (dtype-proto/->sub-array (dtype-proto/->buffer-backing-store item#)))
       :->array-copy (fn [item#]
                       (.toArray (datatype->array-list-cast-fn ~datatype item#)))}
@@ -252,15 +250,10 @@
                 (identical? (dtype-proto/->list-backing-store lhs-buffer#)
                             (dtype-proto/->list-backing-store rhs-buffer#)))
       :partially-alias? (fn [lhs-buffer# rhs-buffer#]
-                          false)}
+                          (dtype-proto/alias? lhs-buffer# rhs-buffer#))}
 
      dtype-proto/PToArray
-     {:->array (fn [item#]
-                 (when-let [ary-list# (datatype->as-array-list ~datatype item#)]
-                   (let [dst-ary# (.elements ary-list#)]
-                     (when (= (alength dst-ary#) (.size ary-list#))
-                       dst-ary#))))
-      :->sub-array (fn [item#]
+     {:->sub-array (fn [item#]
                      (when-let [ary-list# (datatype->as-array-list ~datatype item#)]
                        (let [dst-ary# (.elements ary-list#)]
                          {:array-data dst-ary#
@@ -271,20 +264,12 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (if-let [writer-fn# (get writer/list-writer-table
-                                 [~datatype (casting/flatten-datatype writer-datatype#)])]
-          (writer-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find writer %s->%s"
-                                  ~datatype writer-datatype#) {}))))}
+        (writer/make-list-writer item# writer-datatype# unchecked?#))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (if-let [reader-fn# (get reader/list-reader-table
-                                 [~datatype (casting/flatten-datatype reader-datatype#)])]
-          (reader-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find reader %s->%s"
-                                  ~datatype reader-datatype#) {}))))}
+        (reader/make-list-reader item# reader-datatype# unchecked?#))}
 
      dtype-proto/PToIterator
      {:->iterator-of-type

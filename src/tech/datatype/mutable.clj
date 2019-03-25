@@ -188,8 +188,8 @@
 (defmacro make-iter->list-table
   []
   `(->> [~@(for [dtype casting/base-datatypes]
-             [dtype `(fn [iter# output#]
-                       (let [iter# (typecast/datatype->iter ~dtype iter#)
+             [dtype `(fn [iter# output# unchecked?#]
+                       (let [iter# (typecast/datatype->iter ~dtype iter# unchecked?#)
                              output# (or output#
                                          (dtype-proto/make-container
                                           :list ~dtype 0))
@@ -197,18 +197,16 @@
                          (while (.hasNext iter#)
                            (.append mutable# (typecast/datatype->iter-next-fn
                                               ~dtype iter#)))
-                         output#))]
-             )]
+                         output#))])]
         (into {})))
 
 
-(def iter->list-table)
+(def iter->list-table (make-iter->list-table))
 
 
-(defn iter->list
-  [item & [existing-list]]
-  (let [item-dtype (dtype-proto/get-datatype item)]
-    (if-let [iter-fn (get iter->list-table (casting/flatten-datatype item-dtype))]
-      (iter-fn item existing-list)
-      (throw (ex-info (format "Failed to find iter->list fn for datatype %s"
-                              item-dtype))))))
+(defn iterable->list
+  [src-iterable dst-list & {:keys [datatype unchecked?]}]
+  (let [datatype (or datatype (dtype-proto/get-datatype src-iterable))
+        dst-list (or dst-list (dtype-proto/make-container :list datatype 0 {}))
+        iter-fn (get iter->list-table (casting/flatten-datatype datatype))]
+    (iter-fn src-iterable dst-list unchecked?)))

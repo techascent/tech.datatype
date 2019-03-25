@@ -1,8 +1,9 @@
 package tech.datatype;
 
-import java.nio.*;
+import clojure.lang.IFn;
 
-public interface ShortWriter extends IOBase
+
+public interface ShortWriter extends IOBase, IFn
 {
   void write(int idx, short value);
 }

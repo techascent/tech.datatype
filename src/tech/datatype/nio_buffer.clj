@@ -138,14 +138,13 @@
                       (.limit buf# (+ offset# len#))
                       buf#))
       :alias? (fn [lhs-buffer# rhs-buffer#]
-                (when-let [nio-buf# (dtype-proto/->buffer-backing-store rhs-buffer#)]
-                  (when (and
-                             (= (base/get-datatype lhs-buffer#)
-                                (base/get-datatype rhs-buffer#))
-                             (= (base/ecount lhs-buffer#)
-                                (base/ecount rhs-buffer#)))
+                (when-let [rhs-buffer# (dtype-proto/->buffer-backing-store rhs-buffer#)]
+                  (when ((= (base/get-datatype lhs-buffer#)
+                            (base/get-datatype rhs-buffer#))
+                         (= (base/ecount lhs-buffer#)
+                            (base/ecount rhs-buffer#)))
                     (let [lhs-buffer# (datatype->buffer-cast-fn ~datatype lhs-buffer#)
-                          rhs-buffer# (datatype->buffer-cast-fn ~datatype nio-buf#)]
+                          rhs-buffer# (datatype->buffer-cast-fn ~datatype rhs-buffer#)]
                       (when (= (.isDirect lhs-buffer#) (.isDirect rhs-buffer#))
                         (if (.isDirect lhs-buffer#)
                           (= (jna/->ptr-backing-store lhs-buffer#)
@@ -156,14 +155,12 @@
                                                     rhs-buffer#)))))))))
       :partially-alias?
       (fn [lhs-buffer# rhs-buffer#]
-        (when-let [nio-buf# (dtype-proto/->buffer-backing-store
-                             rhs-buffer#)]
+        (when-let [rhs-buffer# (dtype-proto/->buffer-backing-store
+                                rhs-buffer#)]
           (when (and (= (base/get-datatype lhs-buffer#)
-                        (base/get-datatype rhs-buffer#))
-                     (= (base/ecount lhs-buffer#)
-                        (base/ecount rhs-buffer#)))
+                        (base/get-datatype rhs-buffer#)))
             (let [lhs-buffer# (datatype->buffer-cast-fn ~datatype lhs-buffer#)
-                  rhs-buffer# (datatype->buffer-cast-fn ~datatype nio-buf#)]
+                  rhs-buffer# (datatype->buffer-cast-fn ~datatype rhs-buffer#)]
               (when (= (.isDirect lhs-buffer#) (.isDirect rhs-buffer#))
                 (if (.isDirect lhs-buffer#)
                   (let [lhs-ptr# (Pointer/nativeValue
@@ -183,27 +180,18 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (if-let [writer-fn# (get writer/buffer-writer-table
-                                 [~datatype writer-datatype#])]
-          (writer-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find writer %s->%s"
-                                  ~datatype writer-datatype#) {}))))}
+        (writer/make-buffer-writer item# writer-datatype# unchecked?#))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (if-let [reader-fn# (get reader/buffer-reader-table
-                                 [~datatype
-                                  (casting/flatten-datatype reader-datatype#)])]
-          (reader-fn# item# unchecked?#)
-          (throw (ex-info (format "Failed to find reader %s->%s"
-                                  ~datatype reader-datatype#) {}))))}
+        (reader/make-buffer-reader item# reader-datatype# unchecked?#))}
 
-     dtype-proto/PToIterator
-     {:->iterator-of-type
+     dtype-proto/PToIterable
+     {:->iterable-of-type
       (fn [item# datatype# unchecked?#]
-        (.iterator ^Iterable (dtype-proto/->reader-of-type
-                              item# datatype# unchecked?#)))}
+        (dtype-proto/->reader-of-type
+         item# datatype# unchecked?#))}
 
 
      jna/PToPtr

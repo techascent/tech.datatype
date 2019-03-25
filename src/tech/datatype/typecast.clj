@@ -186,9 +186,10 @@
 
 (defmacro implement-iter-cast
   [datatype]
-  `(if (instance? ~(resolve (datatype->iter-type datatype)) ~'item)
-     ~'item
-     (dtype-proto/->iterator-of-type ~'item ~datatype ~'unchecked?)))
+  `(when ~'item
+     (if (instance? ~(resolve (datatype->iter-type datatype)) ~'item)
+       ~'item
+       (.iterator ^Iterable (dtype-proto/->iterable-of-type ~'item ~datatype ~'unchecked?)))))
 
 
 (defn ->int8-iter ^ByteIter [item unchecked?] (implement-iter-cast :int8))
@@ -220,6 +221,38 @@
     :float64 `(->float64-iter ~reader ~unchecked?)
     :boolean `(->boolean-iter ~reader ~unchecked?)
     :object `(->object-iter ~reader ~unchecked?)))
+
+
+
+(defn ->int8-fast-iter ^ByteIter [item] item)
+(defn ->uint8-fast-iter ^ShortIter [item] item)
+(defn ->int16-fast-iter ^ShortIter [item] item)
+(defn ->uint16-fast-iter ^IntIter [item] item)
+(defn ->int32-fast-iter ^IntIter [item] item)
+(defn ->uint32-fast-iter ^LongIter [item] item)
+(defn ->int64-fast-iter ^LongIter [item] item)
+(defn ->uint64-fast-iter ^LongIter [item] item)
+(defn ->float32-fast-iter ^FloatIter [item] item)
+(defn ->float64-fast-iter ^DoubleIter [item] item)
+(defn ->boolean-fast-iter ^BooleanIter [item] item)
+(defn ->object-fast-iter ^ObjectIter [item] item)
+
+
+(defmacro datatype->fast-iter
+  [datatype reader]
+  (case datatype
+    :int8 `(->int8-fast-iter ~reader)
+    :uint8 `(->uint8-fast-iter ~reader)
+    :int16 `(->int16-fast-iter ~reader)
+    :uint16 `(->uint16-fast-iter ~reader)
+    :int32 `(->int32-fast-iter ~reader)
+    :uint32 `(->uint32-fast-iter ~reader)
+    :int64 `(->int64-fast-iter ~reader)
+    :uint64 `(->uint64-fast-iter ~reader)
+    :float32 `(->float32-fast-iter ~reader)
+    :float64 `(->float64-fast-iter ~reader)
+    :boolean `(->boolean-fast-iter ~reader)
+    :object `(->object-fast-iter ~reader)))
 
 
 (defn reader->iterator

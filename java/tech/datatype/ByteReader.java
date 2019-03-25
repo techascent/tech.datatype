@@ -1,7 +1,9 @@
 package tech.datatype;
-import java.nio.*;
 
-public interface ByteReader extends IOBase, Iterable
+import clojure.lang.IFn;
+
+
+public interface ByteReader extends IOBase, Iterable, IFn
 {
   byte read(int idx);
 }

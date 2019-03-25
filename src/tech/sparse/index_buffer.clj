@@ -1,13 +1,18 @@
 (ns tech.sparse.index-buffer
   (:require [tech.datatype.protocols :as dtype-proto]
-            [tech.datatype.dtype-base :as dtype-base]
+            [tech.datatype.base :as dtype-base]
+            [tech.datatype.typecast :as typecast]
+            [tech.datatype.reader :as reader]
             [tech.sparse.protocols :as sparse-proto]
             [clojure.core.matrix.protocols :as mp]
             [tech.sparse.utils :as utils]
             [tech.datatype :as dtype]
             [tech.sparse.set-ops :as set-ops]
-            [clojure.core.matrix.macros :refer [c-for]])
-  (:import [it.unimi.dsi.fastutil.ints IntArrayList]))
+            [clojure.core.matrix.macros :refer [c-for]]))
+
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
 
 
 (declare find-index)
@@ -38,16 +43,14 @@
 ;; with other buffers.  Index buffers are sorted lists of integers.  They have the same
 ;; length as data buffers but the integers indicate which index the data buffer's
 ;; associated data lies at.
-(defrecord IndexBuffer [^IntArrayList index-data
+(defrecord IndexBuffer [index-data
                         ^long b-offset ;;In elements, not strided elements
                         ^long b-stride ;;Stride of the buffer
                         ^long b-elem-count ;;in actual elements
                         ]
-  dtype-base/PDatatype
+  dtype-proto/PDatatype
   (get-datatype [item] (dtype-base/get-datatype index-data))
 
-  dtype-base/PContainerType
-  (container-type [item] :sparse-index-buffer)
 
   mp/PElementCount
   (element-count [item] (quot (+ b-elem-count
@@ -61,7 +64,7 @@
           end-idx (find-index item end-target-idx)
           n-idx-elems (- end-idx start-idx)]
       (utils/get-index-seq
-       (compute-drv/sub-buffer index-data
+       (dtype-proto/sub-buffer index-data
                                start-idx
                                n-idx-elems)
        b-offset
@@ -80,9 +83,9 @@
   (->nio-index-buffer [item]
     (when (= 1 b-stride)
       (let [start-idx (find-index item 0)
-            end-idx (find-index item b-elem-count)]
-        (-> (compute-drv/sub-buffer index-data start-idx (- end-idx start-idx))
-            (primitive/->buffer-backing-store)))))
+            end-idx (find-index item (dtype/ecount item))]
+        (-> (dtype-proto/sub-buffer index-data start-idx (- end-idx start-idx))
+            (dtype-proto/->buffer-backing-store)))))
 
 
   sparse-proto/PSparseIndexBuffer
@@ -97,8 +100,8 @@
   (found-index? [idx-buf buf-idx target-idx]
     (let [buf-idx (int buf-idx)
           target-idx (relative-offset b-offset b-stride target-idx)]
-      (and (not= buf-idx (.size index-data))
-           (= (.getInt index-data buf-idx)
+      (and (not= buf-idx (dtype/ecount index-data))
+           (= (reader/typed-read :int32 index-data buf-idx)
               target-idx))))
 
   (set-index-values! [item old-data-buf new-idx-buf new-data-buf zero-val]
@@ -138,10 +141,10 @@
             {union-indexes :indexes
              union-values :values} (if (not= 0 remove-count)
                                      (set-ops/union-values
-                                      (compute-drv/sub-buffer index-data
+                                      (dtype-proto/sub-buffer index-data
                                                               first-old-idx
                                                               remove-count)
-                                      (compute-drv/sub-buffer old-data-buf
+                                      (dtype-proto/sub-buffer old-data-buf
                                                               first-old-idx
                                                               remove-count)
                                       new-idx-buf new-data-buf
@@ -184,7 +187,7 @@
     item)
   (offset [item] b-offset)
 
-  compute-drv/PBuffer
+  dtype-proto/PBuffer
   (sub-buffer [_ off len]
     (let [data-off (+ b-offset (* (int off) b-stride))
           data-len (* (int len) b-stride)]
@@ -203,16 +206,16 @@
                      data-len)))
   (alias? [lhs rhs]
     (and (instance? IndexBuffer rhs)
-         (compute-drv/alias? (primitive/->buffer-backing-store lhs)
-                             (primitive/->buffer-backing-store rhs))
+         (dtype-proto/alias? (dtype-proto/->buffer-backing-store lhs)
+                             (dtype-proto/->buffer-backing-store rhs))
          (= b-stride (int (:b-stride rhs)))
          (= b-offset (int (:b-offset rhs)))
          (= b-elem-count (int (:b-elem-count rhs)))))
 
   (partially-alias? [lhs rhs]
     (and (instance? IndexBuffer rhs)
-         (compute-drv/partially-alias? (primitive/->buffer-backing-store lhs)
-                                       (primitive/->buffer-backing-store rhs)))))
+         (dtype-proto/partially-alias? (dtype-proto/->buffer-backing-store lhs)
+                                       (dtype-proto/->buffer-backing-store rhs)))))
 
 
 (defn make-index-buffer

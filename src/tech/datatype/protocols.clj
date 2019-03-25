@@ -105,30 +105,14 @@ data overlap?"))
 (defprotocol PToWriter
   (->writer-of-type [item datatype unchecked?]))
 
-
 (defprotocol PToReader
   (->reader-of-type [item datatype unchecked?]))
-
 
 (defprotocol PToMutable
   (->mutable-of-type [item datatype unchecked?]))
 
-
-(defprotocol PToIterator
-  (->iterator-of-type [item datatype unchecked?]))
-
-
-(extend-type Iterable
-  PToIterator
-  (->iterator-of-type [item datatype unchecked?]
-    (-> (IteratorObjectIter. (.iterator item) :object)
-        (->iterator-of-type datatype unchecked?))))
-
-(extend-type DatatypeIterable
-  PToIterator
-  (->iterator-of-type [item datatype unchecked?]
-    (.iteratorOfType item datatype unchecked?)))
-
+(defprotocol PToIterable
+  (->iterable-of-type [item datatype unchecked?]))
 
 (defprotocol PToUnaryOp
   (->unary-op [item datatype unchecked?]))

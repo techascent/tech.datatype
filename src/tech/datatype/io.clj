@@ -14,7 +14,9 @@
                      datatype->writer
                      reader->iterator]
              :as typecast]
-            [clojure.core.matrix.protocols :as mp])
+            [clojure.core.matrix.protocols :as mp]
+            [tech.datatype.reader :as reader]
+            [tech.datatype.writer :as writer])
 
   (:import [tech.datatype
             ObjectReader ObjectWriter ObjectMutable
@@ -77,63 +79,23 @@
         (fast-copy/parallel-slow-copy! dst src unchecked?))))
   dst)
 
-(defmacro make-indexed-reader
-  [datatype reader-type indexes values unchecked?]
-  `(let [idx-reader# (datatype->reader :int32 ~indexes true)
-         values# (datatype->reader ~datatype ~values ~unchecked?)]
-     (reify ~reader-type
-       (getDatatype [item#] ~datatype)
-       (size [item#] (int (mp/element-count ~indexes)))
-       (read [item# idx#]
-         (.read values# (.read idx-reader# idx#)))
-       (iterator [item#] (reader->iterator item#)))))
-
-(defmacro make-indexed-reader-creators
-  []
-  `(->> [~@(for [dtype (casting/all-datatypes)]
-             [dtype `(fn [indexes# values# unchecked?#]
-                       (make-indexed-reader
-                        ~dtype ~(typecast/datatype->reader-type dtype)
-                        indexes# values# unchecked?#))])]
-        (into {})))
-
-(def indexed-reader-creators (make-indexed-reader-creators))
-
-(defmacro make-indexed-writer
-  [datatype writer-type indexes values unchecked?]
-  `(let [idx-reader# (datatype->reader :int32 ~indexes true)
-         values# (datatype->writer ~datatype ~values ~unchecked?)]
-     (reify ~writer-type
-       (getDatatype [item#] ~datatype)
-       (size [item#] (int (mp/element-count ~indexes)))
-       (write [item# idx# value#]
-         (.write values# (.read idx-reader# idx#) value#)))))
-
-(defmacro make-indexed-writer-creators
-  []
-  `(->> [~@(for [dtype (casting/all-datatypes)]
-             [dtype `(fn [indexes# values# unchecked?#]
-                       (make-indexed-writer
-                        ~dtype ~(typecast/datatype->writer-type dtype)
-                        indexes# values# unchecked?#))])]
-        (into {})))
-
-(def indexed-writer-creators (make-indexed-writer-creators))
 
 (defn write-indexes!
-  [datatype item indexes values options]
-  (let [unchecked? (:unchecked? options)
-        typed-write-fn (get indexed-writer-creators datatype)]
-    (when-not typed-write-fn
-      (throw (ex-info "Failed to create indexed reader" {:datatype datatype})))
-    (fast-copy/parallel-read! (typed-write-fn indexes item unchecked?) values true)
+  [item indexes values options]
+  (let [datatype (or (:datatype options) (dtype-proto/get-datatype item))]
+    ;;We use parallel reader because values is likely to be a raw buffer and thus
+    ;;we can get direct buffer access to it.  We know that we cannot get a raw buffer
+    ;;from an indexed writer.
+    (fast-copy/parallel-read! (writer/make-indexed-writer
+                               indexes item (assoc options :datatype datatype))
+                              values true)
     item))
 
+
 (defn read-indexes!
-  [datatype item indexes values options]
-  (let [unchecked? (:unchecked? options)
-        typed-reader-fn (get indexed-reader-creators datatype)]
-    (when-not typed-reader-fn
-      (throw (ex-info "Failed to create indexed reader" {:datatype datatype})))
-    (fast-copy/parallel-write! values (typed-reader-fn indexes item unchecked?) true)
+  [item indexes values options]
+  (let [datatype (or (:datatype options) (dtype-proto/get-datatype item))]
+    (fast-copy/parallel-write! values (reader/make-indexed-reader
+                                       indexes values (assoc options :datatype datatype))
+                               true)
     values))

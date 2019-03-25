@@ -135,8 +135,7 @@
   (cond
     (numeric-type? src-dtype)
     `(boolean (not= 0.0 (unchecked-double ~item)))
-    (or (= :boolean src-dtype)
-        (= :object src-dtype))
+    (= :boolean src-dtype)
     `(boolean ~item)
     :else
     `(if (number? ~item)

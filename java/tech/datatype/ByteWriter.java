@@ -1,8 +1,9 @@
 package tech.datatype;
 
-import java.nio.*;
+import clojure.lang.IFn;
 
-public interface ByteWriter extends IOBase
+
+public interface ByteWriter extends IOBase, IFn
 {
   void write(int idx, byte value);
 }

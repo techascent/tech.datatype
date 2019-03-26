@@ -14,7 +14,7 @@
   (:import [tech.datatype ObjectReader ObjectWriter
             ByteReader ShortReader IntReader LongReader
             FloatReader DoubleReader BooleanReader]
-           [java.util List]))
+           [java.util List RandomAccess]))
 
 
 (set! *warn-on-reflection* true)
@@ -144,21 +144,19 @@
     (set-value! ary-target target-offset raw-data)
     [ary-target (+ target-offset 1)])
 
-  List
+  RandomAccess
   (copy-raw->item! [raw-data ary-target ^long target-offset options]
-    (let [num-elems (count raw-data)]
-     (if (= 0 num-elems)
-       [ary-target target-offset]
-       (if (number? (raw-data 0))
-         (do
-          (c-for [idx 0 (< idx num-elems) (inc idx)]
-                 (set-value! ary-target (+ idx target-offset) (raw-data idx)))
-          [ary-target (+ target-offset num-elems)])
-         (copy-raw-seq->item! raw-data ary-target target-offset options)))))
+    (let [^List raw-data raw-data
+          num-elems (.size raw-data)]
+      (if (= 0 num-elems)
+        [ary-target target-offset]
+        (if (number? (.get raw-data 0))
+          (do
+            (c-for [idx 0 (< idx num-elems) (inc idx)]
+                   (set-value! ary-target (+ idx target-offset) (.get raw-data idx)))
+            [ary-target (+ target-offset num-elems)])
+          (copy-raw-seq->item! raw-data ary-target target-offset options)))))
 
-  clojure.lang.ISeq
-  (copy-raw->item! [raw-data ary-target target-offset options]
-    (copy-raw-seq->item! raw-data ary-target target-offset options))
   java.lang.Iterable
   (copy-raw->item! [raw-data ary-target target-offset options]
     (copy-raw-seq->item! (seq raw-data) ary-target target-offset options)))
@@ -201,9 +199,9 @@
 
 (extend-type Object
   dtype-proto/PCopyRawData
-  (copy-raw->item!
-   [src-data dst-data offset options]
-    (dtype-proto/copy-raw->item! (seq src-data) dst-data offset options))
+  (copy-raw->item! [raw-data ary-target target-offset options]
+    (copy-raw-seq->item! (seq raw-data) ary-target target-offset options))
+
   dtype-proto/PPersistentVector
   (->vector [src]
     (if (satisfies? dtype-proto/PToReader src)
@@ -237,7 +235,6 @@
   dtype-proto/PReadIndexes
   (write-indexes! [item indexes values options]
     (dtype-io/read-indexes! item indexes values options))
-
 
   dtype-proto/PClone
   (clone [item datatype]

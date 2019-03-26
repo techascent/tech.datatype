@@ -27,10 +27,6 @@
   (copy-raw->item! [raw-data ary-target target-offset options]
     (base/raw-dtype-copy! raw-data ary-target target-offset options))
 
-  dtype-proto/PPersistentVector
-  (->vector [item]
-    (vec (dtype-proto/->array-copy item)))
-
 
   dtype-proto/PPrototype
   (from-prototype [item datatype shape]
@@ -132,8 +128,8 @@
   (every? #(satisfies? % item)
           [dtype-proto/PDatatype
            dtype-proto/PCopyRawData
-           dtype-proto/PPersistentVector dtype-proto/PPrototype
-           dtype-proto/PBuffer dtype-proto/PToArray
+           dtype-proto/PPrototype
+           dtype-proto/PBuffer
            dtype-proto/PToWriter dtype-proto/PToReader]))
 
 

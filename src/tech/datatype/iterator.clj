@@ -75,13 +75,17 @@
 (extend-type Iterable
   dtype-proto/PToIterable
   (->iterable-of-type [item datatype unchecked?]
-    (reify
-      Iterable
-      (iterator [iter-item]
-        (-> (IteratorObjectIter. (.iterator item) :object)
-            (make-marshal-iterator datatype unchecked?)))
-      dtype-proto/PDatatype
-      (get-datatype [item] datatype))))
+    (if (satisfies? dtype-proto/PToReader item)
+      (dtype-proto/->reader-of-type item
+                                    (dtype-proto/get-datatype item)
+                                    false)
+      (reify
+        Iterable
+        (iterator [iter-item]
+          (-> (IteratorObjectIter. (.iterator item) :object)
+              (make-marshal-iterator datatype unchecked?)))
+        dtype-proto/PDatatype
+        (get-datatype [item] datatype)))))
 
 
 (defmacro make-const-iter

@@ -58,7 +58,10 @@
 
 (defn ->vector
   [item]
-  (dtype-proto/->vector item))
+  (if (vector? item)
+    item
+    (-> (dtype-proto/->iterable-of-type item :object true)
+        vec)))
 
 
 (defn ecount
@@ -202,12 +205,6 @@
   (copy-raw->item! [raw-data ary-target target-offset options]
     (copy-raw-seq->item! (seq raw-data) ary-target target-offset options))
 
-  dtype-proto/PPersistentVector
-  (->vector [src]
-    (if (satisfies? dtype-proto/PToReader src)
-      ;;Readers implement iterable which gives them seq and friends
-      (vec (dtype-proto/->reader-of-type
-            src (dtype-proto/get-datatype src) true))))
 
   dtype-proto/PSetConstant
   (set-constant! [item offset value n-elems]

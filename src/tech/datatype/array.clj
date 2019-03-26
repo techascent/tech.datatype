@@ -86,17 +86,18 @@
                            (dtype-proto/->buffer-backing-store item#)
                            datatype# unchecked?#))}
 
-     dtype-proto/PToIterable
-     {:->iterable-of-type (fn [item# datatype# unchecked?#]
-                            (-> (dtype-proto/->buffer-backing-store item#)
-                                (dtype-proto/->iterable-of-type datatype# unchecked?#)))}
 
      dtype-proto/PToWriter
      {:->writer-of-type (fn [item# datatype# unchecked?#]
                           (dtype-proto/->writer-of-type
                            (dtype-proto/->buffer-backing-store item#)
                            datatype#
-                           unchecked?#))}))
+                           unchecked?#))}
+
+     dtype-proto/PToIterable
+     {:->iterable-of-type (fn [item# datatype# unchecked?#]
+                            (dtype-proto/->reader-of-type
+                             item# datatype# unchecked?#))}))
 
 
 (implement-numeric-array-type (Class/forName "[B") :int8)
@@ -155,8 +156,7 @@
 
   dtype-proto/PToIterable
   (->iterable-of-type [item datatype unchecked?]
-    (-> (dtype-proto/->list-backing-store item)
-        (dtype-proto/->iterable-of-type datatype unchecked?))))
+    (dtype-proto/->reader-of-type item datatype unchecked?)))
 
 
 (defonce ^:dynamic *array-constructors* (atom {}))
@@ -258,12 +258,14 @@
     dtype-proto/PDatatype
     {:get-datatype (fn [item]
                      (let [ary-data-cls (.getComponentType ^Class (type item))]
-                       (get @*object-array-datatype-override* ary-data-cls ary-data-cls)))}
+                       (get @*object-array-datatype-override* ary-data-cls
+                            ary-data-cls)))}
 
     dtype-proto/PBuffer
     {:sub-buffer
      (fn [buffer offset length]
-       (-> (dtype-proto/sub-buffer (dtype-proto/->list-backing-store buffer) offset length)
+       (-> (dtype-proto/sub-buffer (dtype-proto/->list-backing-store buffer)
+                                   offset length)
            (typed-buffer/set-datatype (dtype-proto/get-datatype buffer))))
      :alias? (fn [lhs-buffer rhs-buffer]
                (identical? lhs-buffer (dtype-proto/->array rhs-buffer)))
@@ -280,8 +282,6 @@
                         (base/raw-dtype-copy! raw-data 0 ary-target offset
                                               (base/ecount raw-data) options))}
 
-    dtype-proto/PPersistentVector
-    {:->vector (fn [item] (vec item))}
 
     dtype-proto/PPrototype
     {:from-prototype (fn [src-ary datatype shape]
@@ -293,8 +293,9 @@
                               :length (base/ecount item)})
      :->array-copy (fn [src-ary]
                      (base/copy! src-ary
-                                 (make-array-of-type (base/get-datatype src-ary)
-                                                     (alength (as-object-array src-ary)))))}
+                                 (make-array-of-type
+                                  (base/get-datatype src-ary)
+                                  (alength (as-object-array src-ary)))))}
     dtype-proto/PToWriter
     {:->writer-of-type
      (fn [item# datatype# unchecked?#]
@@ -309,10 +310,9 @@
                                      datatype# unchecked?#))}
 
     dtype-proto/PToIterable
-    {:->iterable-of-type
-     (fn [item# datatype# unchecked?#]
-       (-> (dtype-proto/->list-backing-store item#)
-           (dtype-proto/->iterable-of-type datatype# unchecked?#)))}))
+    {:->iterable-of-type (fn [item# datatype# unchecked?#]
+                           (dtype-proto/->reader-of-type
+                            item# datatype# unchecked?#))}))
 
 
 (extend-object-array-type (Class/forName "[Ljava.lang.Object;"))

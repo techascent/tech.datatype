@@ -20,10 +20,6 @@
   "Given a sequence of data copy it as fast as possible into a target item."
   (copy-raw->item! [raw-data ary-target target-offset options]))
 
-(defprotocol PPersistentVector
-  "Conversion to a persistent vector of numbers."
-  (->vector [item]))
-
 (defprotocol PPrototype
   (from-prototype [item datatype shape]))
 

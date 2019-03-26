@@ -47,6 +47,9 @@
   dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
     (base/raw-dtype-copy! raw-data ary-target target-offset options))
+  dtype-proto/PToIterable
+  (->iterable-of-type [item datatype unchecked?]
+    (dtype-proto/->reader-of-type item datatype unchecked?))
   mp/PElementCount
   (element-count [item] (.remaining item)))
 
@@ -185,18 +188,13 @@
           (-> (writer/make-buffer-writer item# true)
               (dtype-proto/->writer-of-type writer-datatype# unchecked?#))))}
 
+
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
         (cond-> (reader/make-buffer-reader item#)
           (not= reader-datatype# ~datatype)
           (dtype-proto/->reader-of-type reader-datatype# unchecked?#)))}
-
-     dtype-proto/PToIterable
-     {:->iterable-of-type
-      (fn [item# datatype# unchecked?#]
-        (dtype-proto/->reader-of-type
-         item# datatype# unchecked?#))}
 
 
      jna/PToPtr

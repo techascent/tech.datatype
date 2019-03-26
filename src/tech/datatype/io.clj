@@ -49,8 +49,8 @@
                         dst-buf
                         (or (and (numeric-type? dst-dtype)
                                  (= dst-dtype src-dtype)
-                                 (= dst-buf-dtype dst-dtype)
-                                 (= src-buf-dtype src-dtype))
+                                 (= dst-buf-dtype (casting/datatype->host-datatype dst-dtype))
+                                 (= src-buf-dtype (casting/datatype->host-datatype src-dtype)))
                             (and (integer-type? dst-dtype)
                                  (integer-type? src-dtype)
                                  (= (casting/datatype->host-datatype dst-dtype)
@@ -76,7 +76,8 @@
         (and dst-list dst-type-matches?)
         (fast-copy/parallel-list-write! dst-list src unchecked?)
         :else
-        (fast-copy/parallel-slow-copy! dst src unchecked?))))
+        (do
+          (fast-copy/parallel-slow-copy! dst src unchecked?)))))
   dst)
 
 

@@ -84,31 +84,39 @@
   dtype-proto/PToWriter
   ;;No marshalling/casting on the writer side.
   (->writer-of-type [item writer-datatype unchecked?]
-    (if (or (= datatype (dtype-proto/get-datatype backing-store))
-            (= datatype writer-datatype))
-      (dtype-proto/->writer-of-type backing-store writer-datatype unchecked?)
-      ;;We will always check it as it goes into our buffer.
-      (-> (dtype-proto/->writer-of-type backing-store datatype unchecked?)
-          (dtype-proto/->writer-of-type writer-datatype true))))
+    (let [writer-matches? (= writer-datatype datatype)
+          src-writer-unchecked? (if writer-matches?
+                                  unchecked?
+                                  false)
+          direct-writer (cond
+                          (dtype-proto/as-nio-buffer backing-store)
+                          (writer/make-buffer-writer item src-writer-unchecked?)
+                          (dtype-proto/as-list backing-store)
+                          (writer/make-list-writer item src-writer-unchecked?)
+                          :else
+                          (dtype-proto/->writer-of-type backing-store datatype false))]
+      (cond-> direct-writer
+        (not writer-matches?)
+        (dtype-proto/->writer-of-type writer-datatype unchecked?))))
 
   dtype-proto/PToReader
   (->reader-of-type [item reader-datatype unchecked?]
-    (if (or (= datatype (dtype-proto/get-datatype backing-store))
-            (= datatype reader-datatype))
-      (dtype-proto/->reader-of-type backing-store reader-datatype unchecked?)
-      ;;We trust that we stored the data correctly.
-      (-> (dtype-proto/->reader-of-type backing-store datatype true)
-          (dtype-proto/->reader-of-type reader-datatype unchecked?))))
+    (let [direct-reader (cond
+                          (dtype-proto/as-nio-buffer backing-store)
+                          (reader/make-buffer-reader item)
+                          (dtype-proto/as-list backing-store)
+                          (reader/make-list-reader item)
+                          :else
+                          (dtype-proto/->reader-of-type backing-store datatype unchecked?))]
+      (cond-> direct-reader
+        (not= reader-datatype datatype)
+        (dtype-proto/->reader-of-type reader-datatype unchecked?))))
 
 
   dtype-proto/PToMutable
   (->mutable-of-type [item mutable-datatype unchecked?]
-    (if (or (= datatype (dtype-proto/get-datatype backing-store))
-            (= datatype mutable-datatype))
-      (dtype-proto/->mutable-of-type backing-store mutable-datatype unchecked?)
-      ;;We trust that we stored the data correctly.
-      (-> (dtype-proto/->mutable-of-type backing-store datatype true)
-          (dtype-proto/->mutable-of-type mutable-datatype unchecked?))))
+    (-> (dtype-proto/->mutable-of-type backing-store datatype true)
+        (dtype-proto/->mutable-of-type mutable-datatype unchecked?)))
 
   jna/PToPtr
   (->ptr-backing-store [item]

@@ -180,12 +180,17 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (writer/make-buffer-writer item# writer-datatype# unchecked?#))}
+        (if (= writer-datatype# ~datatype)
+          (writer/make-buffer-writer item# unchecked?#)
+          (-> (writer/make-buffer-writer item# true)
+              (dtype-proto/->writer-of-type writer-datatype# unchecked?#))))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (reader/make-buffer-reader item# reader-datatype# unchecked?#))}
+        (cond-> (reader/make-buffer-reader item#)
+          (not= reader-datatype# ~datatype)
+          (dtype-proto/->reader-of-type reader-datatype# unchecked?#)))}
 
      dtype-proto/PToIterable
      {:->iterable-of-type

@@ -41,7 +41,7 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(defmacro make-buffer-writer
+(defmacro make-buffer-writer-impl
   "Make a writer from a nio buffer or a fastutil list backing store.  "
   [writer-type buffer-type buffer buffer-pos
    writer-datatype
@@ -124,7 +124,7 @@
                 `(fn [buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype buffer#)
                          buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
-                     (make-buffer-writer
+                     (make-buffer-writer-impl
                       ~(typecast/datatype->writer-type dtype)
                       ~(typecast/datatype->buffer-type buffer-datatype)
                       buffer# buffer-pos#
@@ -139,16 +139,12 @@
 
 
 (defn make-buffer-writer
-  [item datatype unchecked?]
+  [item unchecked?]
   (let [nio-buffer (dtype-proto/->buffer-backing-store item)
         item-dtype (dtype-proto/get-datatype item)
         buffer-dtype (dtype-proto/get-datatype nio-buffer)
-        no-translate-writer (get buffer-writer-table [buffer-dtype item-dtype])
-        translate-writer (get buffer-writer-table [buffer-dtype buffer-dtype])]
-    (if no-translate-writer
-      (no-translate-writer nio-buffer unchecked?)
-      (-> (translate-writer nio-buffer true)
-          (dtype-proto/->writer-of-type datatype unchecked?)))))
+        no-translate-writer (get buffer-writer-table [buffer-dtype item-dtype])]
+    (no-translate-writer nio-buffer unchecked?)))
 
 
 (defmacro make-list-writer-table
@@ -158,7 +154,7 @@
                [[buffer-datatype dtype]
                 `(fn [buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype buffer#)]
-                     (make-buffer-writer
+                     (make-buffer-writer-impl
                       ~(typecast/datatype->writer-type dtype)
                       ~(typecast/datatype->list-type buffer-datatype)
                       buffer# 0
@@ -172,16 +168,12 @@
 
 
 (defn make-list-writer
-  [item datatype unchecked?]
+  [item unchecked?]
   (let [nio-list (dtype-proto/->list-backing-store item)
-        item-dtype (dtype-proto/get-datatype item)
+        item-dtype (casting/flatten-datatype (dtype-proto/get-datatype item))
         list-dtype (dtype-proto/get-datatype nio-list)
-        no-translate-writer (get list-writer-table [list-dtype item-dtype])
-        translate-writer (get list-writer-table [list-dtype list-dtype])]
-    (if no-translate-writer
-      (no-translate-writer nio-list unchecked?)
-      (-> (translate-writer nio-list true)
-          (dtype-proto/->writer-of-type datatype unchecked?)))))
+        no-translate-writer (get list-writer-table [list-dtype item-dtype])]
+    (no-translate-writer nio-list unchecked?)))
 
 
 (defn- make-object-wrapper
@@ -295,7 +287,9 @@
                               (casting/flatten-datatype src-dtype))
                          dst-writer
                          (let [writer-fn (get marshalling-writer-table
-                                              [(casting/flatten-datatype dst-dtype)
+                                              [(casting/flatten-datatype
+                                                (casting/datatype->safe-host-type
+                                                 dst-dtype))
                                                (casting/flatten-datatype src-dtype)])]
                            (writer-fn dst-writer (casting/flatten-datatype src-dtype))))
             dst-dtype (dtype-proto/get-datatype dst-writer)]
@@ -353,7 +347,7 @@
 
 
 (defn make-indexed-writer
-  [indexes values & {:keys [datatype unchecked?]}]
+  [indexes values {:keys [datatype unchecked?]}]
   (let [datatype (or datatype (dtype-proto/get-datatype values))
         writer-fn (get indexed-writer-creators (casting/flatten-datatype datatype))]
     (writer-fn indexes values unchecked?)))

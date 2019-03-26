@@ -45,7 +45,15 @@
   (dtype-proto/set-constant! item offset value elem-count))
 
 (defn get-value [item offset]
-  (.read ^ObjectReader (dtype-proto/->reader-of-type item :object false) offset))
+  (cond
+    (satisfies? dtype-proto/PToReader item)
+    (.read ^ObjectReader (dtype-proto/->reader-of-type item :object false) (int offset))
+    (map? item)
+    (item offset)
+    (= offset 0)
+    item
+    :else
+    (throw (ex-info "Cannot get value of item at offset" {:item item :offset offset}))))
 
 
 (defn ->vector
@@ -224,13 +232,11 @@
 
   dtype-proto/PWriteIndexes
   (write-indexes! [item indexes values options]
-    (dtype-io/write-indexes! (dtype-proto/get-datatype item)
-                             item indexes values options))
+    (dtype-io/write-indexes! item indexes values options))
 
   dtype-proto/PReadIndexes
   (write-indexes! [item indexes values options]
-    (dtype-io/read-indexes! (dtype-proto/get-datatype item)
-                            item indexes values options))
+    (dtype-io/read-indexes! item indexes values options))
 
 
   dtype-proto/PClone

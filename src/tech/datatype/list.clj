@@ -266,12 +266,17 @@
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]
-        (writer/make-list-writer item# writer-datatype# unchecked?#))}
+        (if (= writer-datatype# ~datatype)
+          (writer/make-list-writer item# unchecked?#)
+          (-> (writer/make-list-writer item# true)
+              (dtype-proto/->writer-of-type writer-datatype# unchecked?#))))}
 
      dtype-proto/PToReader
      {:->reader-of-type
       (fn [item# reader-datatype# unchecked?#]
-        (reader/make-list-reader item# reader-datatype# unchecked?#))}
+        (cond-> (reader/make-list-reader item#)
+          (not= reader-datatype# ~datatype)
+          (dtype-proto/->reader-of-type reader-datatype# unchecked?#)))}
 
      dtype-proto/PToIterable
      {:->iterator-of-type

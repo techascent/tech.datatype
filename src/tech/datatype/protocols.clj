@@ -1,8 +1,7 @@
 (ns tech.datatype.protocols
   (:require [clojure.core.matrix.protocols :as mp])
   (:import [tech.datatype Datatype Countable
-            ObjectIter IteratorObjectIter
-            DatatypeIterable]))
+            ObjectIter IteratorObjectIter]))
 
 (set! *warn-on-reflection* true)
 
@@ -60,6 +59,12 @@
   element-by-element conversion to represent the value of the item."
   (->buffer-backing-store [item]))
 
+
+(defn as-nio-buffer
+  [item]
+  (when (and item (satisfies? PToNioBuffer item))
+    (->buffer-backing-store item)))
+
 (defprotocol PNioBuffer
   (position [item])
   (limit [item])
@@ -99,6 +104,11 @@ data overlap?"))
 (defprotocol PToList
   "Generically implemented for anything that implements ->array"
   (->list-backing-store [item]))
+
+
+(defn as-list [item]
+  (when (and item (satisfies? PToList item))
+    (->list-backing-store item)))
 
 
 (defprotocol PToTypedBuffer

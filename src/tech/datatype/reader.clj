@@ -52,7 +52,7 @@
   (m/ecount item))
 
 
-(defmacro make-buffer-reader
+(defmacro make-buffer-reader-impl
   [reader-type buffer-type buffer buffer-pos
    reader-datatype
    intermediate-datatype
@@ -133,7 +133,7 @@
                    (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
                                                                     buffer#)
                          buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
-                     (make-buffer-reader
+                     (make-buffer-reader-impl
                       ~(typecast/datatype->reader-type dtype)
                       ~(typecast/datatype->buffer-type buffer-datatype)
                       buffer# buffer-pos#
@@ -147,15 +147,13 @@
 
 
 (defn make-buffer-reader
-  [item datatype unchecked?]
+  [item]
   (let [nio-buffer (dtype-proto/->buffer-backing-store item)
         item-dtype (dtype-proto/get-datatype item)
         buffer-dtype (dtype-proto/get-datatype nio-buffer)
-        buffer-reader-fn (or (get buffer-reader-table [buffer-dtype item-dtype])
-                             (get buffer-reader-table [buffer-dtype buffer-dtype]))]
-    (-> (buffer-reader-fn nio-buffer)
-        ;;Use marshalling system to expand datatype to all possibilities
-        (dtype-proto/->reader-of-type datatype unchecked?))))
+        buffer-reader-fn (get buffer-reader-table [buffer-dtype item-dtype])]
+
+    (buffer-reader-fn nio-buffer)))
 
 
 (defmacro make-list-reader-table
@@ -165,7 +163,7 @@
                [[buffer-datatype dtype]
                 `(fn [buffer#]
                    (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype buffer#)]
-                     (make-buffer-reader
+                     (make-buffer-reader-impl
                       ~(typecast/datatype->reader-type dtype)
                       ~(typecast/datatype->list-type buffer-datatype)
                       buffer# 0
@@ -179,16 +177,14 @@
 
 
 (defn make-list-reader
-  [item datatype unchecked?]
+  [item]
   (let [list-buffer (dtype-proto/->list-backing-store item)
-        item-dtype (dtype-proto/get-datatype item)
+        item-dtype (casting/flatten-datatype (dtype-proto/get-datatype item))
         buffer-dtype (dtype-proto/get-datatype list-buffer)
         list-reader-fn (or (get list-reader-table
                                   [buffer-dtype (casting/flatten-datatype item-dtype)])
                              (get buffer-reader-table [buffer-dtype buffer-dtype]))]
-    (-> (list-reader-fn list-buffer)
-        ;;Use marshalling system to expand datatype to all possibilities
-        (dtype-proto/->reader-of-type datatype unchecked?))))
+    (list-reader-fn list-buffer)))
 
 
 (defn- make-object-wrapper
@@ -308,7 +304,9 @@
                               (casting/flatten-datatype dest-dtype))
                          src-reader
                          (let [reader-fn (get marshalling-reader-table
-                                              [(casting/flatten-datatype src-dtype)
+                                              [(casting/flatten-datatype
+                                                (casting/datatype->safe-host-type
+                                                 src-dtype))
                                                (casting/flatten-datatype dest-dtype)])]
                            (reader-fn src-reader unchecked?)))
             src-dtype (dtype-proto/get-datatype src-reader)]
@@ -438,7 +436,7 @@
 
 
 (defn make-indexed-reader
-  [indexes values & {:keys [datatype unchecked?]}]
+  [indexes values {:keys [datatype unchecked?]}]
   (let [datatype (or datatype (dtype-proto/get-datatype values))
         reader-fn (get indexed-reader-creators (casting/flatten-datatype datatype))]
     (reader-fn indexes values unchecked?)))

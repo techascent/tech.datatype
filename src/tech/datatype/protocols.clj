@@ -49,6 +49,9 @@
 (defprotocol PReadIndexes
   (read-indexes! [item indexes values options]))
 
+(defprotocol PInsertBlock
+  (insert-block! [item idx values options]))
+
 
 (defprotocol PToNioBuffer
   "Take a 'thing' and convert it to a nio buffer.  Only valid if the thing

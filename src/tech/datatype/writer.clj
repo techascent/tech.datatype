@@ -344,7 +344,7 @@
   []
   `(->> [~@(for [dtype (casting/all-datatypes)]
              [dtype `(fn [indexes# values# unchecked?#]
-                       (make-indexed-writer
+                       (make-indexed-writer-impl
                         ~dtype ~(typecast/datatype->writer-type dtype)
                         indexes# values# unchecked?#))])]
         (into {})))

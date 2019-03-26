@@ -27,6 +27,7 @@
             [tech.datatype.typed-buffer :as dtype-tbuf]
             [tech.datatype.jna :as dtype-jna]
             [tech.parallel :as parallel])
+  (:import [tech.datatype MutableRemove ObjectMutable])
   (:refer-clojure :exclude [cast]))
 
 
@@ -159,6 +160,31 @@ Calls clojure.core.matrix/ecount."
   indexes, values must support same protocols as write and read block."
   [item indexes values & [options]]
   (dtype-proto/read-indexes! item indexes values options))
+
+
+(defn insert!
+  [item idx value]
+  (.insert ^ObjectMutable (dtype-proto/->mutable-of-type item :object false)
+           idx value))
+
+
+(defn remove!
+  [item idx]
+  (let [mut-item ^MutableRemove (dtype-proto/->mutable-of-type
+                                 item (get-datatype item) true)]
+    (.remove mut-item (int idx))))
+
+
+(defn insert-block!
+  [item idx values & [options]]
+  (dtype-proto/insert-block! item idx values options))
+
+
+(defn remove-range!
+  [item start-idx n-elems]
+  (let [mut-item ^MutableRemove (dtype-proto/->mutable-of-type
+                                 item (get-datatype item) true)]
+    (.removeRange mut-item start-idx n-elems)))
 
 
 (defn ->array

@@ -12,8 +12,10 @@
                                               datatype->read-fn
                                               datatype->write-fn
                                               datatype->list-read-fn]]
+            [tech.datatype.typecast :as typecast]
             [tech.datatype.mutable :as mutable]
             [clojure.core.matrix.protocols :as mp]
+            [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel])
   (:import [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
            [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
@@ -271,11 +273,11 @@
       (fn [item# reader-datatype# unchecked?#]
         (reader/make-list-reader item# reader-datatype# unchecked?#))}
 
-     dtype-proto/PToIterator
+     dtype-proto/PToIterable
      {:->iterator-of-type
       (fn [item# datatype# unchecked?#]
-        (.iterator ^Iterable (dtype-proto/->reader-of-type
-                              item# datatype# unchecked?#)))}
+        (dtype-proto/->reader-of-type
+         item# datatype# unchecked?#))}
 
      dtype-proto/PToMutable
      {:->mutable-of-type
@@ -284,7 +286,33 @@
                                   [~datatype (casting/flatten-datatype mut-dtype#)])]
           (mutable-fn# list-item# unchecked?#)
           (throw (ex-info (format "Failed to find mutable %s->%s"
-                                  ~datatype mut-dtype#) {}))))}))
+                                  ~datatype mut-dtype#) {}))))}
+
+     dtype-proto/PInsertBlock
+     {:insert-block!
+      (fn [list-item# idx# values# options#]
+        (let [list-item# (datatype->list-cast-fn ~datatype list-item#)
+              ary-data# (dtype-proto/->sub-array values#)
+              idx# (int idx#)]
+          ;;first, try array as they are most general
+          (if (and ary-data#
+                   (= ~datatype (casting/flatten-datatype
+                                 (dtype-proto/get-datatype (:array-data ary-data#)))))
+            (.addElements list-item# idx#
+                          (typecast/datatype->array-cast-fn ~datatype (:array-data ary-data#))
+                          (int (:offset ary-data#))
+                          (int (:length ary-data#)))
+            ;;next, try list.
+            (let [list-values# (dtype-proto/->list-backing-store values#)]
+              (if (and list-values#
+                       (= ~datatype (casting/flatten-datatype
+                                     (dtype-proto/get-datatype list-values#))))
+                (.addAll list-item# idx# (datatype->list-cast-fn ~datatype list-values#))
+                ;;fallback to element by element
+                (let [item-reader# (typecast/datatype->reader ~datatype values# (:unchecked? options#))
+                      n-values# (.size item-reader#)]
+                  (c-for [iter-idx# (int 0) (< iter-idx# n-values#) (inc iter-idx#)]
+                         (.add list-item# (+ idx# iter-idx#) (.read item-reader# iter-idx#)))))))))}))
 
 
 (extend-list ByteList :int8)

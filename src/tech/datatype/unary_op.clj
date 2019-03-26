@@ -150,11 +150,11 @@
 
 (defn iterable-remove
   [options filter-iter values]
-  (iterator/iterable-filter options
-                            (unary-iterable-map
-                             (make-unary-op :boolean (not arg))
-                             filter-iter)
-                            values))
+  (iterator/iterable-mask options
+                          (unary-iterable-map
+                           (make-unary-op :boolean (not arg))
+                           filter-iter)
+                          values))
 
 
 (defmacro make-unary-op-reader-table

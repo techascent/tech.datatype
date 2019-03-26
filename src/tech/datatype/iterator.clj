@@ -115,53 +115,53 @@
     (throw (ex-info (format "Failed to find iter for datatype %s" datatype) {}))))
 
 
-(defmacro make-filtered-iterable-impl
+(defmacro make-masked-iterable-impl
   [datatype]
-  `(fn [datatype# values# filter# unchecked?#]
+  `(fn [datatype# values# mask# unchecked?#]
      (reify
        dtype-proto/PDatatype
        (get-datatype [item#] datatype#)
        Iterable
        (iterator [item#]
          (let [values# (typecast/datatype->iter ~datatype values# unchecked?#)
-               filter# (typecast/datatype->iter :boolean filter# true)]
-           (while (and (.hasNext filter#)
-                       (= false (.current filter#)))
-             (.nextBoolean filter#)
+               mask# (typecast/datatype->iter :boolean mask# true)]
+           (while (and (.hasNext mask#)
+                       (= false (.current mask#)))
+             (.nextBoolean mask#)
              (typecast/datatype->iter-next-fn ~datatype values#))
            (reify ~(typecast/datatype->iter-type datatype)
-             (hasNext [item#] (and (.hasNext filter#)
-                                   (.current filter#)
+             (hasNext [item#] (and (.hasNext mask#)
+                                   (.current mask#)
                                    (.hasNext values#)))
              (~(typecast/datatype->iter-next-fn-name datatype)
               [item#]
               (let [retval# (.current values#)]
-                (when (.hasNext filter#)
-                  (.nextBoolean filter#)
+                (when (.hasNext mask#)
+                  (.nextBoolean mask#)
                   (typecast/datatype->iter-next-fn ~datatype values#)
-                  (while (and (.hasNext filter#)
-                              (= false (.current filter#)))
-                    (.nextBoolean filter#)
+                  (while (and (.hasNext mask#)
+                              (= false (.current mask#)))
+                    (.nextBoolean mask#)
                     (typecast/datatype->iter-next-fn ~datatype values#)))
                 retval#))
              (current [item#] (.current values#))))))))
 
 
-(defmacro make-filtered-iterable-table
+(defmacro make-masked-iterable-table
   []
   `(->> [~@(for [dtype casting/base-datatypes]
-             [dtype `(make-filtered-iterable-impl ~dtype)])]
+             [dtype `(make-masked-iterable-impl ~dtype)])]
         (into {})))
 
 
-(def filtered-iterable-table (make-filtered-iterable-table))
+(def masked-iterable-table (make-masked-iterable-table))
 
 
-(defn iterable-filter
-  [{:keys [datatype unchecked?]} filter-iter values]
+(defn iterable-mask
+  [{:keys [datatype unchecked?]} mask-iter values]
   (let [datatype (or datatype (dtype-proto/get-datatype values))
-        filter-fn (get filtered-iterable-table (casting/flatten-datatype datatype))]
-    (filter-fn datatype values filter-iter unchecked?)))
+        mask-fn (get masked-iterable-table (casting/flatten-datatype datatype))]
+    (mask-fn datatype values mask-iter unchecked?)))
 
 
 (defmacro make-concat-iterable-impl
@@ -212,3 +212,4 @@
 
 
 ;;take, drop
+;;take-last drop-last

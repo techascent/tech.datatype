@@ -3,12 +3,15 @@
             [tech.datatype.base :as dtype-base]
             [tech.datatype.typecast :as typecast]
             [tech.datatype.reader :as reader]
+            [tech.datatype.unary-op :as unary-op]
             [tech.sparse.protocols :as sparse-proto]
             [clojure.core.matrix.protocols :as mp]
             [tech.sparse.utils :as utils]
             [tech.datatype :as dtype]
             [tech.sparse.set-ops :as set-ops]
-            [clojure.core.matrix.macros :refer [c-for]]))
+            [clojure.core.matrix.macros :refer [c-for]])
+  (:import [tech.datatype UnaryOperators$IntUnary
+            MutableRemove]))
 
 
 (set! *warn-on-reflection* true)
@@ -120,9 +123,10 @@
             ;;Transform the index buffer into our index buffer's base element space
             new-idx-buf (if (or (not= 1 b-stride)
                                 (not= 0 b-offset))
-                          (ct/binary-op! (ct/from-prototype new-idx-buf)
-                                         b-stride new-idx-buf
-                                         1.0 b-offset :+)
+                          (unary-op/unary-reader-map
+                           (unary-op/make-unary-op :int32 (* b-stride
+                                                             (+ arg b-offset)))
+                           new-idx-buf)
                           new-idx-buf)
 
             first-new-idx (int (dtype/get-value new-idx-buf 0))
@@ -152,18 +156,18 @@
                                      {:indexes new-idx-buf
                                       :values new-data-buf})]
         (when-not (= 0 remove-count)
-          (fu-dtype/remove-range! index-data first-old-idx remove-count)
-          (fu-dtype/remove-range! old-data-buf first-old-idx remove-count))
-        (fu-dtype/insert-elems! index-data first-old-idx union-indexes)
-        (fu-dtype/insert-elems! old-data-buf first-old-idx union-values)))
+          (dtype/remove-range! index-data first-old-idx remove-count)
+          (dtype/remove-range! old-data-buf first-old-idx remove-count))
+        (dtype/insert-block! index-data first-old-idx union-indexes)
+        (dtype/insert-block! old-data-buf first-old-idx union-values)))
     item)
   (insert-index! [item data-idx idx]
     (let [real-idx (relative-offset b-offset b-stride idx)]
-      (fu-dtype/insert! index-data data-idx real-idx)))
+      (dtype/insert! index-data data-idx real-idx)))
   (remove-index! [item idx]
     (let [data-idx (find-index item idx)]
       (when (sparse-proto/found-index? item data-idx idx)
-        (fu-dtype/remove-range! index-data data-idx 1)
+        (dtype/remove! index-data data-idx 1)
         data-idx)))
   (remove-sequential-indexes! [item data-buffer]
     (let [start-idx (find-index item 0)
@@ -171,19 +175,23 @@
           n-elems (- end-idx start-idx)]
       (if (= b-stride 1)
         (do
-          (fu-dtype/remove-range! index-data start-idx n-elems)
-          (fu-dtype/remove-range! data-buffer start-idx n-elems))
-        (loop [idx (int 0)
-               n-elems n-elems]
-          (when (< idx n-elems)
-            (let [local-idx (+ start-idx idx)]
-              (if (= 0 (rem (.getInt index-data (+ start-idx idx))
-                            b-stride))
-                (do
-                  (.removeInt index-data local-idx)
-                  (fu-dtype/remove-range! data-buffer local-idx 1)
-                  (recur idx (unchecked-dec n-elems)))
-                (recur (unchecked-inc idx) n-elems)))))))
+          (dtype/remove-range! index-data start-idx n-elems)
+          (dtype/remove-range! data-buffer start-idx n-elems))
+        (let [reader (typecast/datatype->reader :int32 index-data true)
+              ^MutableRemove idx-mutable (dtype-proto/->mutable-of-type index-data :int32 true)
+              ^MutableRemove data-mutable (dtype-proto/->mutable-of-type
+                                           data-buffer (dtype/get-datatype data-buffer) true)]
+          (loop [idx (int 0)
+                 n-elems n-elems]
+            (when (< idx n-elems)
+              (let [local-idx (+ start-idx idx)]
+                (if (= 0 (rem (.read reader (+ start-idx idx))
+                              b-stride))
+                  (do
+                    (.remove idx-mutable local-idx)
+                    (.remove data-mutable local-idx)
+                    (recur idx (unchecked-dec n-elems)))
+                  (recur (unchecked-inc idx) n-elems))))))))
     item)
   (offset [item] b-offset)
 
@@ -220,7 +228,7 @@
 
 (defn make-index-buffer
   [buf-ecount idx-seq]
-  (->IndexBuffer (fu-dtype/make-fastutil-list :int32 idx-seq)
+  (->IndexBuffer (dtype/make-container :list :int32 idx-seq)
                  (long 0)
                  (long 1)
                  (long buf-ecount)))

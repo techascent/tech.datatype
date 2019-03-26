@@ -11,7 +11,10 @@
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix :as m]
             [clojure.core.matrix.protocols :as mp])
-  (:import [tech.datatype ObjectReader ObjectWriter]))
+  (:import [tech.datatype ObjectReader ObjectWriter
+            ByteReader ShortReader IntReader LongReader
+            FloatReader DoubleReader BooleanReader]
+           [java.util List]))
 
 
 (set! *warn-on-reflection* true)
@@ -133,7 +136,7 @@
     (set-value! ary-target target-offset raw-data)
     [ary-target (+ target-offset 1)])
 
-  clojure.lang.PersistentVector
+  List
   (copy-raw->item! [raw-data ary-target ^long target-offset options]
     (let [num-elems (count raw-data)]
      (if (= 0 num-elems)
@@ -153,6 +156,41 @@
     (copy-raw-seq->item! (seq raw-data) ary-target target-offset options)))
 
 
+(extend-protocol dtype-proto/PToReader
+  List
+  (->reader-of-type [item datatype unchecked?]
+    (let [item-count (count item)]
+      (-> (reify ObjectReader
+            (getDatatype [_] :object)
+            (size [_] (int (or
+                            (count item)
+                            0)))
+            (read [item-reader idx]
+              (item idx))
+            (invoke [item-reader idx]
+              (item idx)))
+          (dtype-proto/->reader-of-type datatype unchecked?)))))
+
+
+(defmacro extend-reader-type
+  [reader-type]
+  `(clojure.core/extend
+       ~reader-type
+     dtype-proto/PCopyRawData
+     {:copy-raw->item!
+      (fn [raw-data# ary-target# target-offset# options#]
+        (raw-dtype-copy! raw-data# ary-target# target-offset# options#))}))
+
+
+(extend-reader-type ByteReader)
+(extend-reader-type ShortReader)
+(extend-reader-type IntReader)
+(extend-reader-type LongReader)
+(extend-reader-type FloatReader)
+(extend-reader-type DoubleReader)
+(extend-reader-type BooleanReader)
+
+
 (extend-type Object
   dtype-proto/PCopyRawData
   (copy-raw->item!
@@ -164,33 +202,6 @@
       ;;Readers implement iterable which gives them seq and friends
       (vec (dtype-proto/->reader-of-type
             src (dtype-proto/get-datatype src) true))))
-  dtype-proto/PToReader
-  (->reader-of-type [item datatype unchecked?]
-    (-> (reify ObjectReader
-          (getDatatype [_] :object)
-          (size [_] (int (or (mp/element-count item)
-                             (count item)
-                             0)))
-          (read [item-reader idx]
-            (cond
-              (or (map? item)
-                  (vector? item))
-              (do
-                (when-not (contains? item idx)
-                  (throw (ex-info "Item has no idx entry"
-                                  {:item item
-                                   :idx idx})))
-                (item idx))
-              (fn? item)
-              (item idx)
-              :else
-              (do
-                (when-not (= 0 idx)
-                  (throw (ex-info "Generic index access must be 0"
-                                  {:item item
-                                   :idx idx})))
-                item))))
-        (dtype-proto/->reader-of-type datatype unchecked?)))
 
   dtype-proto/PSetConstant
   (set-constant! [item offset value n-elems]

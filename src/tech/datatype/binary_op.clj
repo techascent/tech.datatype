@@ -134,14 +134,12 @@
              (let [host-dtype (casting/datatype->safe-host-type dtype)]
                [dtype
                 `(fn [lhs# rhs# bin-op#]
-                   (-> (reify DatatypeIterable
-                         (getDatatype [iter-item#] ~dtype)
-                         (iterator [iter-item#]
-                           (make-binary-op-iterator ~dtype lhs# rhs# bin-op#))
-                         (iteratorOfType [item# iter-datatype# unchecked?#]
-                           (-> (.iterator item#)
-                               (dtype-proto/->iterator-of-type
-                                iter-datatype# unchecked?#))))))]))]
+                   (reify
+                     Iterable
+                     (iterator [iter-item#]
+                       (make-binary-op-iterator ~dtype lhs# rhs# bin-op#))
+                     dtype-proto/PDatatype
+                     (get-datatype [iter-item#] ~dtype)))]))]
         (into {})))
 
 (def binary-op-iter-table (make-binary-op-iter-table))
@@ -174,7 +172,9 @@
                                   (.read rhs-reader# idx#)))
                            (iterator [item#]
                              (make-binary-op-iterator
-                              ~dtype lhs-reader# rhs-reader# bin-op#))))))]))]
+                              ~dtype lhs-reader# rhs-reader# bin-op#))
+                           (invoke [item# idx#]
+                             (.read item# (int idx#)))))))]))]
         (into {})))
 
 (def binary-op-reader-table (make-binary-op-reader-table))

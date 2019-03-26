@@ -310,7 +310,7 @@
                          (let [reader-fn (get marshalling-reader-table
                                               [(casting/flatten-datatype src-dtype)
                                                (casting/flatten-datatype dest-dtype)])]
-                           (reader-fn src-reader (casting/flatten-datatype dest-dtype))))
+                           (reader-fn src-reader unchecked?)))
             src-dtype (dtype-proto/get-datatype src-reader)]
         (if (not= src-dtype dest-dtype)
           (make-object-wrapper src-reader dest-dtype)
@@ -357,10 +357,14 @@
         (make-marshalling-reader item# dtype# unchecked?#))}
      dtype-proto/PBuffer
      {:sub-buffer (fn [item# offset# length#]
-                    (make-sub-buffer-reader
-                     ~reader-type
-                     (typecast/datatype->reader ~datatype item#)
-                     offset# length#))
+                    (let [item# (typecast/datatype->reader ~datatype item# true)]
+                      (if (and (= offset# 0)
+                               (= length# (.size item#)))
+                        item#
+                        (make-sub-buffer-reader
+                         ~reader-type
+                         (typecast/datatype->reader ~datatype item#)
+                         offset# length#))))
       :alias? (fn [lhs# rhs#] (identical? lhs# rhs#))
       :partially-alias? (fn [lhs# rhs#]
                           (dtype-proto/alias? lhs# rhs#))}))
@@ -480,6 +484,49 @@
   (let [datatype (or datatype (dtype-proto/get-datatype values))
         reader-fn (get indexed-iterable-table (casting/flatten-datatype datatype))]
     (reader-fn indexes values unchecked?)))
+
+
+(defmacro make-range-reader
+  [datatype]
+  (when-not (casting/numeric-type? datatype)
+    (throw (ex-info (format "Datatype (%s) is not a numeric type" ~datatype) {})))
+  `(fn [start# end# increment#]
+     (let [start# (casting/datatype->cast-fn :unknown ~datatype start#)
+           end# (casting/datatype->cast-fn :unknown ~datatype end#)
+           increment# (casting/datatype->cast-fn :unkown ~datatype increment#)
+           n-elems# (int (/ (- end# start#)
+                            increment#))]
+
+       (reify ~(typecast/datatype->reader-type datatype)
+         (getDatatype [item#] ~datatype)
+         (size [item#] n-elems#)
+         (read [item# idx#]
+           (when-not (< idx# n-elems#)
+             (throw (ex-info (format "Index out of range: %s >= %s" idx# n-elems#))))
+           (casting/datatype->unchecked-cast-fn
+            :unknown ~(casting/datatype->safe-host-type datatype)
+            (+ (* increment# idx#)
+               start#)))
+         (iterator [item#] (typecast/reader->iterator item#))
+         (invoke [item# idx#]
+           (.read item# (int idx#)))))))
+
+
+(defmacro make-range-reader-table
+  []
+  `(->> [~@(for [dtype casting/numeric-types]
+             [dtype `(make-range-reader ~dtype)])]
+        (into {})))
+
+
+(def range-reader-table (make-range-reader-table))
+
+(defn reader-range
+  [datatype start end & [increment]]
+  (if-let [reader-fn (get range-reader-table datatype)]
+    (reader-fn start end (or increment 1))
+    (throw (ex-info (format "Failed to find reader fn for datatype %s" datatype)
+                    {}))))
 
 
 (defmacro typed-read

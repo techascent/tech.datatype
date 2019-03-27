@@ -27,7 +27,7 @@
            [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]
            [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
-           [java.util List ArrayList Arrays]
+           [java.util List ArrayList Arrays RandomAccess]
            [tech.datatype
             ObjectReader ObjectWriter ObjectMutable
             ByteReader ByteWriter ByteMutable
@@ -356,8 +356,17 @@
 
 (defmethod dtype-proto/make-container :list
   [container-type datatype elem-count-or-seq options]
-  (let [typed-buf (typed-buffer/make-typed-buffer
-                   datatype
-                   elem-count-or-seq options)]
+  (let [typed-buf (if (or (instance? RandomAccess elem-count-or-seq)
+                          (satisfies? dtype-proto/PToReader elem-count-or-seq)
+                          (number? elem-count-or-seq)
+                          (not (instance? Iterable elem-count-or-seq)))
+                    (typed-buffer/make-typed-buffer
+                     datatype
+                     elem-count-or-seq options)
+                    (let [list-data (make-list (casting/host-flatten datatype) 0)]
+                      (mutable/iterable->list elem-count-or-seq
+                                              list-data
+                                              {:unchecked? (:unchecked? options)
+                                               :datatype datatype})))]
     (-> (dtype-proto/->list-backing-store typed-buf)
         (typed-buffer/set-datatype datatype))))

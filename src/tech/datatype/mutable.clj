@@ -205,7 +205,7 @@
 
 
 (defn iterable->list
-  [src-iterable dst-list & {:keys [datatype unchecked?]}]
+  [src-iterable dst-list {:keys [datatype unchecked?]}]
   (let [datatype (or datatype (dtype-proto/get-datatype src-iterable))
         dst-list (or dst-list (dtype-proto/make-container :list datatype 0 {}))
         iter-fn (get iter->list-table (casting/flatten-datatype datatype))]

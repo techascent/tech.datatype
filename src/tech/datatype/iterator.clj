@@ -75,10 +75,9 @@
 (extend-type Iterable
   dtype-proto/PToIterable
   (->iterable-of-type [item datatype unchecked?]
-    (if (satisfies? dtype-proto/PToReader item)
-      (dtype-proto/->reader-of-type item
-                                    (dtype-proto/get-datatype item)
-                                    false)
+    (if-let [src-reader (when (satisfies? dtype-proto/PToReader item)
+                          (dtype-proto/->reader-of-type item datatype unchecked?))]
+      src-reader
       (reify
         Iterable
         (iterator [iter-item]

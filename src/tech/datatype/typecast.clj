@@ -115,18 +115,18 @@
 (defn datatype->reader-type
   [datatype]
   (case datatype
-    :int8 'ByteReader
-    :uint8 'ShortReader
-    :int16 'ShortReader
-    :uint16 'IntReader
-    :int32 'IntReader
-    :uint32 'LongReader
-    :int64 'LongReader
-    :uint64 'LongReader
-    :float32 'FloatReader
-    :float64 'DoubleReader
-    :boolean 'BooleanReader
-    :object 'ObjectReader))
+    :int8 'tech.datatype.ByteReader
+    :uint8 'tech.datatype.ShortReader
+    :int16 'tech.datatype.ShortReader
+    :uint16 'tech.datatype.IntReader
+    :int32 'tech.datatype.IntReader
+    :uint32 'tech.datatype.LongReader
+    :int64 'tech.datatype.LongReader
+    :uint64 'tech.datatype.LongReader
+    :float32 'tech.datatype.FloatReader
+    :float64 'tech.datatype.DoubleReader
+    :boolean 'tech.datatype.BooleanReader
+    :object 'tech.datatype.ObjectReader))
 
 
 (defmacro implement-reader-cast
@@ -170,18 +170,18 @@
 (defn datatype->iter-type
   [datatype]
   (case datatype
-    :int8 'ByteIter
-    :uint8 'ShortIter
-    :int16 'ShortIter
-    :uint16 'IntIter
-    :int32 'IntIter
-    :uint32 'LongIter
-    :int64 'LongIter
-    :uint64 'LongIter
-    :float32 'FloatIter
-    :float64 'DoubleIter
-    :boolean 'BooleanIter
-    :object 'ObjectIter))
+    :int8 'tech.datatype.ByteIter
+    :uint8 'tech.datatype.ShortIter
+    :int16 'tech.datatype.ShortIter
+    :uint16 'tech.datatype.IntIter
+    :int32 'tech.datatype.IntIter
+    :uint32 'tech.datatype.LongIter
+    :int64 'tech.datatype.LongIter
+    :uint64 'tech.datatype.LongIter
+    :float32 'tech.datatype.FloatIter
+    :float64 'tech.datatype.DoubleIter
+    :boolean 'tech.datatype.BooleanIter
+    :object 'tech.datatype.ObjectIter))
 
 
 (defmacro implement-iter-cast

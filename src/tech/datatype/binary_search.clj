@@ -1,29 +1,25 @@
 (ns tech.datatype.binary-search
   (:require [tech.datatype.typecast :as typecast]
             [tech.datatype.casting :as casting]
-            [tech.datatype.protocols :as dtype-proto]))
+            [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.base :as dtype-base]
+            [tech.datatype.comparator :as dtype-comp]))
 
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(defmacro datatype->binary-search-algo
-  [datatype ary from to target]
-  (case datatype
-    :int8 `(ByteArrays/binarySearch ~ary ~from ~to ~target)
-    :int16 `(ShortArrays/binarySearch ~ary ~from ~to ~target)
-    :int32 `(IntArrays/binarySearch ~ary ~from ~to ~target)
-    :int64 `(LongArrays/binarySearch ~ary ~from ~to ~target)
-    :float32 `(FloatArrays/binarySearch ~ary ~from ~to ~target)
-    :float64 `(DoubleArrays/binarySearch ~ary ~from ~to ~target)))
-
-
 (defmacro make-binary-search
   [datatype]
-  `(fn [values# target#]
+  `(fn [values# target# comparator#]
      (let [target# (casting/datatype->cast-fn :unknown ~datatype target#)
            values# (typecast/datatype->reader ~datatype values# true)
+           comparator# (or comparator#
+                           (dtype-comp/make-comparator
+                            ~datatype (dtype-comp/default-compare-fn
+                                       ~datatype ~'lhs ~'rhs)))
+           comparator# (dtype-comp/datatype->comparator ~datatype comparator#)
            buf-ecount# (.size values#)]
        (if (= 0 buf-ecount#)
          [false 0]
@@ -31,15 +27,16 @@
                 high# (int buf-ecount#)]
            (if (< low# high#)
              (let [mid# (+ low# (quot (- high# low#) 2))
-                   buf-data# (.read values# mid#)]
-               (if (= buf-data# target#)
+                   buf-data# (.read values# mid#)
+                   compare-result# (.compare comparator# buf-data# target#)]
+               (if (= 0 compare-result#)
                  (recur mid# mid#)
-                 (if (and (< buf-data# target#)
+                 (if (and (< compare-result# 0)
                           (not= mid# low#))
                    (recur mid# high#)
                    (recur low# mid#))))
              (let [buf-val# (.read values# low#)]
-               (if (<= target# buf-val#)
+               (if (<= 0 (.compare comparator# target# buf-val#))
                  [(= target# buf-val#) low#]
                  [false (unchecked-inc low#)]))))))))
 
@@ -57,9 +54,10 @@
   "Perform binary search returning long idx of matching value or insert position.
   Returns index of the element or the index where it should be inserted.  Returns
   a tuple of [found? insert-or-elem-pos]"
-  [values target {:keys [datatype]}]
+  [values target {:keys [datatype
+                         comparator]}]
   (let [datatype (or datatype (dtype-proto/get-datatype values))]
     (if-let [value-fn (get binary-search-table (casting/datatype->safe-host-type
                                                 datatype))]
-      (value-fn values target)
+      (value-fn values target comparator)
       [false 0])))

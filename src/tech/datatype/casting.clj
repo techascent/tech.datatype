@@ -25,6 +25,10 @@
 
 (def primitive-types (set (concat numeric-types [:boolean])))
 
+
+(def base-host-datatypes (set (concat host-numeric-types
+                                      [:object :boolean])))
+
 (def base-datatypes (set (concat host-numeric-types
                                  unsigned-int-types
                                  [:boolean :object])))
@@ -308,6 +312,20 @@
   (if (base-datatypes dtype)
     dtype
     :object))
+
+
+(defn safe-flatten
+  [dtype]
+  (-> dtype
+      datatype->safe-host-type
+      flatten-datatype))
+
+
+(defn host-flatten
+  [dtype]
+  (-> dtype
+      datatype->host-datatype
+      flatten-datatype))
 
 
 (defmacro datatype->sparse-value

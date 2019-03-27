@@ -79,7 +79,9 @@
 
 (defn get-datatype
   [item]
-  (dtype-proto/get-datatype item))
+  (if (satisfies? dtype-proto/PDatatype item)
+    (dtype-proto/get-datatype item)
+    (type item)))
 
 
 (defn make-container
@@ -166,18 +168,19 @@
 
 
 (extend-protocol dtype-proto/PToReader
-  List
+  RandomAccess
   (->reader-of-type [item datatype unchecked?]
-    (let [item-count (count item)]
+    (let [^List item item
+          item-count (.size item)]
       (-> (reify ObjectReader
             (getDatatype [_] :object)
-            (size [_] (int (or
-                            (count item)
-                            0)))
-            (read [item-reader idx]
-              (item idx))
+            (size [_] item-count)
+            (read [_ idx]
+              (.get item idx))
+            (iterator [item-reader]
+              (typecast/reader->iterator item-reader))
             (invoke [item-reader idx]
-              (item idx)))
+              (.read item-reader (int idx))))
           (dtype-proto/->reader-of-type datatype unchecked?)))))
 
 

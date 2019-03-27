@@ -32,7 +32,9 @@
             [tech.datatype.reader :as dtype-reader]
             [tech.datatype.unary-op :as unary-op]
             [tech.datatype.binary-op :as binary-op]
-            [tech.datatype.writer :as dtype-writer])
+            [tech.datatype.writer :as dtype-writer]
+            [tech.datatype.comparator :as dtype-comp]
+            [tech.datatype.boolean-op :as dtype-bool])
   (:import [tech.datatype MutableRemove ObjectMutable])
   (:refer-clojure :exclude [cast]))
 
@@ -321,8 +323,7 @@ Calls clojure.core.matrix/ecount."
                                   options))
 
 
-;;Make to help make unary operations.  You need to import the appriately typed
-;;unary operation
+;;Make to help make unary operations.
 (refer 'tech.datatype.unary-op :only '[make-unary-op])
 (refer 'tech.datatype.binary-op :only '[make-binary-op])
 
@@ -376,6 +377,25 @@ Calls clojure.core.matrix/ecount."
   (binary-op/binary-iterable-map bin-op lhs rhs))
 
 
+(refer 'tech.datatype.boolean-op :only '[make-boolean-unary-op
+                                         make-boolean-binary-op
+                                         unary-iterable-filter
+                                         unary-argfilter
+                                         binary-argfilter])
+
+
+(defn boolean-unary-iterable
+  "Take an iterable and transform it to a boolean iterable via operation."
+  [bool-un-op src-data & {:keys [unchecked? datatype] :as options}]
+  (dtype-bool/boolean-unary-iterable bool-un-op src-data options))
+
+
+(defn boolean-binary-iterable
+  "Take 2 iterables and transform then to 1 boolean iterable via op."
+  [bool-binary-op lhs-data rhs-data {:keys [unchecked? datatype] :as options}]
+  (dtype-bool/boolean-binary-iterable bool-binary-op lhs-data rhs-data options))
+
+
 (defn ->reader-of-type
   "Create a reader of a specific type."
   [src-item & [datatype options]]
@@ -410,6 +430,10 @@ Calls clojure.core.matrix/ecount."
                      :as options}]
   (dtype-reader/make-iterable-indexed-iterable
    indexes values (assoc options :datatype datatype)))
+
+
+;;Argsort, binary search take typed comparators
+(refer 'tech.datatype.comparator :only '[make-comparator])
 
 
 (defn argsort

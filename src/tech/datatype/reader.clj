@@ -162,7 +162,8 @@
              (let [buffer-datatype (casting/datatype->host-datatype dtype)]
                [[buffer-datatype dtype]
                 `(fn [buffer#]
-                   (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype buffer#)]
+                   (let [buffer# (typecast/datatype->list-cast-fn
+                                  ~buffer-datatype buffer#)]
                      (make-buffer-reader-impl
                       ~(typecast/datatype->reader-type dtype)
                       ~(typecast/datatype->list-type buffer-datatype)
@@ -477,8 +478,8 @@
 (def indexed-iterable-table (make-indexed-iterable-creators))
 
 
-(defn make-iterable-indexed-reader
-  [indexes values & {:keys [datatype unchecked?]}]
+(defn make-iterable-indexed-iterable
+  [indexes values {:keys [datatype unchecked?]}]
   (let [datatype (or datatype (dtype-proto/get-datatype values))
         reader-fn (get indexed-iterable-table (casting/flatten-datatype datatype))]
     (reader-fn indexes values unchecked?)))

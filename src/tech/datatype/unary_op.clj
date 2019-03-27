@@ -3,7 +3,7 @@
             [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.iterator :as iterator])
-  (:import [tech.datatype DatatypeIterable
+  (:import [tech.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
             ByteReader ShortReader IntReader LongReader
@@ -22,14 +22,14 @@
   [datatype]
   (let [datatype (casting/datatype->safe-host-type datatype)]
     (case datatype
-      :int8 'UnaryOperators$ByteUnary
-      :int16 'UnaryOperators$ShortUnary
-      :int32 'UnaryOperators$IntUnary
-      :int64 'UnaryOperators$LongUnary
-      :float32 'UnaryOperators$FloatUnary
-      :float64 'UnaryOperators$DoubleUnary
-      :boolean 'UnaryOperators$BooleanUnary
-      :object 'UnaryOperators$ObjectUnary)))
+      :int8 'tech.datatype.UnaryOperators$ByteUnary
+      :int16 'tech.datatype.UnaryOperators$ShortUnary
+      :int32 'tech.datatype.UnaryOperators$IntUnary
+      :int64 'tech.datatype.UnaryOperators$LongUnary
+      :float32 'tech.datatype.UnaryOperators$FloatUnary
+      :float64 'tech.datatype.UnaryOperators$DoubleUnary
+      :boolean 'tech.datatype.UnaryOperators$BooleanUnary
+      :object 'tech.datatype.UnaryOperators$ObjectUnary)))
 
 
 (defmacro extend-unary-op
@@ -57,11 +57,14 @@
 
 
 (defmacro make-unary-op
-  [datatype & body]
+  "Make a unary operation with a given datatype.  The argument is
+  placed into the local namespace as 'arg'.
+  (make-unary-op :int32 (+ arg 10))"
+  [datatype body]
   `(reify ~(datatype->unary-op-type datatype)
      (getDatatype [item#] ~datatype)
      (op [item# ~'arg]
-       ~@body)
+       ~body)
      (invoke [item# arg#]
        (let [~'arg (casting/datatype->cast-fn :unknown ~datatype arg#)]
          ~@body))))

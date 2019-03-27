@@ -2,7 +2,7 @@
   (:require [tech.datatype.typecast :as typecast]
             [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto])
-  (:import [tech.datatype DatatypeIterable
+  (:import [tech.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
             ByteReader ShortReader IntReader LongReader
@@ -21,14 +21,14 @@
   [datatype]
   (let [datatype (casting/datatype->safe-host-type datatype)]
     (case datatype
-      :int8 'BinaryOperators$ByteBinary
-      :int16 'BinaryOperators$ShortBinary
-      :int32 'BinaryOperators$IntBinary
-      :int64 'BinaryOperators$LongBinary
-      :float32 'BinaryOperators$FloatBinary
-      :float64 'BinaryOperators$DoubleBinary
-      :boolean 'BinaryOperators$BooleanBinary
-      :object 'BinaryOperators$ObjectBinary)))
+      :int8 'tech.datatype.BinaryOperators$ByteBinary
+      :int16 'tech.datatype.BinaryOperators$ShortBinary
+      :int32 'tech.datatype.BinaryOperators$IntBinary
+      :int64 'tech.datatype.BinaryOperators$LongBinary
+      :float32 'tech.datatype.BinaryOperators$FloatBinary
+      :float64 'tech.datatype.BinaryOperators$DoubleBinary
+      :boolean 'tech.datatype.BinaryOperators$BooleanBinary
+      :object 'tech.datatype.BinaryOperators$ObjectBinary)))
 
 
 (defmacro extend-binary-op
@@ -57,6 +57,9 @@
 
 
 (defmacro make-binary-op
+  "Make a binary op of type datatype.  Arguments to the operation
+  are exposed to the local scope as 'x' and 'y' respectively.
+  (make-binary-op :float32 (Math/pow x y))"
   [datatype & body]
   `(reify ~(datatype->binary-op-type datatype)
      (getDatatype [item#] ~datatype)

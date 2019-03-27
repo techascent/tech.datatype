@@ -95,11 +95,16 @@
        (let [item# (checked-full-write-cast
                     item# :unknown ~datatype
                     ~host-type)]
-         (reify ~(typecast/datatype->iter-type host-type)
-           (getDatatype [iter#] ~datatype)
-           (hasNext [iter#] true)
-           (~(typecast/datatype->iter-next-fn-name host-type) [iter#] item#)
-           (current [iter#] item#))))))
+         (reify
+           Iterable
+           (iterator [item]
+             (reify ~(typecast/datatype->iter-type host-type)
+               (getDatatype [iter#] ~datatype)
+               (hasNext [iter#] true)
+               (~(typecast/datatype->iter-next-fn-name host-type) [iter#] item#)
+               (current [iter#] item#)))
+           dtype-proto/PDatatype
+           (get-datatype [item] ~datatype))))))
 
 
 (defmacro make-const-iter-table
@@ -112,7 +117,7 @@
 (def const-iter-table (make-const-iter-table))
 
 
-(defn make-const-iterator
+(defn make-const-iterable
   [item datatype]
   (if-let [iter-fn (get const-iter-table (casting/flatten-datatype datatype))]
     (iter-fn item)
@@ -191,7 +196,8 @@
                   (aset algo-data# 1 (rest (aget algo-data# 1))))
                 retval#))
              (current [item#]
-               (let [src-iter# (typecast/datatype->fast-iter ~datatype (aget algo-data# 0))]
+               (let [src-iter# (typecast/datatype->fast-iter
+                                ~datatype (aget algo-data# 0))]
                  (.current src-iter#)))))))))
 
 
@@ -206,14 +212,13 @@
 
 
 (defn iterable-concat
-  [{:keys [datatype unchecked?]} & args]
+  [{:keys [datatype unchecked?]} concat-iters]
   (let [datatype (or datatype
-                     (when-let [first-arg (first args)]
-                       (dtype-proto/get-datatype (first args)))
+                     (when-let [first-arg (first concat-iters)]
+                       (dtype-proto/get-datatype first-arg))
                      :float64)
         create-fn (get concat-iterable-table (casting/flatten-datatype datatype))]
-    (create-fn datatype args)))
-
+    (create-fn datatype concat-iters)))
 
 ;;take, drop
 ;;take-last drop-last

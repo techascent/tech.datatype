@@ -57,7 +57,7 @@
   "Perform binary search returning long idx of matching value or insert position.
   Returns index of the element or the index where it should be inserted.  Returns
   a tuple of [found? insert-or-elem-pos]"
-  [values target & {:keys [datatype]}]
+  [values target {:keys [datatype]}]
   (let [datatype (or datatype (dtype-proto/get-datatype values))]
     (if-let [value-fn (get binary-search-table (casting/datatype->safe-host-type
                                                 datatype))]

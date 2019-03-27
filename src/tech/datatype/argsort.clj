@@ -15,7 +15,12 @@
             Comparator$IntComp
             Comparator$LongComp
             Comparator$FloatComp
-            Comparator$DoubleComp]))
+    Comparator$DoubleComp]))
+
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
+
 
 (defn datatype->comparator-type
   [datatype]
@@ -28,30 +33,41 @@
     :float64 'DoubleComparator))
 
 
-(defmacro datatype->comparator
+(defmacro datatype->comp-impl
   [datatype comparator]
   `(if (instance? ~(resolve (datatype->comparator-type datatype)) ~comparator)
      ~comparator
      (throw (ex-info (format "Comparator is not of correct type: %s" ~comparator) {}))))
 
 
-(defn int8-comparator ^ByteComparator [item] (datatype->comparator :int8 item))
-(defn int16-comparator ^ShortComparator [item] (datatype->comparator :int16 item))
-(defn int32-comparator ^IntComparator [item] (datatype->comparator :int32 item))
-(defn int64-comparator ^LongComparator [item] (datatype->comparator :int64 item))
-(defn float32-comparator ^FloatComparator [item] (datatype->comparator :float32 item))
-(defn float64-comparator ^DoubleComparator [item] (datatype->comparator :float64 item))
+(defn int8-comparator ^ByteComparator [item] (datatype->comp-impl :int8 item))
+(defn int16-comparator ^ShortComparator [item] (datatype->comp-impl :int16 item))
+(defn int32-comparator ^IntComparator [item] (datatype->comp-impl :int32 item))
+(defn int64-comparator ^LongComparator [item] (datatype->comp-impl :int64 item))
+(defn float32-comparator ^FloatComparator [item] (datatype->comp-impl :float32 item))
+(defn float64-comparator ^DoubleComparator [item] (datatype->comp-impl :float64 item))
+
+
+(defmacro datatype->comparator
+  [datatype comp-item]
+  (case datatype
+    :int8 `(int8-comparator ~comp-item)
+    :int16 `(int16-comparator ~comp-item)
+    :int32 `(int32-comparator ~comp-item)
+    :int64 `(int64-comparator ~comp-item)
+    :float32 `(float32-comparator ~comp-item)
+    :float64 `(float64-comparator ~comp-item)))
 
 
 (defn datatype->tech-comparator-type
   [datatype]
   (case datatype
-    :int8 'Comparator$ByteComp
-    :int16 'Comparator$ShortComp
-    :int32 'Comparator$IntComp
-    :int64 'Comparator$LongComp
-    :float32 'Comparator$FloatComp
-    :float64 'Comparator$DoubleComp))
+    :int8 'tech.datatype.Comparator$ByteComp
+    :int16 'tech.datatype.Comparator$ShortComp
+    :int32 'tech.datatype.Comparator$IntComp
+    :int64 'tech.datatype.Comparator$LongComp
+    :float32 'tech.datatype.Comparator$FloatComp
+    :float64 'tech.datatype.Comparator$DoubleComp))
 
 (defn datatype->tech-comparator-fn-name
   [datatype]
@@ -62,7 +78,6 @@
     :int64 'compareLongs
     :float32 'compareFloats
     :float64 'compareDoubles))
-
 
 
 (defmacro make-comparator
@@ -99,12 +114,14 @@
                values# (typecast/datatype->reader ~datatype values# true)
                value-comparator# (datatype->comparator ~datatype comparator#)
                idx-comparator# (if reverse?#
-                                 (make-comparator :int32 (.compare value-comparator#
-                                                                   (.read values# ~'rhs)
-                                                                   (.read values# ~'lhs)))
-                                 (make-comparator :int32 (.compare value-comparator#
-                                                                   (.read values# ~'lhs)
-                                                                   (.read values# ~'rhs))))]
+                                 (make-comparator
+                                  :int32 (.compare value-comparator#
+                                                   (.read values# ~'rhs)
+                                                   (.read values# ~'lhs)))
+                                 (make-comparator
+                                  :int32 (.compare value-comparator#
+                                                   (.read values# ~'lhs)
+                                                   (.read values# ~'rhs))))]
 
            (if parallel?#
              (IntArrays/parallelQuickSort index-array# (int32-comparator idx-comparator#))
@@ -123,11 +140,11 @@
 
 
 (defn argsort
-  [values & {:keys [parallel?
-                    typed-comparator
-                    datatype
-                    reverse?]
-             :or {parallel? true}}]
+  [values {:keys [parallel?
+                  typed-comparator
+                  datatype
+                  reverse?]
+           :or {parallel? true}}]
   (let [datatype (or datatype (dtype-proto/get-datatype values))
         _ (when-not (casting/numeric-type? datatype)
             (throw (ex-info (format "Datatype is not numeric: %s" datatype))))

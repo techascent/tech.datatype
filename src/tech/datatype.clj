@@ -28,10 +28,11 @@
             [tech.datatype.jna :as dtype-jna]
             [tech.datatype.binary-search :as dtype-search]
             [tech.datatype.argsort :as dtype-sort]
-            [tech.datatype.reader :as dtype-reader]
-            [tech.datatype.writer :as dtype-writer]
             [tech.datatype.iterator :as dtype-iter]
-            [tech.parallel :as parallel])
+            [tech.datatype.reader :as dtype-reader]
+            [tech.datatype.unary-op :as unary-op]
+            [tech.datatype.binary-op :as binary-op]
+            [tech.datatype.writer :as dtype-writer])
   (:import [tech.datatype MutableRemove ObjectMutable])
   (:refer-clojure :exclude [cast]))
 
@@ -300,6 +301,7 @@ Calls clojure.core.matrix/ecount."
   [lhs-buffer rhs-buffer]
   (dtype-proto/alias? lhs-buffer rhs-buffer))
 
+
 (defn partially-alias?
   "Do these two buffers partially alias each other?  Does some sub-range of their
   data overlap?"
@@ -307,20 +309,166 @@ Calls clojure.core.matrix/ecount."
   (dtype-proto/partially-alias? lhs-buffer rhs-buffer))
 
 
-(defn ->writer-of-type
-  "Create a writer of a specific type."
-  [src-item datatype & [options]]
-  (dtype-proto/->writer-of-type src-item datatype (:unchecked? options)))
+(defn ->iterable-of-type
+  "Create an object that when .iterator is called it returns an iterator that
+  derives from tech.datatype.{dtype}Iter.  This iterator class adds 'current'
+  to the fastutil typed iterator of the same type.  Current makes implementing
+  a few algorithms far easier as they no longer require local state outside of
+  the iterator."
+  [src-item & [datatype options]]
+  (dtype-proto/->iterable-of-type src-item
+                                  (or datatype (get-datatype src-item))
+                                  options))
+
+
+;;Make to help make unary operations.  You need to import the appriately typed
+;;unary operation
+(refer 'tech.datatype.unary-op :only '[make-unary-op])
+(refer 'tech.datatype.binary-op :only '[make-binary-op])
+
+
+(defn const-iterable
+  [value & {:keys [datatype]}]
+  (dtype-iter/make-const-iterable value (or datatype (get-datatype value))))
+
+
+(defn iterable-mask
+  "Filter out one iterable from boolean values of another."
+  ([{:keys [datatype unchecked?]
+     :or {datatype (get-datatype values)} :as options}
+    mask-iter values]
+   (dtype-iter/iterable-mask (assoc options :datatype datatype)
+                             mask-iter values))
+  ([mask-iter values]
+   (iterable-mask {} mask-iter values)))
+
+
+(defn iterable-remove
+  ([{:keys [datatype unchecked?]
+      :or {datatype (get-datatype values)} :as options}
+    mask-iter values]
+   (unary-op/iterable-remove (assoc options :datatype datatype)
+                             mask-iter values))
+  ([mask-iter values]
+   (iterable-remove {} mask-iter values)))
+
+
+(defn iterable-concat
+  "Concatenate a list of iterables into one iterable."
+  [{:keys [datatype unchecked?] :as options} & args]
+  (dtype-iter/iterable-concat options args))
+
+
+(defn unary-iterable-map
+  "Typed unary iteration across an iterable.  Produces a new iterable.
+  (unary-iterable-map
+    (unary-op/make-unary-op :int32 (* b-stride
+                                      (+ arg b-offset)))
+    new-idx-buf)"
+  [un-op item]
+  (unary-op/unary-iterable-map un-op item))
+
+
+(defn binary-iterable-map
+  "Typed binary iteration across 2 iterables.  Length is the short of the two
+  iterables.  Produces a new iterable."
+  [bin-op lhs rhs]
+  (binary-op/binary-iterable-map bin-op lhs rhs))
 
 
 (defn ->reader-of-type
   "Create a reader of a specific type."
-  [src-item datatype & [options]]
-  (dtype-proto/->reader-of-type src-item datatype (:unchecked? options)))
+  [src-item & [datatype options]]
+  (dtype-proto/->reader-of-type src-item
+                                (or datatype (get-datatype src-item))
+                                (:unchecked? options)))
+
+(defn const-reader
+  "Make a reader that returns a constant value."
+  [value & {:keys [datatype num-elems]}]
+  (dtype-reader/make-const-reader value
+                                  (or datatype (get-datatype value))
+                                  num-elems))
+
+
+(defn indexed-reader
+  "Make a new reader that indexes into the values of another reader.
+  Indexes must be convertible to an int32 reader."
+  [indexes values & {:keys [datatype unchecked?]
+                     :or {datatype (get-datatype values)}
+                     :as options}]
+  (dtype-reader/make-indexed-reader indexes
+                                    values
+                                    (assoc options :datatype datatype)))
+
+
+(defn iterable-indexed-iterable
+  "Make an iterable that indexes into values.  Values must be readable
+  while indexes need only be int32 iterable."
+  [indexes values & {:keys [datatype unchecked?]
+                     :or {datatype (get-datatype values)}
+                     :as options}]
+  (dtype-reader/make-iterable-indexed-iterable
+   indexes values (assoc options :datatype datatype)))
+
+
+(defn argsort
+  "Return a list of indexes in sorted-values order.  Values must be
+  convertible to a reader.  Sorts least-to-greatest by default
+  unless either reverse? is specified or a correctly typed comparator
+  is provided.
+  Returns an int32 array or indexes."
+  [values & {:keys [parallel?
+                    typed-comparator
+                    datatype
+                    reverse?]
+             :or {parallel? true}
+             :as options}]
+  (dtype-sort/argsort values (assoc options :parallel? parallel?)))
+
+
+(defn binary-search
+  "Perform a binary search of (convertible to reader) values for target and return a
+  tuple of [found? elem-pos-or-insert-pos].  If the element is found, the elem-pos
+  contains the index.  If the element is not found, then it contains the index where the
+  element would be inserted to maintain sort order of the values."
+  [values target & {:keys [datatype unchecked?]
+                    :or {datatype (get-datatype values)}
+                    :as options}]
+  (dtype-search/binary-search
+   values target (assoc options :datatype datatype)))
+
+
+(defn unary-reader-map
+  "Typed unary iteration across an reader.  Produces a new reader that evaluates
+  the unary op at access time.
+  (unary-iterable-map
+    (unary-op/make-unary-op :int32 (* b-stride
+                                      (+ arg b-offset)))
+    new-idx-buf)"
+  [un-op item]
+  (unary-op/unary-reader-map un-op item))
+
+
+(defn binary-reader-map
+  "Typed binary iteration across 2 readers.  Length is the shorter of the two
+  readers.  Produces a new reader that performs operation at access time."
+  [bin-op lhs rhs]
+  (binary-op/binary-reader-map bin-op lhs rhs))
+
+
+(defn ->writer-of-type
+  "Create a writer of a specific type."
+  [src-item & [datatype options]]
+  (dtype-proto/->writer-of-type src-item
+                                (or datatype (get-datatype src-item))
+                                (:unchecked? options)))
 
 
 (defn ->mutable-of-type
   "Create an object capable of mutating the underlying structure of the data storage.
   Only works for list-backed types."
-  [src-item datatype & [options]]
-  (dtype-proto/->mutable-of-type src-item datatype (:unchecked? options)))
+  [src-item & [datatype options]]
+  (dtype-proto/->mutable-of-type src-item
+                                 (or datatype (get-datatype src-item))
+                                 (:unchecked? options)))

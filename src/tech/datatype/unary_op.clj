@@ -121,14 +121,15 @@
            (reify ~(datatype->unary-op-type host-datatype)
              (getDatatype [item#] ~dst-datatype)
              (op [item# arg#]
-               (let [value# (.op src-op# (nio-access/checked-full-write-cast arg#
-                                                                             ~host-datatype
-                                                                             ~dst-datatype
-                                                                             ~src-datatype))]
-                 (nio-access/checked-full-read-cast value#
-                                                    ~src-host-datatype
-                                                    ~src-datatype
-                                                    ~dst-datatype)))
+               (let [value# (.op src-op# (nio-access/checked-full-write-cast
+                                          arg#
+                                          ~host-datatype
+                                          ~dst-datatype
+                                          ~src-datatype))]
+                 (nio-access/checked-full-write-cast value#
+                                                     ~src-host-datatype
+                                                     ~src-datatype
+                                                     ~dst-datatype)))
              (invoke [item# arg#]
                (.op item# (casting/datatype->cast-fn
                            :unknown ~dst-datatype arg#)))))))))
@@ -138,7 +139,8 @@
   []
   `(->> [~@(for [src-dtype casting/base-host-datatypes
                  dst-dtype casting/base-host-datatypes]
-             [[src-dtype dst-dtype] `(make-marshalling-unary-op-impl ~dst-dtype ~src-dtype)])]
+             [[src-dtype dst-dtype] `(make-marshalling-unary-op-impl
+                                      ~dst-dtype ~src-dtype)])]
         (into {})))
 
 
@@ -155,7 +157,8 @@
                            ~datatype)
                       item#
                       (let [marshal-fn# (get marshalling-unary-op-table
-                                             [~datatype (casting/safe-flatten un-dtype#)])]
+                                             [~datatype (casting/safe-flatten
+                                                         un-dtype#)])]
                         (marshal-fn# item# un-dtype# unchecked?#))))}))
 
 
@@ -251,7 +254,8 @@
                              (->> (.read src-reader# idx#)
                                   (.op un-op#)))
                            (iterator [item#]
-                             (make-unary-op-iterator ~dtype src-reader# un-op# unchecked?#))
+                             (make-unary-op-iterator ~dtype src-reader#
+                                                     un-op# unchecked?#))
                            (invoke [item# idx#]
                              (.read item# (int idx#)))))))]))]
         (into {})))
@@ -271,12 +275,12 @@
 
 
 
-(defmacro create-double-unary-op
+(defmacro make-double-unary-op
   [op-code]
   `(make-unary-op :float64 ~op-code))
 
 
-(defmacro create-numeric-unary-op
+(defmacro make-numeric-unary-op
   [op-code]
   `(reify
      dtype-proto/PToUnaryOp
@@ -295,7 +299,7 @@
      ))
 
 
-(defmacro float-double-unary-op
+(defmacro make-float-double-unary-op
   [op-code]
   `(reify
      dtype-proto/PToUnaryOp
@@ -315,53 +319,59 @@
 
 
 (def builtin-unary-ops
-  {:floor (create-double-unary-op (Math/floor arg))
-   :ceil (create-double-unary-op (Math/ceil arg))
-   :round (create-double-unary-op (unchecked-double (Math/round arg)))
-   :rint (create-double-unary-op (Math/rint arg))
-   :- (create-double-unary-op (- arg))
-   :logistic (create-double-unary-op
+  {:floor (make-double-unary-op (Math/floor arg))
+   :ceil (make-double-unary-op (Math/ceil arg))
+   :round (make-double-unary-op (unchecked-double (Math/round arg)))
+   :rint (make-double-unary-op (Math/rint arg))
+   :- (make-double-unary-op (- arg))
+   :logistic (make-double-unary-op
               (/ 1.0
                  (+ 1.0 (Math/exp (- arg)))))
-   :not (create-double-unary-op (if (= 0.0 arg) 1.0 0.0))
-   :expp (create-double-unary-op (Math/exp arg))
-   :expm1 (create-double-unary-op (Math/expm1 arg))
-   :log (create-double-unary-op (Math/log arg))
-   :log10 (create-double-unary-op (Math/log10 arg))
-   :log1p (create-double-unary-op (Math/log1p arg))
-   :signum (create-double-unary-op (Math/signum arg))
-   :sqrt (create-double-unary-op (Math/sqrt arg))
-   :cbrt (create-double-unary-op (Math/cbrt arg))
-   :abs (create-double-unary-op (Math/abs arg))
-   :sq (create-numeric-unary-op (unchecked-multiply arg arg))
-   :sin (create-double-unary-op (Math/sin arg))
-   :sinh (create-double-unary-op (Math/sinh arg))
-   :cos (create-double-unary-op (Math/cos arg))
-   :cosh (create-double-unary-op (Math/cosh arg))
-   :tan (create-double-unary-op (Math/tan arg))
-   :tanh (create-double-unary-op (Math/tanh arg))
-   :acos (create-double-unary-op (Math/acos arg))
-   :asin (create-double-unary-op (Math/asin arg))
-   :atan (create-double-unary-op (Math/atan arg))
-   :to-degrees (create-double-unary-op (Math/toDegrees arg))
-   :to-radians (create-double-unary-op (Math/toRadians arg))
+   :not (make-double-unary-op (if (= 0.0 arg) 1.0 0.0))
+   :expp (make-double-unary-op (Math/exp arg))
+   :expm1 (make-double-unary-op (Math/expm1 arg))
+   :log (make-double-unary-op (Math/log arg))
+   :log10 (make-double-unary-op (Math/log10 arg))
+   :log1p (make-double-unary-op (Math/log1p arg))
+   :signum (make-double-unary-op (Math/signum arg))
+   :sqrt (make-double-unary-op (Math/sqrt arg))
+   :cbrt (make-double-unary-op (Math/cbrt arg))
+   :abs (make-double-unary-op (Math/abs arg))
+   :sq (make-numeric-unary-op (unchecked-multiply arg arg))
+   :sin (make-double-unary-op (Math/sin arg))
+   :sinh (make-double-unary-op (Math/sinh arg))
+   :cos (make-double-unary-op (Math/cos arg))
+   :cosh (make-double-unary-op (Math/cosh arg))
+   :tan (make-double-unary-op (Math/tan arg))
+   :tanh (make-double-unary-op (Math/tanh arg))
+   :acos (make-double-unary-op (Math/acos arg))
+   :asin (make-double-unary-op (Math/asin arg))
+   :atan (make-double-unary-op (Math/atan arg))
+   :to-degrees (make-double-unary-op (Math/toDegrees arg))
+   :to-radians (make-double-unary-op (Math/toRadians arg))
 
-   :next-up (float-double-unary-op (Math/nextUp arg))
-   :next-down (float-double-unary-op (Math/nextDown arg))
-   :ulp (float-double-unary-op (Math/ulp arg))
-   ;;This is strained.  It would need a different interface really.
+   :next-up (make-float-double-unary-op (Math/nextUp arg))
+   :next-down (make-float-double-unary-op (Math/nextDown arg))
+   :ulp (make-float-double-unary-op (Math/ulp arg))
 
    :bit-not (make-unary-op :int64 (bit-not arg))
-   :/ (create-numeric-unary-op (/ arg))
+   :/ (make-numeric-unary-op (/ arg))
    :no-op :no-op})
 
 
 (defn apply-unary-op
+    "Perform operation returning a scalar, reader, or an iterator.  Note that the
+  results of this could be a reader, iterable or a scalar depending on what was passed
+  in.  Also note that the results are lazyily calculated so no computation is done in
+  this method aside from building the next thing *unless* the inputs are scalar in which
+  case the operation is evaluated immediately."
   [{:keys [datatype unchecked?] :as options} un-op arg]
   (cond
     (satisfies? dtype-proto/PToReader arg)
     (unary-reader-map options un-op arg)
-    (instance? Iterable arg)
+
+    (or (instance? Iterable arg)
+        (satisfies? dtype-proto/PToIterable arg))
     (unary-iterable-map options un-op arg)
     :else
     (let [datatype (or datatype (dtype-base/get-datatype arg))]

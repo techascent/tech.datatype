@@ -295,7 +295,7 @@
    :- (make-numeric-binary-op (- x y))
    :/ (make-numeric-binary-op (/ x y))
    :* (make-numeric-binary-op (* x y))
-   :rem (long-binary-op (Math/floorMod x y))
+   :rem (make-long-binary-op (Math/floorMod x y))
    :quot (make-long-binary-op (Math/floorDiv x y))
    :pow (make-double-binary-op (Math/pow x y))
    ;;Math/max and friends aren't defined for all primitives leading to reflection

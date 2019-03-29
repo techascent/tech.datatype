@@ -271,15 +271,17 @@
   `(reify
      dtype-proto/PToBinaryOp
      (->binary-op [item# datatype# unchecked?#]
-       (when-not (casting/numeric-type? datatype#)
-         (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
-       (case (casting/safe-flatten datatype#)
-         :int8 (make-binary-op :int8 (unchecked-byte ~op-code))
-         :int16 (make-binary-op :int16 (unchecked-short ~op-code))
-         :int32 (make-binary-op :int32 (unchecked-int ~op-code))
-         :int64 (make-binary-op :int64 (unchecked-long ~op-code))
-         :float32 (make-binary-op :float32 (unchecked-float ~op-code))
-         :float64 (make-binary-op :float64 (unchecked-double ~op-code))))
+       (let [bin-dtype# (if (casting/numeric-type? datatype#)
+                          datatype#
+                          :float64)]
+         (-> (case (casting/safe-flatten bin-dtype#)
+               :int8 (make-binary-op :int8 (unchecked-byte ~op-code))
+               :int16 (make-binary-op :int16 (unchecked-short ~op-code))
+               :int32 (make-binary-op :int32 (unchecked-int ~op-code))
+               :int64 (make-binary-op :int64 (unchecked-long ~op-code))
+               :float32 (make-binary-op :float32 (unchecked-float ~op-code))
+               :float64 (make-binary-op :float64 (unchecked-double ~op-code)))
+             (dtype-proto/->binary-op datatype# unchecked?#))))
      dtype-proto/PDatatype
      (get-datatype [item#] :float64)))
 
@@ -331,7 +333,7 @@
    })
 
 
-(defn- arg->arg-type
+(defn arg->arg-type
   [arg]
   (cond
     (satisfies? dtype-proto/PToReader arg) :reader
@@ -344,7 +346,7 @@
 (defn apply-binary-op
   "We perform a left-to-right reduction making scalars/readers/etc.  This matches
   clojure semantics.  Note that the results of this could be a reader, iterable or a
-  scalar depending on what was passed in.  Also note that the results are lazyily
+  scalar depending on what was passed in.  Also note that the results are lazily
   calculated so no computation is done in this method aside from building the next thing
   *unless* the inputs are scalar in which case the operation is evaluated immediately."
   [{:keys [datatype unchecked?] :as options}

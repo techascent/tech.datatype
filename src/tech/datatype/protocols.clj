@@ -135,6 +135,9 @@ data overlap?"))
 (defprotocol PToUnaryBooleanOp
   (->binary-boolean-op [item datatype unchecked?]))
 
+(defprotocol PToReduceOp
+  (->reduce-op [item datatype unchecked?]))
+
 (defmulti make-container
   (fn [container-type datatype elem-seq-or-count options]
     container-type))

@@ -46,7 +46,7 @@
 
 (defmacro buffer-adder-construct-table
   []
-  `(->> [~@(for [dtype casting/base-datatypes]
+  `(->> [~@(for [dtype casting/base-host-datatypes]
              [dtype `(fn [lhs-buf# rhs-buf# unchecked?#]
                        (make-buffer-adder ~dtype lhs-buf# rhs-buf# unchecked?#))])]
         (into {})))
@@ -72,7 +72,7 @@
           result-idx-buf (dtype/make-container :list :int32 0)
           result-mut (typecast/datatype->mutable :int32 result-idx-buf true)
           dtype (dtype/get-datatype lhs-data-buf)
-          add-fn (get buffer-adder-table (casting/flatten-datatype dtype))
+          add-fn (get buffer-adder-table (casting/safe-flatten dtype))
           _ (when-not add-fn
               (throw (ex-info (format "Failed to find add fn for datatype %s" dtype)
                               {})))

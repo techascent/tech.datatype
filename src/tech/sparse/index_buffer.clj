@@ -4,6 +4,7 @@
             [tech.datatype.typecast :as typecast]
             [tech.datatype.reader :as reader]
             [tech.datatype.unary-op :as unary-op]
+            [tech.datatype.binary-search :as dtype-search]
             [tech.sparse.protocols :as sparse-proto]
             [clojure.core.matrix.protocols :as mp]
             [tech.sparse.utils :as utils]
@@ -95,17 +96,10 @@
   ;;Returns an integer that may point to either the index or where
   ;;the item should be inserted.
   (find-index [idx-buf target-idx]
-    (utils/binary-search index-data
-                         (relative-offset b-offset
-                                          b-stride
-                                          target-idx)))
-
-  (found-index? [idx-buf buf-idx target-idx]
-    (let [buf-idx (int buf-idx)
-          target-idx (relative-offset b-offset b-stride target-idx)]
-      (and (not= buf-idx (dtype/ecount index-data))
-           (= (reader/typed-read :int32 index-data buf-idx)
-              target-idx))))
+    (dtype-search/binary-search index-data
+                                (relative-offset b-offset
+                                                 b-stride
+                                                 target-idx)))
 
   (set-index-values! [item old-data-buf new-idx-buf new-data-buf zero-val]
     (when-not (= (dtype/ecount new-data-buf)
@@ -133,8 +127,12 @@
             last-new-idx (int (dtype/get-value new-idx-buf
                                                (- (dtype/ecount new-idx-buf) 1)))
 
-            first-old-idx (utils/binary-search index-data first-new-idx)
-            last-old-idx (utils/binary-search index-data (unchecked-inc last-new-idx))
+            [first-found? first-old-idx] (dtype-search/binary-search
+                                          index-data first-new-idx)
+            [last-found? last-old-idx] (dtype-search/binary-search
+                                        index-data (unchecked-inc last-new-idx))
+            first-old-idx (int first-old-idx)
+            last-old-idx (int last-old-idx)
             remove-count (- last-old-idx first-old-idx)
             _ (when (< remove-count 0)
                 (throw (ex-info "Index buf logic error"
@@ -165,8 +163,8 @@
     (let [real-idx (relative-offset b-offset b-stride idx)]
       (dtype/insert! index-data data-idx real-idx)))
   (remove-index! [item idx]
-    (let [data-idx (find-index item idx)]
-      (when (sparse-proto/found-index? item data-idx idx)
+    (let [[found? data-idx] (find-index item idx)]
+      (when found?
         (dtype/remove! index-data data-idx 1)
         data-idx)))
   (remove-sequential-indexes! [item data-buffer]
@@ -178,9 +176,11 @@
           (dtype/remove-range! index-data start-idx n-elems)
           (dtype/remove-range! data-buffer start-idx n-elems))
         (let [reader (typecast/datatype->reader :int32 index-data true)
-              ^MutableRemove idx-mutable (dtype-proto/->mutable-of-type index-data :int32 true)
+              ^MutableRemove idx-mutable (dtype-proto/->mutable-of-type
+                                          index-data :int32 true)
               ^MutableRemove data-mutable (dtype-proto/->mutable-of-type
-                                           data-buffer (dtype/get-datatype data-buffer) true)]
+                                           data-buffer (dtype/get-datatype
+                                                        data-buffer) true)]
           (loop [idx (int 0)
                  n-elems n-elems]
             (when (< idx n-elems)

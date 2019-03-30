@@ -17,7 +17,6 @@ This must not return a buffer if stride does not = 1"))
   ;;Returns an integer that may point to either the index or where
   ;;the item should be inserted.
   (find-index [idx-buf target-idx])
-  (found-index? [idx-buf buf-idx target-idx])
   (set-index-values! [item old-data-buf new-idx-buf new-data-buf zero-val]
     "idx-buf is sorted values.")
   (insert-index! [item data-idx idx]

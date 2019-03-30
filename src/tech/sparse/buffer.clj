@@ -1,20 +1,17 @@
 (ns tech.sparse.buffer
-  (:require [tech.libs.fastutil.datatype :as fu-dtype]
-            [tech.datatype :as dtype]
+  (:require [tech.datatype :as dtype]
+            [tech.datatype.casting :as casting]
             [tech.datatype.base :as dtype-base]
-            [tech.datatype.java-primitive :as primitive]
-            [tech.datatype.java-unsigned :as unsigned]
+            [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.binary-search :as dtype-search]
+            [tech.datatype.typecast :as typecast]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix.macros :refer [c-for]]
-            [tech.compute.cpu.typed-buffer :as cpu-typed-buf]
-            [tech.compute.driver :as compute-drv]
-            [tech.compute.tensor.functional :as tens-func]
             [tech.sparse.set-ops :as set-ops]
             [tech.sparse.protocols :as sparse-proto]
             [tech.sparse.index-buffer :as sparse-index]
-            [tech.sparse.utils :refer [binary-search get-index-seq]
-             :as utils])
-  (:import [it.unimi.dsi.fastutil.ints IntArrayList]))
+            [tech.sparse.utils :as utils]))
+
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -23,47 +20,8 @@
 (defrecord SparseBuffer [data-buf
                          index-buf
                          zero-val]
-  dtype-base/PDatatype
-  (get-datatype [item] (dtype-base/get-datatype data-buf))
-
-  dtype-base/PContainerType
-  (container-type [item] :sparse-buffer)
-
-  dtype-base/PAccess
-  (get-value [item idx]
-    (let [buf-idx (sparse-proto/find-index index-buf idx)]
-      (if (sparse-proto/found-index? index-buf buf-idx idx)
-        (dtype/get-value data-buf buf-idx)
-        zero-val)))
-
-  (set-constant! [item offset value elem-count]
-    (let [elem-count (int elem-count)
-          offset (int offset)
-          value (dtype/cast value (dtype/get-datatype data-buf))]
-      (if (= value zero-val)
-        (sparse-proto/remove-sequential-indexes!
-         (compute-drv/sub-buffer index-buf offset elem-count)
-         data-buf)
-        (let [new-idx-buf (fu-dtype/make-fastutil-list :int32 (range elem-count))
-              new-data-buf (fu-dtype/make-fastutil-list
-                            (dtype/get-datatype data-buf)
-                            (repeat elem-count value))]
-          (sparse-proto/set-index-values!
-           index-buf data-buf
-           new-idx-buf new-data-buf zero-val)))
-      item))
-
-  (set-value! [item idx value]
-    (let [value (dtype/cast value (dtype/get-datatype item))]
-      (if (= zero-val value)
-        (when-let [data-idx (sparse-proto/remove-index! index-buf idx)]
-          (fu-dtype/remove-range! data-buf data-idx 1))
-        (let [data-idx (sparse-proto/find-index index-buf idx)]
-          (if (sparse-proto/found-index? index-buf data-idx idx)
-            (dtype/set-value! data-buf data-idx value)
-            (do
-              (fu-dtype/insert! data-buf data-idx value)
-              (sparse-proto/insert-index! index-buf data-idx idx)))))))
+  dtype-proto/PDatatype
+  (get-datatype [item] (dtype-proto/get-datatype data-buf))
 
   sparse-proto/PSparse
   (index-seq [item] (sparse-proto/index-seq index-buf))
@@ -81,69 +39,65 @@
 
   (set-sequential-values! [item data-buffer]
     (sparse-proto/set-values! item
-                              (fu-dtype/make-fastutil-list
+                              (dtype-proto/make-container :list
                                :int32 (range (dtype/ecount data-buffer)))
                               data-buffer))
-
   (->sparse-buffer-backing-store [item] item)
   (data-buffer [item]
     (let [start-idx (long (sparse-proto/find-index index-buf 0))
           end-idx (long (sparse-proto/find-index index-buf (dtype/ecount index-buf)))]
-      (compute-drv/sub-buffer data-buf start-idx (- end-idx start-idx))))
+      (dtype-proto/sub-buffer data-buf start-idx (- end-idx start-idx))))
   (->nio-data-buffer [item]
     (when (= 1 (int (sparse-proto/stride index-buf)))
       (let [start-idx (int (sparse-proto/find-index index-buf 0))
             end-idx (int (sparse-proto/find-index index-buf (dtype/ecount index-buf)))]
-        (-> (compute-drv/sub-buffer data-buf
+        (-> (dtype-proto/sub-buffer data-buf
                                     start-idx
                                     (- end-idx start-idx))
-            (primitive/->buffer-backing-store)))))
+            (dtype-proto/->buffer-backing-store)))))
   (index-buffer [item] index-buf)
   (zero-value [item] zero-val)
 
-  compute-drv/PBuffer
+  dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
     (->SparseBuffer data-buf
-                    (compute-drv/sub-buffer index-buf offset length)
+                    (dtype-proto/sub-buffer index-buf offset length)
                     zero-val))
   (alias? [lhs-dev-buffer rhs-dev-buffer]
     (and (instance? SparseBuffer rhs-dev-buffer)
-         (compute-drv/alias? (:data-buf lhs-dev-buffer)
+         (dtype-proto/alias? (:data-buf lhs-dev-buffer)
                              (:data-buf rhs-dev-buffer))
-         (compute-drv/alias? (:index-buf lhs-dev-buffer)
+         (dtype-proto/alias? (:index-buf lhs-dev-buffer)
                              (:index-buf rhs-dev-buffer))
          (= (:zero-val lhs-dev-buffer)
             (:zero-val rhs-dev-buffer))))
   (partially-alias? [lhs-dev-buffer rhs-dev-buffer]
     (and (instance? SparseBuffer rhs-dev-buffer)
-         (compute-drv/partially-alias? (:data-buf lhs-dev-buffer)
+         (dtype-proto/partially-alias? (:data-buf lhs-dev-buffer)
                                        (:data-buf rhs-dev-buffer))
-         (compute-drv/partially-alias? (:index-buf lhs-dev-buffer)
+         (dtype-proto/partially-alias? (:index-buf lhs-dev-buffer)
                                        (:index-buf rhs-dev-buffer))))
 
   mp/PElementCount
   (element-count [item] (mp/element-count index-buf))
 
-  primitive/PToArray
-  (primitive/->array [item] nil)
-  (primitive/->array-copy [item]
+  dtype-proto/PToArray
+  (dtype-proto/->sub-array [item] nil)
+  (dtype-proto/->array-copy [item]
     (let [n-elems (mp/element-count item)
-          retval (primitive/make-array-of-type (dtype-base/get-datatype item)
-                                               n-elems)]
+          retval (dtype-proto/make-container :java-array
+                                             (casting/safe-flatten
+                                              (dtype-proto/get-datatype item))
+                                             n-elems)]
       (dtype/copy! item 0 retval 0 n-elems {:unchecked? true})
-      retval))
-
-  dtype-base/PPersistentVector
-  (->vector [item]
-    (->> (primitive/->array-copy item)
-         vec)))
+      retval)))
 
 
 (defn make-sparse-buffer
   ([datatype elem-count-or-seq options]
    (cond
      (number? elem-count-or-seq)
-     (->SparseBuffer (fu-dtype/make-fastutil-list datatype 0)
+     (->SparseBuffer (dtype-proto/make-container :list datatype 0)
                      (sparse-index/make-index-buffer elem-count-or-seq [])
                      (dtype/cast 0 datatype))
      :else
@@ -156,7 +110,8 @@
                                                     (dtype/cast data-val datatype))
                                                [idx data-val])))
                               (remove nil?))]
-       (->SparseBuffer (fu-dtype/make-fastutil-list datatype (map second nonzero-pairs))
+       (->SparseBuffer (dtype-proto/make-container :list datatype
+                                                   (map second nonzero-pairs))
                        (sparse-index/make-index-buffer buf-size
                                                        (map first nonzero-pairs))
                        zero-val))))
@@ -168,21 +123,21 @@
   "Call at your own risk.  The types have to match, more or less."
   [src src-offset dest dest-offset n-elems options]
   (let [src (-> (sparse-proto/->sparse-buffer-backing-store src)
-                (compute-drv/sub-buffer src-offset n-elems))
-        dest (compute-drv/sub-buffer dest dest-offset n-elems)]
+                (dtype-proto/sub-buffer src-offset n-elems))
+        dest (dtype-proto/sub-buffer dest dest-offset n-elems)]
     ;;Start with the obvious
     (dtype/set-constant! dest 0 (sparse-proto/zero-value src) n-elems)
     (utils/typed-sparse-copy! (sparse-proto/data-buffer src)
-                              (primitive/->buffer-backing-store dest)
+                              (dtype-proto/->buffer-backing-store dest)
                               (sparse-proto/index-seq src))
     dest))
 
 
 (defn copy-dense->sparse-unchecked!
   [src src-offset dest dest-offset n-elems options]
-  (let [src (compute-drv/sub-buffer src src-offset n-elems)
+  (let [src (dtype-proto/sub-buffer src src-offset n-elems)
         dest (-> (sparse-proto/->sparse-buffer-backing-store dest)
-                 (compute-drv/sub-buffer dest-offset n-elems))]
+                 (dtype-proto/sub-buffer dest-offset n-elems))]
     ;;Not the most efficient way but it will work.
     (dtype/set-constant! dest 0 (sparse-proto/zero-value dest) n-elems)
     (sparse-proto/set-sequential-values! dest src)
@@ -191,58 +146,29 @@
 
 (defn- generic-sparse->sparse!
   [src dest unchecked?]
-  (let [^IntArrayList target-indexes (fu-dtype/make-fastutil-list :int32 0)
+  (let [target-indexes (dtype-proto/make-container :list :int32 0 {})
+        index-mutable (typecast/datatype->mutable :int32 target-indexes true)
         dest-dtype (dtype/get-datatype dest)
-        target-data (fu-dtype/make-fastutil-list dest-dtype 0)
-        src-data (:data-buf src)]
+        target-data (dtype-proto/make-container :list dest-dtype 0 {})
+        target-mutable (typecast/datatype->mutable :object target-data unchecked?)
+        src-data (typecast/datatype->reader :object (sparse-proto/data-buffer src))]
     ;;Can't think of a faster way at this moment.
-    (doseq [[data-idx target-idx] (sparse-proto/index-seq src)]
-      (.add target-indexes (int target-idx))
-      (fu-dtype/append! target-data (if unchecked?
-                                      (-> (dtype/get-value src-data data-idx)
-                                          (dtype/unchecked-cast dest-dtype))
-                                      (-> (dtype/get-value src-data data-idx)
-                                          (dtype/cast dest-dtype)))))
+    (doseq [{:keys [data-index global-index]} (sparse-proto/index-seq src)]
+      (.append index-mutable (int global-index))
+      (.append target-mutable (.read src-data data-index)))
     (sparse-proto/set-values! dest target-indexes target-data)))
 
 
 (defn copy-sparse->sparse!
   [src src-offset dest dest-offset n-elems {:keys [unchecked?] :as options}]
   (let [src (-> (sparse-proto/->sparse-buffer-backing-store src)
-                (compute-drv/sub-buffer src-offset n-elems))
+                (dtype-proto/sub-buffer src-offset n-elems))
         old-dest dest
         dest (-> (sparse-proto/->sparse-buffer-backing-store dest)
-                 (compute-drv/sub-buffer dest-offset n-elems))]
+                 (dtype-proto/sub-buffer dest-offset n-elems))]
     (dtype/set-constant! dest 0 (sparse-proto/zero-value src) n-elems)
     (if-let [src-nio-indexes (sparse-proto/->nio-index-buffer src)]
       (sparse-proto/set-values! dest
                                 src-nio-indexes
                                 (sparse-proto/->nio-data-buffer src))
       (generic-sparse->sparse! src dest unchecked?))))
-
-
-(defn- add-direct-copy-block
-  ([src-dtype dest-dtype]
-   (dtype-base/add-copy-operation :sparse-buffer :typed-buffer src-dtype
-                                  dest-dtype true copy-sparse->dense-unchecked!)
-   (dtype-base/add-copy-operation :typed-buffer :sparse-buffer src-dtype
-                                  dest-dtype true copy-dense->sparse-unchecked!)
-   (dtype-base/add-copy-operation :sparse-buffer :sparse-buffer src-dtype
-                                  dest-dtype true copy-sparse->sparse!)
-   (when (= src-dtype dest-dtype)
-     (dtype-base/add-copy-operation :typed-buffer :sparse-buffer src-dtype
-                                    dest-dtype false copy-dense->sparse-unchecked!)
-     (dtype-base/add-copy-operation :sparse-buffer :typed-buffer src-dtype
-                                    dest-dtype false copy-sparse->dense-unchecked!)
-     (dtype-base/add-copy-operation :sparse-buffer :sparse-buffer src-dtype
-                                    dest-dtype false copy-sparse->sparse!)))
-  ([dtype]
-   (add-direct-copy-block dtype dtype)))
-
-
-(doseq [dtype primitive/datatypes]
-  (add-direct-copy-block dtype)
-  (when-let [u-dtype (get unsigned/direct-signed->unsigned-map dtype)]
-    (add-direct-copy-block u-dtype)
-    (add-direct-copy-block u-dtype dtype)
-    (add-direct-copy-block dtype u-dtype)))

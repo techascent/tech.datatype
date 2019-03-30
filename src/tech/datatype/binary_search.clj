@@ -56,8 +56,9 @@
   a tuple of [found? insert-or-elem-pos]"
   [values target {:keys [datatype
                          comparator]}]
-  (let [datatype (or datatype (dtype-proto/get-datatype values))]
+  (let [datatype (or datatype (dtype-base/get-datatype target))]
     (if-let [value-fn (get binary-search-table (casting/datatype->safe-host-type
                                                 datatype))]
       (value-fn values target comparator)
-      [false 0])))
+      (throw (ex-info (format "No search mechanism found for datatype %s" datatype)
+                      {})))))

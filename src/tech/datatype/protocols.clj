@@ -132,7 +132,7 @@ data overlap?"))
 (defprotocol PToBinaryOp
   (->binary-op [item datatype unchecked?]))
 
-(defprotocol PToUnaryBooleanOp
+(defprotocol PToBinaryBooleanOp
   (->binary-boolean-op [item datatype unchecked?]))
 
 (defprotocol PToReduceOp

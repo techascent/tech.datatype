@@ -4,7 +4,8 @@
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.iterator :as iterator]
             [tech.datatype.base :as dtype-base]
-            [tech.datatype.nio-access :as nio-access])
+            [tech.datatype.nio-access :as nio-access]
+            [tech.datatype.argtypes :as argtypes])
   (:import [tech.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
@@ -327,7 +328,6 @@
    :logistic (make-double-unary-op
               (/ 1.0
                  (+ 1.0 (Math/exp (- arg)))))
-   :not (make-double-unary-op (if (= 0.0 arg) 1.0 0.0))
    :expp (make-double-unary-op (Math/exp arg))
    :expm1 (make-double-unary-op (Math/expm1 arg))
    :log (make-double-unary-op (Math/log arg))
@@ -366,14 +366,12 @@
   this method aside from building the next thing *unless* the inputs are scalar in which
   case the operation is evaluated immediately."
   [{:keys [datatype unchecked?] :as options} un-op arg]
-  (cond
-    (satisfies? dtype-proto/PToReader arg)
+  (case (argtypes/arg->arg-type arg)
+    :reader
     (unary-reader-map options un-op arg)
-
-    (or (instance? Iterable arg)
-        (satisfies? dtype-proto/PToIterable arg))
+    :iterable
     (unary-iterable-map options un-op arg)
-    :else
+    :scalar
     (let [datatype (or datatype (dtype-base/get-datatype arg))]
       (if (= :no-op un-op)
         (if unchecked?

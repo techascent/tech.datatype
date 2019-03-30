@@ -4,7 +4,8 @@
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.nio-access :as nio-access]
-            [tech.datatype.reader :as reader])
+            [tech.datatype.reader :as reader]
+            [tech.datatype.argtypes :as argtypes])
   (:import [tech.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
@@ -304,12 +305,6 @@
    ;;warnings.
    :max (make-numeric-binary-op (if (> x y) x y))
    :min (make-numeric-binary-op (if (> x y) y x))
-   :and (make-double-binary-op (if (and (not= 0.0 x)
-                                      (not= 0.0 y))
-                               1.0 0.0))
-   :or (make-double-binary-op (if (or (not= 0.0 x)
-                                    (not= 0.0 y))
-                              1.0 0.0))
    :bit-and (make-long-binary-op (bit-and x y))
    :bit-and-not (make-long-binary-op (bit-and-not x y))
    :bit-or (make-long-binary-op (bit-or x y))
@@ -321,26 +316,10 @@
    :bit-shift-left (make-long-binary-op (bit-shift-left x y))
    :bit-shift-right (make-long-binary-op (bit-shift-right x y))
    :unsigned-bit-shift-right (make-long-binary-op (unsigned-bit-shift-right x y))
-   :eq (make-numeric-binary-op (if (= x y) 1 0))
-   :not-eq (make-numeric-binary-op (if (not= x y) 1 0))
-   :> (make-numeric-binary-op (if (> x y) 1 0))
-   :>= (make-numeric-binary-op (if (>= x y) 1 0))
-   :< (make-numeric-binary-op (if (< x y) 1 0))
-   :<= (make-numeric-binary-op (if (<= x y) 1 0))
    :atan2 (make-double-binary-op (Math/atan2 x y))
    :hypot (make-double-binary-op (Math/hypot x y))
    :ieee-remainder (make-double-binary-op (Math/IEEEremainder x y))
    })
-
-
-(defn arg->arg-type
-  [arg]
-  (cond
-    (satisfies? dtype-proto/PToReader arg) :reader
-    (or (instance? Iterable arg)
-        (satisfies? dtype-proto/PToIterable arg)) :iterable
-    :else
-    :scalar))
 
 
 (defn apply-binary-op
@@ -353,7 +332,7 @@
    bin-op arg1 arg2 & args]
   (let [all-args (concat [arg1 arg2] args)
         all-arg-types (->> all-args
-                           (map arg->arg-type)
+                           (map argtypes/arg->arg-type)
                            set)
         op-arg-type (cond
                       (all-arg-types :iterable)
@@ -365,15 +344,15 @@
         datatype (or datatype (dtype-base/get-datatype arg1))
         n-elems (long (if (= op-arg-type :reader)
                         (->> all-args
-                             (remove #(= :scalar (arg->arg-type %)))
+                             (remove #(= :scalar (argtypes/arg->arg-type %)))
                              (map dtype-base/ecount)
                              (apply min))
                         Integer/MAX_VALUE))]
     (loop [arg1 arg1
            arg2 arg2
            args args]
-      (let [arg1-type (arg->arg-type arg1)
-            arg2-type (arg->arg-type arg2)
+      (let [arg1-type (argtypes/arg->arg-type arg1)
+            arg2-type (argtypes/arg->arg-type arg2)
             op-map-fn (case op-arg-type
                         :iterable
                         (partial binary-iterable-map (assoc options :datatype datatype)

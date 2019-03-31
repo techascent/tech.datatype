@@ -10,7 +10,8 @@
             [tech.sparse.utils :as utils]
             [tech.datatype :as dtype]
             [tech.sparse.set-ops :as set-ops]
-            [clojure.core.matrix.macros :refer [c-for]])
+            [clojure.core.matrix.macros :refer [c-for]]
+            [tech.datatype.functional.impl :as impl])
   (:import [tech.datatype UnaryOperators$IntUnary
             MutableRemove]))
 
@@ -103,62 +104,65 @@
                                 {:datatype :int32}))
 
   (set-index-values! [item old-data-buf new-idx-buf new-data-buf zero-val]
-    (when-not (= (dtype/ecount new-data-buf)
-                 (dtype/ecount new-idx-buf))
-      (throw (ex-info "index, data buffer count mismatch"
-                      {:index-buffer-ecount (dtype/ecount new-idx-buf)
-                       :data-buffer-ecount (dtype/ecount new-data-buf)})))
-    (when (not= 0 (dtype/ecount new-idx-buf))
-      (let [buf-dtype (dtype/get-datatype old-data-buf)
-            _ (when-not (= buf-dtype (dtype/get-datatype new-data-buf))
-                (throw (ex-info "Datatypes do not match"
-                                {:old-datatype buf-dtype
-                                 :new-datatype (dtype/get-datatype new-data-buf)})))
+    ;;This algorithm requires random access of the new index buffer and new data buffer
+    (let [new-idx-buf (impl/->reader new-idx-buf :int32)
+          new-data-buf (impl/->reader new-data-buf (dtype-base/get-datatype old-data-buf))]
+      (when-not (= (dtype/ecount new-data-buf)
+                   (dtype/ecount new-idx-buf))
+        (throw (ex-info "index, data buffer count mismatch"
+                        {:index-buffer-ecount (dtype/ecount new-idx-buf)
+                         :data-buffer-ecount (dtype/ecount new-data-buf)})))
+      (when (not= 0 (dtype/ecount new-idx-buf))
+        (let [buf-dtype (dtype/get-datatype old-data-buf)
+              _ (when-not (= buf-dtype (dtype/get-datatype new-data-buf))
+                  (throw (ex-info "Datatypes do not match"
+                                  {:old-datatype buf-dtype
+                                   :new-datatype (dtype/get-datatype new-data-buf)})))
 
-            ;;Transform the index buffer into our index buffer's base element space
-            new-idx-buf (if (or (not= 1 b-stride)
-                                (not= 0 b-offset))
-                          (unary-op/unary-reader-map
-                           (unary-op/make-unary-op :int32 (* b-stride
-                                                             (+ arg b-offset)))
-                           new-idx-buf)
-                          new-idx-buf)
+              ;;Transform the index buffer into our index buffer's base element space
+              new-idx-buf (if (or (not= 1 b-stride)
+                                  (not= 0 b-offset))
+                            (unary-op/apply-unary-op {:datatype :int32}
+                                                     (unary-op/make-unary-op :int32 (* b-stride
+                                                                                       (+ arg b-offset)))
+                                                     new-idx-buf)
+                            new-idx-buf)
 
-            first-new-idx (int (dtype/get-value new-idx-buf 0))
-            last-new-idx (int (dtype/get-value new-idx-buf
-                                               (- (dtype/ecount new-idx-buf) 1)))
+              first-new-idx (int (dtype/get-value new-idx-buf 0))
+              last-new-idx (int (dtype/get-value new-idx-buf
+                                                 (- (dtype/ecount new-idx-buf) 1)))
 
-            [first-found? first-old-idx] (dtype-search/binary-search
-                                          index-data first-new-idx)
-            [last-found? last-old-idx] (dtype-search/binary-search
-                                        index-data (unchecked-inc last-new-idx))
-            first-old-idx (int first-old-idx)
-            last-old-idx (int last-old-idx)
-            remove-count (- last-old-idx first-old-idx)
-            _ (when (< remove-count 0)
-                (throw (ex-info "Index buf logic error"
-                                {:first-new-idx first-new-idx
-                                 :last-new-idx last-new-idx
-                                 :first-old-idx first-old-idx
-                                 :last-old-idx last-old-idx})))
-            {union-indexes :indexes
-             union-values :values} (if (not= 0 remove-count)
-                                     (set-ops/union-values
-                                      (dtype-proto/sub-buffer index-data
-                                                              first-old-idx
-                                                              remove-count)
-                                      (dtype-proto/sub-buffer old-data-buf
-                                                              first-old-idx
-                                                              remove-count)
-                                      new-idx-buf new-data-buf
-                                      zero-val)
-                                     {:indexes new-idx-buf
-                                      :values new-data-buf})]
-        (when-not (= 0 remove-count)
-          (dtype/remove-range! index-data first-old-idx remove-count)
-          (dtype/remove-range! old-data-buf first-old-idx remove-count))
-        (dtype/insert-block! index-data first-old-idx union-indexes)
-        (dtype/insert-block! old-data-buf first-old-idx union-values)))
+              [first-found? first-old-idx] (dtype-search/binary-search
+                                            index-data first-new-idx)
+              [last-found? last-old-idx] (dtype-search/binary-search
+                                          index-data (unchecked-inc last-new-idx))
+              first-old-idx (int first-old-idx)
+              last-old-idx (int last-old-idx)
+              remove-count (- last-old-idx first-old-idx)
+              _ (when (< remove-count 0)
+                  (throw (ex-info "Index buf logic error"
+                                  {:first-new-idx first-new-idx
+                                   :last-new-idx last-new-idx
+                                   :first-old-idx first-old-idx
+                                   :last-old-idx last-old-idx})))
+              {union-indexes :indexes
+               union-values :values} (if (not= 0 remove-count)
+                                       (set-ops/union-values
+                                        (dtype-proto/sub-buffer index-data
+                                                                first-old-idx
+                                                                remove-count)
+                                        (dtype-proto/sub-buffer old-data-buf
+                                                                first-old-idx
+                                                                remove-count)
+                                        new-idx-buf new-data-buf
+                                        zero-val)
+                                       {:indexes new-idx-buf
+                                        :values new-data-buf})]
+          (when-not (= 0 remove-count)
+            (dtype/remove-range! index-data first-old-idx remove-count)
+            (dtype/remove-range! old-data-buf first-old-idx remove-count))
+          (dtype/insert-block! index-data first-old-idx union-indexes)
+          (dtype/insert-block! old-data-buf first-old-idx union-values))))
     item)
   (insert-index! [item data-idx idx]
     (let [real-idx (relative-offset b-offset b-stride idx)]

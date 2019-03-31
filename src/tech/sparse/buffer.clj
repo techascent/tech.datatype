@@ -17,16 +17,115 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
+(defmacro make-sparse-reader
+  [datatype]
+  `(fn [item# unchecked?#]
+     (when-not (= (casting/safe-flatten (dtype-base/get-datatype item#))
+                  ~datatype)
+       (throw (ex-info (format "Datatype mismatch: %s, %s"
+                               ~datatype
+                               (casting/safe-flatten (dtype-base/get-datatype item#)))
+                       {})))
+     (let [n-elems# (dtype-base/ecount item#)
+           data-buffer# (sparse-proto/data-buffer item#)
+           data-reader# (typecast/datatype->reader ~datatype data-buffer# unchecked?#)
+           index-buffer# (sparse-proto/index-buffer item#)]
+       (reify ~(typecast/datatype->reader-type datatype)
+         (getDatatype [_#] (dtype-base/get-datatype item#))
+         (size [_#] n-elems#)
+         (read [reader# idx#]
+           (let [[found?# item-idx#] (sparse-proto/find-index index-buffer# idx#)]
+             (if found?#
+               (.read data-reader# (int item-idx#))
+               (casting/datatype->sparse-value ~datatype))))
+         (invoke [reader# arg#]
+           (.read reader# (int arg#)))
+         dtype-proto/PBuffer
+         (sub-buffer [reader# offset# length#]
+           (-> (dtype-proto/sub-buffer item# offset# length#)
+               (dtype-proto/->reader-of-type ~datatype unchecked?#)))
+         (alias? [reader# rhs#]
+           (dtype-proto/alias? item# rhs#))
+         (partially-alias? [reader# rhs#]
+           (dtype-proto/partially-alias? item# rhs#))
+         sparse-proto/PToSparseBuffer
+         (->sparse-buffer [reader#] item#)))))
+
+
+(defmacro make-sparse-reader-table
+  []
+  `(->> [~@(for [dtype casting/base-host-datatypes]
+             [dtype `(make-sparse-reader ~dtype)])]
+        (into {})))
+
+
+(def sparse-reader-table (make-sparse-reader-table))
+
+
+(defmacro make-sparse-writer
+  [datatype]
+  `(fn [item# unchecked?#]
+     (when-not (= (casting/safe-flatten (dtype-base/get-datatype item#))
+                  ~datatype)
+       (throw (ex-info (format "Datatype mismatch: %s, %s"
+                               ~datatype
+                               (casting/safe-flatten (dtype-base/get-datatype item#)))
+                       {})))
+     (let [n-elems# (dtype-base/ecount item#)
+           data-buffer# (sparse-proto/data-buffer item#)
+           data-writer# (typecast/datatype->writer ~datatype data-buffer# unchecked?#)
+           index-buffer# (sparse-proto/index-buffer item#)
+           sparse-value# (casting/datatype->sparse-value ~datatype)]
+       (reify ~(typecast/datatype->writer-type datatype)
+         (getDatatype [_#] (dtype-base/get-datatype item#))
+         (size [_#] n-elems#)
+         (write [writer# idx# value#]
+           (let [[found?# item-idx#] (sparse-proto/find-index index-buffer# idx#)]
+             (if-not (= value# sparse-value#)
+               (if found?#
+                 (.write data-writer# (int item-idx#) value#)
+                 (do
+                   (sparse-proto/insert-index! index-buffer# item-idx# idx#)
+                   (dtype/insert! data-buffer# item-idx# value#)))
+               ;;Else if sparse value remove it from record.
+               (when found?#
+                 (sparse-proto/remove-index! index-buffer# idx#)
+                 (dtype/remove! data-buffer# item-idx#)))))
+         (invoke [writer# arg# value#]
+           (.write writer# (int arg#) (casting/datatype->cast-fn
+                                       :unknown ~datatype value#)))
+         dtype-proto/PBuffer
+         (sub-buffer [writer# offset# length#]
+           (-> (dtype-proto/sub-buffer item# offset# length#)
+               (dtype-proto/->writer-of-type ~datatype unchecked?#)))
+         (alias? [writer# rhs#]
+           (dtype-proto/alias? item# rhs#))
+         (partially-alias? [writer# rhs#]
+           (dtype-proto/partially-alias? item# rhs#))
+         sparse-proto/PToSparseBuffer
+         (->sparse-buffer [writer#] item#)))))
+
+
+(defmacro make-sparse-writer-table
+  []
+  `(->> [~@(for [dtype casting/base-host-datatypes]
+             [dtype `(make-sparse-writer ~dtype)])]
+        (into {})))
+
+
+(def sparse-writer-table (make-sparse-writer-table))
+
+
 (defrecord SparseBuffer [data-buf
-                         index-buf
-                         zero-val]
+                         index-buf]
   dtype-proto/PDatatype
   (get-datatype [item] (dtype-proto/get-datatype data-buf))
 
   sparse-proto/PSparse
   (index-seq [item] (sparse-proto/index-seq index-buf))
   (set-stride [item new-stride]
-    (->SparseBuffer data-buf (sparse-proto/set-stride index-buf new-stride) zero-val))
+    (->SparseBuffer data-buf (sparse-proto/set-stride index-buf new-stride)
+                    (sparse-proto/zero-value item)))
   (stride [item]
     (sparse-proto/stride index-buf))
   (->nio-index-buffer [item]
@@ -35,7 +134,8 @@
   sparse-proto/PSparseBuffer
   (set-values! [item new-idx-buf new-data-buf]
     (sparse-proto/set-index-values! index-buf data-buf new-idx-buf
-                                    new-data-buf zero-val))
+                                    new-data-buf
+                                    (sparse-proto/zero-value item)))
 
   (set-sequential-values! [item data-buffer]
     (sparse-proto/set-values! item
@@ -49,20 +149,28 @@
       (dtype-proto/sub-buffer data-buf start-idx (- end-idx start-idx))))
   (->nio-data-buffer [item]
     (when (= 1 (int (sparse-proto/stride index-buf)))
-      (let [start-idx (int (sparse-proto/find-index index-buf 0))
-            end-idx (int (sparse-proto/find-index index-buf (dtype/ecount index-buf)))]
+      (let [start-idx (int (second (sparse-proto/find-index index-buf 0)))
+            end-idx (int (second (sparse-proto/find-index index-buf (dtype/ecount index-buf))))]
         (-> (dtype-proto/sub-buffer data-buf
                                     start-idx
                                     (- end-idx start-idx))
             (dtype-proto/->buffer-backing-store)))))
   (index-buffer [item] index-buf)
-  (zero-value [item] zero-val)
+  (zero-value [item] (case (casting/host-flatten (dtype-base/get-datatype data-buf))
+                       :int8 (casting/datatype->sparse-value :int8)
+                       :int16 (casting/datatype->sparse-value :int16)
+                       :int32 (casting/datatype->sparse-value :int32)
+                       :int64 (casting/datatype->sparse-value :int64)
+                       :float32 (casting/datatype->sparse-value :float32)
+                       :float64 (casting/datatype->sparse-value :float64)
+                       :boolean (casting/datatype->sparse-value :boolean)
+                       :object (casting/datatype->sparse-value :object)))
 
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
     (->SparseBuffer data-buf
                     (dtype-proto/sub-buffer index-buf offset length)
-                    zero-val))
+                    (sparse-proto/zero-value buffer)))
   (alias? [lhs-dev-buffer rhs-dev-buffer]
     (and (instance? SparseBuffer rhs-dev-buffer)
          (dtype-proto/alias? (:data-buf lhs-dev-buffer)
@@ -78,6 +186,9 @@
          (dtype-proto/partially-alias? (:index-buf lhs-dev-buffer)
                                        (:index-buf rhs-dev-buffer))))
 
+  sparse-proto/PToSparseBuffer
+  (->sparse-buffer [item] item)
+
   mp/PElementCount
   (element-count [item] (mp/element-count index-buf))
 
@@ -90,7 +201,22 @@
                                               (dtype-proto/get-datatype item))
                                              n-elems)]
       (dtype/copy! item 0 retval 0 n-elems {:unchecked? true})
-      retval)))
+      retval))
+
+  dtype-proto/PToReader
+  (->reader-of-type [item datatype unchecked?]
+    (let [reader-fn (get sparse-reader-table (casting/safe-flatten
+                                              (dtype-base/get-datatype item)))]
+      (-> (reader-fn item true)
+          (dtype-proto/->reader-of-type datatype unchecked?))))
+
+
+  dtype-proto/PToWriter
+  (->writer-of-type [item datatype unchecked?]
+    (let [writer-fn (get sparse-writer-table (casting/safe-flatten
+                                              (dtype-base/get-datatype item)))]
+      (-> (writer-fn item true)
+          (dtype-proto/->writer-of-type datatype unchecked?)))))
 
 
 (defn make-sparse-buffer

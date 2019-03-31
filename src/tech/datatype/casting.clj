@@ -331,6 +331,9 @@
 (defmacro datatype->sparse-value
   [datatype]
   (cond
-    (= datatype :object) `nil
-    (= datatype :boolean `false)
-    `(datatype->unchecked-cast-fn ~datatype 0)))
+    (= datatype :object)
+    `nil
+    (= datatype :boolean)
+    `false
+    :else
+    `(datatype->unchecked-cast-fn :unknown ~datatype 0)))

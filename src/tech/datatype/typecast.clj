@@ -46,18 +46,18 @@
 (defn datatype->writer-type
   [datatype]
   (case datatype
-    :int8 'ByteWriter
-    :uint8 'ShortWriter
-    :int16 'ShortWriter
-    :uint16 'IntWriter
-    :int32 'IntWriter
-    :uint32 'LongWriter
-    :int64 'LongWriter
-    :uint64 'LongWriter
-    :float32 'FloatWriter
-    :float64 'DoubleWriter
-    :boolean 'BooleanWriter
-    :object 'ObjectWriter))
+    :int8 'tech.datatype.ByteWriter
+    :uint8 'tech.datatype.ShortWriter
+    :int16 'tech.datatype.ShortWriter
+    :uint16 'tech.datatype.IntWriter
+    :int32 'tech.datatype.IntWriter
+    :uint32 'tech.datatype.LongWriter
+    :int64 'tech.datatype.LongWriter
+    :uint64 'tech.datatype.LongWriter
+    :float32 'tech.datatype.FloatWriter
+    :float64 'tech.datatype.DoubleWriter
+    :boolean 'tech.datatype.BooleanWriter
+    :object 'tech.datatype.ObjectWriter))
 
 
 

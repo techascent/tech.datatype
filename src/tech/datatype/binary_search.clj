@@ -36,7 +36,7 @@
                    (recur mid# high#)
                    (recur low# mid#))))
              (let [buf-val# (.read values# low#)]
-               (if (<= 0 (.compare comparator# target# buf-val#))
+               (if (<= (.compare comparator# target# buf-val#) 0)
                  [(= target# buf-val#) low#]
                  [false (unchecked-inc low#)]))))))))
 

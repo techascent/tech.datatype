@@ -36,7 +36,7 @@
 
 (defn find-index
   ^long [index-buffer item-value]
-  (long (sparse-proto/find-index index-buffer item-value)))
+  (second (sparse-proto/find-index index-buffer item-value)))
 
 (defn stride
   ^long [index-buffer]
@@ -68,11 +68,11 @@
           end-idx (find-index item end-target-idx)
           n-idx-elems (- end-idx start-idx)]
       (utils/get-index-seq
+       b-offset
+       b-stride
        (dtype-proto/sub-buffer index-data
                                start-idx
-                               n-idx-elems)
-       b-offset
-       b-stride)))
+                               n-idx-elems))))
   (set-stride [item new-stride]
     (let [new-stride (long new-stride)]
       (when-not (= 0 (rem (dtype/ecount item) new-stride))
@@ -99,7 +99,8 @@
     (dtype-search/binary-search index-data
                                 (relative-offset b-offset
                                                  b-stride
-                                                 target-idx)))
+                                                 target-idx)
+                                {:datatype :int32}))
 
   (set-index-values! [item old-data-buf new-idx-buf new-data-buf zero-val]
     (when-not (= (dtype/ecount new-data-buf)
@@ -163,9 +164,9 @@
     (let [real-idx (relative-offset b-offset b-stride idx)]
       (dtype/insert! index-data data-idx real-idx)))
   (remove-index! [item idx]
-    (let [[found? data-idx] (find-index item idx)]
+    (let [[found? data-idx] (sparse-proto/find-index item idx)]
       (when found?
-        (dtype/remove! index-data data-idx 1)
+        (dtype/remove! index-data data-idx)
         data-idx)))
   (remove-sequential-indexes! [item data-buffer]
     (let [start-idx (find-index item 0)

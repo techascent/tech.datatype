@@ -1,7 +1,6 @@
 (ns tech.datatype.list
   (:require [tech.datatype.base :as base]
             [tech.datatype.protocols :as dtype-proto]
-            [tech.datatype :as dtype]
             [tech.datatype.array :as dtype-array]
             [tech.datatype.typed-buffer :as typed-buffer]
             [tech.datatype.reader :refer [make-buffer-reader] :as reader]
@@ -107,7 +106,7 @@
 (defn wrap-array
   [src-data]
   (if (satisfies? dtype-proto/PDatatype src-data)
-    (case (dtype/get-datatype src-data)
+    (case (base/get-datatype src-data)
       :int8 (ByteArrayList/wrap ^bytes src-data)
       :int16 (ShortArrayList/wrap ^shorts src-data)
       :int32 (IntArrayList/wrap ^ints src-data)
@@ -277,12 +276,6 @@
         (cond-> (reader/make-list-reader item#)
           (not= reader-datatype# ~datatype)
           (dtype-proto/->reader-of-type reader-datatype# unchecked?#)))}
-
-     dtype-proto/PToIterable
-     {:->iterator-of-type
-      (fn [item# datatype# unchecked?#]
-        (dtype-proto/->reader-of-type
-         item# datatype# unchecked?#))}
 
      dtype-proto/PToMutable
      {:->mutable-of-type

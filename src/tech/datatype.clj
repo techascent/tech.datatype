@@ -26,6 +26,7 @@
             [tech.datatype.nio-buffer :as dtype-nio]
             [tech.datatype.typed-buffer :as dtype-tbuf]
             [tech.datatype.jna :as dtype-jna]
+            [tech.datatype.list :as dtype-list]
             [tech.datatype.binary-search :as dtype-search]
             [tech.datatype.argsort :as dtype-sort]
             [tech.datatype.iterator :as dtype-iter]

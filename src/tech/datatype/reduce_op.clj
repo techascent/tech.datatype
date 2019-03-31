@@ -6,7 +6,8 @@
             [tech.datatype.binary-op :as binary-op]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.protocols :as dtype-proto]
-            [tech.datatype.nio-access :as nio-access])
+            [tech.datatype.nio-access :as nio-access]
+            [tech.datatype.argtypes :as argtypes])
   (:import [tech.datatype
             ReduceOperators$ByteReduce
             ReduceOperators$ShortReduce
@@ -293,7 +294,7 @@
   "Reduce an iterable into one thing.  This is not currently parallelized."
   [{:keys [datatype unchecked?]} reduce-op values]
   (let [datatype (or datatype (dtype-base/get-datatype values))]
-    (if (= (binary-op/arg->arg-type values) :scalar)
+    (if (= (argtypes/arg->arg-type values) :scalar)
       (case (casting/safe-flatten datatype)
         :int8 (.finalize (datatype->reduce-op :int8 reduce-op unchecked?)
                          values 1)

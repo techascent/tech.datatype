@@ -25,12 +25,13 @@
         [first-idx adj-index-buf]
         (if (= 0 data-offset)
           [0 index-buf]
-          (let [off-idx (dtype-search/binary-search index-buf data-offset)]
+          (let [off-idx (second (dtype-search/binary-search index-buf data-offset {}))]
             [off-idx (dtype/sub-buffer index-buf off-idx)]))
         first-idx (int first-idx)
         index-seq (if (= 0 data-offset)
-                    index-buf
+                    (dtype/->reader-of-type index-buf :int32)
                     (unary-op/unary-reader-map
+                     {:datatype :int32}
                      (unary-op/make-unary-op :int32 (- arg data-offset))
                      adj-index-buf))
         index-seq (map ->IndexSeqRec
@@ -39,6 +40,7 @@
     (if (= 1 data-stride)
       index-seq
       (->> index-seq
+           ;; only return indexes which are commensurate with the stride.
            (map (fn [record]
                   (let [global-index (int (:global-index record))]
                     (when (= 0 (rem global-index data-stride))

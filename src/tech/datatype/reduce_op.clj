@@ -273,10 +273,11 @@
               item-count# (int 0)]
          (if next?#
            (if (= item-count# 0)
-             (recur (.next iter#) (.hasNext iter#) 1)
+             (recur (typecast/datatype->iter-next-fn ~datatype iter#)
+                    (.hasNext iter#) 1)
              (recur (.update reduce-op# accum# (.next iter#))
                     (.hasNext iter#)
-                    (unchecked-inc item-count#)))
+                    (inc item-count#)))
            (.finalize reduce-op# accum# item-count#))))))
 
 

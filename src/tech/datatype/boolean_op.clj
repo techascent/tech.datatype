@@ -320,7 +320,7 @@
                     (let [retval# (.op item# x# y#)]
                       (casting/datatype->cast-fn ~datatype :boolean retval#)))
                   dtype-proto/PDatatype
-                  (get-datatype [item#] (dtype-base/get-datatype item#))
+                  (get-datatype [bool-item#] (dtype-base/get-datatype item#))
                   IFn
                   (invoke [bool-item# x# y#]
                     (.op bool-item#
@@ -331,13 +331,22 @@
                 (dtype-proto/->binary-boolean-op datatype# unchecked?#))))})))
 
 
+(extend-type BinaryOperators$BooleanBinary
+  dtype-proto/PToBinaryBooleanOp
+  (->binary-boolean-op [item dtype unchecked?]
+    (if (= :boolean dtype)
+      item
+      (let [cast-fn (get marshalling-boolean-binary-table
+                         [:boolean (casting/safe-flatten dtype)])]
+        (cast-fn item dtype unchecked?)))))
+
+
 (extend-binary-op-types :int8)
 (extend-binary-op-types :int16)
 (extend-binary-op-types :int32)
 (extend-binary-op-types :int64)
 (extend-binary-op-types :float32)
 (extend-binary-op-types :float64)
-(extend-binary-op-types :boolean)
 (extend-binary-op-types :object)
 
 
@@ -557,6 +566,23 @@
              (dtype-proto/->binary-boolean-op datatype# unchecked?#))))))
 
 
+(defmacro make-all-datatype-binary-boolean-op
+  [opcode]
+  `(reify
+     dtype-proto/PToBinaryBooleanOp
+     (->binary-boolean-op [item# datatype# unchecked?#]
+       (let [host-dtype# (casting/safe-flatten datatype#)]
+         (case host-dtype#
+           :int8 (make-boolean-binary-op :int8 ~opcode)
+           :int16 (make-boolean-binary-op :int16 ~opcode)
+           :int32 (make-boolean-binary-op :int32 ~opcode)
+           :int64 (make-boolean-binary-op :int64 ~opcode)
+           :float32 (make-boolean-binary-op :float32 ~opcode)
+           :float64 (make-boolean-binary-op :float64 ~opcode)
+           :boolean (make-boolean-binary-op :boolean ~opcode)
+           :object (make-boolean-binary-op :object ~opcode))))))
+
+
 (def builtin-boolean-unary-ops
   {:not (make-boolean-unary-op :boolean (not arg))})
 
@@ -564,8 +590,8 @@
 (def builtin-boolean-binary-ops
   {:and (make-boolean-binary-op :boolean (boolean (and x y)))
    :or (make-boolean-binary-op :boolean (boolean (or x y)))
-   :eq (make-boolean-binary-op :boolean (boolean (= x y)))
-   :not-eq (make-boolean-binary-op :boolean (boolean (not= x y)))
+   :eq (make-all-datatype-binary-boolean-op (boolean (= x y)))
+   :not-eq (make-all-datatype-binary-boolean-op (boolean (not= x y)))
    :> (make-numeric-binary-boolean-op (if (> x y) true false))
    :>= (make-numeric-binary-boolean-op (if (>= x y) true false))
    :< (make-numeric-binary-boolean-op (if (< x y) true false))

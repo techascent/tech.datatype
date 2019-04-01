@@ -255,7 +255,8 @@
   `(do
      ~@(for [dtype base-datatypes]
          [`(add-cast-fn ~dtype #(datatype->cast-fn :unknown ~dtype %))
-          `(add-unchecked-cast-fn ~dtype #(datatype->unchecked-cast-fn :unkown ~dtype %))])))
+          `(add-unchecked-cast-fn ~dtype #(datatype->unchecked-cast-fn
+                                           :unkown ~dtype %))])))
 
 (def casts (add-all-cast-fns))
 

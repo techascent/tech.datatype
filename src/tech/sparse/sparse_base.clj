@@ -25,25 +25,11 @@
   "Given the offset and stride of the buffer
   return an index sequence that contains a sequence of
   tuples that contain"
-  [data-offset data-stride index-buf]
-  (let [data-offset (int data-offset)
-        data-stride (int data-stride)
-        n-elems (dtype/ecount index-buf)
-        [first-idx adj-index-buf]
-        (if (= 0 data-offset)
-          [0 index-buf]
-          (let [off-idx (second (dtype-search/binary-search index-buf data-offset {}))]
-            [off-idx (dtype/sub-buffer index-buf off-idx)]))
-        first-idx (int first-idx)
-        index-seq (if (= 0 data-offset)
-                    (dtype/->reader-of-type index-buf :int32)
-                    (unary-op/unary-reader-map
-                     {:datatype :int32}
-                     (unary-op/make-unary-op :int32 (- arg data-offset))
-                     adj-index-buf))
-        index-seq (map ->IndexSeqRec
-                       (range first-idx n-elems)
-                       index-seq)]
+  [data-stride index-iterable]
+  (let [data-stride (int data-stride)
+        index-seq (->> (dtype/->iterable-of-type index-iterable :int32)
+                       (map-indexed #(->IndexSeqRec %1 %2)))]
+
     (if (= 1 data-stride)
       index-seq
       (->> index-seq
@@ -91,13 +77,6 @@
 (declare make-sparse-reader)
 
 
-(defn naive-index-iterable->index-seq
-  [index-iterable]
-  (map-indexed (fn [data-idx global-idx]
-                 {:data-index data-idx
-                  :global-index global-idx})
-               index-iterable))
-
 
 (defmacro make-indexed-data-reader
   [datatype]
@@ -121,10 +100,9 @@
          (iterator [reader#] (typecast/reader->iterator reader#))
          sparse-proto/PSparse
          (index-seq [reader#]
-           (naive-index-iterable->index-seq index-reader#))
+           (get-index-seq 1 index-reader#))
          (sparse-value [reader#] zero-val#)
          (sparse-ecount [reader#] (- n-elems# idx-count#))
-         (index-reader [reader#] index-reader#)
          (set-stride [item# new-stride#]
            (when-not (= 0 (rem n-elems# new-stride#))
              (throw (ex-info (format
@@ -133,21 +111,18 @@
                              {})))
            (if (= 1 (int new-stride#))
              item#
-             (let [new-idx-seq# (get-index-seq 0 new-stride# index-reader#)
+             (let [new-idx-seq# (get-index-seq new-stride# index-reader#)
                    {indexes# :indexes
                     data# :data} (index-seq->readers new-idx-seq# data-reader#)]
-               (make-sparse-reader indexes# data# (quot n-elems# (int new-stride#))
+               (make-sparse-reader indexes# data#
+                                   (quot n-elems# (int new-stride#))
                                    :sparse-value zero-val#))))
          (stride [item#] 1)
-         (find-index [item# target-idx#]
-           (dtype-search/binary-search index-reader# (int target-idx#) {}))
          (readers [item#]
-           {:index-reader index-reader#
-            :data-reader data-reader#})
+           {:indexes index-reader#
+            :data data-reader#})
          (iterables [item#]
            (sparse-proto/readers item#))
-         sparse-proto/PSparseData
-         (data-reader [item#] data-reader#)
          sparse-proto/PToSparseReader
          (->sparse-reader [item#] item#)
          dtype-proto/PBuffer
@@ -189,6 +164,8 @@
 
 
 (defn make-sparse-reader
+  "A sparse reader has no stride or offset but satisfies all of the necessary protocols.
+  It does not satisfy the writer or mutable protocols."
   [index-reader data-reader n-elems & {:keys [datatype
                                               sparse-value]}]
   (let [datatype (casting/safe-flatten

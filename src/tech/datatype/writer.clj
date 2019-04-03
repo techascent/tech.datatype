@@ -72,7 +72,7 @@
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
+             (dtype-proto/->writer-of-type ~intermediate-datatype ~unchecked?)))
        (alias? [buffer# rhs#]
          (dtype-proto/alias? ~buffer rhs#))
        (partially-alias? [lhs# rhs#]

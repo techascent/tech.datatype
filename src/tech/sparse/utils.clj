@@ -11,44 +11,6 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(defrecord IndexSeqRec [^long data-index ^long global-index])
-
-
-(defn get-index-seq
-  "Given the offset and stride of the buffer
-  return an index sequence that contains a sequence of
-  tuples that contain"
-  [data-offset data-stride index-buf]
-  (let [data-offset (int data-offset)
-        data-stride (int data-stride)
-        n-elems (dtype/ecount index-buf)
-        [first-idx adj-index-buf]
-        (if (= 0 data-offset)
-          [0 index-buf]
-          (let [off-idx (second (dtype-search/binary-search index-buf data-offset {}))]
-            [off-idx (dtype/sub-buffer index-buf off-idx)]))
-        first-idx (int first-idx)
-        index-seq (if (= 0 data-offset)
-                    (dtype/->reader-of-type index-buf :int32)
-                    (unary-op/unary-reader-map
-                     {:datatype :int32}
-                     (unary-op/make-unary-op :int32 (- arg data-offset))
-                     adj-index-buf))
-        index-seq (map ->IndexSeqRec
-                       (range first-idx n-elems)
-                       index-seq)]
-    (if (= 1 data-stride)
-      index-seq
-      (->> index-seq
-           ;; only return indexes which are commensurate with the stride.
-           (map (fn [record]
-                  (let [global-index (int (:global-index record))]
-                    (when (= 0 (rem global-index data-stride))
-                      (assoc record :global-index
-                             (quot global-index data-stride))))))
-           (remove nil?)))))
-
-
 
 (defmacro ^:private make-sparse-copier
   [datatype]

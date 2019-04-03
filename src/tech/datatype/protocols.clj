@@ -107,10 +107,6 @@ data overlap?"))
     (->list-backing-store item)))
 
 
-(defprotocol PToTypedBuffer
-  (->typed-buffer [item datatype]))
-
-
 (defprotocol PToWriter
   (->writer-of-type [item datatype unchecked?]))
 

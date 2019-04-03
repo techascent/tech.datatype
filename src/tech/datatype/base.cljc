@@ -13,7 +13,8 @@
             [clojure.core.matrix.protocols :as mp])
   (:import [tech.datatype ObjectReader ObjectWriter
             ByteReader ShortReader IntReader LongReader
-            FloatReader DoubleReader BooleanReader]
+            FloatReader DoubleReader BooleanReader
+            ObjectMutable]
            [java.util List RandomAccess]))
 
 
@@ -110,6 +111,17 @@
 (defn read-indexes!
   [item indexes values & [options]]
   (dtype-proto/read-indexes! item indexes values options))
+
+
+(defn remove-range!
+  [item idx count]
+  (.removeRange ^ObjectMutable (dtype-proto/->mutable-of-type item :object false)
+                idx count))
+
+
+(defn insert-block!
+  [item idx values & [options]]
+  (dtype-proto/insert-block! item idx values options))
 
 
 (defn copy!

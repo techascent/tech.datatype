@@ -1,5 +1,5 @@
 {:paths ["src"]
- :deps {org.clojure/clojure {:mvn/version "1.9.0"}
+ :deps {org.clojure/clojure {:mvn/version "1.10.1-beta1"}
         net.mikera/core.matrix {:mvn/version "0.62.0"}
         net.mikera/vectorz-clj {:mvn/version "0.48.0"}
         techascent/tech.jna {:mvn/version "3.3"}

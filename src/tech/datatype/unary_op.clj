@@ -275,7 +275,12 @@
 (def unary-op-reader-table (make-unary-op-reader-table))
 
 
-(defn unary-reader-map
+(defmulti unary-reader-map
+  (fn [options un-op item]
+    (dtype-base/buffer-type item)))
+
+
+(defmethod unary-reader-map :default
   [{:keys [datatype unchecked?]} un-op item]
   (let [datatype (or datatype (dtype-base/get-datatype item))]
     (if (= (dtype-proto/op-name un-op) :identity)

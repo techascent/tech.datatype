@@ -495,9 +495,14 @@
 (def boolean-unary-reader-table (make-boolean-unary-reader-table))
 
 
-(defn boolean-unary-reader
-  "Create an reader that transforms one sequence of arbitrary datatypes into boolean
+(defmulti boolean-unary-reader
+    "Create an reader that transforms one sequence of arbitrary datatypes into boolean
   reader given a boolean unary op."
+  (fn [options bool-unary-op src-reader]
+    (dtype-base/buffer-type src-reader)))
+
+
+(defmethod boolean-unary-reader :default
   [{:keys [unchecked? datatype]} bool-un-op src-data]
   (let [datatype (or datatype (dtype-base/get-datatype src-data))
         create-fn (get boolean-unary-reader-table (casting/safe-flatten datatype))]
@@ -539,9 +544,16 @@
 (def boolean-binary-reader-table (make-boolean-binary-reader-table))
 
 
-(defn boolean-binary-reader
-  "Create an reader that transforms one sequence of arbitrary datatypes into boolean
+
+(defmulti boolean-binary-reader
+    "Create an reader that transforms one sequence of arbitrary datatypes into boolean
   reader given a boolean binary op."
+  (fn [options bool-binary-op lhs rhs]
+    [(dtype-base/buffer-type lhs)
+     (dtype-base/buffer-type rhs)]))
+
+
+(defmethod boolean-binary-reader :default
   [{:keys [unchecked? datatype]} bool-binary-op lhs-data rhs-data]
   (let [datatype (or datatype (dtype-base/get-datatype lhs-data))
         create-fn (get boolean-binary-reader-table (casting/safe-flatten datatype))]

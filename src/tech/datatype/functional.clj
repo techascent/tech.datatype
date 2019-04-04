@@ -11,6 +11,7 @@
             [tech.datatype.casting :as casting])
   (:refer-clojure :exclude [+ - / *
                             <= < >= >
+                            identity
                             min max
                             bit-xor bit-and bit-and-not bit-not bit-set bit-test
                             bit-or bit-flip bit-clear

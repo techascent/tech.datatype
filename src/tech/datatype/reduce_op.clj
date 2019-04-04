@@ -302,9 +302,26 @@
 (def iterable-reduce-table (make-iterable-reduce-table))
 
 
+(defmulti iterable-reduce
+  (fn [options reduce-op values]
+    (dtype-base/buffer-type values)))
+
+
+(defn default-iterable-reduce
+  [{:keys [datatype unchecked?] :as options} reduce-op values]
+  (let [datatype (or datatype (dtype-base/get-datatype values))
+        reduce-fn (get iterable-reduce-table (casting/safe-flatten datatype))]
+    (reduce-fn reduce-op values unchecked?)))
+
+
+(defmethod iterable-reduce :default
+  [options reduce-op values]
+  (default-iterable-reduce options reduce-op values))
+
+
 (defn apply-reduce-op
   "Reduce an iterable into one thing.  This is not currently parallelized."
-  [{:keys [datatype unchecked?]} reduce-op values]
+  [{:keys [datatype unchecked?] :as options} reduce-op values]
   (let [datatype (or datatype (dtype-base/get-datatype values))]
     (if (= (argtypes/arg->arg-type values) :scalar)
       (case (casting/safe-flatten datatype)
@@ -324,8 +341,7 @@
                             values 1)
         :object (.finalize (datatype->reduce-op :object reduce-op unchecked?)
                            values 1))
-      (let [reduce-fn (get iterable-reduce-table (casting/safe-flatten datatype))]
-        (reduce-fn reduce-op values unchecked?)))))
+      (iterable-reduce options reduce-op values))))
 
 
 (defn dot-product

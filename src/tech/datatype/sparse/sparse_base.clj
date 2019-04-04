@@ -231,6 +231,11 @@
                          (sparse-proto/sparse-value sparse-item)))))
 
 
+(defmethod unary-op/unary-reader-map :sparse
+  [options un-op sparse-item]
+  (sparse-unary-map options un-op sparse-item))
+
+
 (defn sparse-boolean-unary-map
   [options un-op sparse-item]
   (let [datatype (or (:datatype options)
@@ -244,6 +249,11 @@
                         ((dtype-proto/->unary-boolean-op un-op datatype false)
                          (sparse-proto/sparse-value sparse-item))
                         :datatype :boolean)))
+
+
+(defmethod boolean-op/boolean-unary-reader :sparse
+  [options un-op sparse-item]
+  (sparse-boolean-unary-map options un-op sparse-item))
 
 
 (defmacro make-sparse-union-reader
@@ -450,6 +460,7 @@
     (union-fn bin-op sparse-lhs sparse-rhs (:unchecked? options) :boolean)))
 
 
+
 (defn sparse-elemwise-*
   [options lhs rhs]
   (when-not (= (dtype-base/ecount lhs)
@@ -499,6 +510,38 @@
       (binary-op/binary-reader-map options bin-op lhs rhs))))
 
 
+(defn general-sparse-reader-map
+  [options bin-op lhs rhs]
+  (cond
+    (= :* (dtype-base/op-name bin-op))
+    (sparse-elemwise-* options lhs rhs)
+    (and (= :sparse (dtype-base/buffer-type lhs))
+         (= :sparse (dtype-base/buffer-type rhs)))
+    (sparse-binary-map options bin-op lhs rhs)
+    :else
+    (binary-op/default-binary-reader-map options bin-op lhs rhs)))
+
+
+(defmethod binary-op/binary-reader-map [:sparse :sparse]
+  [options bin-op lhs rhs]
+  (general-sparse-reader-map options bin-op lhs rhs))
+
+
+(defmethod binary-op/binary-reader-map [:dense :sparse]
+  [options bin-op lhs rhs]
+  (general-sparse-reader-map options bin-op lhs rhs))
+
+
+(defmethod binary-op/binary-reader-map [:sparse :dense]
+  [options bin-op lhs rhs]
+  (general-sparse-reader-map options bin-op lhs rhs))
+
+
+(defmethod boolean-op/boolean-binary-reader [:sparse :sparse]
+  [options bin-op sparse-lhs sparse-rhs]
+  (sparse-boolean-binary-map options bin-op sparse-lhs sparse-rhs))
+
+
 (defn sparse-reduce-+
   [options sparse-vec]
   (let [base-value (functional/* (sparse-proto/sparse-value sparse-vec)
@@ -536,25 +579,9 @@
        sparse-vec))))
 
 
-(defn sparse-dot
-  [options lhs rhs]
-  (->> (sparse-elemwise-* options lhs rhs)
-       (sparse-reduce-+ options)))
-
-
-(defn sparse-magnitude-sq
-  [options lhs]
-  (->> (sparse-unary-map options (:sq unary-op/builtin-unary-ops) lhs)
-       (sparse-reduce-+ options)))
-
-
-(defn sparse-distance-sq
-  [options lhs rhs]
-  (->> (sparse-binary-map options (:- binary-op/builtin-binary-ops) lhs rhs)
-       (sparse-magnitude-sq options)))
-
-
-(def sparse-optimized-operations
-  {[:binary-op :*] sparse-elemwise-*
-   [:reduce :+] sparse-reduce-+
-   [:reduce :*] sparse-reduce-*})
+(defmethod reduce-op/iterable-reduce :sparse
+  [options reduce-op values]
+  (case (dtype-base/op-name reduce-op)
+    :+ (sparse-reduce-+ options values)
+    :* (sparse-reduce-* options values)
+    (reduce-op/default-iterable-reduce options reduce-op values)))

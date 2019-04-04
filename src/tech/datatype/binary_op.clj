@@ -261,14 +261,27 @@
                              (.read item# (int idx#)))))))]))]
         (into {})))
 
+
 (def binary-op-reader-table (make-binary-op-reader-table))
 
-(defn binary-reader-map
+
+(defn default-binary-reader-map
   [{:keys [datatype unchecked?]} bin-op lhs rhs]
   (let [dtype (or datatype (dtype-proto/get-datatype lhs))]
     (if-let [reader-fn (get binary-op-reader-table (casting/flatten-datatype dtype))]
       (reader-fn lhs rhs bin-op unchecked?)
       (throw (ex-info (format "Cannot binary map datatype %s" dtype) {})))))
+
+
+(defmulti binary-reader-map
+  (fn [options binary-op lhs rhs]
+    [(dtype-base/buffer-type lhs)
+     (dtype-base/buffer-type rhs)]))
+
+
+(defmethod binary-reader-map :default
+  [{:keys [datatype unchecked?] :as options} bin-op lhs rhs]
+  (default-binary-reader-map options bin-op lhs rhs))
 
 
 (defmacro make-double-binary-op

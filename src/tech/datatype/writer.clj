@@ -281,19 +281,14 @@
 (defn make-marshalling-writer
   [dst-writer src-dtype unchecked?]
   (let [dst-dtype (dtype-proto/get-datatype dst-writer)]
-    (if (= dst-dtype src-dtype)
+    (if (= (casting/safe-flatten dst-dtype) (casting/safe-flatten src-dtype))
       dst-writer
-      (let [dst-writer (if (= (casting/flatten-datatype dst-dtype)
-                              (casting/flatten-datatype src-dtype))
-                         dst-writer
-                         (let [writer-fn (get marshalling-writer-table
-                                              [(casting/flatten-datatype
-                                                (casting/datatype->safe-host-type
-                                                 dst-dtype))
-                                               (casting/flatten-datatype src-dtype)])]
-                           (writer-fn dst-writer (casting/flatten-datatype src-dtype))))
-            dst-dtype (dtype-proto/get-datatype dst-writer)]
-        (if (not= dst-dtype src-dtype)
+      (let [writer-fn (get marshalling-writer-table
+                           [(casting/safe-flatten dst-dtype)
+                            (casting/flatten-datatype src-dtype)])
+            dst-writer (writer-fn dst-writer unchecked?)]
+        (if (and (= :object (casting/flatten-datatype src-dtype))
+                 (not= :object src-dtype))
           (make-object-wrapper dst-writer src-dtype)
           dst-writer)))))
 

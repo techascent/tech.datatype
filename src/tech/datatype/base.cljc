@@ -93,6 +93,22 @@
    (dtype-proto/make-container container-type datatype elem-seq {})))
 
 
+(defn copy!
+  "copy elem-count src items to dest items.  Options may contain unchecked in which you
+  get unchecked operations."
+  ([src src-offset dest dest-offset elem-count options]
+   (base-macros/check-range src src-offset elem-count)
+   (base-macros/check-range dest dest-offset elem-count)
+   (let [src (dtype-proto/sub-buffer src src-offset elem-count)
+         dest (dtype-proto/sub-buffer dest dest-offset elem-count)]
+     (dtype-proto/copy! dest src options))
+   dest)
+  ([src src-offset dst dst-offset elem-count]
+   (copy! src src-offset dst dst-offset elem-count {:unchecked? false}))
+  ([src dest]
+   (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))
+
+
 (defn write-block!
   [item offset values & [options]]
   (copy! values 0 item offset (ecount values) options))
@@ -118,26 +134,9 @@
   (.removeRange ^ObjectMutable (dtype-proto/->mutable-of-type item :object false)
                 idx count))
 
-
 (defn insert-block!
   [item idx values & [options]]
   (dtype-proto/insert-block! item idx values options))
-
-
-(defn copy!
-  "copy elem-count src items to dest items.  Options may contain unchecked in which you
-  get unchecked operations."
-  ([src src-offset dest dest-offset elem-count options]
-   (base-macros/check-range src src-offset elem-count)
-   (base-macros/check-range dest dest-offset elem-count)
-   (let [src (dtype-proto/sub-buffer src src-offset elem-count)
-         dest (dtype-proto/sub-buffer dest dest-offset elem-count)]
-     (dtype-io/dense-copy! dest src (:unchecked? options)))
-   dest)
-  ([src src-offset dst dst-offset elem-count]
-   (copy! src src-offset dst dst-offset elem-count {:unchecked? false}))
-  ([src dest]
-   (copy! src 0 dest 0 (min (ecount dest) (ecount src)))))
 
 
 (defn copy-raw-seq->item!
@@ -153,6 +152,18 @@
   (let [elem-count (ecount raw-data)]
     (copy! raw-data 0 ary-target target-offset elem-count options)
     [ary-target (+ (long target-offset) elem-count)]))
+
+
+(defn op-name
+  [operator]
+  (if (satisfies? dtype-proto/POperator operator)
+    (dtype-proto/op-name operator)
+    :unnamed))
+
+
+(defn buffer-type
+  [item]
+  (dtype-proto/safe-buffer-type item))
 
 
 (extend-protocol dtype-proto/PCopyRawData

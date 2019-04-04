@@ -227,14 +227,14 @@ Calls clojure.core.matrix/ecount."
   "Write a block of data to an object.  Values must support ->reader-of-type,
   get-datatype, and core.matrix.protocols/element-count."
   [item offset values & [options]]
-  (dtype-proto/write-block! item offset values options))
+  (base/write-block! item offset values options))
 
 
 (defn read-block!
   "Read a block from an object.  Values must support ->writer-of-type,
   get-datatype, and core.matrix.protocols/element-count."
   [item offset values & [options]]
-  (dtype-proto/read-block! item offset values options))
+  (base/read-block! item offset values options))
 
 
 (defn write-indexes!
@@ -262,6 +262,11 @@ Calls clojure.core.matrix/ecount."
   (let [mut-item ^MutableRemove (dtype-proto/->mutable-of-type
                                  item (get-datatype item) true)]
     (.remove mut-item (int idx))))
+
+
+(defn remove-range!
+  [item idx count]
+  (base/remove-range! item idx count))
 
 
 (defn insert-block!

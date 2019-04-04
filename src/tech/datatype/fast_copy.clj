@@ -205,9 +205,7 @@
 
 (defn parallel-read!
   [item src unchecked?]
-  (let [src-dtype (cond-> (dtype-proto/get-datatype src)
-                     unchecked?
-                     casting/datatype->host-datatype)
+  (let [src-dtype (dtype-proto/get-datatype src)
         src-buf (typecast/as-nio-buffer src)
         src-list (typecast/as-list src)]
     (cond

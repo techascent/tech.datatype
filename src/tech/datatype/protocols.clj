@@ -27,6 +27,14 @@
   "Clone an object.  Implemented generically for all objects."
   (clone [item datatype]))
 
+(defprotocol PBufferType ;;:sparse or :dense
+  (buffer-type [item]))
+
+(defn safe-buffer-type
+  [item]
+  (if (satisfies? PBufferType item)
+    (buffer-type item)
+    :dense))
 
 (defprotocol PSetConstant
   (set-constant! [item offset value elem-count]))
@@ -112,6 +120,9 @@ data overlap?"))
 (defprotocol PToIterable
   (->iterable-of-type [item datatype unchecked?]))
 
+(defprotocol POperator
+  (op-name [item]))
+
 (defprotocol PToUnaryOp
   (->unary-op [item datatype unchecked?]))
 
@@ -130,3 +141,9 @@ data overlap?"))
 (defmulti make-container
   (fn [container-type datatype elem-seq-or-count options]
     container-type))
+
+
+(defmulti copy!
+  (fn [dst src options]
+    [(safe-buffer-type src)
+     (safe-buffer-type dst)]))

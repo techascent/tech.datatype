@@ -1,6 +1,5 @@
-(ns tech.sparse.sparse-base
+(ns tech.datatype.sparse.sparse-base
   (:require [tech.datatype.reader :as reader]
-            [tech.datatype :as dtype]
             [tech.datatype.binary-search :as dtype-search]
             [tech.datatype.unary-op :as unary-op]
             [tech.datatype.binary-op :as binary-op]
@@ -11,7 +10,7 @@
             [tech.datatype.casting :as casting]
             [tech.datatype.typecast :as typecast]
             [tech.datatype.base :as dtype-base]
-            [tech.sparse.protocols :as sparse-proto]
+            [tech.datatype.sparse.protocols :as sparse-proto]
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.functional.impl :as impl]
             [tech.datatype.functional :as functional]
@@ -28,7 +27,7 @@
   tuples that contain"
   [data-stride index-iterable]
   (let [data-stride (int data-stride)
-        index-seq (->> (dtype/->iterable-of-type index-iterable :int32)
+        index-seq (->> (dtype-proto/->iterable-of-type index-iterable :int32 false)
                        (map-indexed #(->IndexSeqRec %1 %2)))]
 
     (if (= 1 data-stride)
@@ -126,6 +125,8 @@
            (sparse-proto/readers item#))
          sparse-proto/PToSparseReader
          (->sparse-reader [item#] item#)
+         dtype-proto/PBufferType
+         (buffer-type [item#] :sparse)
          dtype-proto/PBuffer
          (sub-buffer [item# offset# length#]
            (when-not (<= (+ offset# length#)
@@ -457,10 +458,10 @@
                             (dtype-base/ecount lhs)
                             (dtype-base/ecount rhs))
                     {})))
-  (let [sparse-lhs (when (satisfies? sparse-proto/PToSparseReader lhs)
-                     (sparse-proto/->sparse-reader lhs))
-        sparse-rhs (when (satisfies? sparse-proto/PToSparseReader rhs)
-                     (sparse-proto/->sparse-reader rhs))
+  (let [sparse-lhs (when (sparse-proto/is-sparse? lhs)
+                     (sparse-proto/->sparse lhs))
+        sparse-rhs (when (sparse-proto/is-sparse? rhs)
+                     (sparse-proto/->sparse rhs))
         any-dense? (or (nil? sparse-lhs)
                        (nil? sparse-rhs))
         op-datatype (or (:datatype options) (dtype-base/get-datatype lhs))
@@ -523,15 +524,15 @@
               (sparse-proto/sparse-value sparse-vec)))
       (sparse-proto/sparse-value sparse-vec)
       (and (casting/numeric-type? item-dtype)
-           (= 1.0 (dtype/cast sparse-val :float64)))
+           (= 1.0 (casting/cast sparse-val :float64)))
       (reduce-op/apply-reduce-op
        (assoc options :datatype item-dtype)
-       (:+ binary-op/builtin-binary-ops)
+       (:* binary-op/builtin-binary-ops)
        (sparse-proto/data-reader sparse-vec))
       :else
       (reduce-op/apply-reduce-op
        (assoc options :datatype item-dtype)
-       (:+ binary-op/builtin-binary-ops)
+       (:* binary-op/builtin-binary-ops)
        sparse-vec))))
 
 
@@ -546,7 +547,14 @@
   (->> (sparse-unary-map options (:sq unary-op/builtin-unary-ops) lhs)
        (sparse-reduce-+ options)))
 
+
 (defn sparse-distance-sq
   [options lhs rhs]
   (->> (sparse-binary-map options (:- binary-op/builtin-binary-ops) lhs rhs)
        (sparse-magnitude-sq options)))
+
+
+(def sparse-optimized-operations
+  {[:binary-op :*] sparse-elemwise-*
+   [:reduce :+] sparse-reduce-+
+   [:reduce :*] sparse-reduce-*})

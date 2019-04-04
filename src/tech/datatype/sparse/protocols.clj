@@ -1,4 +1,4 @@
-(ns tech.sparse.protocols)
+(ns tech.datatype.sparse.protocols)
 
 
 (defprotocol PSparse

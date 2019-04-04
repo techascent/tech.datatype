@@ -111,8 +111,21 @@
 
   dtype-proto/PToMutable
   (->mutable-of-type [item mutable-datatype unchecked?]
-    (-> (dtype-proto/->mutable-of-type backing-store datatype true)
+    (-> (dtype-proto/->mutable-of-type
+         backing-store datatype (if (= mutable-datatype datatype)
+                                  unchecked?
+                                  false))
         (dtype-proto/->mutable-of-type mutable-datatype unchecked?)))
+
+
+  dtype-proto/PInsertBlock
+  (insert-block! [item idx values options]
+    (dtype-proto/insert-block! backing-store
+                               idx
+                               (if (:unchecked? options)
+                                 values
+                                 (dtype-proto/->reader-of-type values datatype false))
+                               options))
 
   jna/PToPtr
   (->ptr-backing-store [item]

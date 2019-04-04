@@ -85,7 +85,8 @@
   (let [host-datatype (casting/safe-flatten dst-datatype)
         src-host-datatype (casting/safe-flatten src-datatype)]
     `(fn [un-op# datatype# unchecked?#]
-       (let [src-op# (datatype->reduce-op ~src-host-datatype un-op# unchecked?#)]
+       (let [src-op# (datatype->reduce-op ~src-host-datatype un-op# unchecked?#)
+             op-name# (dtype-base/op-name src-op#)]
          (if unchecked?#
            (reify ~(datatype->reduce-op-type host-datatype)
              (getDatatype [item#] datatype#)
@@ -121,7 +122,9 @@
                         (casting/datatype->cast-fn
                          :unknown ~dst-datatype accum#)
                         (casting/datatype->cast-fn
-                         :unknown ~dst-datatype next#))))
+                         :unknown ~dst-datatype next#)))
+             dtype-proto/POperator
+             (op-name [item#] op-name#))
            (reify ~(datatype->reduce-op-type host-datatype)
              (getDatatype [item#] ~dst-datatype)
              (update [item# accum# next#]
@@ -158,7 +161,9 @@
                         (casting/datatype->cast-fn
                          :unknown ~dst-datatype accum#)
                         (casting/datatype->cast-fn
-                         :unknown ~dst-datatype next#)))))))))
+                         :unknown ~dst-datatype next#)))
+             dtype-proto/POperator
+             (op-name [item#] op-name#)))))))
 
 
 (defmacro make-marshalling-reduce-table
@@ -247,20 +252,26 @@
   "Make a reduce op of type datatype.  Arguments to the operation
   are exposed to the local scope as 'x' and 'y' respectively.
   (make-reduce-op :float32 (Math/pow x y))"
-  [datatype update & [finalize]]
-  `(reify ~(datatype->reduce-op-type datatype)
-     (getDatatype [item#] ~datatype)
-     (update [item# ~'accum ~'next]
-       ~update)
-     (finalize [item# ~'accum ~'num-elems]
-       ~(if finalize
-          `~finalize
-          `~'accum))
-     IFn
-     (invoke [item# accum# next#]
-       (.update item#
-                (casting/datatype->cast-fn :unknown ~datatype accum#)
-                (casting/datatype->cast-fn :unknown ~datatype next#)))))
+  ([opname datatype update finalize]
+   `(reify ~(datatype->reduce-op-type datatype)
+      (getDatatype [item#] ~datatype)
+      (update [item# ~'accum ~'next]
+        ~update)
+      (finalize [item# ~'accum ~'num-elems]
+        ~(if finalize
+           `~finalize
+           `~'accum))
+      IFn
+      (invoke [item# accum# next#]
+        (.update item#
+                 (casting/datatype->cast-fn :unknown ~datatype accum#)
+                 (casting/datatype->cast-fn :unknown ~datatype next#)))
+      dtype-proto/POperator
+      (op-name [item] ~opname)))
+  ([datatype update finalize]
+   `(make-reduce-op :unnamed ~datatype ~update ~finalize))
+  ([datatype update]
+   `(make-reduce-up ~datatype ~update nil)))
 
 
 (defmacro make-iterable-reduce-fn

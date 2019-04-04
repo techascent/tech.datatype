@@ -168,9 +168,9 @@
 
 
 (defmacro extend-mutable
-  [typename datatype]
+  [datatype]
   `(clojure.core/extend
-       ~typename
+       ~(typecast/datatype->mutable-type datatype)
      dtype-proto/PToMutable
      {:->mutable-of-type
       (fn [item# mut-dtype# unchecked?#]
@@ -180,9 +180,19 @@
                                     [~datatype (casting/flatten-datatype mut-dtype#)])]
             (mutable-fn# item# unchecked?#)
             (throw (ex-info (format "Failed to find marshalling mutable: %s %s"
-                                    ~datatype dtype#)
+                                    ~datatype mut-dtype#)
                             {:src-datatype ~datatype
-                             :dst-datatype dtype#})))))}))
+                             :dst-datatype mut-dtype#})))))}))
+
+(extend-mutable :int8)
+(extend-mutable :int16)
+(extend-mutable :int32)
+(extend-mutable :int64)
+(extend-mutable :float32)
+(extend-mutable :float64)
+(extend-mutable :boolean)
+(extend-mutable :object)
+
 
 
 (defmacro make-iter->list-table

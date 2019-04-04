@@ -41,7 +41,9 @@
         src-buf (or (typecast/as-nio-buffer src)
                     (typecast/as-list src))
         dst-nio (typecast/as-nio-buffer dst)
+        src-nio (typecast/as-nio-buffer src)
         dst-list (typecast/as-list dst)
+        src-list (typecast/as-list src)
         dst-buf (or dst-nio dst-list)
         src-buf-dtype (when src-buf (dtype-proto/get-datatype src-buf))
         dst-buf-dtype (when dst-buf (dtype-proto/get-datatype dst-buf))
@@ -63,7 +65,11 @@
         dst-type-matches? (or (= dst-buf-dtype dst-dtype)
                               (and unchecked?
                                    (= (casting/datatype->host-datatype dst-dtype)
-                                      dst-buf-dtype)))]
+                                      dst-buf-dtype)))
+        src-type-matches? (or (= src-buf-dtype src-dtype)
+                              (and unchecked?
+                                   (= (casting/datatype->host-datatype src-dtype)
+                                      src-buf-dtype)))]
     ;;Fast path means no conversion is necessary and we can hit optimized
     ;;bulk pathways
     (if fast-path?
@@ -75,6 +81,10 @@
         (fast-copy/parallel-nio-write! dst-nio src unchecked?)
         (and dst-list dst-type-matches?)
         (fast-copy/parallel-list-write! dst-list src unchecked?)
+        (and src-nio src-type-matches?)
+        (fast-copy/parallel-nio-read! dst src-nio unchecked?)
+        (and src-list src-type-matches?)
+        (fast-copy/parallel-list-read! dst src-list unchecked?)
         :else
         (do
           (fast-copy/parallel-slow-copy! dst src unchecked?)))))
@@ -89,7 +99,7 @@
     ;;from an indexed writer.
     (fast-copy/parallel-read! (writer/make-indexed-writer
                                indexes item (assoc options :datatype datatype))
-                              values true)
+                              values (:unchecked? options))
     item))
 
 
@@ -100,3 +110,8 @@
                                        indexes values (assoc options :datatype datatype))
                                true)
     values))
+
+
+(defmethod dtype-proto/copy! :default
+  [dst src options]
+  (dense-copy! dst src (:unchecked? options)))

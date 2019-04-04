@@ -103,7 +103,8 @@
   (let [host-datatype (casting/safe-flatten dst-datatype)
         src-host-datatype (casting/safe-flatten src-datatype)]
     `(fn [un-op# datatype# unchecked?#]
-       (let [src-op# (datatype->unary-op ~src-host-datatype un-op# unchecked?#)]
+       (let [src-op# (datatype->unary-op ~src-host-datatype un-op# unchecked?#)
+             op-name# (dtype-base/op-name un-op#)]
          (if unchecked?#
            (reify ~(datatype->unary-op-type host-datatype)
              (getDatatype [item#] datatype#)
@@ -118,7 +119,9 @@
                                                  ~dst-datatype)))
              (invoke [item# arg#]
                (.op item# (casting/datatype->cast-fn
-                           :unknown ~dst-datatype arg#))))
+                           :unknown ~dst-datatype arg#)))
+             dtype-proto/POperator
+             (op-name [item#] op-name#))
            (reify ~(datatype->unary-op-type host-datatype)
              (getDatatype [item#] ~dst-datatype)
              (op [item# arg#]
@@ -133,7 +136,9 @@
                                                      ~dst-datatype)))
              (invoke [item# arg#]
                (.op item# (casting/datatype->cast-fn
-                           :unknown ~dst-datatype arg#)))))))))
+                           :unknown ~dst-datatype arg#)))
+             dtype-proto/POperator
+             (op-name [item#] op-name#)))))))
 
 
 (defmacro make-marshalling-unary-table
@@ -177,14 +182,19 @@
 (defmacro make-unary-op
   "Make a unary operation with a given datatype.  The argument is
   placed into the local namespace as 'arg'.
-  (make-unary-op :int32 (+ arg 10))"
-  [datatype body]
-  `(reify ~(datatype->unary-op-type datatype)
-     (getDatatype [item#] ~datatype)
-     (op [item# ~'arg]
-       ~body)
-     (invoke [item# arg#]
-       (.op item# (casting/datatype->cast-fn :unknown ~datatype arg#)))))
+  (make-unary-op :plus10 :int32 (+ arg 10))"
+  ([opname datatype body]
+   `(reify
+      ~(datatype->unary-op-type datatype)
+      (getDatatype [item#] ~datatype)
+      (op [item# ~'arg]
+        ~body)
+      (invoke [item# arg#]
+        (.op item# (casting/datatype->cast-fn :unknown ~datatype arg#)))
+      dtype-proto/POperator
+      (op-name [item#] ~opname)))
+  ([datatype body]
+   `(make-unary-op :unamed ~datatype ~body)))
 
 
 (defmacro make-unary-op-iterator
@@ -224,7 +234,7 @@
 (defn unary-iterable-map
   [{:keys [datatype unchecked?]} un-op item]
   (let [datatype (or datatype (dtype-base/get-datatype item))]
-    (if (= un-op :no-op)
+    (if (= (dtype-proto/op-name un-op) :identity)
       (dtype-proto/->iterable-of-type item datatype unchecked?)
       (if-let [iter-fn (get unary-op-iter-table (casting/flatten-datatype datatype))]
         (iter-fn item un-op unchecked?)
@@ -268,8 +278,8 @@
 (defn unary-reader-map
   [{:keys [datatype unchecked?]} un-op item]
   (let [datatype (or datatype (dtype-base/get-datatype item))]
-    (if (= un-op :no-op)
-      (dtype-proto/->reader-of-type item datatype unchecked?)
+    (if (= (dtype-proto/op-name un-op) :identity)
+      item
       (if-let [reader-fn (get unary-op-reader-table (casting/flatten-datatype datatype))]
         (reader-fn item un-op unchecked?)
         (throw (ex-info (format "Cannot unary map datatype %s" datatype) {}))))))
@@ -277,32 +287,37 @@
 
 
 (defmacro make-double-unary-op
-  [op-code]
-  `(make-unary-op :float64 ~op-code))
+  [opname op-code]
+  `(make-unary-op ~opname :float64 ~op-code))
 
 
 (defmacro make-numeric-unary-op
-  [op-code]
+  [opname op-code]
   `(reify
      dtype-proto/PToUnaryOp
      (->unary-op [item# datatype# unchecked?#]
        (when-not (casting/numeric-type? datatype#)
          (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
        (case (casting/safe-flatten datatype#)
-         :int8 (make-unary-op :int8 (unchecked-byte ~op-code))
-         :int16 (make-unary-op :int16 (unchecked-short ~op-code))
-         :int32 (make-unary-op :int32 (unchecked-int ~op-code))
-         :int64 (make-unary-op :int64 ~op-code)
-         :float32 (make-unary-op :float32 ~op-code)
-         :float64 (make-unary-op :float64 ~op-code)))
+         :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
+         :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
+         :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+         :int64 (make-unary-op ~opname :int64 ~op-code)
+         :float32 (make-unary-op ~opname :float32 ~op-code)
+         :float64 (make-unary-op ~opname :float64 ~op-code)))
      dtype-proto/PDatatype
      (get-datatype [item#] :float64)
-     ))
+     dtype-proto/POperator
+     (op-name [item#] ~opname)))
 
 
 (defmacro make-float-double-unary-op
-  [op-code]
+  [opname op-code]
   `(reify
+     dtype-proto/POperator
+     (op-name [item#] ~opname)
+     dtype-proto/PDatatype
+     (get-datatype [item#] :float64)
      dtype-proto/PToUnaryOp
      (->unary-op [item# datatype# unchecked?#]
        (when-not (casting/numeric-type? datatype#)
@@ -312,51 +327,70 @@
                          datatype#
                          :float64)
              retval# (case op-dtype#
-                       :float32 (make-unary-op :float32 ~op-code)
-                       :float64 (make-unary-op :float64 ~op-code))]
+                       :float32 (make-unary-op ~opname :float32 ~op-code)
+                       :float64 (make-unary-op ~opname :float64 ~op-code))]
          (if-not (= op-dtype# datatype#)
            (dtype-proto/->unary-op retval# datatype# unchecked?#)
            retval#)))))
 
+(defmacro make-all-datatype-unary-op
+  [opname op-code]
+  `(reify
+     dtype-proto/POperator
+     (op-name [item#] ~opname)
+     dtype-proto/PToUnaryOp
+     (->unary-op [item# datatype# unchecked?#]
+       (case (casting/safe-flatten datatype#)
+         :int8 (make-unary-op ~opname :int8 ~op-code)
+         :int16 (make-unary-op ~opname :int16 ~op-code)
+         :int32 (make-unary-op ~opname :int32 ~op-code)
+         :int64 (make-unary-op ~opname :int64 ~op-code)
+         :float32 (make-unary-op ~opname :float32 ~op-code)
+         :float64 (make-unary-op ~opname :float64 ~op-code)
+         :boolean (make-unary-op ~opname :boolean ~op-code)
+         :object (make-unary-op ~opname :object ~op-code)))))
+
 
 (def builtin-unary-ops
-  {:floor (make-double-unary-op (Math/floor arg))
-   :ceil (make-double-unary-op (Math/ceil arg))
-   :round (make-double-unary-op (unchecked-double (Math/round arg)))
-   :rint (make-double-unary-op (Math/rint arg))
-   :- (make-double-unary-op (- arg))
-   :logistic (make-double-unary-op
-              (/ 1.0
-                 (+ 1.0 (Math/exp (- arg)))))
-   :expp (make-double-unary-op (Math/exp arg))
-   :expm1 (make-double-unary-op (Math/expm1 arg))
-   :log (make-double-unary-op (Math/log arg))
-   :log10 (make-double-unary-op (Math/log10 arg))
-   :log1p (make-double-unary-op (Math/log1p arg))
-   :signum (make-double-unary-op (Math/signum arg))
-   :sqrt (make-double-unary-op (Math/sqrt arg))
-   :cbrt (make-double-unary-op (Math/cbrt arg))
-   :abs (make-double-unary-op (Math/abs arg))
-   :sq (make-numeric-unary-op (unchecked-multiply arg arg))
-   :sin (make-double-unary-op (Math/sin arg))
-   :sinh (make-double-unary-op (Math/sinh arg))
-   :cos (make-double-unary-op (Math/cos arg))
-   :cosh (make-double-unary-op (Math/cosh arg))
-   :tan (make-double-unary-op (Math/tan arg))
-   :tanh (make-double-unary-op (Math/tanh arg))
-   :acos (make-double-unary-op (Math/acos arg))
-   :asin (make-double-unary-op (Math/asin arg))
-   :atan (make-double-unary-op (Math/atan arg))
-   :to-degrees (make-double-unary-op (Math/toDegrees arg))
-   :to-radians (make-double-unary-op (Math/toRadians arg))
+  (->> [(make-double-unary-op :floor (Math/floor arg))
+        (make-double-unary-op :ceil (Math/ceil arg))
+        (make-double-unary-op :round (unchecked-double (Math/round arg)))
+        (make-double-unary-op :rint (Math/rint arg))
+        (make-double-unary-op :- (- arg))
+        (make-double-unary-op :logistic
+                              (/ 1.0
+                                 (+ 1.0 (Math/exp (- arg)))))
+        (make-double-unary-op :exp (Math/exp arg))
+        (make-double-unary-op :expm1 (Math/expm1 arg))
+        (make-double-unary-op :log (Math/log arg))
+        (make-double-unary-op :log10 (Math/log10 arg))
+        (make-double-unary-op :log1p (Math/log1p arg))
+        (make-double-unary-op :signum (Math/signum arg))
+        (make-double-unary-op :sqrt (Math/sqrt arg))
+        (make-double-unary-op :cbrt (Math/cbrt arg))
+        (make-double-unary-op :abs (Math/abs arg))
+        (make-numeric-unary-op :sq (unchecked-multiply arg arg))
+        (make-double-unary-op :sin (Math/sin arg))
+        (make-double-unary-op :sinh (Math/sinh arg))
+        (make-double-unary-op :cos (Math/cos arg))
+        (make-double-unary-op :cosh (Math/cosh arg))
+        (make-double-unary-op :tan (Math/tan arg))
+        (make-double-unary-op :tanh (Math/tanh arg))
+        (make-double-unary-op :acos (Math/acos arg))
+        (make-double-unary-op :asin (Math/asin arg))
+        (make-double-unary-op :atan (Math/atan arg))
+        (make-double-unary-op :to-degrees (Math/toDegrees arg))
+        (make-double-unary-op :to-radians (Math/toRadians arg))
 
-   :next-up (make-float-double-unary-op (Math/nextUp arg))
-   :next-down (make-float-double-unary-op (Math/nextDown arg))
-   :ulp (make-float-double-unary-op (Math/ulp arg))
+        (make-float-double-unary-op :next-up (Math/nextUp arg))
+        (make-float-double-unary-op :next-down (Math/nextDown arg))
+        (make-float-double-unary-op :ulp (Math/ulp arg))
 
-   :bit-not (make-unary-op :int64 (bit-not arg))
-   :/ (make-numeric-unary-op (/ arg))
-   :no-op :no-op})
+        (make-unary-op :bit-not :int64 (bit-not arg))
+        (make-numeric-unary-op :/ (/ arg))
+        (make-all-datatype-unary-op :identity arg)]
+       (map #(vector (dtype-proto/op-name %) %))
+       (into {})))
 
 
 (defn apply-unary-op
@@ -373,7 +407,7 @@
     (unary-iterable-map options un-op arg)
     :scalar
     (let [datatype (or datatype (dtype-base/get-datatype arg))]
-      (if (= :no-op un-op)
+      (if (= :identity (dtype-proto/op-name un-op))
         (if unchecked?
           (casting/unchecked-cast arg datatype)
           (casting/cast arg datatype)))

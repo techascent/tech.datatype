@@ -1,4 +1,4 @@
-(ns tech.sparse.buffer-test
+(ns tech.datatype.sparse.sparse-buffer-test
   (:require [tech.datatype.sparse.protocols :as sparse-proto]
             [tech.datatype :as dtype]
             [tech.datatype.sparse.sparse-buffer]

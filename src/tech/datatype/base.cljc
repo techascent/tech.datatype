@@ -95,12 +95,12 @@
 
 (defn write-block!
   [item offset values & [options]]
-  (dtype-proto/write-block! item offset values options))
+  (copy! values 0 item offset (ecount values) options))
 
 
 (defn read-block!
   [item offset values & [options]]
-  (dtype-proto/read-block! item offset values options))
+  (copy! item offset values 0 (ecount values) options))
 
 
 (defn write-indexes!
@@ -232,14 +232,6 @@
              (.write writer idx value))))
 
 
-  dtype-proto/PWriteBlock
-  (write-block! [item offset values options]
-    (copy! values 0 item offset (ecount values) options))
-
-  dtype-proto/PReadBlock
-  (read-block! [item offset values options]
-    (copy! item offset values 0 (ecount values) options))
-
   dtype-proto/PWriteIndexes
   (write-indexes! [item indexes values options]
     (dtype-io/write-indexes! item indexes values options))
@@ -252,3 +244,12 @@
   (clone [item datatype]
     (copy! item (dtype-proto/from-prototype item datatype
                                             (shape item)))))
+
+
+(defn item-inclusive-range
+  [item-reader]
+  (let [item-ecount (ecount item-reader)]
+    (if (= 0 item-ecount)
+      [0 0]
+      [(get-value item-reader 0)
+       (get-value item-reader (- item-ecount 1))])))

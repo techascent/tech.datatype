@@ -15,6 +15,7 @@
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.functional.impl :as impl]
             [tech.datatype.functional :as functional]
+            [tech.datatype.argsort :as argsort]
             [clojure.core.matrix.protocols :as mp]))
 
 
@@ -365,13 +366,25 @@
 (def sparse-binary-op-table (make-sparse-binary-op-table))
 
 
-(defn- reader-range
-  [item-reader]
-  (let [item-ecount (dtype-base/ecount item-reader)]
-    (if (= 0 item-ecount)
-      [0 0]
-      [(dtype-base/get-value item-reader 0)
-       (dtype-base/get-value item-reader (- item-ecount 1))])))
+
+(defn unordered-global-space->ordered-local-space
+  [new-indexes new-data b-offset b-stride indexes-in-order?]
+  (let [b-offset (int b-offset)
+        b-stride (int b-stride)
+        [new-indexes new-values] (if-not indexes-in-order?
+                                   (let [ordered-indexes (argsort/argsort new-indexes {:datatype :int32})]
+                                     [(reader/make-indexed-reader ordered-indexes new-indexes)
+                                      (reader/make-indexed-reader ordered-indexes new-data)])
+                                   [new-indexes new-data])
+        new-indexes (unary-op/unary-reader-map
+                     {:datatype :int32}
+                     (unary-op/make-unary-op :int32 (-> (* arg b-stride)
+                                                        (+ b-offset)))
+                     new-indexes)]
+    {:indexes new-indexes
+     :data new-data}))
+
+
 
 
 (defn- bound-sparse-item
@@ -415,9 +428,9 @@
           (let [lhs-indexes (sparse-proto/index-reader sparse-lhs)
                 rhs-indexes (sparse-proto/index-reader sparse-rhs)
                 [lhs-start-val lhs-end-val]
-                (reader-range lhs-indexes)
+                (dtype-base/item-inclusive-range lhs-indexes)
                 [rhs-start-val rhs-end-val]
-                (reader-range rhs-indexes)
+                (dtype-base/item-inclusive-range rhs-indexes)
                 start-val (max (int rhs-start-val) (int lhs-start-val))
                 end-val (+ 1 (min (int rhs-end-val) (int lhs-end-val)))]
             [(bound-sparse-item sparse-lhs start-val end-val)

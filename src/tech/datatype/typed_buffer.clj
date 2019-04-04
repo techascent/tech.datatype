@@ -197,13 +197,3 @@
 (defmethod dtype-proto/make-container :typed-buffer
   [container-type datatype elem-count-or-seq options]
   (make-typed-buffer datatype elem-count-or-seq options))
-
-
-(extend-type Object
-  dtype-proto/PToTypedBuffer
-  (->typed-buffer [item dtype]
-    (if (= dtype (dtype-proto/get-datatype item))
-      item
-      (assoc
-       (->typed-buffer item)
-       :datatype dtype))))

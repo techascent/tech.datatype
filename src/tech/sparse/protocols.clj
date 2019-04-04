@@ -66,3 +66,12 @@ clojure.core.matrix.protocols/PElementCount"))
   [item]
   (or (satisfies? PSparse item)
       (satisfies? PToSparseReader item)))
+
+
+(defn ->sparse
+  [item]
+  (cond
+    (satisfies? PSparse item) item
+    (satisfies? PToSparseReader item) (->sparse-reader item)
+    :else
+    (throw (ex-info "Item is not sparse" {}))))

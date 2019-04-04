@@ -31,15 +31,8 @@
 (defprotocol PSetConstant
   (set-constant! [item offset value elem-count]))
 
-
-(defprotocol PWriteBlock
-  (write-block! [item offset values options]))
-
 (defprotocol PWriteIndexes
   (write-indexes! [item indexes values options]))
-
-(defprotocol PReadBlock
-  (read-block! [item offset values options]))
 
 (defprotocol PReadIndexes
   (read-indexes! [item indexes values options]))

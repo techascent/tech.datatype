@@ -80,9 +80,7 @@
 
 (defn get-datatype
   [item]
-  (if (satisfies? dtype-proto/PDatatype item)
-    (dtype-proto/get-datatype item)
-    (type item)))
+  (dtype-proto/safe-get-datatype item))
 
 
 (defn make-container

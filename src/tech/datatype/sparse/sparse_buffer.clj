@@ -1,6 +1,7 @@
 (ns tech.datatype.sparse.sparse-buffer
   (:require [tech.datatype.sparse.sparse-base :as sparse-base]
             [tech.datatype.sparse.protocols :as sparse-proto]
+            [tech.datatype.sparse.reader :as sparse-reader]
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.casting :as casting]
@@ -22,7 +23,8 @@
      (let [b-offset# (long (:b-offset item#))
            b-stride# (long (:b-stride item#))
            b-elem-count# (long (:b-elem-count item#))
-           sparse-value# (casting/datatype->cast-fn :unknown ~datatype (:sparse-value item#))
+           sparse-value# (casting/datatype->cast-fn :unknown ~datatype
+                                                    (:sparse-value item#))
            indexes# (:indexes item#)
            data# (:data item#)
            index-mutable# (typecast/datatype->mutable :int32 indexes#)
@@ -71,10 +73,10 @@
            indexes data] :as sparse-buf}]
   (let [b-offset (long b-offset)
         b-elem-count (long b-elem-count)]
-    (-> (sparse-base/make-sparse-reader indexes data
-                                        (+ b-elem-count b-offset)
-                                        :sparse-value sparse-value
-                                        :datatype (dtype-base/get-datatype sparse-buf))
+    (-> (sparse-reader/make-sparse-reader indexes data
+                                          (+ b-elem-count b-offset)
+                                          :sparse-value sparse-value
+                                          :datatype (dtype-base/get-datatype sparse-buf))
         (dtype-proto/sub-buffer b-offset b-elem-count))))
 
 
@@ -305,7 +307,7 @@
   (index-seq [item]
     (as-> (make-base-reader item) it
       (sparse-proto/index-iterable it)
-      (sparse-base/get-index-seq b-stride it)))
+      (sparse-reader/get-index-seq b-stride it)))
 
   (sparse-value [item] sparse-value)
   (sparse-ecount [item]
@@ -337,9 +339,12 @@
     (sparse-proto/readers (sparse-proto/->sparse-reader item)))
 
   (iterables [item]
-    (let [base-reader (make-base-reader item)]
-      (sparse-base/index-seq->iterables (sparse-base/get-index-seq b-stride base-reader)
-                                        (sparse-proto/data-reader base-reader)))))
+    (if (= 1 b-stride)
+      (sparse-proto/readers item)
+      (let [base-reader (make-base-reader item)]
+        (sparse-reader/index-seq->iterables
+         (sparse-reader/get-index-seq b-stride base-reader)
+         (sparse-proto/data-reader base-reader))))))
 
 
 (defn copy-sparse->any
@@ -368,7 +373,8 @@
   [index-reader data-reader n-elems {:keys [sparse-value
                                             datatype]}]
   (let [datatype (or datatype (dtype-base/get-datatype data-reader))
-        sparse-value (casting/cast (or sparse-value (sparse-base/make-sparse-value datatype))
+        sparse-value (casting/cast (or sparse-value
+                                       (sparse-reader/make-sparse-value datatype))
                                    datatype)
         index-list (if (satisfies? dtype-proto/PToMutable index-reader)
                      index-reader
@@ -394,7 +400,7 @@
                         elem-seq datatype (:unchecked? options))
                        (merge options
                               {:datatype datatype
-                               :sparse-value (sparse-base/make-sparse-value
+                               :sparse-value (sparse-reader/make-sparse-value
                                               datatype)}))
           {:keys [indexes data]} (sparse-proto/readers reader-data)]
       (make-sparse-buffer indexes data

@@ -396,32 +396,3 @@
         (make-all-datatype-unary-op :identity arg)]
        (map #(vector (dtype-proto/op-name %) %))
        (into {})))
-
-
-(defn apply-unary-op
-    "Perform operation returning a scalar, reader, or an iterator.  Note that the
-  results of this could be a reader, iterable or a scalar depending on what was passed
-  in.  Also note that the results are lazyily calculated so no computation is done in
-  this method aside from building the next thing *unless* the inputs are scalar in which
-  case the operation is evaluated immediately."
-  [{:keys [datatype unchecked?] :as options} un-op arg]
-  (case (argtypes/arg->arg-type arg)
-    :reader
-    (unary-reader-map options un-op arg)
-    :iterable
-    (unary-iterable-map options un-op arg)
-    :scalar
-    (let [datatype (or datatype (dtype-base/get-datatype arg))]
-      (if (= :identity (dtype-proto/op-name un-op))
-        (if unchecked?
-          (casting/unchecked-cast arg datatype)
-          (casting/cast arg datatype)))
-      (case (casting/safe-flatten datatype)
-        :int8 (.op (datatype->unary-op :int8 un-op unchecked?) arg)
-        :int16 (.op (datatype->unary-op :int16 un-op unchecked?) arg)
-        :int32 (.op (datatype->unary-op :int32 un-op unchecked?) arg)
-        :int64 (.op (datatype->unary-op :int64 un-op unchecked?) arg)
-        :float32 (.op (datatype->unary-op :float32 un-op unchecked?) arg)
-        :float64 (.op (datatype->unary-op :float64 un-op unchecked?) arg)
-        :boolean (.op (datatype->unary-op :boolean un-op unchecked?) arg)
-        :object (.op (datatype->unary-op :object un-op unchecked?) arg)))))

@@ -22,7 +22,8 @@
             [tech.datatype.fast-copy :as fast-copy]
             [clojure.core.matrix.protocols :as mp]
             ;;Load all iterator bindings
-            [tech.datatype.iterator])
+            [tech.datatype.iterator]
+            [tech.datatype.argtypes :as argtypes])
   (:import [tech.datatype ObjectReader ObjectReaderIter ObjectIter
             ByteReader ByteReaderIter ByteIter
             ShortReader ShortReaderIter ShortIter

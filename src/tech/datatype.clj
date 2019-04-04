@@ -33,9 +33,12 @@
             [tech.datatype.reader :as dtype-reader]
             [tech.datatype.unary-op :as unary-op]
             [tech.datatype.binary-op :as binary-op]
+            [tech.datatype.reduce-op :as reduce-op]
             [tech.datatype.writer :as dtype-writer]
             [tech.datatype.comparator :as dtype-comp]
-            [tech.datatype.boolean-op :as dtype-bool])
+            [tech.datatype.boolean-op :as dtype-bool]
+            [tech.datatype.sparse.protocols :as sparse-proto]
+            [tech.datatype.sparse.sparse-buffer])
   (:import [tech.datatype MutableRemove ObjectMutable])
   (:refer-clojure :exclude [cast]))
 
@@ -97,6 +100,18 @@
   means is supports the ->mutable-of-type protocol."
   [datatype elem-count-or-seq & [options]]
   (make-container :list datatype elem-count-or-seq options))
+
+
+(defn make-sparse-container
+  "Make a container of fixed element count that stores data sparsely"
+  [datatype elem-count-or-seq & [options]]
+  (make-container :sparse datatype elem-count-or-seq options))
+
+
+(defn buffer-type
+  "Return the type of buffer.  Current options are :dense or :sparse"
+  [item]
+  (base/buffer-type item))
 
 
 (defn set-value!
@@ -369,18 +384,19 @@ Calls clojure.core.matrix/ecount."
 (defn unary-iterable-map
   "Typed unary iteration across an iterable.  Produces a new iterable.
   (unary-iterable-map
+    {}
     (unary-op/make-unary-op :int32 (* b-stride
                                       (+ arg b-offset)))
     new-idx-buf)"
-  [un-op item]
-  (unary-op/unary-iterable-map un-op item))
+  [options un-op item]
+  (unary-op/unary-iterable-map options un-op item))
 
 
 (defn binary-iterable-map
   "Typed binary iteration across 2 iterables.  Length is the short of the two
   iterables.  Produces a new iterable."
-  [bin-op lhs rhs]
-  (binary-op/binary-iterable-map bin-op lhs rhs))
+  [options bin-op lhs rhs]
+  (binary-op/binary-iterable-map options bin-op lhs rhs))
 
 
 (refer 'tech.datatype.boolean-op :only '[make-boolean-unary-op
@@ -393,13 +409,13 @@ Calls clojure.core.matrix/ecount."
 (defn boolean-unary-iterable
   "Take an iterable and transform it to a boolean iterable via operation."
   [bool-un-op src-data & {:keys [unchecked? datatype] :as options}]
-  (dtype-bool/boolean-unary-iterable bool-un-op src-data options))
+  (dtype-bool/boolean-unary-iterable options bool-un-op src-data))
 
 
 (defn boolean-binary-iterable
   "Take 2 iterables and transform then to 1 boolean iterable via op."
   [bool-binary-op lhs-data rhs-data {:keys [unchecked? datatype] :as options}]
-  (dtype-bool/boolean-binary-iterable bool-binary-op lhs-data rhs-data options))
+  (dtype-bool/boolean-binary-iterable options bool-binary-op lhs-data rhs-data))
 
 
 (defn ->reader-of-type
@@ -426,6 +442,13 @@ Calls clojure.core.matrix/ecount."
   (dtype-reader/make-indexed-reader indexes
                                     values
                                     (assoc options :datatype datatype)))
+
+
+(defn ->sparse
+  "Return an object that implements the sparse protocols."
+  [item]
+  (when (= :sparse (buffer-type item))
+    (sparse-proto/->sparse item)))
 
 
 (defn iterable-indexed-iterable
@@ -476,15 +499,15 @@ Calls clojure.core.matrix/ecount."
     (unary-op/make-unary-op :int32 (* b-stride
                                       (+ arg b-offset)))
     new-idx-buf)"
-  [un-op item]
-  (unary-op/unary-reader-map un-op item))
+  [options un-op item]
+  (unary-op/unary-reader-map options un-op item))
 
 
 (defn binary-reader-map
   "Typed binary iteration across 2 readers.  Length is the shorter of the two
   readers.  Produces a new reader that performs operation at access time."
-  [bin-op lhs rhs]
-  (binary-op/binary-reader-map bin-op lhs rhs))
+  [options bin-op lhs rhs]
+  (binary-op/binary-reader-map options bin-op lhs rhs))
 
 
 (defn ->writer-of-type

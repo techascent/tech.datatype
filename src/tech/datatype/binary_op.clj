@@ -5,6 +5,7 @@
             [tech.datatype.base :as dtype-base]
             [tech.datatype.nio-access :as nio-access]
             [tech.datatype.reader :as reader]
+            [tech.datatype.unary-op :as unary-op]
             [tech.datatype.argtypes :as argtypes])
   (:import [tech.datatype
             ByteIter ShortIter IntIter LongIter
@@ -344,69 +345,47 @@
        (into {})))
 
 
-(defn apply-binary-op
-  "We perform a left-to-right reduction making scalars/readers/etc.  This matches
-  clojure semantics.  Note that the results of this could be a reader, iterable or a
-  scalar depending on what was passed in.  Also note that the results are lazily
-  calculated so no computation is done in this method aside from building the next thing
-  *unless* the inputs are scalar in which case the operation is evaluated immediately."
-  [{:keys [datatype unchecked?] :as options}
-   bin-op arg1 arg2 & args]
-  (let [all-args (concat [arg1 arg2] args)
-        all-arg-types (->> all-args
-                           (map argtypes/arg->arg-type)
-                           set)
-        op-arg-type (cond
-                      (all-arg-types :iterable)
-                      :iterable
-                      (all-arg-types :reader)
-                      :reader
-                      :else
-                      :scalar)
-        datatype (or datatype (dtype-base/get-datatype arg1))
-        n-elems (long (if (= op-arg-type :reader)
-                        (->> all-args
-                             (remove #(= :scalar (argtypes/arg->arg-type %)))
-                             (map dtype-base/ecount)
-                             (apply min))
-                        Integer/MAX_VALUE))]
-    (loop [arg1 arg1
-           arg2 arg2
-           args args]
-      (let [arg1-type (argtypes/arg->arg-type arg1)
-            arg2-type (argtypes/arg->arg-type arg2)
-            op-map-fn (case op-arg-type
-                        :iterable
-                        (partial binary-iterable-map (assoc options :datatype datatype)
-                                 bin-op)
-                        :reader
-                        (partial binary-reader-map (assoc options :datatype datatype)
-                                 bin-op)
-                        :scalar
-                        nil)
-            arg-result
-            (cond
-              (and (= arg1-type :scalar)
-                   (= arg2-type :scalar))
-              (case (casting/safe-flatten datatype)
-                :int8 (.op (datatype->binary-op :int8 bin-op unchecked?) arg1 arg2)
-                :int16 (.op (datatype->binary-op :int16 bin-op unchecked?) arg1 arg2)
-                :int32 (.op (datatype->binary-op :int32 bin-op unchecked?) arg1 arg2)
-                :int64 (.op (datatype->binary-op :int64 bin-op unchecked?) arg1 arg2)
-                :float32 (.op (datatype->binary-op :float32 bin-op unchecked?)
-                              arg1 arg2)
-                :float64 (.op (datatype->binary-op :float64 bin-op unchecked?)
-                              arg1 arg2)
-                :boolean (.op (datatype->binary-op :boolean bin-op unchecked?)
-                              arg1 arg2)
-                :object (.op (datatype->binary-op :object bin-op unchecked?)
-                             arg1 arg2))
-              (= arg1-type :scalar)
-              (op-map-fn (reader/make-const-reader arg1 datatype) arg2)
-              (= arg2-type :scalar)
-              (op-map-fn arg1 (reader/make-const-reader arg2 datatype))
-              :else
-              (op-map-fn arg1 arg2))]
-        (if (first args)
-          (recur arg-result (first args) (rest args))
-          arg-result)))))
+(defmacro make-binary->unary
+  [datatype]
+  `(fn [bin-op# dtype# const-val# left-assoc?#]
+     (let [bin-op# (datatype->binary-op ~datatype bin-op# true)
+           const-val# (casting/datatype->cast-fn :unknown ~datatype const-val#)
+           op-name# (if left-assoc?#
+                      (keyword (str (name (dtype-base/op-name bin-op#))
+                                    " - " const-val# " - " "arg"))
+                      (keyword (str (name (dtype-base/op-name bin-op#))
+                                    " - " "arg" " - " (str const-val#))))]
+       (if left-assoc?#
+         (reify
+           ~(unary-op/datatype->unary-op-type datatype)
+           (getDatatype [op#] dtype#)
+           (op [item# arg#]
+             (.op bin-op# const-val# arg#))
+           (invoke [item# arg#]
+             (.op item# (casting/datatype->cast-fn :unknown ~datatype arg#)))
+           dtype-proto/POperator
+           (op-name [item#] op-name#))
+         (reify
+           ~(unary-op/datatype->unary-op-type datatype)
+           (getDatatype [op#] dtype#)
+           (op [item# arg#]
+             (.op bin-op# arg# const-val#))
+           (invoke [item# arg#]
+             (.op item# (casting/datatype->cast-fn :unknown ~datatype arg#)))
+           dtype-proto/POperator
+           (op-name [item#] op-name#))))))
+
+
+(defmacro make-binary->unary-table
+  []
+  `(->> [~@(for [dtype casting/base-host-datatypes]
+             [dtype `(make-binary->unary ~dtype)])]
+        (into {})))
+
+(def binary->unary-table (make-binary->unary-table))
+
+(defn binary->unary
+  [{:keys [datatype unchecked? left-associate?]} bin-op constant-value]
+  (let [datatype (or datatype (dtype-base/get-datatype constant-value))
+        create-fn (get binary->unary-table (casting/safe-flatten datatype))]
+    (create-fn bin-op datatype constant-value left-associate?)))

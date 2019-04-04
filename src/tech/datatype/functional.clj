@@ -2,13 +2,15 @@
   (:require [tech.datatype.unary-op :as unary]
             [tech.datatype.binary-op :as binary]
             [tech.datatype.reduce-op :as reduce-op]
+            [tech.datatype.iterator :as iterator]
             [tech.datatype.functional.impl :as impl]
             [tech.datatype.argsort :as argsort]
             [tech.datatype.boolean-op :as boolean-op]
             [tech.datatype.binary-search :as binary-search]
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.base :as dtype-base]
-            [tech.datatype.casting :as casting])
+            [tech.datatype.casting :as casting]
+            [tech.datatype.sparse.reader :as sparse-reader])
   (:refer-clojure :exclude [+ - / *
                             <= < >= >
                             identity
@@ -44,7 +46,7 @@
              :or {parallel? true}
              :as options}]
   (let [options (impl/default-options (assoc options :parallel? true))]
-    (argsort/argsort (impl/->reader values)
+    (argsort/argsort (sparse-reader/->reader values)
                      (impl/default-options options))))
 
 
@@ -57,7 +59,7 @@
   (let [options (impl/default-options options)
         datatype (clojure.core/or (:datatype options) (dtype-base/get-datatype target))]
     (binary-search/binary-search
-     (impl/->reader values datatype)
+     (sparse-reader/->reader values datatype)
      target options)))
 
 
@@ -73,8 +75,8 @@
                                                         (bool-op x y))))]
       (boolean-op/binary-argfilter (impl/default-options {})
                                    bool-op
-                                   (impl/->iterable filter-seq)
-                                   (impl/->iterable second-seq)))
+                                   (iterator/->iterable filter-seq)
+                                   (iterator/->iterable second-seq)))
     (let [bool-op (if (satisfies? dtype-proto/PToUnaryBooleanOp bool-op)
                     bool-op
                     (boolean-op/make-boolean-unary-op

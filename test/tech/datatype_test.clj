@@ -30,6 +30,7 @@
     (dtype/copy-raw->item! double-array-seq output-doubles 0)
     (is (= (vec output-doubles) (mapv double (flatten input-seq))))))
 
+
 (defn basic-copy
   [src-fn dest-fn src-dtype dst-dtype]
   (let [ary (dtype/make-container src-fn src-dtype (range 10))
@@ -44,7 +45,7 @@
                  :src-dtype src-dtype :dst-dtype dst-dtype}))))
 
 
-(def create-functions [:typed-buffer :native-buffer :list])
+(def create-functions [:typed-buffer :native-buffer :list :sparse])
 
 
 (deftest generalized-copy-test

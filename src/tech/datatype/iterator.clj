@@ -2,6 +2,7 @@
   (:require [tech.datatype.typecast :as typecast]
             [tech.datatype.casting :as casting]
             [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.argtypes :as argtypes]
             [tech.datatype.nio-access
              :refer [unchecked-full-cast
                      checked-full-write-cast]])
@@ -219,5 +220,9 @@
         create-fn (get concat-iterable-table (casting/flatten-datatype datatype))]
     (create-fn datatype concat-iters)))
 
-;;take, drop
-;;take-last drop-last
+
+(defn ->iterable
+  [item]
+  (if (= :scalar (argtypes/arg->arg-type item))
+    (make-const-iterable item (dtype-proto/safe-get-datatype item))
+    item))

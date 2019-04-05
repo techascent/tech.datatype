@@ -1,4 +1,4 @@
-(ns tech.compute.tensor.dimensions
+(ns tech.tensor.dimensions
   "Compute tensors dimensions control the shape and stride of the tensor along with
   offsetting into the actual data buffer.  This allows multiple backends to share a
   single implementation of a system that will allow transpose, reshape, etc. assuming
@@ -9,9 +9,9 @@
   any index buffers then it is considered an indirect shape."
   (:require [clojure.core.matrix :as m]
             [tech.datatype :as dtype]
-            [tech.compute.tensor.dimensions.select :as dims-select]
-            [tech.compute.tensor.dimensions.shape :as shape]
-            [tech.compute.tensor.utils
+            [tech.tensor.dimensions.select :as dims-select]
+            [tech.tensor.dimensions.shape :as shape]
+            [tech.tensor.utils
              :refer [when-not-error reversev map-reversev]]))
 
 
@@ -180,6 +180,24 @@
                                       (long (dtype/get-value
                                              next-dim-entry
                                              shape-idx)))))))
+              offset)))))
+
+
+(defn- addr->elem-idx
+  ^long [item-shape item-strides shape-counts arg]
+  (long (let [num-items (count item-shape)]
+          (loop [idx (long 0)
+                 arg (long arg)
+                 offset (long 0)]
+            (if (< idx num-items)
+              (let [next-stride (long (item-strides idx))
+                    next-dim (long (item-shape idx))
+                    shape-mult (long (get shape-counts idx))
+                    n-items (rem (quot arg next-stride)
+                                 next-dim)]
+                (recur (unchecked-inc idx)
+                       (- arg (* next-stride n-items))
+                       (+ offset (* shape-mult n-items))))
               offset)))))
 
 

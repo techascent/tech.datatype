@@ -418,6 +418,11 @@ Calls clojure.core.matrix/ecount."
   (dtype-bool/boolean-binary-iterable options bool-binary-op lhs-data rhs-data))
 
 
+(defn reader?
+  [item]
+  (satisfies? dtype-proto/PToReader item))
+
+
 (defn ->reader-of-type
   "Create a reader of a specific type."
   [src-item & [datatype options]]

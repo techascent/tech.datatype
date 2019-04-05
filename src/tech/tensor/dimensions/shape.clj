@@ -1,8 +1,8 @@
-(ns tech.compute.tensor.dimensions.shape
+(ns tech.tensor.dimensions.shape
   "A shape vector entry can be a number of things.  We want to be precise
   with handling them and abstract that handling so new things have a clear
   path."
-  (:require [tech.compute.tensor.utils
+  (:require [tech.tensor.utils
              :refer [when-not-error reversev map-reversev]]
             [tech.datatype :as dtype]))
 

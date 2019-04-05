@@ -1,10 +1,14 @@
 package tech.datatype;
 
 
-public interface IndexingSystem
+public class IndexingSystem
 {
-  int globalToLocal(int global_idx);
-  boolean isomorphic();
-  int localToGlobalInt(int local_idx);
-  IntIter localToGlobal(int local_idx);
+  public interface Forward
+  {
+    int globalToLocal(int global_idx);
+  }
+  public interface Backward
+  {
+    IntIter localToGlobal(int local_idx);
+  }
 }

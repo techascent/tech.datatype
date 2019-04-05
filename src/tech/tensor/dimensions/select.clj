@@ -1,8 +1,7 @@
-(ns tech.compute.tensor.dimensions.select
+(ns tech.tensor.dimensions.select
   "Selecting subsets from a larger set of dimensions leads to its own algebra."
-  (:require [tech.compute.tensor.protocols :refer [tensor? dense?]]
-            [tech.compute.tensor.dimensions.shape :as shape]
-            [tech.compute.tensor.utils :refer [when-not-error]]
+  (:require [tech.tensor.dimensions.shape :as shape]
+            [tech.tensor.utils :refer [when-not-error]]
             [clojure.core.matrix :as m]
             [tech.datatype :as dtype]))
 
@@ -16,7 +15,7 @@
         {:type :+
          :min-item 0
          :max-item (- (long dim) 1)}
-        (tensor? dim) dim
+        (dtype/reader? dim) dim
         (shape/classified-sequence? dim) dim
         (sequential? dim) (shape/classify-sequence dim)
         :else
@@ -24,25 +23,11 @@
                         {:dimension dim}))))
 
 
-(defn- verify-tensor-indexer
-  [select-arg]
-  (let [tens-shape (dtype/shape select-arg)]
-    (when-not (= 1 (count tens-shape))
-      (throw (ex-info "Only tensor of rank 1 can be used as indexes in other tensors"
-                      {:select-arg-shape tens-shape})))
-    (when-not (dense? select-arg)
-      (throw (ex-info "Only dense tensors can be used as indexes in other tensors" {})))
-    (when-not (= :int32 (dtype/get-datatype select-arg))
-      (throw (ex-info "Index tensors must be int32 datatype"
-                      {:tensor-datatype (dtype/get-datatype select-arg)})))
-    select-arg))
-
-
 (defn- expand-select-arg
   [select-arg]
   (cond
     (number? select-arg) (shape/classify-sequence select-arg)
-    (tensor? select-arg) (verify-tensor-indexer select-arg)
+    (dtype/reader? select-arg) select-arg
     (shape/classified-sequence? select-arg) select-arg
     (sequential? select-arg) (shape/classify-sequence select-arg)
     (= :all select-arg) select-arg
@@ -56,22 +41,22 @@
   "Given a dimension and select argument, create a new dimension with
 the selection applied."
   [dim select-arg]
-  ;;Dim is now a map or a tensor
+  ;;Dim is now a map or a reader
   (let [dim (expand-dimension dim)
-        ;;Select arg is now a map, a keyword, or a tensor
+        ;;Select arg is now a map, a keyword, or a reader
         select-arg (expand-select-arg select-arg)
-        dim-type (cond (tensor? dim) :tensor
+        dim-type (cond (dtype/reader? dim) :reader
                        (shape/classified-sequence? dim)  :classified-sequence)
-        select-type (cond (tensor? select-arg) :tensor
+        select-type (cond (dtype/reader? select-arg) :reader
                           (shape/classified-sequence? select-arg) :classified-sequence
                           (keyword? select-arg) :keyword)]
     (cond
-      (= :tensor select-type)
+      (= :reader select-type)
       (do
         (when-not-error (and (= :classified-sequence dim-type)
                              (= :+ (:type dim))
                              (= 0 (long (:min-item dim))))
-          "Can only use tensor indexers on monotonically incrementing dimensions"
+          "Can only use reader indexers on monotonically incrementing dimensions"
           {:dim dim
            :select-arg select-arg})
         select-arg)
@@ -79,11 +64,11 @@ the selection applied."
       dim
       (= :lla select-arg)
       (case dim-type
-        :tensor (throw (ex-info "Can not reverse tensor indexers"
+        :reader (throw (ex-info "Can not reverse reader indexers"
                                 {:dimension dim :select-arg select-arg}))
         :classified-sequence (shape/reverse-classified-sequence dim))
-      (= :tensor dim-type)
-      (throw (ex-info "Only :all select types are supported on tensor dimensions"
+      (= :reader dim-type)
+      (throw (ex-info "Only :all select types are supported on reader dimensions"
                       {:dimension dim
                        :select-arg select-arg}))
       :else
@@ -109,7 +94,7 @@ Returns:
   (let [[dimension-seq strides offset]
         (reduce (fn [[dimension-seq strides offset] [dimension stride]]
                   (cond
-                    (tensor? dimension)
+                    (dtype/reader? dimension)
                     [(conj dimension-seq dimension) (conj strides stride) offset]
                     (shape/classified-sequence? dimension)
                     ;;Shift the sequence down and record the new offset.

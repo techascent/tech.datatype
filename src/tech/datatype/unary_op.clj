@@ -280,7 +280,7 @@
     (dtype-base/buffer-type item)))
 
 
-(defmethod unary-reader-map :default
+(defn default-unary-reader-map
   [{:keys [datatype unchecked?]} un-op item]
   (let [datatype (or datatype (dtype-base/get-datatype item))]
     (if (= (dtype-proto/op-name un-op) :identity)
@@ -288,6 +288,11 @@
       (if-let [reader-fn (get unary-op-reader-table (casting/flatten-datatype datatype))]
         (reader-fn item un-op unchecked?)
         (throw (ex-info (format "Cannot unary map datatype %s" datatype) {}))))))
+
+
+(defmethod unary-reader-map :default
+  [{:keys [datatype unchecked?] :as options} un-op item]
+  (default-unary-reader-map options un-op item))
 
 
 

@@ -290,7 +290,8 @@
      {:insert-block!
       (fn [list-item# idx# values# options#]
         (let [list-item# (datatype->list-cast-fn ~datatype list-item#)
-              ary-data# (dtype-proto/->sub-array values#)
+              ary-data# (when (satisfies? dtype-proto/PToArray values#)
+                          (dtype-proto/->sub-array values#))
               idx# (int idx#)]
           ;;first, try array as they are most general
           (if (and ary-data#
@@ -301,7 +302,8 @@
                           (int (:offset ary-data#))
                           (int (:length ary-data#)))
             ;;next, try list.
-            (let [list-values# (dtype-proto/->list-backing-store values#)]
+            (let [list-values# (when (satisfies? dtype-proto/PToList values#)
+                                 (dtype-proto/->list-backing-store values#))]
               (if (and list-values#
                        (= ~datatype (casting/flatten-datatype
                                      (dtype-proto/get-datatype list-values#))))

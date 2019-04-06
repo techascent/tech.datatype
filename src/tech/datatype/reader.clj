@@ -529,6 +529,38 @@
                     {}))))
 
 
+(defmacro make-reverse-reader
+  [datatype]
+  `(fn [src-reader#]
+     (let [src-reader# (typecast/datatype->reader ~datatype src-reader#)
+           n-elems# (.size src-reader#)
+           n-elems-m1# (- n-elems# 1)]
+       (reify
+         ~(typecast/datatype->reader-type datatype)
+         (getDatatype [reader#] (dtype-proto/get-datatype src-reader#))
+         (size [reader#] (.size src-reader#))
+         (read [reader# idx#] (.read src-reader# (- n-elems-m1# idx#)))
+         (invoke [reader# idx#]
+           (.read reader# (int idx#)))
+         (iterator [reader#] (typecast/reader->iterator reader#))))))
+
+(defmacro make-reverse-reader-table
+  []
+  `(->> [~@(for [dtype casting/base-host-datatypes]
+             [dtype `(make-reverse-reader ~dtype)])]
+        (into {})))
+
+
+(def reverse-reader-table (make-reverse-reader-table))
+
+
+(defn reverse-reader
+  [src-reader {:keys [datatype]}]
+  (let [datatype (or datatype (dtype-proto/safe-get-datatype src-reader))
+        create-fn (get reverse-reader-table (casting/safe-flatten datatype))]
+    (create-fn src-reader)))
+
+
 (defmacro typed-read
   [datatype item idx]
   `(.read (typecast/datatype->reader ~datatype ~item)

@@ -123,6 +123,21 @@
       (- max-item shape-idx))))
 
 
+(defn classified-sequence->global-addr
+  "Inverse of above"
+  ^long [{:keys [type min-item max-item sequence] :as dim} ^long shape-idx]
+  (let [min-item (long min-item)
+        max-item (long max-item)
+        last-idx (- max-item min-item)]
+    (when (> shape-idx last-idx)
+      (throw (ex-info "Element access out of range"
+                      {:shape-idx shape-idx
+                       :dimension dim})))
+    (if (= :+ type)
+      (- shape-idx min-item)
+      (+ shape-idx max-item))))
+
+
 (defn shape-entry->count
   "Return a vector of counts of each shape."
   ^long [shape-entry]
@@ -132,7 +147,7 @@
     (classified-sequence? shape-entry)
     (classified-sequence->count shape-entry)
     :else
-    (long (dtype/ecount shape-entry))))
+    (dtype/ecount shape-entry)))
 
 
 (defn shape->count-vec

@@ -9,6 +9,7 @@ public class IndexingSystem
   }
   public interface Backward
   {
-    IntIter localToGlobal(int local_idx);
+    //Returns an iterable that when asked returns an IntIter or nil
+    Object localToGlobal(int local_idx);
   }
 }

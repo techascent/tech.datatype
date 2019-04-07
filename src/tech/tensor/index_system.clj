@@ -71,24 +71,28 @@
       :else
       (let [{:keys [reverse-shape reverse-strides]}
             (dims/->reverse-data dims max-shape)
-            rev-max-shape (int-array (utils/reversev max-shape))]
+            rev-max-shape (int-array (utils/reversev max-shape))
+            reverse-offsets (if-let [item-offsets (:offsets dims)]
+                              (utils/reversev item-offsets)
+                              (reader/make-const-reader 0 :int32
+                                                        (count reverse-shape)))]
         ;;General case when non of the dimensions are indexed themselves.
         (if direct?
           (let [rev-shape (int-array reverse-shape)
                 rev-strides (int-array reverse-strides)
+                rev-offsets (int-array reverse-offsets)
                 num-items (alength rev-max-shape)]
             (reify IndexingSystem$Forward
               (globalToLocal [item arg]
                 (loop [idx (long 0)
                        arg (long arg)
                        offset (long 0)]
-                  (if (and (> arg 0)
-                           (< idx num-items))
+                  (if (< idx num-items)
                     (let [next-max (aget rev-max-shape idx)
                           next-stride (aget rev-strides idx)
                           next-dim (aget rev-shape idx)
-                          max-idx (rem arg next-max)
-                          shape-idx (rem arg next-dim)]
+                          next-off (aget rev-offsets idx)
+                          shape-idx (rem (+ arg next-off) next-dim)]
                       (recur (inc idx)
                              (quot arg next-max)
                              (+ offset (* next-stride shape-idx))))
@@ -106,8 +110,11 @@
                                                              (int-array rev-max-shape))]
             (reify IndexingSystem$Forward
               (globalToLocal [item idx]
-                (dims/elem-idx->addr reverse-shape reverse-strides
-                                     reverse-max-shape idx)))))))))
+                (dims/elem-idx->addr reverse-shape
+                                     reverse-strides
+                                     reverse-offsets
+                                     reverse-max-shape
+                                     idx)))))))))
 
 
 (defn- naive-shape->strides
@@ -134,9 +141,10 @@
 (defn local-address->local-shape
   "Shape and strides are not transposed.  Returns
   [valid? local-shape-as-list]"
-  [shape strides addr]
+  [shape offsets strides addr]
   (let [strides (typecast/datatype->reader :int32 strides)
         shape (typecast/datatype->reader :int32 shape)
+        offsets (typecast/datatype->reader :int32 offsets)
         addr (int addr)
         n-elems (.size strides)
         retval (dtype/make-container :list :int32 0)
@@ -145,11 +153,16 @@
            addr addr]
       (if (< idx n-elems)
         (let [local-stride (.read strides idx)
-              shape-idx (quot addr local-stride)]
-          (if (< shape-idx (.read shape idx))
+              shape-idx (quot addr local-stride)
+              local-shape (.read shape idx)]
+          (if (< shape-idx local-shape)
             (do
-              (.append retval-mut shape-idx)
-              (recur (unchecked-inc idx) (rem addr local-stride)))
+              (let [shape-idx (- shape-idx (.read offsets idx))
+                    shape-idx (if (< shape-idx 0)
+                                (+ shape-idx local-shape)
+                                shape-idx)]
+                (.append retval-mut (int shape-idx))
+                (recur (unchecked-inc idx) (rem addr local-stride))))
             (recur n-elems addr)))
         [(= 0 addr) retval]))))
 
@@ -182,17 +195,19 @@
   operation hasn't yet been derived.  In this case, the best you can do is a O(N)
   iteration similar to dense math."
   ^IndexingSystem$Backward
-  [{:keys [shape strides] :as dims} max-shape]
+  [{:keys [shape strides offsets] :as dims} max-shape]
   (let [dims-direct? (dims/direct? dims)
         access-increasing? (dims/access-increasing? dims)
         broadcasting? (not= shape max-shape)
         n-shape (count shape)
-        [ordered-shape ordered-strides transpose-vec]
+        offsets (or offsets (reader/make-const-reader 0 :int32 n-shape))
+        [ordered-shape ordered-strides ordered-offsets transpose-vec]
         (if access-increasing?
-          [shape strides (reader/reader-range :int32 0 n-shape)]
+          [shape strides offsets (reader/reader-range :int32 0 n-shape)]
           (let [index-ary (argsort/argsort strides {:datatype :int32 :reverse? true})]
             [(reader/make-indexed-reader index-ary shape {:datatype :object})
              (reader/make-indexed-reader index-ary strides {:datatype :int32})
+             (reader/make-indexed-reader index-ary offsets {:datatype :int32})
              ;;In order to invert an arbitrary transposition, argsort it
              (argsort/argsort index-ary {:datatype :int32})]))
         shape-obj-reader (typecast/datatype->reader :object shape)
@@ -201,6 +216,7 @@
         ordered-shape (typecast/datatype->reader :int32 (shape/shape->count-vec
                                                          ordered-shape))
         ordered-strides (typecast/datatype->reader :int32 ordered-strides)
+        ordered-offsets (typecast/datatype->reader :int32 ordered-offsets)
         global-shape (typecast/datatype->reader :int32 (if (and access-increasing?
                                                                 (= shape max-shape))
                                                          ordered-shape
@@ -213,7 +229,8 @@
       IndexingSystem$Backward
       (localToGlobal [item local-idx]
         (let [[valid? local-shape] (local-address->local-shape
-                                    ordered-shape ordered-strides local-idx)
+                                    ordered-shape ordered-offsets
+                                    ordered-strides local-idx)
               ;;move the local shape into the global space
               local-shape (typecast/datatype->reader
                            :int32

@@ -42,7 +42,7 @@
   changing.  There can also be optionally a companion vector of names which name each
   dimension.  Names are used when doing things that are dimension aware such as a 2d
   convolution.  Shape is the same as a core-matrix shape."
-  [shape & {:keys [names strides]}]
+  [shape & {:keys [strides offsets]}]
   (let [strides (extend-strides shape strides)
         sorted-shape-stride (->> (map vector shape strides)
                                  (sort-by second >))
@@ -55,10 +55,11 @@
       {:max-stride max-stride
        :elem-count elem-count
        :strides strides
+       :offsets offsets
        :shape shape})
     {:shape (vec shape)
      :strides strides
-     :names names}))
+     :offsets offsets}))
 
 
 (defn ecount
@@ -87,8 +88,13 @@
 
 
 (defn strides
-  ^long [{:keys [strides]}]
+  [{:keys [strides]}]
   strides)
+
+
+(defn offsets
+  [{:keys [offsets]}]
+  offsets)
 
 
 (defn dense?
@@ -126,9 +132,10 @@
   in order.  This is necessary for external library interfaces (blas, cudnn).  An
   example would be after any nontrivial transpose that is not made concrete (copied)
   this condition will not hold."
-  [{:keys [shape strides] :as dims}]
+  [{:keys [shape strides offsets] :as dims}]
   (and (shape/direct-shape? shape)
-       (apply >= strides)))
+       (apply >= strides)
+       (= 0 (apply + 0 offsets))))
 
 
 (defn ->most-rapidly-changing-dimension
@@ -153,7 +160,7 @@
   rev-shape: reverse shape.
   rev-strides: reverse strides.
   arg: >= 0."
-  ^long [rev-shape rev-strides rev-max-shape arg]
+  [rev-shape rev-strides rev-offsets rev-max-shape arg]
   (long (let [num-items (count rev-shape)]
           (loop [idx (long 0)
                  arg (long arg)
@@ -163,8 +170,8 @@
                     next-stride (long (rev-strides idx))
                     next-dim-entry (rev-shape idx)
                     next-dim (shape/shape-entry->count next-dim-entry)
-                    max-idx (rem arg next-max)
-                    shape-idx (rem arg next-dim)]
+                    next-offset (long (rev-offsets idx))
+                    shape-idx (rem (+ arg next-offset) next-dim)]
                 (recur (inc idx)
                        (quot arg next-max)
                        (+ offset (* next-stride

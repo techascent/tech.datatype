@@ -80,9 +80,9 @@
 
 
 (defmacro make-comparator
-  "Make typed comparator of a given type.  Available types are the base numeric signed types
-  and object (boolean is excluded).  Arguments to the comparator are exported into the local scope
-  by the name of 'lhs' and 'rhs'.
+  "Make typed comparator of a given type.  Available types are the base numeric signed
+  types and object (boolean is excluded).  Arguments to the comparator are exported into
+  the local scope by the name of 'lhs' and 'rhs'.
 
   (make-comparator :int32 (Integer/compareTo lhs rhs))"
   [datatype comp-body]

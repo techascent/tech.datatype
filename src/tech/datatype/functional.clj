@@ -84,3 +84,9 @@
       (boolean-op/unary-argfilter (impl/default-options {})
                                   bool-op
                                   filter-seq))))
+
+
+(refer 'tech.datatype.functional.impl :only '[argmin argmin-last
+                                              argmax argmax-last
+                                              argcompare
+                                              argcompare-last])

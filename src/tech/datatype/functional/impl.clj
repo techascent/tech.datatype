@@ -18,6 +18,7 @@
              :as boolean-op]
             [tech.datatype.iterator :as iterator]
             [tech.datatype.argtypes :as argtypes]
+            [tech.datatype.typecast :as typecast]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.reader :as reader]
             [tech.datatype.protocols :as dtype-proto]
@@ -25,7 +26,8 @@
             [tech.datatype.array]
             [tech.datatype.list]
             [tech.datatype.primitive]
-            [tech.datatype.sparse.reader :as sparse-reader]))
+            [tech.datatype.sparse.reader :as sparse-reader]
+            [tech.datatype.comparator :as comparator]))
 
 (def ^:dynamic *datatype* nil)
 (def ^:dynamic *unchecked?* nil)
@@ -371,3 +373,136 @@
      ~@(->> all-builtins
             (map (fn [[op-name op-seq]]
                    `(def-builtin-operator ~op-name ~op-seq))))))
+
+
+(defmacro impl-arg-op
+  [datatype op]
+  `(fn [values#]
+     (let [value-reader# (typecast/datatype->reader ~datatype values#)
+           n-elems# (.size value-reader#)]
+       (reduce-op/iterable-reduce
+        {:datatype ~datatype}
+        (binary/make-binary-op :int32 (if (~op
+                                           (.read value-reader# ~'x)
+                                           (.read value-reader# ~'y))
+                                        ~'x
+                                        ~'y))
+        (reader/reader-range :int32 0 n-elems#)))))
+
+
+(defmacro make-no-boolean-macro-table
+  [sub-macro]
+  `(->> [~@(for [dtype (concat casting/host-numeric-types
+                               [:object])]
+             [dtype `(~sub-macro ~dtype)])]
+        (into {})))
+
+(defmacro make-maxarg
+  [datatype]
+  `(impl-arg-op ~datatype >=))
+
+(def maxarg-table (make-no-boolean-macro-table make-maxarg))
+
+(defn argmax
+  "Return index of first maximal value"
+  [{:keys [datatype]} values]
+  (let [datatype (or datatype (dtype-base/get-datatype values))
+        maxarg-fn (get maxarg-table (casting/safe-flatten datatype))]
+    (maxarg-fn values)))
+
+(defmacro make-minarg
+  [datatype]
+  `(impl-arg-op ~datatype <=))
+
+(def minarg-table (make-no-boolean-macro-table make-minarg))
+
+(defn argmin
+  "Return index of first minimal value"
+  [{:keys [datatype]} values]
+  (let [datatype (or datatype (dtype-base/get-datatype values))
+        minarg-fn (get minarg-table (casting/safe-flatten datatype))]
+    (minarg-fn values)))
+
+(defmacro make-last-maxarg
+  [datatype]
+  `(impl-arg-op ~datatype >))
+
+(def last-maxarg-table (make-no-boolean-macro-table make-last-maxarg))
+
+(defn argmax-last
+  "Return index of last maximal value"
+  [{:keys [datatype]} values]
+  (let [datatype (or datatype (dtype-base/get-datatype values))
+        maxarg-fn (get last-maxarg-table (casting/safe-flatten datatype))]
+    (maxarg-fn values)))
+
+(defmacro make-last-minarg
+  [datatype]
+  `(impl-arg-op ~datatype <))
+
+(def last-minarg-table (make-no-boolean-macro-table make-last-minarg))
+
+(defn argmin-last
+  "Return index of first minimal value"
+  [{:keys [datatype]} values]
+  (let [datatype (or datatype (dtype-base/get-datatype values))
+        minarg-fn (get last-minarg-table (casting/safe-flatten datatype))]
+    (minarg-fn values)))
+
+
+(defmacro impl-compare-arg-op
+  [datatype]
+  `(fn [values# comparator#]
+     (let [value-reader# (typecast/datatype->reader ~datatype values#)
+           n-elems# (.size value-reader#)
+           comparator# (comparator/datatype->comparator ~datatype comparator#)]
+       (reduce-op/iterable-reduce
+        {:datatype ~datatype}
+        (binary/make-binary-op
+         :int32 (if (<= (.compare
+                         comparator#
+                         (.read value-reader# ~'x)
+                         (.read value-reader# ~'y))
+                        0)
+                  ~'x
+                  ~'y))
+        (reader/reader-range :int32 0 n-elems#)))))
+
+(def compare-arg-ops (make-no-boolean-macro-table impl-compare-arg-op))
+
+(defn argcompare
+  "Given a reader of values and a comparator, return the first item where
+  the comparator's value is less than zero."
+  [{:keys [datatype]} values comp-item]
+  (let [datatype (or datatype (dtype-base/get-datatype values))
+        compare-fn (get compare-arg-ops (casting/safe-flatten datatype))]
+    (compare-fn values comp-item)))
+
+
+(defmacro impl-compare-last-arg-op
+  [datatype]
+  `(fn [values# comparator#]
+     (let [value-reader# (typecast/datatype->reader ~datatype values#)
+           n-elems# (.size value-reader#)
+           comparator# (comparator/datatype->comparator ~datatype comparator#)]
+       (reduce-op/iterable-reduce
+        {:datatype ~datatype}
+        (binary/make-binary-op
+         :int32 (if (>= (.compare
+                         comparator#
+                         (.read value-reader# ~'x)
+                         (.read value-reader# ~'y))
+                        0)
+                  ~'y
+                  ~'x))
+        (reader/reader-range :int32 0 n-elems#)))))
+
+(def compare-last-arg-ops (make-no-boolean-macro-table impl-compare-last-arg-op))
+
+(defn argcompare-last
+  "Given a reader of values and a comparator, return the last item where
+  the comparator's value is less than zero."
+  [{:keys [datatype]} values comp-item]
+  (let [datatype (or datatype (dtype-base/get-datatype values))
+        compare-fn (get compare-last-arg-ops (casting/safe-flatten datatype))]
+    (compare-fn values comp-item)))

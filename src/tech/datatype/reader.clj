@@ -191,34 +191,36 @@
 
 (defn- make-object-wrapper
   [reader datatype]
-  (let [item-dtype (dtype-proto/get-datatype reader)]
+  (let [item-dtype (dtype-proto/safe-get-datatype reader)]
     (when-not (and (= :object (casting/flatten-datatype item-dtype))
                    (= :object (casting/flatten-datatype datatype)))
-      (throw (ex-info "Incorrect use of object wrapper" {}))))
-  (if (= datatype (dtype-proto/get-datatype reader))
-    reader
-    (let [obj-reader (typecast/datatype->reader :object reader)]
-      (reify
-        ObjectReader
-        (getDatatype [_] datatype)
-        (size [_] (.size obj-reader))
-        (read [_ idx] (.read obj-reader idx))
-        (iterator [_] (.iterator obj-reader))
-        (invoke [item idx] (.read item idx))
-        dtype-proto/PToNioBuffer
-        (->buffer-backing-store [reader]
-          (dtype-proto/->buffer-backing-store obj-reader))
-       dtype-proto/PToList
-       (->list-backing-store [reader]
-         (dtype-proto/->list-backing-store obj-reader))
-       dtype-proto/PBuffer
-       (sub-buffer [reader offset length]
-         (-> (dtype-proto/sub-buffer obj-reader offset length)
-             (dtype-proto/->reader-of-type datatype true)))
-       (alias? [reader rhs]
-         (dtype-proto/alias? obj-reader rhs))
-       (partially-alias? [reader rhs]
-         (dtype-proto/partially-alias? obj-reader rhs))))))
+      (throw (ex-info "Incorrect use of object wrapper" {})))
+    (if (= datatype item-dtype)
+      reader
+      (let [obj-reader (typecast/datatype->reader :object reader)]
+        (reify
+          ObjectReader
+          (getDatatype [_] (if-not (keyword? datatype)
+                             :object
+                             datatype))
+          (size [_] (.size obj-reader))
+          (read [_ idx] (.read obj-reader idx))
+          (iterator [_] (.iterator obj-reader))
+          (invoke [item idx] (.read item idx))
+          dtype-proto/PToNioBuffer
+          (->buffer-backing-store [reader]
+            (dtype-proto/->buffer-backing-store obj-reader))
+          dtype-proto/PToList
+          (->list-backing-store [reader]
+            (dtype-proto/->list-backing-store obj-reader))
+          dtype-proto/PBuffer
+          (sub-buffer [reader offset length]
+            (-> (dtype-proto/sub-buffer obj-reader offset length)
+                (dtype-proto/->reader-of-type datatype true)))
+          (alias? [reader rhs]
+            (dtype-proto/alias? obj-reader rhs))
+          (partially-alias? [reader rhs]
+            (dtype-proto/partially-alias? obj-reader rhs)))))))
 
 
 
@@ -299,7 +301,7 @@
 
 (defn make-marshalling-reader
   [src-reader dest-dtype unchecked?]
-  (let [src-dtype (dtype-proto/get-datatype src-reader)]
+  (let [src-dtype (dtype-proto/safe-get-datatype src-reader)]
     (if (= src-dtype dest-dtype)
       src-reader
       (let [src-reader (if (= (casting/flatten-datatype src-dtype)

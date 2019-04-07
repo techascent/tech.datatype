@@ -409,6 +409,11 @@
     (iterator/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
 
 
+(defn argfind
+  [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
+  (first (unary-argfilter options bool-unary-filter-op filter-seq)))
+
+
 (defmacro make-boolean-binary-iterable
   [datatype]
   (let [op-dtype (casting/safe-flatten datatype)]

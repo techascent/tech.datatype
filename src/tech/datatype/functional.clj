@@ -25,12 +25,35 @@
 (def all-builtins (impl/define-all-builtins))
 
 
-(refer 'tech.datatype.boolean-op :only '[make-boolean-binary-op
-                                         make-boolean-unary-op])
+(impl/export-symbols tech.datatype.unary-op
+                     make-unary-op
+                     make-numeric-unary-op
+                     make-float-double-unary-op
+                     make-all-datatype-unary-op
+                     unary-iterable-map
+                     unary-reader-map)
 
-(refer 'tech.datatype.unary-op :only '[make-unary-op])
 
-(refer 'tech.datatype.binary-op :only '[make-binary-op])
+(impl/export-symbols tech.datatype.binary-op
+                     binary-iterable-map
+                     binary-reader-map
+                     make-binary-op
+                     make-numeric-binary-op
+                     make-long-binary-op
+                     make-double-binary-op)
+
+
+(impl/export-symbols tech.datatype.functional.impl
+                     argmin argmin-last
+                     argmax argmax-last
+                     argcompare
+                     argcompare-last
+                     apply-reduce-op
+                     apply-unary-op
+                     apply-binary-op
+                     apply-unary-boolean-op
+                     apply-binary-boolean-op)
+
 
 
 (defn argsort
@@ -84,9 +107,3 @@
       (boolean-op/unary-argfilter (impl/default-options {})
                                   bool-op
                                   filter-seq))))
-
-
-(refer 'tech.datatype.functional.impl :only '[argmin argmin-last
-                                              argmax argmax-last
-                                              argcompare
-                                              argcompare-last])

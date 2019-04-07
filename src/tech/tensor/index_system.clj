@@ -10,6 +10,7 @@
             [tech.datatype.unary-op :as unary-op]
             [tech.datatype.binary-op :as binary-op]
             [tech.datatype.reduce-op :as reduce-op]
+            [tech.datatype.boolean-op :as boolean-op]
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.binary-search :as dtype-search])
   (:import [tech.datatype
@@ -77,9 +78,9 @@
                 rev-strides (int-array reverse-strides)
                 num-items (alength rev-max-shape)]
             (reify IndexingSystem$Forward
-              (globalToLocal [item idx]
+              (globalToLocal [item arg]
                 (loop [idx (long 0)
-                       arg (long idx)
+                       arg (long arg)
                        offset (long 0)]
                   (if (and (> arg 0)
                            (< idx num-items))
@@ -95,8 +96,8 @@
           ;;Totally general case to encapsulate all the variations including indexed
           ;;dimensions.
           (let [reverse-shape (mapv (fn [item]
-                                      (cond-> item
-                                        (dtype/reader? item)
+                                      (if (number? item)
+                                        (long item)
                                         (dtype/->reader-of-type item :int32)))
                                     reverse-shape)
                 reverse-stride (typecast/datatype->reader :int32
@@ -107,24 +108,6 @@
               (globalToLocal [item idx]
                 (dims/elem-idx->addr reverse-shape reverse-strides
                                      reverse-max-shape idx)))))))))
-
-
-(defn filter-index
-  "Filter out local indexes that cannot be supported."
-  [shape strides item-addr]
-  (let [shape (typecast/datatype->reader :int32 shape)
-        strides (typecast/datatype->reader :int32 strides)
-        n-elems (.size shape)]
-    (loop [elem-idx (int 0)
-           item-addr (int item-addr)]
-      (if (< elem-idx n-elems)
-        (let [local-stride (.read strides elem-idx)
-              rel-shape (quot item-addr local-stride)]
-          (if (< rel-shape (.read shape elem-idx))
-            (recur (unchecked-inc elem-idx)
-                   (rem item-addr local-stride))
-            false))
-        (= item-addr 0)))))
 
 
 (defn- naive-shape->strides
@@ -151,8 +134,9 @@
 (defn local-address->local-shape
   "Shape and strides are not transposed.  Returns
   [valid? local-shape-as-list]"
-  [strides addr]
+  [shape strides addr]
   (let [strides (typecast/datatype->reader :int32 strides)
+        shape (typecast/datatype->reader :int32 shape)
         addr (int addr)
         n-elems (.size strides)
         retval (dtype/make-container :list :int32 0)
@@ -161,10 +145,12 @@
            addr addr]
       (if (< idx n-elems)
         (let [local-stride (.read strides idx)
-              shape-idx (quot addr local-stride)
-              addr (rem addr local-stride)]
-          (.append retval-mut shape-idx)
-          (recur (unchecked-inc idx) addr))
+              shape-idx (quot addr local-stride)]
+          (if (< shape-idx (.read shape idx))
+            (do
+              (.append retval-mut shape-idx)
+              (recur (unchecked-inc idx) (rem addr local-stride)))
+            (recur n-elems addr)))
         [(= 0 addr) retval]))))
 
 
@@ -207,11 +193,13 @@
           (let [index-ary (argsort/argsort strides {:datatype :int32 :reverse? true})]
             [(reader/make-indexed-reader index-ary shape {:datatype :object})
              (reader/make-indexed-reader index-ary strides {:datatype :int32})
-             index-ary]))
+             ;;In order to invert an arbitrary transposition, argsort it
+             (argsort/argsort index-ary {:datatype :int32})]))
         shape-obj-reader (typecast/datatype->reader :object shape)
-        shape-int-reader (typecast/datatype->reader :int32 (shape/shape->count-vec
-                                                            shape))
-        ordered-shape (typecast/datatype->reader :int32 ordered-shape)
+        safe-shape (shape/shape->count-vec shape)
+        shape-int-reader (typecast/datatype->reader :int32 safe-shape)
+        ordered-shape (typecast/datatype->reader :int32 (shape/shape->count-vec
+                                                         ordered-shape))
         ordered-strides (typecast/datatype->reader :int32 ordered-strides)
         global-shape (typecast/datatype->reader :int32 (if (and access-increasing?
                                                                 (= shape max-shape))
@@ -219,12 +207,13 @@
                                                          (int-array max-shape)))
         global-strides (typecast/datatype->reader :int32  (naive-shape->strides
                                                            global-shape))
-        shape-mults (typecast/datatype->reader :int32 (mapv quot max-shape shape))
+        shape-mults (typecast/datatype->reader :int32 (mapv quot max-shape safe-shape))
         n-global-shape (.size global-shape)]
     (reify
       IndexingSystem$Backward
       (localToGlobal [item local-idx]
-        (let [[valid? local-shape] (local-address->local-shape ordered-strides local-idx)
+        (let [[valid? local-shape] (local-address->local-shape
+                                    ordered-shape ordered-strides local-idx)
               ;;move the local shape into the global space
               local-shape (typecast/datatype->reader
                            :int32
@@ -243,11 +232,13 @@
                                     (shape/classified-sequence->global-addr
                                      shape-entry local-idx)
                                     :else
-                                    (let [[found? addr] (dtype-search/binary-search
-                                                         shape-entry local-idx
-                                                         {:datatype :int32})]
-                                      (when found?
-                                        addr))))
+                                    (when-let [addr (boolean-op/argfind
+                                                     {:datatype :int32}
+                                                     (boolean-op/make-boolean-unary-op
+                                                      :int32
+                                                      (= arg local-idx))
+                                                     shape-entry)]
+                                      addr)))
                                 local-shape shape-obj-reader)
                            (remove nil?)
                            vec)]
@@ -262,26 +253,29 @@
                                          local-shape global-strides))]
               (if-not broadcasting?
                 [global-base-addr]
+                ;;Expansion out into global space
                 (let [retval (dtype/make-container :list :int32 [global-base-addr])]
                   (loop [idx (int 0)]
                     (when (< idx n-global-shape)
                       (let [local-idx (- n-global-shape idx 1)
                             num-repeat (- (.read shape-mults local-idx) 1)
                             multiplier (* (.read global-strides local-idx)
-                                          (.read shape-int-reader local-idx))]
+                                          (.read shape-int-reader local-idx))
+                            ;;This is not something that would work in c++.  The unary
+                            ;;operation will make a reader out of retval which gets the
+                            ;;underyling nio buffer of fixed size.  Then the list will
+                            ;;perform insertions at the end evaulating the unary map
+                            ;;exactly once
+                            initial-reader (typecast/datatype->reader :int32 retval true)]
                         (loop [repeat-idx 0]
                           (when (< repeat-idx num-repeat)
                             (let [local-mult (* multiplier (+ repeat-idx 1))]
-                              ;;This is not something that would work in c++.  The unary
-                              ;;operation will make a reader out of retval which gets
-                              ;;the underyling nio buffer of fixed size.  Then the
-                              ;;list will perform insertions at the end evaulating the
-                              ;;unary map exactly once
                               (dtype/insert-block! retval (dtype/ecount retval)
                                                    (unary-op/default-unary-reader-map
                                                     {:datatype :int32 :unchecked? true}
                                                     (unary-op/make-unary-op
                                                      :int32 (+ arg local-mult))
-                                                    retval))))))
+                                                    initial-reader)))
+                            (recur (unchecked-inc repeat-idx)))))
                       (recur (unchecked-inc idx))))
                   retval)))))))))

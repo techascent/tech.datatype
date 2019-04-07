@@ -168,7 +168,7 @@
 
 
 (defn dense-integer-dot-product
-  "hardcode dot product to be for dense things."
+  "hardcode dot product for dense integers."
   [lhs rhs]
   (->> (binary-op/default-binary-reader-map
         {:datatype :int32} integer-binary-*
@@ -265,8 +265,9 @@
                             ;;operation will make a reader out of retval which gets the
                             ;;underyling nio buffer of fixed size.  Then the list will
                             ;;perform insertions at the end evaulating the unary map
-                            ;;exactly once
-                            initial-reader (typecast/datatype->reader :int32 retval true)]
+                            ;;exactly over this initial reader.
+                            initial-reader (typecast/datatype->reader
+                                            :int32 retval true)]
                         (loop [repeat-idx 0]
                           (when (< repeat-idx num-repeat)
                             (let [local-mult (* multiplier (+ repeat-idx 1))]

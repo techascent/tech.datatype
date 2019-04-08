@@ -43,6 +43,8 @@
        ~ary-cls
      dtype-proto/PDatatype
      {:get-datatype (fn [arg#] ~datatype)}
+     dtype-proto/PToBackingStore
+     {:->backing-store-seq (fn [arg#] [(dtype-proto/->sub-array arg#)])}
      dtype-proto/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
                          (base/raw-dtype-copy! raw-data# ary-target#
@@ -67,16 +69,7 @@
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]
                     (dtype-proto/sub-buffer (dtype-proto/->buffer-backing-store buffer#)
-                                            offset# length#))
-
-      :alias? (fn [lhs-buffer# rhs-buffer#]
-                (dtype-proto/alias? (dtype-proto/->buffer-backing-store lhs-buffer#)
-                                    rhs-buffer#))
-
-      :partially-alias? (fn [lhs-buffer# rhs-buffer#]
-                          (dtype-proto/partially-alias?
-                           (dtype-proto/->buffer-backing-store lhs-buffer#)
-                           rhs-buffer#))}
+                                            offset# length#))}
      dtype-proto/PToList
      {:->list-backing-store (fn [item#]
                               (typecast/wrap-array-with-list item#))}
@@ -112,6 +105,9 @@
   dtype-proto/PDatatype
   (get-datatype [_] :boolean)
 
+  dtype-proto/PToBackingStore
+  (->backing-store-seq [arg] [(dtype-proto/->sub-array arg)])
+
   dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target offset options]
     (base/raw-dtype-copy! raw-data ary-target offset options))
@@ -123,10 +119,6 @@
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
     (dtype-proto/sub-buffer (dtype-proto/->list-backing-store buffer) offset length))
-  (alias? [lhs-buffer rhs-buffer]
-    (identical? lhs-buffer (dtype-proto/->array rhs-buffer)))
-  (partially-alias? [lhs-buffer rhs-buffer]
-    (dtype-proto/alias? lhs-buffer rhs-buffer))
 
   dtype-proto/PToArray
   (->sub-array [item]
@@ -261,16 +253,15 @@
                        (get @*object-array-datatype-override* ary-data-cls
                             ary-data-cls)))}
 
+    dtype-proto/PToBackingStore
+    {:->backing-store-seq (fn [item] [(dtype-proto/->sub-array item)])}
+
     dtype-proto/PBuffer
     {:sub-buffer
      (fn [buffer offset length]
        (-> (dtype-proto/sub-buffer (dtype-proto/->list-backing-store buffer)
                                    offset length)
-           (typed-buffer/set-datatype (dtype-proto/get-datatype buffer))))
-     :alias? (fn [lhs-buffer rhs-buffer]
-               (identical? lhs-buffer (dtype-proto/->array rhs-buffer)))
-     :partially-alias? (fn [lhs-buffer rhs-buffer]
-                         (dtype-proto/alias? lhs-buffer rhs-buffer))}
+           (typed-buffer/set-datatype (dtype-proto/get-datatype buffer))))}
 
     dtype-proto/PToList
     {:->list-backing-store (fn [item#]

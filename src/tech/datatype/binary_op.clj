@@ -259,7 +259,12 @@
                              (make-binary-op-iterator
                               ~dtype lhs-reader# rhs-reader# bin-op# unchecked?#) )
                            (invoke [item# idx#]
-                             (.read item# (int idx#)))))))]))]
+                             (.read item# (int idx#)))
+                           dtype-proto/PToBackingStore
+                           (->backing-store-seq  [item#]
+                             (concat (dtype-proto/->backing-store-seq lhs-reader#)
+                                     (dtype-proto/->backing-store-seq rhs-reader#))))
+                         )))]))]
         (into {})))
 
 

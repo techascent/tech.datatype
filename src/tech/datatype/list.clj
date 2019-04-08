@@ -159,28 +159,34 @@
        ~typename
      dtype-proto/PCopyRawData
      {:copy-raw->item! (fn [raw-data# ary-target# target-offset# options#]
-                         (dtype-proto/copy-raw->item! (dtype-proto/->buffer-backing-store raw-data#)
-                                                      ary-target# target-offset# options#))}
+                         (dtype-proto/copy-raw->item!
+                          (dtype-proto/->buffer-backing-store raw-data#)
+                          ary-target# target-offset# options#))}
+
+
+     dtype-proto/PToBackingStore
+     {:->backing-store-seq (fn [item#]
+                             (-> (dtype-proto/->buffer-backing-store item#)
+                                 (dtype-proto/->backing-store-seq)))}
+
 
      dtype-proto/PToNioBuffer
      {:->buffer-backing-store (fn [item#]
-                                (let [item# (datatype->array-list-cast-fn ~datatype item#)]
-                                  (datatype->buffer-creation-length ~datatype (.elements item#) (.size item#))))}
+                                (let [item# (datatype->array-list-cast-fn
+                                             ~datatype item#)]
+                                  (datatype->buffer-creation-length
+                                   ~datatype (.elements item#) (.size item#))))}
+
 
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]
                     (dtype-proto/sub-buffer (dtype-proto/->buffer-backing-store buffer#)
-                                            offset# length#))
-      :alias? (fn [lhs-dev-buffer# rhs-dev-buffer#]
-                (dtype-proto/alias? (dtype-proto/->buffer-backing-store lhs-dev-buffer#)
-                                    (dtype-proto/->buffer-backing-store rhs-dev-buffer#)))
-      :partially-alias? (fn [lhs-dev-buffer# rhs-dev-buffer#]
-                          (dtype-proto/partially-alias? (dtype-proto/->buffer-backing-store lhs-dev-buffer#)
-                                                        (dtype-proto/->buffer-backing-store rhs-dev-buffer#)))}
+                                            offset# length#))}
 
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
-                     (dtype-proto/->sub-array (dtype-proto/->buffer-backing-store item#)))
+                     (dtype-proto/->sub-array
+                      (dtype-proto/->buffer-backing-store item#)))
       :->array-copy (fn [item#]
                       (.toArray (datatype->array-list-cast-fn ~datatype item#)))}
      dtype-proto/PToWriter
@@ -246,12 +252,7 @@
                     (let [list-data# (datatype->list-cast-fn ~datatype buffer#)
                           offset# (int offset#)
                           length# (int length#)]
-                      (.subList list-data# offset# (+ offset# length#))))
-      :alias? (fn [lhs-buffer# rhs-buffer#]
-                (identical? (dtype-proto/->list-backing-store lhs-buffer#)
-                            (dtype-proto/->list-backing-store rhs-buffer#)))
-      :partially-alias? (fn [lhs-buffer# rhs-buffer#]
-                          (dtype-proto/alias? lhs-buffer# rhs-buffer#))}
+                      (.subList list-data# offset# (+ offset# length#))))}
 
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
@@ -298,7 +299,8 @@
                    (= ~datatype (casting/flatten-datatype
                                  (dtype-proto/get-datatype (:array-data ary-data#)))))
             (.addElements list-item# idx#
-                          (typecast/datatype->array-cast-fn ~datatype (:array-data ary-data#))
+                          (typecast/datatype->array-cast-fn
+                           ~datatype (:array-data ary-data#))
                           (int (:offset ary-data#))
                           (int (:length ary-data#)))
             ;;next, try list.
@@ -309,10 +311,12 @@
                                      (dtype-proto/get-datatype list-values#))))
                 (.addAll list-item# idx# (datatype->list-cast-fn ~datatype list-values#))
                 ;;fallback to element by element
-                (let [item-reader# (typecast/datatype->reader ~datatype values# (:unchecked? options#))
+                (let [item-reader# (typecast/datatype->reader
+                                    ~datatype values# (:unchecked? options#))
                       n-values# (.size item-reader#)]
                   (c-for [iter-idx# (int 0) (< iter-idx# n-values#) (inc iter-idx#)]
-                         (.add list-item# (+ idx# iter-idx#) (.read item-reader# iter-idx#)))))))))}))
+                         (.add list-item# (+ idx# iter-idx#)
+                               (.read item-reader# iter-idx#)))))))))}))
 
 
 (extend-list ByteList :int8)

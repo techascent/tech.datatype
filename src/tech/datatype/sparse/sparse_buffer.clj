@@ -194,18 +194,6 @@
                       sparse-value
                       indexes
                       data)))
-  (alias? [lhs-buffer rhs-buffer]
-    (when (instance? SparseBuffer rhs-buffer)
-      (and (dtype-proto/alias? indexes (:indexes rhs-buffer))
-           (dtype-proto/alias? data (:data rhs-buffer))
-           (= b-offset (long (:b-offset rhs-buffer)))
-           (= b-stride (long (:b-stride rhs-buffer)))
-           (= b-elem-count (long (:b-elem-count rhs-buffer))))))
-
-  (partially-alias? [lhs-buffer rhs-buffer]
-    (when (instance? SparseBuffer rhs-buffer)
-      (or (dtype-proto/partially-alias? indexes (:indexes rhs-buffer))
-          (dtype-proto/partially-alias? data (:data rhs-buffer)))))
 
   dtype-proto/PCopyRawData
   (copy-raw->item! [item dest dest-offset options]

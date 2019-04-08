@@ -17,7 +17,7 @@
   [item]
   (if (satisfies? PDatatype item)
     (get-datatype item)
-    (type item)))
+    :object))
 
 
 (extend-type Countable

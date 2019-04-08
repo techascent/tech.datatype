@@ -21,6 +21,14 @@
 (set! *unchecked-math* :warn-on-boxed)
 (set! *warn-on-reflection* true)
 
+(defmacro ^:private impl-int-reader
+  [n-elems opcode]
+  `(reify IndexingSystem$Forward
+     (getDatatype [item#] :int32)
+     (size [item#] ~n-elems)
+     (read [item# ~'idx] ~opcode)
+     (invoke [item# idx#] (.read item# (int idx#)))))
+
 
 (defn get-elem-dims-global->local
   ^IndexingSystem$Forward [dims max-shape]
@@ -31,7 +39,8 @@
         direct? (dims/direct? dims)
         min-shape (drop-while #(= 1 %) (dims/shape dims))
         local-ec (dims/ecount dims)
-        max-ec (dtype-base/shape->ecount max-shape)]
+        max-ec (dtype-base/shape->ecount max-shape)
+        n-elems (shape/ecount max-shape)]
     (cond
       ;;Special case for indexes that increase monotonically
       (and direct?
@@ -39,8 +48,7 @@
               max-shape)
            dense?
            increasing?)
-      (reify IndexingSystem$Forward
-        (globalToLocal [item idx] idx))
+      (impl-int-reader n-elems idx)
       ;;Special case for broadcasting a vector across an image (like applying bias).
       (and direct?
            (= (dims/ecount dims)
@@ -53,10 +61,8 @@
                          (filter #(= local-ec (second %)))
                          (ffirst)))
             broadcast-amt (long (apply * 1 (drop (+ 1 ec-idx) max-shape)))]
-        (reify IndexingSystem$Forward
-          (globalToLocal [item idx]
-            (rem (quot idx broadcast-amt)
-                 local-ec))))
+        (impl-int-reader n-elems (rem (quot idx broadcast-amt)
+                                      local-ec)))
 
       ;;Special case where the entire shape is being broadcast from an
       ;;outer dimension. [2 2] broadcast into [4 2 2].
@@ -65,9 +71,7 @@
            increasing?
            (= min-shape
               (take-last (count min-shape) max-shape)))
-      (reify IndexingSystem$Forward
-        (globalToLocal [item arg]
-          (rem arg local-ec)))
+      (impl-int-reader n-elems (rem idx local-ec))
       :else
       (let [{:keys [reverse-shape reverse-strides]}
             (dims/->reverse-data dims max-shape)
@@ -82,21 +86,22 @@
                 rev-strides (int-array reverse-strides)
                 rev-offsets (int-array reverse-offsets)
                 num-items (alength rev-max-shape)]
-            (reify IndexingSystem$Forward
-              (globalToLocal [item arg]
-                (loop [idx (long 0)
-                       arg (long arg)
-                       offset (long 0)]
-                  (if (< idx num-items)
-                    (let [next-max (aget rev-max-shape idx)
-                          next-stride (aget rev-strides idx)
-                          next-dim (aget rev-shape idx)
-                          next-off (aget rev-offsets idx)
-                          shape-idx (rem (+ arg next-off) next-dim)]
-                      (recur (inc idx)
-                             (quot arg next-max)
-                             (+ offset (* next-stride shape-idx))))
-                    offset)))))
+            (impl-int-reader
+             n-elems
+             (let [arg idx]
+               (loop [idx (long 0)
+                      arg (long arg)
+                      offset (long 0)]
+                 (if (< idx num-items)
+                   (let [next-max (aget rev-max-shape idx)
+                         next-stride (aget rev-strides idx)
+                         next-dim (aget rev-shape idx)
+                         next-off (aget rev-offsets idx)
+                         shape-idx (rem (+ arg next-off) next-dim)]
+                     (recur (inc idx)
+                            (quot arg next-max)
+                            (+ offset (* next-stride shape-idx))))
+                   offset)))))
           ;;Totally general case to encapsulate all the variations including indexed
           ;;dimensions.
           (let [reverse-shape (mapv (fn [item]
@@ -108,13 +113,13 @@
                                                           (int-array reverse-strides))
                 reverse-max-shape (typecast/datatype->reader :int32
                                                              (int-array rev-max-shape))]
-            (reify IndexingSystem$Forward
-              (globalToLocal [item idx]
-                (dims/elem-idx->addr reverse-shape
-                                     reverse-strides
-                                     reverse-offsets
-                                     reverse-max-shape
-                                     idx)))))))))
+            (impl-int-reader
+             n-elems
+             (dims/elem-idx->addr reverse-shape
+                                  reverse-strides
+                                  reverse-offsets
+                                  reverse-max-shape
+                                  idx))))))))
 
 
 (defn- naive-shape->strides

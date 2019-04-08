@@ -27,7 +27,7 @@
                     :offsets offsets
                     :strides strides} max-shape)
          forward-elems (->> (range n-elems)
-                            (mapv #(vector % (.globalToLocal forward (int %)))))
+                            (mapv #(vector % (.read forward (int %)))))
 
          backward-elems (->> (range n-src-buffer-elems)
                              (mapcat (fn [local-addr]

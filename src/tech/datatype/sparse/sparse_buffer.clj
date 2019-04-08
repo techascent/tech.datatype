@@ -14,6 +14,10 @@
             [clojure.core.matrix.protocols :as mp]))
 
 
+(set! *unchecked-math* :warn-on-boxed)
+(set! *warn-on-reflection* true)
+
+
 (declare make-sparse-buffer)
 
 
@@ -272,10 +276,10 @@
 
   dtype-proto/PSetConstant
   (set-constant! [item offset value length]
-    (when-not (<= (+ offset length)
+    (when-not (<= (+ (int offset) (int length))
                   (dtype-base/ecount item))
       (throw (ex-info (format "Request count (%s) out of range (%s)")
-                      (+ offset length)
+                      (+ (int offset) (int length))
                       (dtype-base/ecount item))))
     (let [item-dtype (dtype-base/get-datatype item)
           value (casting/cast value item-dtype)
@@ -327,7 +331,7 @@
       (throw (ex-info (format "New stride %s is not commensurate with elem-count %s"
                               new-stride b-elem-count)
                       {})))
-    (->SparseBuffer b-offset (* b-stride new-stride)
+    (->SparseBuffer b-offset (* b-stride (int new-stride))
                     b-elem-count
                     sparse-value
                     indexes

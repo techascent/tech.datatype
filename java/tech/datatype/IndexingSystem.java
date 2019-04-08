@@ -3,9 +3,9 @@ package tech.datatype;
 
 public class IndexingSystem
 {
-  public interface Forward
+  //Forward is an IntReader.
+  public interface Forward extends IntReader
   {
-    int globalToLocal(int global_idx);
   }
   public interface Backward
   {

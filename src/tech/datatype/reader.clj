@@ -206,12 +206,6 @@
         dtype-proto/PToBackingStore
         (->backing-store-seq [reader#]
           (dtype-proto/->backing-store-seq src-reader#))
-        dtype-proto/PToNioBuffer
-        (->buffer-backing-store [reader#]
-          (dtype-proto/->buffer-backing-store src-reader#))
-        dtype-proto/PToList
-        (->list-backing-store [reader#]
-          (dtype-proto/->list-backing-store src-reader#))
         dtype-proto/PBuffer
         (sub-buffer [reader# offset# length#]
           (-> (dtype-proto/sub-buffer src-reader# offset# length#)

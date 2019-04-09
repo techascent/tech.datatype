@@ -94,6 +94,10 @@
          (invoke [reader# idx#]
            (.read reader# (int idx#)))
          (iterator [reader#] (typecast/reader->iterator reader#))
+         dtype-proto/PToBackingStore
+         (->backing-store-seq [item#]
+           (concat (dtype-proto/->backing-store-seq index-reader#)
+                   (dtype-proto/->backing-store-seq data-reader#)))
          sparse-proto/PSparse
          (index-seq [reader#]
            (get-index-seq 1 index-reader#))
@@ -145,10 +149,7 @@
                  new-data-reader# (dtype-proto/sub-buffer
                                    data-reader# start-elem# sub-len#)]
              (make-sparse-reader new-idx-reader# new-data-reader# length#
-                                 :sparse-value zero-val#)))
-         ;;These two queries are irrelevant with readers
-         (alias? [lhs# rhs#] false)
-         (partially-alias? [lhs# rhs#] false)))))
+                                 :sparse-value zero-val#)))))))
 
 
 (defmacro make-indexed-reader-table

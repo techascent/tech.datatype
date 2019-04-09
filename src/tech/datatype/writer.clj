@@ -73,10 +73,6 @@
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
              (dtype-proto/->writer-of-type ~intermediate-datatype ~unchecked?)))
-       (alias? [buffer# rhs#]
-         (dtype-proto/alias? ~buffer rhs#))
-       (partially-alias? [lhs# rhs#]
-         (dtype-proto/partially-alias? ~buffer rhs#))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
          (dtype-proto/set-constant! ~buffer offset#
@@ -104,11 +100,7 @@
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
-       (alias? [buffer# rhs#]
-         (dtype-proto/alias? ~buffer rhs#))
-       (partially-alias? [lhs# rhs#]
-         (dtype-proto/partially-alias? ~buffer rhs#))
+             (dtype-proto/->writer-of-type ~intermediate-datatype ~unchecked?)))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
          (dtype-proto/set-constant! ~buffer offset#
@@ -153,7 +145,9 @@
              (let [buffer-datatype (casting/datatype->host-datatype dtype)]
                [[buffer-datatype dtype]
                 `(fn [buffer# unchecked?#]
-                   (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype buffer#)]
+                   (let [buffer# (typecast/datatype->list-cast-fn
+                                  ~buffer-datatype
+                                                                  buffer#)]
                      (make-buffer-writer-impl
                       ~(typecast/datatype->writer-type dtype)
                       ~(typecast/datatype->list-type buffer-datatype)
@@ -176,8 +170,40 @@
     (no-translate-writer nio-list unchecked?)))
 
 
+
+(defmacro make-derived-writer
+  ([writer-datatype runtime-datatype unchecked? src-writer writer-op create-fn n-elems]
+   `(let [src-writer# ~src-writer
+          ~'src-writer src-writer#
+          n-elems# ~n-elems
+          runtime-datatype# ~runtime-datatype
+          unchecked?# ~unchecked?]
+      (reify
+        ~(typecast/datatype->writer-type writer-datatype)
+        (getDatatype [writer#] runtime-datatype#)
+        (size [writer#] n-elems#)
+        (write [writer# ~'idx ~'value]
+          ~writer-op)
+        (invoke [item# idx# value#]
+          (.write item# (int idx#)
+                  (casting/datatype->cast-fn
+                   :unknown
+                   ~writer-datatype
+                   value#)))
+        dtype-proto/PToBackingStore
+        (->backing-store-seq [writer#]
+          (dtype-proto/->backing-store-seq src-writer#))
+        dtype-proto/PBuffer
+        (sub-buffer [writer# offset# length#]
+          (-> (dtype-proto/sub-buffer src-writer# offset# length#)
+              (~create-fn runtime-datatype# unchecked?#))))))
+  ([writer-datatype runtime-datatype unchecked? src-writer writer-op create-fn]
+   `(make-derived-writer ~writer-datatype ~runtime-datatype ~unchecked?
+                         ~src-writer ~writer-op ~create-fn (.size ~'src-writer))))
+
+
 (defn- make-object-wrapper
-  [writer datatype]
+  [writer datatype & [unchecked?]]
   (let [item-dtype (dtype-proto/get-datatype writer)]
     (when-not (and (= :object (casting/flatten-datatype item-dtype))
                    (= :object (casting/flatten-datatype datatype)))
@@ -185,93 +211,40 @@
   (if (= datatype (dtype-proto/get-datatype writer))
     writer
     (let [obj-writer (typecast/datatype->writer :object writer)]
-      (reify
-        ObjectWriter
-        (getDatatype [_] datatype)
-        (size [_] (.size obj-writer))
-        (write [_ idx value] (.write obj-writer idx value))
-        (invoke [_ idx value] (.write obj-writer idx value))
-        dtype-proto/PToNioBuffer
-        (->buffer-backing-store [writer]
-          (dtype-proto/->buffer-backing-store obj-writer))
-       dtype-proto/PToList
-       (->list-backing-store [writer]
-         (dtype-proto/->list-backing-store obj-writer))
-       dtype-proto/PBuffer
-       (sub-buffer [writer offset length]
-         (-> (dtype-proto/sub-buffer obj-writer offset length)
-             (dtype-proto/->writer-of-type datatype true)))
-       (alias? [writer rhs]
-         (dtype-proto/alias? obj-writer rhs))
-       (partially-alias? [writer rhs]
-         (dtype-proto/partially-alias? obj-writer rhs))))))
+      (make-derived-writer :object datatype true obj-writer
+                           (.write obj-writer idx value)
+                           make-object-wrapper))))
 
 
-(defmacro make-marshalling-writer
-  [dst-writer result-dtype intermediate-dtype src-dtype src-writer-type
-   unchecked?]
-  `(if ~unchecked?
-     (reify ~src-writer-type
-       (getDatatype [item#] ~intermediate-dtype)
-       (size [item#] (.size ~dst-writer))
-       (write[item# idx# value#]
-         (.write ~dst-writer idx#
-                 (unchecked-full-cast value# ~src-dtype ~intermediate-dtype ~result-dtype)))
-       (invoke [_ idx# value#] (.write ~dst-writer idx#
-                                       (unchecked-full-cast value# :unknown ~intermediate-dtype ~result-dtype)))
-       dtype-proto/PToNioBuffer
-       (->buffer-backing-store [writer#]
-         (dtype-proto/->buffer-backing-store ~dst-writer))
-       dtype-proto/PToList
-       (->list-backing-store [writer#]
-         (dtype-proto/->list-backing-store ~dst-writer))
-       dtype-proto/PBuffer
-       (sub-buffer [writer# offset# length#]
-         (-> (dtype-proto/sub-buffer ~dst-writer offset# length#)
-             (dtype-proto/->writer-of-type ~intermediate-dtype ~unchecked?)))
-       (alias? [writer# rhs#]
-         (dtype-proto/alias? ~dst-writer rhs#))
-       (partially-alias? [writer# rhs#]
-         (dtype-proto/partially-alias? ~dst-writer rhs#)))
-     (reify ~src-writer-type
-       (getDatatype [item#] ~intermediate-dtype)
-       (size [item#] (.size ~dst-writer))
-       (write[item# idx# value#]
-         (.write ~dst-writer idx#
-                 (checked-full-write-cast value# ~src-dtype ~intermediate-dtype ~result-dtype)))
-       (invoke [_ idx# value#] (.write ~dst-writer idx#
-                                       (checked-full-write-cast value# :unknown
-                                                                ~intermediate-dtype ~result-dtype)))
-       dtype-proto/PToNioBuffer
-       (->buffer-backing-store [writer#]
-         (dtype-proto/->buffer-backing-store ~dst-writer))
-       dtype-proto/PToList
-       (->list-backing-store [writer#]
-         (dtype-proto/->list-backing-store ~dst-writer))
-       dtype-proto/PBuffer
-       (sub-buffer [writer# offset# length#]
-         (-> (dtype-proto/sub-buffer ~dst-writer offset# length#)
-             (dtype-proto/->writer-of-type ~intermediate-dtype ~unchecked?)))
-       (alias? [writer# rhs#]
-         (dtype-proto/alias? ~dst-writer rhs#))
-       (partially-alias? [writer# rhs#]
-         (dtype-proto/partially-alias? ~dst-writer rhs#)))))
+(declare make-marshalling-writer)
 
 
 (defmacro make-marshalling-writer-table
   []
   `(->> [~@(for [dtype (casting/all-datatypes)
                  dst-writer-datatype casting/all-host-datatypes]
-            [[dst-writer-datatype dtype]
-             `(fn [dst-writer# unchecked?#]
-                (let [dst-writer# (typecast/datatype->writer ~dst-writer-datatype dst-writer# true)]
-                  (make-marshalling-writer
-                   dst-writer#
-                   ~dst-writer-datatype
-                   ~dtype
-                   ~(casting/datatype->safe-host-type dtype)
-                   ~(typecast/datatype->writer-type (casting/datatype->safe-host-type dtype))
-                   unchecked?#)))])]
+             (let [writer-dtype (casting/safe-flatten dtype)]
+               [[dst-writer-datatype dtype]
+                `(fn [dst-writer# unchecked?#]
+                   (let [dst-writer# (typecast/datatype->writer
+                                      ~dst-writer-datatype dst-writer# true)]
+                     (if unchecked?#
+                       (make-derived-writer ~writer-dtype ~dtype true dst-writer#
+                                            (.write dst-writer# ~'idx
+                                                    (unchecked-full-cast
+                                                     ~'value
+                                                     ~writer-dtype
+                                                     ~dtype
+                                                     ~dst-writer-datatype))
+                                            make-marshalling-writer)
+                       (make-derived-writer ~writer-dtype ~dtype false dst-writer#
+                                            (.write dst-writer# ~'idx
+                                                    (checked-full-write-cast
+                                                     ~'value
+                                                     ~writer-dtype
+                                                     ~dtype
+                                                     ~dst-writer-datatype))
+                                            make-marshalling-writer))))]))]
         (into {})))
 
 
@@ -317,16 +290,13 @@
 (defmacro make-indexed-writer-impl
   [datatype writer-type indexes values unchecked?]
   `(let [idx-reader# (datatype->reader :int32 ~indexes true)
-         values# (datatype->writer ~datatype ~values ~unchecked?)]
-     (reify ~writer-type
-       (getDatatype [item#] ~datatype)
-       (size [item#] (int (mp/element-count ~indexes)))
-       (write [item# idx# value#]
-         (.write values# (.read idx-reader# idx#) value#))
-       (invoke [item# idx# value#]
-         (.write item# (int idx#)
-                 (casting/datatype->unchecked-cast-fn
-                  :unknown ~datatype value#))))))
+         values# (datatype->writer ~datatype ~values ~unchecked?)
+         writer-dtype# (dtype-proto/get-datatype ~values)]
+     (make-derived-writer ~datatype writer-dtype# ~unchecked?
+                          idx-reader#
+                          (.write values# (.read idx-reader# ~'idx)
+                                  ~'value)
+                          dtype-proto/->writer-of-type)))
 
 
 (defmacro make-indexed-writer-creators
@@ -356,7 +326,8 @@
        (loop [idx# (int 0)]
          (if (.hasNext src-iter#)
            (do
-             (.write dst-writer# idx# (typecast/datatype->iter-next-fn ~datatype src-iter#))
+             (.write dst-writer# idx# (typecast/datatype->iter-next-fn
+                                       ~datatype src-iter#))
              (recur (unchecked-inc idx#)))
            dst#)))))
 

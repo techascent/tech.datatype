@@ -318,19 +318,6 @@ Calls clojure.core.matrix/ecount."
                                     (long offset))))]
     (dtype-proto/sub-buffer buffer offset length)))
 
-(defn alias?
-  "Do these two buffers alias each other?  Meaning do they start at the same address
-  and overlap completely?"
-  [lhs-buffer rhs-buffer]
-  (dtype-proto/alias? lhs-buffer rhs-buffer))
-
-
-(defn partially-alias?
-  "Do these two buffers partially alias each other?  Does some sub-range of their
-  data overlap?"
-  [lhs-buffer rhs-buffer]
-  (dtype-proto/partially-alias? lhs-buffer rhs-buffer))
-
 
 (defn ->iterable-of-type
   "Create an object that when .iterator is called it returns an iterator that

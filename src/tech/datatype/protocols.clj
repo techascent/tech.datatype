@@ -57,6 +57,17 @@
   (insert-block! [item idx values options]))
 
 
+(defprotocol PToBackingStore
+  "Necessary only for checking that things aren't reading/writing to same backing store
+  object."
+  (->backing-store-seq [item]))
+
+
+(extend-type Object
+  PToBackingStore
+  (->backing-store-seq [item] [item]))
+
+
 (defprotocol PToNioBuffer
   "Take a 'thing' and convert it to a nio buffer.  Only valid if the thing
   shares the backing store with the buffer.  Result may not exactly
@@ -79,13 +90,7 @@
 (defprotocol PBuffer
   "Interface to create sub-buffers out of larger contiguous buffers."
   (sub-buffer [buffer offset length]
-    "Create a sub buffer that shares the backing store with the main buffer.")
-  (alias? [lhs-buffer rhs-buffer]
-    "Do these two buffers alias each other?  Meaning do they start at the same address
-and overlap completely?")
-  (partially-alias? [lhs-buffer rhs-buffer]
-    "Do these two buffers partially alias each other?  Does some sub-range of their
-data overlap?"))
+    "Create a sub buffer that shares the backing store with the main buffer."))
 
 
 (defprotocol PToArray

@@ -22,6 +22,7 @@
             [tech.datatype.reader :as reader]
             [tech.datatype.writer :as writer]
             [tech.datatype.fast-copy :as fast-copy]
+            [tech.jna :as jna]
             [clojure.core.matrix.macros :refer [c-for]]
             [tech.parallel :as parallel]
             [tech.datatype.array])
@@ -92,6 +93,13 @@
                                                         n-elems# {})
                             (dtype-proto/make-container :nio-buffer datatype#
                                                         n-elems# {}))))}
+
+     dtype-proto/PToBackingStore
+     {:->backing-store-seq (fn [item#]
+                             (if-let [data-ary# (dtype-proto/->sub-array item#)]
+                               [data-ary#]
+                               [(jna/->ptr-backing-store item#)]))}
+
      dtype-proto/PToNioBuffer
      {:->buffer-backing-store (fn [item#] item#)}
 
@@ -139,47 +147,7 @@
                           len# (long length#)]
                       (.position buf# offset#)
                       (.limit buf# (+ offset# len#))
-                      buf#))
-      :alias? (fn [lhs-buffer# rhs-buffer#]
-                (when-let [rhs-buffer# (dtype-proto/->buffer-backing-store rhs-buffer#)]
-                  (when ((= (base/get-datatype lhs-buffer#)
-                            (base/get-datatype rhs-buffer#))
-                         (= (base/ecount lhs-buffer#)
-                            (base/ecount rhs-buffer#)))
-                    (let [lhs-buffer# (datatype->buffer-cast-fn ~datatype lhs-buffer#)
-                          rhs-buffer# (datatype->buffer-cast-fn ~datatype rhs-buffer#)]
-                      (when (= (.isDirect lhs-buffer#) (.isDirect rhs-buffer#))
-                        (if (.isDirect lhs-buffer#)
-                          (= (jna/->ptr-backing-store lhs-buffer#)
-                             (jna/->ptr-backing-store rhs-buffer#))
-                          (identical? (:array-data (dtype-proto/->sub-array
-                                                    lhs-buffer#))
-                                      (:array-data (dtype-proto/->sub-array
-                                                    rhs-buffer#)))))))))
-      :partially-alias?
-      (fn [lhs-buffer# rhs-buffer#]
-        (when-let [rhs-buffer# (dtype-proto/->buffer-backing-store
-                                rhs-buffer#)]
-          (when (and (= (base/get-datatype lhs-buffer#)
-                        (base/get-datatype rhs-buffer#)))
-            (let [lhs-buffer# (datatype->buffer-cast-fn ~datatype lhs-buffer#)
-                  rhs-buffer# (datatype->buffer-cast-fn ~datatype rhs-buffer#)]
-              (when (= (.isDirect lhs-buffer#) (.isDirect rhs-buffer#))
-                (if (.isDirect lhs-buffer#)
-                  (let [lhs-ptr# (Pointer/nativeValue
-                                  ^Pointer (jna/->ptr-backing-store lhs-buffer#))
-                        rhs-ptr# (Pointer/nativeValue
-                                  ^Pointer (jna/->ptr-backing-store rhs-buffer#))]
-                    (in-range? lhs-ptr# (base/ecount lhs-buffer#)
-                               rhs-ptr# (base/ecount rhs-buffer#)))
-                  (let [lhs-sub# (dtype-proto/->sub-array lhs-buffer#)
-                        rhs-sub# (dtype-proto/->sub-array rhs-buffer#)]
-                    (and (identical? (:array-data lhs-sub#)
-                                     (:array-data rhs-sub#))
-                         (in-range? (:offset lhs-sub#)
-                                    (:length lhs-sub#)
-                                    (:offset rhs-sub#)
-                                    (:length rhs-sub#))))))))))}
+                      buf#))}
      dtype-proto/PToWriter
      {:->writer-of-type
       (fn [item# writer-datatype# unchecked?#]

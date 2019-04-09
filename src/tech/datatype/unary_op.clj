@@ -5,7 +5,8 @@
             [tech.datatype.iterator :as iterator]
             [tech.datatype.base :as dtype-base]
             [tech.datatype.nio-access :as nio-access]
-            [tech.datatype.argtypes :as argtypes])
+            [tech.datatype.argtypes :as argtypes]
+            [tech.datatype.reader :as reader])
   (:import [tech.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
@@ -249,6 +250,8 @@
                            filter-iter)
                           values))
 
+(declare unary-reader-map)
+
 
 (defmacro make-unary-op-reader-table
   []
@@ -257,18 +260,19 @@
                [dtype
                 `(fn [item# un-op# unchecked?#]
                    (let [un-op# (datatype->unary-op ~dtype un-op# true)
-                         src-reader# (typecast/datatype->reader ~dtype item# unchecked?#)]
-                     (-> (reify ~(typecast/datatype->reader-type dtype)
-                           (getDatatype [item#] ~dtype)
-                           (size [item#] (.size src-reader#))
-                           (read [item# idx#]
-                             (->> (.read src-reader# idx#)
-                                  (.op un-op#)))
-                           (iterator [item#]
-                             (make-unary-op-iterator ~dtype src-reader#
-                                                     un-op# unchecked?#))
-                           (invoke [item# idx#]
-                             (.read item# (int idx#)))))))]))]
+                         src-reader# (typecast/datatype->reader ~dtype item#
+                                                                unchecked?#)
+                         src-dtype# (dtype-base/get-datatype src-reader#)
+                         constructor# #(unary-reader-map
+                                        {:datatype %2
+                                         :unchecked? %3}
+                                        un-op#
+                                        %1)]
+                     (reader/make-derived-reader ~dtype src-dtype# unchecked?#
+                                                 src-reader#
+                                                 (->> (.read src-reader# ~'idx)
+                                                      (.op un-op#))
+                                                 constructor#)))]))]
         (into {})))
 
 

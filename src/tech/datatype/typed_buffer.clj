@@ -34,6 +34,11 @@
                    (dtype-proto/from-prototype backing-store
                                                (casting/datatype->host-type datatype)
                                                shape)))
+
+  dtype-proto/PToBackingStore
+  (->backing-store-seq [item]
+    (dtype-proto/->backing-store-seq backing-store))
+
   dtype-proto/PToNioBuffer
   (->buffer-backing-store [item]
     (when (satisfies? dtype-proto/PToNioBuffer backing-store)
@@ -57,12 +62,6 @@
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
     (->TypedBuffer datatype (dtype-proto/sub-buffer backing-store offset length)))
-  (alias? [lhs-buffer rhs-buffer]
-    (when-let [rhs-nio (typecast/as-nio-buffer rhs-buffer)]
-      (dtype-proto/alias? backing-store rhs-nio)))
-  (partially-alias? [lhs-buffer rhs-buffer]
-    (when-let [rhs-nio (typecast/as-nio-buffer rhs-buffer)]
-      (dtype-proto/alias? backing-store rhs-nio)))
 
 
   dtype-proto/PToArray

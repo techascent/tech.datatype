@@ -115,6 +115,24 @@
   (long (apply * (shape/shape->count-vec shape))))
 
 
+(defn buffer-ecount
+  "What is the necessary ecount for a given buffer"
+  ^long [{:keys [shape strides]}]
+  (let [stride-idx (dtype-fn/argmax {:datatype :int32} strides)
+        stride-val (dtype/get-value strides stride-idx)
+        shape-val (dtype/get-value shape stride-idx)
+        shape-val (long
+                   (cond
+                     (number? shape-val)
+                     shape-val
+                     (shape/classified-sequence? shape-val)
+                     (shape/classified-sequence-max shape-val)
+                     :else
+                     (apply max (dtype/->reader-of-type
+                                 shape-val :int32))))]
+    (* shape-val (long stride-val))))
+
+
 (defn ->2d-shape
   "Given dimensions, return new dimensions with the lowest (fastest-changing) dimension
   unchanged and the rest of the dimensions multiplied into the higher dimension."
@@ -761,11 +779,11 @@ https://cloojure.github.io/doc/core.matrix/clojure.core.matrix.html#var-select"
   (if (every? #(= 0 (long %)) new-offset-vec)
     dims
     (let [old-offsets (:offsets dims)
-          _ (when-not (= (count old-offsets)
-                         (count new-offset-vec))
+          _ (when-not (= (dtype-base/ecount old-offsets)
+                         (dtype-base/ecount new-offset-vec))
               (throw (ex-info "Rotation offset vector count mismatch."
-                              {:old-offset-count (count old-offsets)
-                               :new-offsets-count (count new-offset-vec)})))
+                              {:old-offset-count (dtype-base/ecount old-offsets)
+                               :new-offsets-count (dtype-base/ecount new-offset-vec)})))
           new-offsets (mapv (fn [old-offset new-offset dim]
                               (let [potential-new-offset (+ (long old-offset)
                                                             (long new-offset))

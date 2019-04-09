@@ -9,10 +9,9 @@
               [tech.datatype.writer :as writer]
               [tech.datatype.functional.impl :as fn-impl]
               [tech.datatype.unary-op :as unary-op]
-              [tech.datatype.unary-op :as binary-op]
-              [tech.datatype.unary-op :as reduce-op]
-              [tech.datatype.unary-op :as boolean-op]
-
+              [tech.datatype.binary-op :as binary-op]
+              [tech.datatype.reduce-op :as reduce-op]
+              [tech.datatype.boolean-op :as boolean-op]
               [tech.datatype :as dtype]
               [clojure.core.matrix.protocols :as mp]
               [clojure.core.matrix :as m]
@@ -212,25 +211,65 @@
   (instance? Tensor item))
 
 
+(defn- tensor->base-buffer-type
+  [tens]
+  (assoc tens :buffer-type
+         (dtype/buffer-type
+          (tensor->buffer tens))))
+
+
 
 (defmethod unary-op/unary-reader-map :tensor
   [options un-op item]
   (construct-tensor (unary-op/unary-reader-map
                      options un-op
-                     (assoc item :buffer-type
-                            (dtype/buffer-type (tensor->buffer item))))
+                     (tensor->base-buffer-type item))
                     (dims/dimensions (dtype/shape item))))
 
 
+(defn default-tensor-binary-reader-map
+  "Anything times a tensor returns a thing in the shape of
+  the tensor.  ecounts must match."
+  [options bin-op lhs rhs]
+  (when-not (= (dtype-base/ecount lhs)
+               (dtype-base/ecount rhs))
+    (throw (ex-info "Ecounts don't match" {})))
+  (let [lhs-shape (dtype-base/shape lhs)
+        lhs-tensor? (tensor? lhs)
+        lhs (if (tensor? lhs)
+              (tensor->base-buffer-type lhs)
+              lhs)
+        rhs-shape (dtype-base/shape rhs)
+        rhs (if (tensor? rhs)
+              (tensor->base-buffer-type rhs)
+              rhs)]
+    (construct-tensor
+     (binary-op/binary-reader-map options bin-op lhs rhs)
+     (if lhs-tensor?
+       (dims/dimensions lhs-shape)
+       (dims/dimensions rhs-shape)))))
 
 ;; Next up
-;; (defmethod binary-op/binary-reader-map [:dense :tensor]
-;;   [options un-op item]
-;;   (construct-tensor (unary-op/unary-reader-map
-;;                      options un-op
-;;                      (assoc item :buffer-type
-;;                             (dtype/buffer-type (tensor->buffer item))))
-;;                     (dims/dimensions (dtype/shape item))))
+(defmethod binary-op/binary-reader-map [:dense :tensor]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-reader-map options bin-op lhs rhs))
+
+(defmethod binary-op/binary-reader-map [:tensor :dense]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-reader-map options bin-op lhs rhs))
+
+(defmethod binary-op/binary-reader-map [:tensor :tensor]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-reader-map options bin-op lhs rhs))
+
+(defmethod binary-op/binary-reader-map [:sparse :tensor]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-reader-map options bin-op lhs rhs))
+
+
+(defmethod binary-op/binary-reader-map [:tensor :sparse]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-reader-map options bin-op lhs rhs))
 
 
 (defn to-core-matrix

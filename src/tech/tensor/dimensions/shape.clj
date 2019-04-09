@@ -80,6 +80,11 @@
        vec))
 
 
+(defn classified-sequence-max
+  ^long [{:keys [max-item]}]
+  (long max-item))
+
+
 (defn combine-classified-sequences
   "Room for optimization here.  But simplest way is easiest to get correct."
   [source-sequence select-sequence]

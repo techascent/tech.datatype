@@ -5,10 +5,14 @@
               [tech.datatype.sparse.reader :as sparse-reader]
               [tech.tensor.dimensions :as dims]
               [tech.tensor.dimensions.shape :as shape]
-              [tech.tensor.index-system :as index-system]
               [tech.datatype.reader :as reader]
               [tech.datatype.writer :as writer]
               [tech.datatype.functional.impl :as fn-impl]
+              [tech.datatype.unary-op :as unary-op]
+              [tech.datatype.unary-op :as binary-op]
+              [tech.datatype.unary-op :as reduce-op]
+              [tech.datatype.unary-op :as boolean-op]
+
               [tech.datatype :as dtype]
               [clojure.core.matrix.protocols :as mp]
               [clojure.core.matrix :as m]
@@ -22,20 +26,27 @@
 (set! *warn-on-reflection* true)
 
 
+(def ^:dynamic *datatype* :float64)
+
+(defmacro with-datatype
+  [dtype & body]
+  `(with-bindings {#'*datatype* ~dtype}
+     ~@body))
+
+
+(defn datatype
+  [dtype-or-nil]
+  (or dtype-or-nil *datatype*))
+
+
 (defn- dimensions->index-reader
   [dimensions]
-  ^IntReader (index-system/get-elem-dims-global->local
-   dimensions
-   (or (:max-shape dimensions)
-       (shape/shape->count-vec (:shape dimensions)))))
+  ^IntReader (dims/->global->local dimensions))
 
 
 (defn- dimensions->index-inverter
   ^IndexingSystem$Backward [dimensions]
-  (index-system/get-elem-dims-local->global
-   dimensions
-   (or (:max-shape dimensions)
-       (shape/shape->count-vec (:shape dimensions)))))
+  (dims/->local->global dimensions))
 
 
 (defn- simple-dimensions?
@@ -54,7 +65,7 @@
        (= 1 (count (:shape dimensions)))))
 
 
-(defrecord Tensor [buffer dimensions]
+(defrecord Tensor [buffer dimensions buffer-type]
   dtype-proto/PDatatype
   (get-datatype [item] (dtype-base/get-datatype buffer))
 
@@ -143,7 +154,7 @@
 
   dtype-proto/PBufferType
   (buffer-type [item]
-    (dtype-proto/buffer-type buffer))
+    (or buffer-type (dtype-proto/buffer-type buffer)))
 
 
   sparse-proto/PToSparseReader
@@ -175,6 +186,12 @@
                                        reader)))))))
 
 
+(defn construct-tensor
+  [buffer dims & [buffer-type]]
+  (->Tensor buffer dims (or buffer-type
+                            :tensor)))
+
+
 (defn tensor->buffer
   [tens]
   (:buffer tens))
@@ -187,9 +204,33 @@
 
 (defn mutable?
   [tens]
-  (satisfies? (tensor->buffer tens)
-              dtype-proto/PToWriter))
+  (satisfies? dtype-proto/PToWriter (tensor->buffer tens)))
 
+
+(defn tensor?
+  [item]
+  (instance? Tensor item))
+
+
+
+(defmethod unary-op/unary-reader-map :tensor
+  [options un-op item]
+  (construct-tensor (unary-op/unary-reader-map
+                     options un-op
+                     (assoc item :buffer-type
+                            (dtype/buffer-type (tensor->buffer item))))
+                    (dims/dimensions (dtype/shape item))))
+
+
+
+;; Next up
+;; (defmethod binary-op/binary-reader-map [:dense :tensor]
+;;   [options un-op item]
+;;   (construct-tensor (unary-op/unary-reader-map
+;;                      options un-op
+;;                      (assoc item :buffer-type
+;;                             (dtype/buffer-type (tensor->buffer item))))
+;;                     (dims/dimensions (dtype/shape item))))
 
 
 (defn to-core-matrix
@@ -199,12 +240,13 @@
     (dtype-base/copy! double-data tensor)
     retval))
 
+
 (defn to-core-matrix-vector
   [tensor]
   (m/as-vector (to-core-matrix tensor)))
 
 
-(defn to-jvm
+(defn ->jvm
   "Conversion to storage that is efficient for the jvm.
   Base storage is either jvm-array or persistent-vector."
   [item & {:keys [datatype base-storage]
@@ -247,10 +289,10 @@
 (defn tensor->string
   ^String [tens & {:keys [print-datatype]
                    :or {print-datatype :float64}}]
-  (format "#tech.compute.tensor.Tensor<%s>%s\n%s"
+  (format "#tech.tensor.impl.Tensor<%s>%s\n%s"
           (name (dtype/get-datatype tens))
           (dtype/shape tens)
-          (corem-pp/pm (to-jvm tens :datatype print-datatype))))
+          (corem-pp/pm (->jvm tens :datatype print-datatype))))
 
 
 (defmethod print-method Tensor

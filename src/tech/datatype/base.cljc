@@ -68,7 +68,9 @@
 (defn ecount
   "Type hinted ecount."
   ^long [item]
-  (m/ecount item))
+  (if item
+    (m/ecount item)
+    0))
 
 
 (defn shape

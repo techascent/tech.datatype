@@ -64,7 +64,8 @@
 (defn sparse-unary-map
   [options un-op sparse-item]
   (let [datatype (or (:datatype options)
-                     (dtype-base/get-datatype sparse-item))]
+                     (dtype-base/get-datatype sparse-item))
+        sparse-item (sparse-proto/->sparse sparse-item)]
     (make-sparse-reader (sparse-proto/index-reader sparse-item)
                         (impl/apply-unary-op {} un-op
                                              (sparse-proto/data-reader sparse-item))

@@ -90,12 +90,15 @@ the selection applied."
 Returns:
 {:dimension-seq dimension-seq
 :offset offset}"
-  [dimension-seq stride-seq]
-  (let [[dimension-seq strides offset]
-        (reduce (fn [[dimension-seq strides offset] [dimension stride]]
+  [dimension-seq stride-seq dim-offset-seq]
+  (let [[dimension-seq strides dim-offsets offset]
+        (reduce (fn [[dimension-seq strides dim-offsets offset] [dimension stride dim-offset]]
                   (cond
                     (dtype/reader? dimension)
-                    [(conj dimension-seq dimension) (conj strides stride) offset]
+                    [(conj dimension-seq dimension)
+                     (conj strides stride)
+                     (conj dim-offsets dim-offset)
+                     offset]
                     (shape/classified-sequence? dimension)
                     ;;Shift the sequence down and record the new offset.
                     (let [{:keys [type min-item max-item sequence
@@ -124,21 +127,26 @@ Returns:
                                       :else
                                       dimension)]
                       ;;A scalar single select arg means drop the dimension.
-                      (if-not (and (= 1 dimension) scalar?)
+                      (if-not (and (= 1 dimension)
+                                   scalar?
+                                   (= 0 (int dim-offset)))
                         [(conj dimension-seq dimension)
-                         (conj strides stride) new-offset]
+                         (conj strides stride)
+                         (conj dim-offsets dim-offset)
+                         new-offset]
                         ;;We keep track of offsetting but we don't add the
                         ;;element to the return value.
-                        [dimension-seq strides new-offset]))
+                        [dimension-seq strides dim-offsets new-offset]))
                     :else
                     (throw (ex-info "Bad dimension type"
                                     {:dimension dimension}))))
-                [[] [] 0]
-                (map vector dimension-seq stride-seq))
+                [[] [] [] 0]
+                (map vector dimension-seq stride-seq dim-offset-seq))
         retval
 
         {:dimension-seq dimension-seq
          :strides strides
+         :offsets dim-offsets
          :offset offset
          :length (when (shape/direct-shape? dimension-seq)
                    (apply + 1 (map * (map (comp dec shape/shape-entry->count)

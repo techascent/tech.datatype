@@ -1,6 +1,6 @@
 (ns tech.tensor.index-system-test
   (:require [tech.datatype :as dtype]
-            [tech.tensor.index-system :as index-system]
+            [tech.tensor.dimensions :as dims]
             [tech.tensor.dimensions.shape :as shape]
             [tech.datatype.reader :as reader]
             [tech.datatype.typecast :as typecast]
@@ -18,14 +18,9 @@
             (reader/typed-read :int32 (shape/shape->count-vec shape)
                                max-stride-idx))
          n-elems (shape/ecount max-shape)
-         forward (index-system/get-elem-dims-global->local
-                  {:shape shape
-                   :offsets offsets
-                   :strides strides} max-shape)
-         backward (index-system/get-elem-dims-local->global
-                   {:shape shape
-                    :offsets offsets
-                    :strides strides} max-shape)
+         dimensions (dims/dimensions shape :strides strides :offsets offsets :max-shape max-shape)
+         forward (dims/->global->local dimensions)
+         backward (dims/->local->global dimensions)
          forward-elems (->> (range n-elems)
                             (mapv #(vector % (.read forward (int %)))))
 
@@ -87,7 +82,8 @@
   (base-index-system-test [2 2] [3 1] [2 4])
   (base-index-system-test [2 2] [1 3] [4 4])
 
-
+  ;;Normal image
   (base-index-system-test [4 4 3] [12 3 1] [4 4 3])
 
+  ;;Image in channels-first
   (base-index-system-test [3 4 4] [1 12 3] [3 4 4]))

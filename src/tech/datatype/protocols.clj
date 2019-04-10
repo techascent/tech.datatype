@@ -38,11 +38,13 @@
 (defprotocol PBufferType ;;:sparse or :dense
   (buffer-type [item]))
 
+(extend-type Object
+  PBufferType
+  (buffer-type [item] :dense))
+
 (defn safe-buffer-type
   [item]
-  (if (satisfies? PBufferType item)
-    (buffer-type item)
-    :dense))
+  (buffer-type item))
 
 (defprotocol PSetConstant
   (set-constant! [item offset value elem-count]))

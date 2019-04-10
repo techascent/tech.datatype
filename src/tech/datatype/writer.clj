@@ -65,10 +65,12 @@
                                             value#)))
        dtype-proto/PToNioBuffer
        (->buffer-backing-store [reader#]
-         (dtype-proto/->buffer-backing-store ~buffer))
+         (when (satisfies? dtype-proto/PToNioBuffer)
+           (dtype-proto/->buffer-backing-store ~buffer)))
        dtype-proto/PToList
        (->list-backing-store [reader#]
-         (dtype-proto/->list-backing-store ~buffer))
+         (when (satisfies? dtype-proto/PToList ~buffer)
+           (dtype-proto/->list-backing-store ~buffer)))
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
@@ -93,10 +95,12 @@
                                             value#)))
        dtype-proto/PToNioBuffer
        (->buffer-backing-store [reader#]
-         (dtype-proto/->buffer-backing-store ~buffer))
+         (when (satisfies? dtype-proto/PToNioBuffer ~buffer)
+           (dtype-proto/->buffer-backing-store ~buffer)))
        dtype-proto/PToList
        (->list-backing-store [reader#]
-         (dtype-proto/->list-backing-store ~buffer))
+         (when (satisfies? dtype-proto/PToList ~buffer)
+           (dtype-proto/->list-backing-store ~buffer)))
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
@@ -114,7 +118,8 @@
              (let [buffer-datatype (casting/datatype->host-datatype dtype)]
                [[buffer-datatype dtype]
                 `(fn [buffer# unchecked?#]
-                   (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype buffer#)
+                   (let [buffer# (typecast/datatype->buffer-cast-fn
+                                  ~buffer-datatype buffer#)
                          buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
                      (make-buffer-writer-impl
                       ~(typecast/datatype->writer-type dtype)

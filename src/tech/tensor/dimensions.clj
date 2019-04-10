@@ -62,7 +62,8 @@
                                                (.read shape (+ local-idx 1))))
                     local-idx)))]
           (recur (unchecked-inc idx) (int max-stride-idx)))))
-    strides))
+    ;;Using persistent vectors for short things is often faster.
+    (vec strides)))
 
 
 (declare create-dimension-transforms)
@@ -120,7 +121,9 @@
 (defn buffer-ecount
   "What is the necessary ecount for a given buffer"
   ^long [{:keys [shape strides]}]
-  (let [stride-idx (dtype-fn/argmax {:datatype :int32} strides)
+  ;;In this case the length of strides is so small as to make the general
+  ;;method fast to just use object methods.
+  (let [stride-idx (dtype-fn/argmax {:datatype :object} strides)
         stride-val (dtype/get-value strides stride-idx)
         shape-val (dtype/get-value shape stride-idx)
         shape-val (long
@@ -286,32 +289,44 @@ to be reversed for the most efficient implementation."
 (defn get-elem-dims-global->local
   ^IndexingSystem$Forward [dims]
   ;;Special cases here for speed
-  (let [dense? (dense? dims)
-        max-shape (:max-shape dims)
-        increasing? (access-increasing? dims)
-        ;;Any indirect addressing?
+  (let [{:keys [shape strides offsets max-shape]} dims
         direct? (direct? dims)
-        min-shape (drop-while #(= 1 %) (shape dims))
+        shape-ecount (long (if direct?
+                             (apply * shape)
+                             (ecount shape)))
+        dense? (if direct?
+                 (= shape-ecount
+                    (buffer-ecount dims))
+                 false)
+        increasing? (if direct?
+                      (and (apply >= strides)
+                           (every? #(= 0 %) offsets))
+                      false)
+        vec-shape (if direct?
+                    shape
+                    (shape/shape->count-vec shape))
+        broadcast? (not= vec-shape max-shape)
+        ;;Any indirect addressing?
+        min-shape (drop-while #(= 1 %) shape)
         local-ec (ecount dims)
         max-ec (dtype-base/shape->ecount max-shape)
         n-elems (shape/ecount max-shape)]
     (cond
       ;;Special case for indexes that increase monotonically
       (and direct?
-           (= (:shape dims)
-              max-shape)
+           (not broadcast?)
            dense?
            increasing?)
       (impl-int-reader n-elems idx)
       ;;Special case for broadcasting a vector across an image (like applying bias).
       (and direct?
            (= (ecount dims)
-              (apply max (shape dims)))
+              (apply max vec-shape))
            dense?
            increasing?)
       (let [ec-idx (long
                     (->> (map-indexed vector (left-pad-ones
-                                              (shape dims) max-shape))
+                                              vec-shape max-shape))
                          (filter #(= local-ec (second %)))
                          (ffirst)))
             broadcast-amt (long (apply * 1 (drop (+ 1 ec-idx) max-shape)))]
@@ -334,28 +349,54 @@ to be reversed for the most efficient implementation."
                               (utils/reversev item-offsets)
                               (reader/make-const-reader 0 :int32
                                                         (count reverse-shape)))]
-        ;;General case when non of the dimensions are indexed themselves.
+        ;;General case when direct shape
         (if direct?
           (let [rev-shape (int-array reverse-shape)
                 rev-strides (int-array reverse-strides)
                 rev-offsets (int-array reverse-offsets)
                 num-items (alength rev-max-shape)]
-            (impl-int-reader
-             n-elems
-             (let [arg idx]
-               (loop [idx (long 0)
-                      arg (long arg)
-                      offset (long 0)]
-                 (if (< idx num-items)
-                   (let [next-max (aget rev-max-shape idx)
-                         next-stride (aget rev-strides idx)
-                         next-dim (aget rev-shape idx)
-                         next-off (aget rev-offsets idx)
-                         shape-idx (rem (+ arg next-off) next-dim)]
-                     (recur (inc idx)
-                            (quot arg next-max)
-                            (+ offset (* next-stride shape-idx))))
-                   offset)))))
+            (if (and (not broadcast?)
+                     (<= num-items 2)
+                     access-increasing?)
+              ;;Common cases with offsetting
+              (if (= 2 num-items)
+                (let [shape-0 (aget rev-shape 0)
+                      shape-1 (aget rev-shape 1)
+                      offset-0 (aget rev-offsets 0)
+                      offset-1 (aget rev-offsets 1)
+                      stride-0 (aget rev-strides 0)
+                      stride-1 (aget rev-strides 1)]
+                  (impl-int-reader
+                   n-elems
+                   (let [first-elem (rem (unchecked-add idx offset-0) shape-0)
+                         next-elem (rem (unchecked-add (quot idx shape-0) offset-1)
+                                        shape-1)]
+                     (unchecked-add (unchecked-multiply first-elem stride-0)
+                                    (unchecked-multiply  next-elem stride-1)))))
+                (let [shape-0 (aget rev-shape 0)
+                      offset-0 (aget rev-offsets 0)
+                      stride-0 (aget rev-strides 0)]
+                  (impl-int-reader
+                   n-elems
+                   (let [first-elem (rem (+ idx offset-0) shape-0)]
+                     (* first-elem stride-0)))))
+              ;;Broadcasting with offsets but direct shape general case.
+              (impl-int-reader
+               n-elems
+               (let [arg idx]
+                 (loop [idx (long 0)
+                        arg (long arg)
+                        offset (long 0)]
+                   (if (< idx num-items)
+                     (let [next-max (aget rev-max-shape idx)
+                           next-stride (aget rev-strides idx)
+                           next-dim (aget rev-shape idx)
+                           next-off (aget rev-offsets idx)
+                           shape-idx (rem (+ arg next-off) next-dim)]
+                       (recur (inc idx)
+                              (quot arg next-max)
+                              (+ offset (* next-stride shape-idx))))
+                     offset))))))
           ;;Totally general case to encapsulate all the variations including indexed
           ;;dimensions.
           (let [reverse-shape (mapv (fn [item]

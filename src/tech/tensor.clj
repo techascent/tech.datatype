@@ -37,7 +37,7 @@
   (let [tens (impl/ensure-tensor tens)]
     (assoc tens :dimensions
            (dims/rotate (impl/tensor->dimensions tens)
-                        (dtype-fn/* -1 rotate-vec)))))
+                        (mapv #(* -1 (long %)) rotate-vec)))))
 
 
 (defn reshape
@@ -68,3 +68,14 @@
     (impl/construct-tensor (-> (impl/tensor->buffer tens)
                                (dtype/sub-buffer buf-offset buf-len))
                            new-dims)))
+
+
+(defn clone
+  [tens & {:keys [datatype]}]
+  (let [datatype (or datatype
+                     (dtype/get-datatype tens))
+        new-tens (new-tensor (dtype/shape tens)
+                             :datatype datatype)]
+    (dtype/copy! (dtype/->reader-of-type tens (:datatype datatype))
+                 (dtype/->writer new-tens))
+    new-tens))

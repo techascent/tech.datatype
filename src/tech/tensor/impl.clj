@@ -146,9 +146,14 @@
 
   dtype-proto/PToWriter
   (->writer-of-type [item datatype unchecked?]
-    (writer/make-indexed-writer (dimensions->index-reader dimensions)
-                                (dtype-proto/->writer-of-type buffer datatype unchecked?)
-                                {:datatype datatype}))
+    (let [data-writer (dtype-proto/->writer-of-type
+                       buffer datatype unchecked?)]
+      (if (simple-dimensions? dimensions)
+        data-writer
+        (writer/make-indexed-writer (dimensions->index-reader dimensions)
+                                    (dtype-proto/->writer-of-type
+                                     buffer datatype unchecked?)
+                                    {:datatype datatype}))))
 
 
   dtype-proto/PBufferType
@@ -191,6 +196,11 @@
                             :tensor)))
 
 
+(defn tensor?
+  [item]
+  (instance? Tensor item))
+
+
 (defn ensure-tensor
   [item]
   (if (tensor? item)
@@ -214,10 +224,6 @@
   [tens]
   (satisfies? dtype-proto/PToWriter (tensor->buffer tens)))
 
-
-(defn tensor?
-  [item]
-  (instance? Tensor item))
 
 
 (defn- tensor->base-buffer-type
@@ -312,7 +318,8 @@
         item-ecount (dtype-base/ecount item)
         column-len (long (last item-shape))
         n-columns (quot item-ecount column-len)
-        data-array (dtype-proto/->reader-of-type item (dtype-base/get-datatype item) true)
+        data-array (dtype-proto/->reader-of-type item
+                                                 (dtype-base/get-datatype item) true)
         base-data
         (->> (range n-columns)
              (map (fn [col-idx]

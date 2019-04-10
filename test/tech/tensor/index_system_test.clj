@@ -18,7 +18,8 @@
             (reader/typed-read :int32 (shape/shape->count-vec shape)
                                max-stride-idx))
          n-elems (shape/ecount max-shape)
-         dimensions (dims/dimensions shape :strides strides :offsets offsets :max-shape max-shape)
+         dimensions (dims/dimensions shape :strides strides :offsets
+                                     offsets :max-shape max-shape)
          forward (dims/->global->local dimensions)
          backward (dims/->local->global dimensions)
          forward-elems (->> (range n-elems)
@@ -35,7 +36,7 @@
          (with-out-str
            (pp/pprint {:shape shape
                        :strides strides
-                       :offsets offsets
+                       :offsets (vec offsets)
                        :max-shape max-shape})))))
   ([shape strides max-shape]
    (base-index-system-test shape strides

@@ -47,6 +47,8 @@
 
 (defn get-value [item offset]
   (cond
+    (instance? RandomAccess item)
+    (.get ^List item (int offset))
     (satisfies? dtype-proto/PToReader item)
     (.read ^ObjectReader (dtype-proto/->reader-of-type item :object false) (int offset))
     (map? item)

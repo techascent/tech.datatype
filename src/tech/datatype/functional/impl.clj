@@ -27,7 +27,8 @@
             [tech.datatype.list]
             [tech.datatype.primitive]
             [tech.datatype.sparse.reader :as sparse-reader]
-            [tech.datatype.comparator :as comparator]))
+            [tech.datatype.comparator :as comparator])
+  (:import [java.util List RandomAccess]))
 
 (def ^:dynamic *datatype* nil)
 (def ^:dynamic *unchecked?* nil)
@@ -390,19 +391,48 @@
                    `(def-builtin-operator ~op-name ~op-seq))))))
 
 
+(defn- ->list
+  ^List [item]
+  (when-not (instance? List item)
+    (throw (ex-info "ITem is not a list." {})))
+  item)
+
+
 (defmacro impl-arg-op
   [datatype op]
-  `(fn [values#]
-     (let [value-reader# (typecast/datatype->reader ~datatype values#)
-           n-elems# (.size value-reader#)]
-       (reduce-op/iterable-reduce
-        {:datatype ~datatype}
-        (binary/make-binary-op :int32 (if (~op
-                                           (.read value-reader# ~'x)
-                                           (.read value-reader# ~'y))
-                                        ~'x
-                                        ~'y))
-        (reader/reader-range :int32 0 n-elems#)))))
+  (if (= datatype :object)
+    `(fn [values#]
+       (if (instance? RandomAccess values#)
+         (let [values# (->list values#)
+               n-elems# (.size values#)]
+           (reduce (fn [lhs# rhs#]
+                     (if (~op
+                          (.get values# lhs#)
+                          (.get values# rhs#))
+                       lhs#
+                       rhs#))
+                   (range n-elems#)))
+         (let [value-reader# (typecast/datatype->reader ~datatype values#)
+               n-elems# (.size value-reader#)]
+           (reduce-op/iterable-reduce
+            {:datatype ~datatype}
+            (binary/make-binary-op :int32 (if (~op
+                                               (.read value-reader# ~'x)
+                                               (.read value-reader# ~'y))
+                                          ~'x
+                                          ~'y))
+            (reader/reader-range :int32 0 n-elems#)))))
+    `(fn [values#]
+       (let [value-reader# (typecast/datatype->reader ~datatype values#)
+             n-elems# (.size value-reader#)]
+         (reduce-op/iterable-reduce
+          {:datatype ~datatype}
+          (binary/make-binary-op :int32 (if (~op
+                                             (.read value-reader# ~'x)
+                                             (.read value-reader# ~'y))
+                                          ~'x
+                                          ~'y))
+          (reader/reader-range :int32 0 n-elems#))))))
 
 
 (defmacro make-no-boolean-macro-table

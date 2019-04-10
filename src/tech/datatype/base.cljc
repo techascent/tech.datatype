@@ -190,6 +190,15 @@
     (copy-raw-seq->item! (seq raw-data) ary-target target-offset options)))
 
 
+(extend-protocol dtype-proto/PBuffer
+  RandomAccess
+  (sub-buffer [item offset length]
+    (let [^List item item
+          offset (int offset)
+          length (int length)]
+      (.subList item offset (+ offset length)))))
+
+
 (extend-protocol dtype-proto/PToReader
   RandomAccess
   (->reader-of-type [item datatype unchecked?]

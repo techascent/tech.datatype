@@ -317,21 +317,47 @@
      (get-datatype [item#] :float64)))
 
 
+(defmacro make-numeric-object-binary-op
+  [opname op-code]
+  `(reify
+     dtype-proto/PToBinaryOp
+     (->binary-op [item# datatype# unchecked?#]
+       (let [bin-dtype# (if (casting/numeric-type? datatype#)
+                          datatype#
+                          :float64)]
+         (-> (case (casting/safe-flatten bin-dtype#)
+               :int8 (make-binary-op ~opname :int8 (unchecked-byte ~op-code))
+               :int16 (make-binary-op ~opname :int16 (unchecked-short ~op-code))
+               :int32 (make-binary-op ~opname :int32 (unchecked-int ~op-code))
+               :int64 (make-binary-op ~opname :int64 (unchecked-long ~op-code))
+               :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
+               :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
+               :object (make-binary-op ~opname :object ~op-code))
+             (dtype-proto/->binary-op datatype# unchecked?#))))
+     dtype-proto/POperator
+     (op-name [item#] ~opname)
+     dtype-proto/PDatatype
+     (get-datatype [item#] :object)))
+
+
 (defmacro make-long-binary-op
   [opname op-code]
   `(make-binary-op ~opname :int64 ~op-code))
 
 
+(set! *unchecked-math* false)
+
+
 (def builtin-binary-ops
-  (->> [(make-numeric-binary-op :+ (+ x y))
-        (make-numeric-binary-op :- (- x y))
-        (make-numeric-binary-op :/ (/ x y))
-        (make-numeric-binary-op :* (* x y))
+  (->> [(make-numeric-object-binary-op :+ (+ x y))
+        (make-numeric-object-binary-op :- (- x y))
+        (make-numeric-object-binary-op :/ (/ x y))
+        (make-numeric-object-binary-op :* (* x y))
         (make-long-binary-op :rem (Math/floorMod x y))
         (make-long-binary-op :quot (Math/floorDiv x y))
         (make-double-binary-op :pow (Math/pow x y))
-        (make-numeric-binary-op :max (if (> x y) x y))
-        (make-numeric-binary-op :min (if (> x y) y x))
+        (make-numeric-object-binary-op :max (if (> x y) x y))
+        (make-numeric-object-binary-op :min (if (> x y) y x))
         (make-long-binary-op :bit-and (bit-and x y))
         (make-long-binary-op :bit-and-not (bit-and-not x y))
         (make-long-binary-op :bit-or (bit-or x y))

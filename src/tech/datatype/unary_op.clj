@@ -325,6 +325,27 @@
      (op-name [item#] ~opname)))
 
 
+(defmacro make-numeric-object-unary-op
+  [opname op-code]
+  `(reify
+     dtype-proto/PToUnaryOp
+     (->unary-op [item# datatype# unchecked?#]
+       (when-not (casting/numeric-type? datatype#)
+         (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
+       (case (casting/safe-flatten datatype#)
+         :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
+         :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
+         :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+         :int64 (make-unary-op ~opname :int64 ~op-code)
+         :float32 (make-unary-op ~opname :float32 ~op-code)
+         :float64 (make-unary-op ~opname :float64 ~op-code)
+         :object (make-unary-op ~opname :object ~op-code)))
+     dtype-proto/PDatatype
+     (get-datatype [item#] :object)
+     dtype-proto/POperator
+     (op-name [item#] ~opname)))
+
+
 (defmacro make-float-double-unary-op
   [opname op-code]
   `(reify
@@ -365,12 +386,15 @@
          :object (make-unary-op ~opname :object ~op-code)))))
 
 
+(set! *unchecked-math* false)
+
+
 (def builtin-unary-ops
   (->> [(make-double-unary-op :floor (Math/floor arg))
         (make-double-unary-op :ceil (Math/ceil arg))
         (make-double-unary-op :round (unchecked-double (Math/round arg)))
         (make-double-unary-op :rint (Math/rint arg))
-        (make-double-unary-op :- (- arg))
+        (make-numeric-object-unary-op :- (- arg))
         (make-double-unary-op :logistic
                               (/ 1.0
                                  (+ 1.0 (Math/exp (- arg)))))

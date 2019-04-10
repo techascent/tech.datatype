@@ -92,8 +92,10 @@
              (nil? max-shape)
              (nil? strides)
              (nil? offsets))
-      (create-dimension-transforms (->Dimensions shape [1] [0] nil nil
-                                                 (shape/shape->count-vec shape)))
+      (create-dimension-transforms
+       (->Dimensions shape [1] [0]
+                     (shape/shape->count-vec shape)
+                     nil nil))
       (let [strides (if (= n-elems (dtype-base/ecount strides))
                       strides
                       (extend-strides shape strides))
@@ -642,8 +644,7 @@ b. Combine densely-packed dimensions (not as simple)."
       ;; dimensionality.
       (and (access-increasing? existing-dims)
            (dense? existing-dims))
-      {:shape shape
-       :strides (extend-strides shape [])}
+      (dimensions shape)
       ;;Padding creates islands of dense behavior.  We cannot reshape across islands.
       (access-increasing? existing-dims)
       (let [existing-dims (minimize existing-dims)

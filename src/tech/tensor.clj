@@ -34,14 +34,16 @@
 
 (defn rotate
   [tens rotate-vec]
-  (assoc tens :dimensions
-         (dims/rotate (impl/tensor->dimensions tens)
-                      (dtype-fn/* -1 rotate-vec))))
+  (let [tens (impl/ensure-tensor tens)]
+    (assoc tens :dimensions
+           (dims/rotate (impl/tensor->dimensions tens)
+                        (dtype-fn/* -1 rotate-vec)))))
 
 
 (defn reshape
   [tens new-shape]
-  (let [new-dims (dims/in-place-reshape (:dimensions tens)
+  (let [tens (impl/ensure-tensor tens)
+        new-dims (dims/in-place-reshape (:dimensions tens)
                                         new-shape)]
     (impl/construct-tensor
      (dtype/sub-buffer (impl/tensor->buffer tens)
@@ -51,12 +53,15 @@
 
 (defn transpose
   [tens transpose-vec]
-  (update tens :dimensions dims/transpose transpose-vec))
+  (let [tens (impl/ensure-tensor tens)]
+    (update tens :dimensions dims/transpose transpose-vec)))
 
 
 (defn select
   [tens & args]
-  (let [{new-dims :dims
+
+  (let [tens (impl/ensure-tensor tens)
+        {new-dims :dims
          buf-offset :elem-offset
          buf-len :buffer-length}
         (apply dims/select (:dimensions tens) args)]

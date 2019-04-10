@@ -472,7 +472,7 @@
     (iterator/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
 
 
-(declare boolean-unary-map)
+(declare boolean-unary-reader)
 
 
 (defmacro make-boolean-unary-reader
@@ -481,10 +481,11 @@
     `(fn [src-seq# bool-op# unchecked?#]
        (let [bool-op# (datatype->boolean-unary ~op-dtype bool-op# unchecked?#)
              src-reader# (typecast/datatype->reader ~datatype src-seq# unchecked?#)
-             create-fn# #(boolean-unary-map {:datatype %2
-                                             :unchecked? %3}
-                                            bool-op#
-                                            %1)]
+             create-fn# #(boolean-unary-reader {:datatype (dtype-base/get-datatype
+                                                           src-seq#)
+                                                :unchecked? %3}
+                                               bool-op#
+                                               %1)]
          (reader/make-derived-reader :boolean :boolean unchecked?#
                                      src-reader#
                                      (.op bool-op# (.read src-reader# ~'idx))

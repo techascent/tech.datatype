@@ -286,17 +286,34 @@
 (extend-writer-type BooleanWriter :boolean)
 (extend-writer-type ObjectWriter :object)
 
+(declare make-indexed-writer)
+
 
 (defmacro make-indexed-writer-impl
   [datatype writer-type indexes values unchecked?]
   `(let [idx-reader# (datatype->reader :int32 ~indexes true)
          values# (datatype->writer ~datatype ~values ~unchecked?)
-         writer-dtype# (dtype-proto/get-datatype ~values)]
-     (make-derived-writer ~datatype writer-dtype# ~unchecked?
-                          idx-reader#
-                          (.write values# (.read idx-reader# ~'idx)
-                                  ~'value)
-                          dtype-proto/->writer-of-type)))
+         writer-dtype# (dtype-proto/get-datatype ~values)
+         n-elems# (.size idx-reader#)]
+     (reify
+       ~(typecast/datatype->writer-type datatype)
+       (getDatatype [writer#] writer-dtype#)
+       (size [writer#] n-elems#)
+       (write [writer# idx# value#]
+         (.write values# (.read idx-reader# idx#) value#))
+       (invoke [item# idx# value#]
+         (.write item# (int idx#)
+                 (casting/datatype->cast-fn
+                  :unknown
+                  ~datatype
+                  value#)))
+       dtype-proto/PToBackingStore
+       (->backing-store-seq [writer#]
+         (dtype-proto/->backing-store-seq values#))
+       dtype-proto/PBuffer
+       (sub-buffer [writer# offset# length#]
+         (-> (dtype-proto/sub-buffer ~indexes offset# length#)
+             (make-indexed-writer ~values {:unchecked? ~unchecked?}))))))
 
 
 (defmacro make-indexed-writer-creators

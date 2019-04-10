@@ -256,27 +256,31 @@ Calls clojure.core.matrix/ecount."
   "Write a block of data to specific indexes in the object.
   indexes, values must support same protocols as write and read block."
   [item indexes values & [options]]
-  (dtype-proto/write-indexes! item indexes values options))
+  (dtype-proto/write-indexes! item indexes values options)
+  item)
 
 
 (defn read-indexes!
   "Write a block of data to specific indexes in the object.
   indexes, values must support same protocols as write and read block."
   [item indexes values & [options]]
-  (dtype-proto/read-indexes! item indexes values options))
+  (dtype-proto/read-indexes! item indexes values options)
+  values)
 
 
 (defn insert!
   [item idx value]
   (.insert ^ObjectMutable (dtype-proto/->mutable-of-type item :object false)
-           idx value))
+           idx value)
+  item)
 
 
 (defn remove!
   [item idx]
   (let [mut-item ^MutableRemove (dtype-proto/->mutable-of-type
                                  item (get-datatype item) true)]
-    (.remove mut-item (int idx))))
+    (.remove mut-item (int idx))
+    item))
 
 
 (defn remove-range!
@@ -286,14 +290,16 @@ Calls clojure.core.matrix/ecount."
 
 (defn insert-block!
   [item idx values & [options]]
-  (dtype-proto/insert-block! item idx values options))
+  (dtype-proto/insert-block! item idx values options)
+  item)
 
 
 (defn remove-range!
   [item start-idx n-elems]
   (let [mut-item ^MutableRemove (dtype-proto/->mutable-of-type
                                  item (get-datatype item) true)]
-    (.removeRange mut-item start-idx n-elems)))
+    (.removeRange mut-item start-idx n-elems))
+  item)
 
 
 (defn ->buffer-backing-store
@@ -417,6 +423,11 @@ Calls clojure.core.matrix/ecount."
                                 (or datatype (get-datatype src-item))
                                 (:unchecked? options)))
 
+(defn ->reader
+  [item]
+  (->reader-of-type item))
+
+
 (defn const-reader
   "Make a reader that returns a constant value."
   [value & {:keys [datatype num-elems]}]
@@ -508,6 +519,11 @@ Calls clojure.core.matrix/ecount."
   (dtype-proto/->writer-of-type src-item
                                 (or datatype (get-datatype src-item))
                                 (:unchecked? options)))
+
+
+(defn ->writer
+  [item]
+  (->writer-of-type item))
 
 
 (defn ->mutable-of-type

@@ -191,6 +191,15 @@
                             :tensor)))
 
 
+(defn ensure-tensor
+  [item]
+  (if (tensor? item)
+    item
+    (if-let [item-shape (dtype-base/shape item)]
+      (construct-tensor item (dims/dimensions item-shape))
+      (throw (ex-info "Cannot construct tensor from item with no shape." {})))))
+
+
 (defn tensor->buffer
   [tens]
   (:buffer tens))
@@ -218,11 +227,18 @@
           (tensor->buffer tens))))
 
 
-
 (defmethod unary-op/unary-reader-map :tensor
   [options un-op item]
   (construct-tensor (unary-op/unary-reader-map
                      options un-op
+                     (tensor->base-buffer-type item))
+                    (dims/dimensions (dtype/shape item))))
+
+
+(defmethod boolean-op/boolean-unary-reader :tensor
+  [options bool-op item]
+  (construct-tensor (boolean-op/boolean-unary-reader
+                     options bool-op
                      (tensor->base-buffer-type item))
                     (dims/dimensions (dtype/shape item))))
 
@@ -328,7 +344,7 @@
 (defn tensor->string
   ^String [tens & {:keys [print-datatype]
                    :or {print-datatype :float64}}]
-  (format "#tech.tensor.impl.Tensor<%s>%s\n%s"
+  (format "#tech.tensor<%s>%s\n%s"
           (name (dtype/get-datatype tens))
           (dtype/shape tens)
           (corem-pp/pm (->jvm tens :datatype print-datatype))))

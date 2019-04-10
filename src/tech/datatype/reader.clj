@@ -23,7 +23,9 @@
             [clojure.core.matrix.protocols :as mp]
             ;;Load all iterator bindings
             [tech.datatype.iterator]
-            [tech.datatype.argtypes :as argtypes])
+            [tech.datatype.argtypes :as argtypes]
+            [tech.datatype.protocols.impl
+             :refer [safe-get-datatype]])
   (:import [tech.datatype ObjectReader ObjectReaderIter ObjectIter
             ByteReader ByteReaderIter ByteIter
             ShortReader ShortReaderIter ShortIter
@@ -217,7 +219,7 @@
 
 (defn- make-object-wrapper
   [reader datatype unchecked?]
-  (let [item-dtype (dtype-proto/safe-get-datatype reader)]
+  (let [item-dtype (safe-get-datatype reader)]
     (when-not (and (= :object (casting/flatten-datatype item-dtype))
                    (= :object (casting/flatten-datatype datatype)))
       (throw (ex-info "Incorrect use of object wrapper"
@@ -273,7 +275,7 @@
 
 (defn make-marshalling-reader
   [src-reader dest-dtype unchecked?]
-  (let [src-dtype (dtype-proto/safe-get-datatype src-reader)]
+  (let [src-dtype (safe-get-datatype src-reader)]
     (if (= src-dtype dest-dtype)
       src-reader
       (let [src-reader (if (= (casting/flatten-datatype src-dtype)
@@ -511,7 +513,7 @@
 
 (defn reverse-reader
   [src-reader {:keys [datatype]}]
-  (let [datatype (or datatype (dtype-proto/safe-get-datatype src-reader))
+  (let [datatype (or datatype (safe-get-datatype src-reader))
         create-fn (get reverse-reader-table (casting/safe-flatten datatype))]
     (create-fn src-reader)))
 

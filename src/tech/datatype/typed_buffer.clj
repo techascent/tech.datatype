@@ -11,7 +11,8 @@
             [tech.jna :as jna]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp])
-  (:import [com.sun.jna Pointer]))
+  (:import [com.sun.jna Pointer]
+           [tech.datatype.protocols PDatatype]))
 
 
 (set! *warn-on-reflection* true)

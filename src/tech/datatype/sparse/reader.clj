@@ -8,7 +8,9 @@
             [tech.datatype.sparse.protocols :as sparse-proto]
             [tech.datatype.binary-search :as dtype-search]
             [tech.datatype.unary-op :as unary-op]
-            [tech.datatype.argtypes :as argtypes]))
+            [tech.datatype.argtypes :as argtypes]
+            [tech.datatype.protocols.impl
+             :refer [safe-get-datatype]]))
 
 
 (declare ->reader const-sparse-reader make-sparse-reader)
@@ -164,7 +166,7 @@
 
 (defn ->reader
   [item & [datatype]]
-  (let [dtype (or datatype (dtype-proto/safe-get-datatype item))]
+  (let [dtype (or datatype (safe-get-datatype item))]
     (case (argtypes/arg->arg-type item)
       :scalar
       (const-sparse-reader item dtype)

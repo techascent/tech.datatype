@@ -13,13 +13,6 @@
   (get-datatype [item] (.getDatatype item)))
 
 
-(defn safe-get-datatype
-  [item]
-  (if (satisfies? PDatatype item)
-    (get-datatype item)
-    :object))
-
-
 (extend-type Countable
   mp/PElementCount
   (element-count [item] (.size item)))

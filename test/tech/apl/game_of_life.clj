@@ -12,7 +12,7 @@
 
 (defn membership
   [lhs rhs]
-  (let [membership-set (set (vec rhs))]
+  (let [membership-set (set (dtype/->vector rhs))]
     (bool-op/boolean-unary-reader
      {:datatype :object}
      (bool-op/make-boolean-unary-op

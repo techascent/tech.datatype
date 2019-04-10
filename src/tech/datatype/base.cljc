@@ -8,6 +8,8 @@
             [tech.datatype.casting :as casting]
             [tech.datatype.typecast :as typecast]
             [tech.datatype.io :as dtype-io]
+            [tech.datatype.protocols.impl
+             :refer [safe-get-datatype]]
             [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix :as m]
             [clojure.core.matrix.protocols :as mp])
@@ -84,7 +86,7 @@
 
 (defn get-datatype
   [item]
-  (dtype-proto/safe-get-datatype item))
+  (safe-get-datatype item))
 
 
 (defn make-container

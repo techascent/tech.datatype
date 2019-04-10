@@ -5,7 +5,9 @@
             [tech.datatype.argtypes :as argtypes]
             [tech.datatype.nio-access
              :refer [unchecked-full-cast
-                     checked-full-write-cast]])
+                     checked-full-write-cast]]
+            [tech.datatype.protocols.impl
+             :refer [safe-get-datatype]])
   (:import [tech.datatype ObjectIter ByteIter ShortIter
             IntIter LongIter FloatIter DoubleIter
             BooleanIter IteratorObjectIter]))
@@ -224,5 +226,5 @@
 (defn ->iterable
   [item]
   (if (= :scalar (argtypes/arg->arg-type item))
-    (make-const-iterable item (dtype-proto/safe-get-datatype item))
+    (make-const-iterable item (safe-get-datatype item))
     item))

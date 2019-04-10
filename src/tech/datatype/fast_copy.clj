@@ -8,7 +8,9 @@
             [tech.parallel :as parallel]
             [tech.datatype.nio-access :refer [buf-put buf-get
                                               datatype->list-read-fn]]
-            [clojure.core.matrix.macros :refer [c-for]])
+            [clojure.core.matrix.macros :refer [c-for]]
+            [tech.datatype.protocols.impl
+             :refer [safe-get-datatype]])
   (:import  [com.sun.jna Pointer]
             [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
             [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
@@ -54,7 +56,7 @@
 
 (defn parallel-slow-copy!
   [dst src unchecked?]
-  (case (dtype-proto/safe-get-datatype dst)
+  (case (safe-get-datatype dst)
     :int8 (parallel-slow-copy :int8 dst src unchecked?)
     :uint8 (parallel-slow-copy :uint8 dst src unchecked?)
     :int16 (parallel-slow-copy :int16 dst src unchecked?)
@@ -81,7 +83,7 @@
 
 (defn serial-slow-copy!
   [dst src unchecked?]
-  (case (dtype-proto/safe-get-datatype dst)
+  (case (safe-get-datatype dst)
     :int8 (serial-slow-copy :int8 dst src unchecked?)
     :uint8 (serial-slow-copy :uint8 dst src unchecked?)
     :int16 (serial-slow-copy :int16 dst src unchecked?)
@@ -110,7 +112,7 @@
 
 (defn parallel-nio-write!
   [dst src unchecked?]
-  (case (dtype-proto/safe-get-datatype dst)
+  (case (safe-get-datatype dst)
     :int8 (impl-nio-write :int8 dst src unchecked?)
     :int16 (impl-nio-write :int16 dst src unchecked?)
     :int32 (impl-nio-write :int32 dst src unchecked?)
@@ -131,7 +133,7 @@
 
 (defn parallel-list-write!
   [dst src unchecked?]
-  (case (dtype-proto/safe-get-datatype dst)
+  (case (safe-get-datatype dst)
     :int8 (impl-list-write :int8 dst src unchecked?)
     :int16 (impl-list-write :int16 dst src unchecked?)
     :int32 (impl-list-write :int32 dst src unchecked?)
@@ -144,15 +146,15 @@
 
 (defn parallel-write!
   [item src unchecked?]
-  (let [item-dtype (cond-> (dtype-proto/safe-get-datatype item)
+  (let [item-dtype (cond-> (safe-get-datatype item)
                      unchecked?
                      casting/datatype->host-datatype)
         item-buf (typecast/as-nio-buffer item)
         item-list (typecast/as-list item)]
     (cond
-      (and item-buf (= item-dtype (dtype-proto/safe-get-datatype item-buf)))
+      (and item-buf (= item-dtype (safe-get-datatype item-buf)))
       (parallel-nio-write! item src unchecked?)
-      (and item-list (= item-dtype (dtype-proto/safe-get-datatype item-list)))
+      (and item-list (= item-dtype (safe-get-datatype item-list)))
       (parallel-list-write! item src unchecked?)
       :else
       (parallel-slow-copy! item src unchecked?))))
@@ -171,7 +173,7 @@
 
 (defn parallel-nio-read!
   [dst src unchecked?]
-  (case (dtype-proto/safe-get-datatype src)
+  (case (safe-get-datatype src)
     :int8 (impl-nio-read :int8 dst src unchecked?)
     :int16 (impl-nio-read :int16 dst src unchecked?)
     :int32 (impl-nio-read :int32 dst src unchecked?)
@@ -192,7 +194,7 @@
 
 (defn parallel-list-read!
   [dst src unchecked?]
-  (case (dtype-proto/safe-get-datatype src)
+  (case (safe-get-datatype src)
     :int8 (impl-list-read :int8 dst src unchecked?)
     :int16 (impl-list-read :int16 dst src unchecked?)
     :int32 (impl-list-read :int32 dst src unchecked?)
@@ -205,13 +207,13 @@
 
 (defn parallel-read!
   [item src unchecked?]
-  (let [src-dtype (dtype-proto/safe-get-datatype src)
+  (let [src-dtype (safe-get-datatype src)
         src-buf (typecast/as-nio-buffer src)
         src-list (typecast/as-list src)]
     (cond
-      (and src-buf (= src-dtype (dtype-proto/safe-get-datatype src-buf)))
+      (and src-buf (= src-dtype (safe-get-datatype src-buf)))
       (parallel-nio-read! item src unchecked?)
-      (and src-list (= src-dtype (dtype-proto/safe-get-datatype src-list)))
+      (and src-list (= src-dtype (safe-get-datatype src-list)))
       (parallel-list-read! item src unchecked?)
       :else
       (parallel-slow-copy! item src unchecked?))))
@@ -233,8 +235,8 @@
                          (or dst-buf dst-list))
             (throw (ex-info "convertible to list or nio"
                             {})))
-        src-dtype (dtype-proto/safe-get-datatype (or src-buf src-list))
-        dst-dtype (dtype-proto/safe-get-datatype (or dst-buf dst-list))
+        src-dtype (safe-get-datatype (or src-buf src-list))
+        dst-dtype (safe-get-datatype (or dst-buf dst-list))
         n-elems (long (mp/element-count dst))]
     (when-not (= src-dtype dst-dtype)
       (throw (ex-info "Fast copy called inappropriately; datatypes do not match"

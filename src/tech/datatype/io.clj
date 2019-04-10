@@ -16,7 +16,9 @@
              :as typecast]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.reader :as reader]
-            [tech.datatype.writer :as writer])
+            [tech.datatype.writer :as writer]
+            [tech.datatype.protocols.impl
+             :refer [safe-get-datatype]])
 
   (:import [tech.datatype
             ObjectReader ObjectWriter ObjectMutable
@@ -36,8 +38,8 @@
 
 (defn dense-copy!
   [dst src unchecked?]
-  (let [dst-dtype (dtype-proto/safe-get-datatype dst)
-        src-dtype (dtype-proto/safe-get-datatype src)
+  (let [dst-dtype (safe-get-datatype dst)
+        src-dtype (safe-get-datatype src)
         src-buf (or (typecast/as-nio-buffer src)
                     (typecast/as-list src))
         dst-nio (typecast/as-nio-buffer dst)
@@ -45,8 +47,8 @@
         dst-list (typecast/as-list dst)
         src-list (typecast/as-list src)
         dst-buf (or dst-nio dst-list)
-        src-buf-dtype (when src-buf (dtype-proto/safe-get-datatype src-buf))
-        dst-buf-dtype (when dst-buf (dtype-proto/safe-get-datatype dst-buf))
+        src-buf-dtype (when src-buf (safe-get-datatype src-buf))
+        dst-buf-dtype (when dst-buf (safe-get-datatype dst-buf))
         fast-path? (and src-buf
                         dst-buf
                         (or (and (numeric-type? dst-dtype)
@@ -93,7 +95,7 @@
 
 (defn write-indexes!
   [item indexes values options]
-  (let [datatype (or (:datatype options) (dtype-proto/safe-get-datatype item))]
+  (let [datatype (or (:datatype options) (safe-get-datatype item))]
     ;;We use parallel reader because values is likely to be a raw buffer and thus
     ;;we can get direct buffer access to it.  We know that we cannot get a raw buffer
     ;;from an indexed writer.
@@ -105,7 +107,7 @@
 
 (defn read-indexes!
   [item indexes values options]
-  (let [datatype (or (:datatype options) (dtype-proto/safe-get-datatype item))]
+  (let [datatype (or (:datatype options) (safe-get-datatype item))]
     (fast-copy/parallel-write! values (reader/make-indexed-reader
                                        indexes values (assoc options :datatype datatype))
                                true)

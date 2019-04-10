@@ -3,6 +3,7 @@
   (:require [tech.tensor :as tens]
             [tech.datatype :as dtype]
             [tech.datatype.unary-op :as unary-op]
+            [tech.datatype.binary-op :as binary-op]
             [tech.datatype.boolean-op :as bool-op]
             [tech.tensor.impl :as tens-impl]
             [tech.datatype.functional :as dtype-fn]
@@ -86,13 +87,25 @@
 (def summed (apply dtype-fn/+ table-rotated))
 
 
-(def next-gen (-> (bool-op/boolean-unary-reader
-                   {}
-                   (bool-op/make-boolean-unary-op :int8
-                                                  (or (= 3 arg)
-                                                      (= 4 arg)))
-                   summed)
-                  (tens/clone :datatype :int8)))
+(defn game-of-life-operator
+  [original new-matrix]
+  (-> (binary-op/binary-reader-map
+       {:datatype :int8}
+       (binary-op/make-binary-op :int8
+                                 (unchecked-byte
+                                  (if (or (= 3 y)
+                                          (and (not= 0 x)
+                                               (= 4 y)))
+                                    1
+                                    0)))
+       original
+       new-matrix)
+      ;;Force the actual result to be calculated.  Else we would get a *huge* chain of reader
+      ;;maps.
+      (tens/clone :datatype :int8)))
+
+
+(def next-gen (game-of-life-operator R-matrix summed))
 
 
 (defn life
@@ -103,12 +116,7 @@
              (rotate-vertical vert-amount)
              (rotate-horizontal horz-amount)))
        (apply dtype-fn/+)
-       (bool-op/boolean-unary-reader
-        {}
-        (bool-op/make-boolean-unary-op :int8
-                                       (or (= 3 arg)
-                                           (= 4 arg))))
-       (#(tens/clone % :datatype :int8))))
+       (game-of-life-operator R)))
 
 
 (defn life-seq
@@ -134,5 +142,5 @@
 (defn print-life-generations
   [& [n-gens]]
   (doseq [life-item (take (or n-gens 1000) (life-seq RR))]
-    (println life-item)
+    (println (mat->pic-mat life-item))
     (Thread/sleep 125)))

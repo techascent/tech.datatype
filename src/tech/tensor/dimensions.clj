@@ -114,8 +114,8 @@
 
 (defn ecount
   "Return the element count indicated by the dimension map"
-  ^long [{:keys [shape]}]
-  (long (apply * (shape/shape->count-vec shape))))
+  ^long [{:keys [max-shape]}]
+  (long (apply * max-shape)))
 
 
 (defn buffer-ecount
@@ -153,8 +153,8 @@
 
 
 (defn shape
-  [{:keys [shape]}]
-  (shape/shape->count-vec shape))
+  [{:keys [shape max-shape]}]
+  max-shape)
 
 
 (defn strides
@@ -465,7 +465,7 @@ to be reversed for the most efficient implementation."
   (->> (binary-op/default-binary-reader-map
         {:datatype :int32} integer-binary-*
         lhs rhs)
-       (reduce-op/default-iterable-reduce
+       (reduce-op/default-iterable-reduce-map
         {:datatype :int32} integer-reduce-+)))
 
 
@@ -534,7 +534,7 @@ to be reversed for the most efficient implementation."
                                                      {:datatype :int32}
                                                      (boolean-op/make-boolean-unary-op
                                                       :int32
-                                                      (= arg local-idx))
+                                                      (= x local-idx))
                                                      shape-entry)]
                                       addr)))
                                 local-shape shape-obj-reader)
@@ -573,7 +573,7 @@ to be reversed for the most efficient implementation."
                                                    (unary-op/default-unary-reader-map
                                                     {:datatype :int32 :unchecked? true}
                                                     (unary-op/make-unary-op
-                                                     :int32 (+ arg local-mult))
+                                                     :int32 (+ x local-mult))
                                                     initial-reader)))
                             (recur (unchecked-inc repeat-idx)))))
                       (recur (unchecked-inc idx))))

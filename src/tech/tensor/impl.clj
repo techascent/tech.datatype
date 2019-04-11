@@ -26,6 +26,7 @@
 
 
 (def ^:dynamic *datatype* :float64)
+(def ^:dynamic *container-type* :typed-buffer)
 
 (defmacro with-datatype
   [dtype & body]
@@ -34,8 +35,13 @@
 
 
 (defn datatype
-  [dtype-or-nil]
+  [& [dtype-or-nil]]
   (or dtype-or-nil *datatype*))
+
+
+(defn container-type
+  [& [container-type]]
+  (or container-type *container-type*))
 
 
 (defn- dimensions->index-reader
@@ -226,7 +232,7 @@
 
 
 
-(defn- tensor->base-buffer-type
+(defn tensor->base-buffer-type
   [tens]
   (assoc tens :buffer-type
          (dtype/buffer-type
@@ -241,9 +247,9 @@
                     (dims/dimensions (dtype/shape item))))
 
 
-(defmethod boolean-op/boolean-unary-reader :tensor
+(defmethod boolean-op/boolean-unary-reader-map :tensor
   [options bool-op item]
-  (construct-tensor (boolean-op/boolean-unary-reader
+  (construct-tensor (boolean-op/boolean-unary-reader-map
                      options bool-op
                      (tensor->base-buffer-type item))
                     (dims/dimensions (dtype/shape item))))
@@ -294,7 +300,55 @@
   (default-tensor-binary-reader-map options bin-op lhs rhs))
 
 
-(defn to-core-matrix
+(defn default-tensor-binary-boolean-reader-map
+  "Anything times a tensor returns a thing in the shape of
+  the tensor.  ecounts must match."
+  [options bin-op lhs rhs]
+  (when-not (= (dtype-base/ecount lhs)
+               (dtype-base/ecount rhs))
+    (throw (ex-info "Ecounts don't match" {})))
+  (let [lhs-shape (dtype-base/shape lhs)
+        lhs-tensor? (tensor? lhs)
+        lhs (if (tensor? lhs)
+              (tensor->base-buffer-type lhs)
+              lhs)
+        rhs-shape (dtype-base/shape rhs)
+        rhs (if (tensor? rhs)
+              (tensor->base-buffer-type rhs)
+              rhs)]
+    (construct-tensor
+     (boolean-op/boolean-binary-reader-map options bin-op lhs rhs)
+     (if lhs-tensor?
+       (dims/dimensions lhs-shape)
+       (dims/dimensions rhs-shape)))))
+
+;; Next up
+(defmethod boolean-op/boolean-binary-reader-map [:dense :tensor]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-boolean-reader-map options bin-op lhs rhs))
+
+(defmethod boolean-op/boolean-binary-reader-map [:tensor :dense]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-boolean-reader-map options bin-op lhs rhs))
+
+(defmethod boolean-op/boolean-binary-reader-map [:tensor :tensor]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-boolean-reader-map options bin-op lhs rhs))
+
+(defmethod boolean-op/boolean-binary-reader-map [:sparse :tensor]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-boolean-reader-map options bin-op lhs rhs))
+
+
+(defmethod boolean-op/boolean-binary-reader-map [:tensor :sparse]
+  [options bin-op lhs rhs]
+  (default-tensor-binary-boolean-reader-map options bin-op lhs rhs))
+
+
+
+
+
+(defn ->core-matrix
   [tensor]
   (let [retval (m/new-array :vectorz (dtype-base/shape tensor))
         double-data (mp/as-double-array retval)]
@@ -302,24 +356,24 @@
     retval))
 
 
-(defn to-core-matrix-vector
+(defn ->core-matrix-vector
   [tensor]
-  (m/as-vector (to-core-matrix tensor)))
+  (m/as-vector (->core-matrix tensor)))
 
 
 (defn ->jvm
   "Conversion to storage that is efficient for the jvm.
   Base storage is either jvm-array or persistent-vector."
   [item & {:keys [datatype base-storage]
-           :or {datatype :float64
-                base-storage :persistent-vector}}]
+           :or {base-storage :persistent-vector}}]
   ;;Get the data off the device
   (let [item-shape (dtype-base/shape item)
         item-ecount (dtype-base/ecount item)
         column-len (long (last item-shape))
         n-columns (quot item-ecount column-len)
-        data-array (dtype-proto/->reader-of-type item
-                                                 (dtype-base/get-datatype item) true)
+        datatype (or datatype (dtype-base/get-datatype item))
+        data-array (dtype-proto/->reader-of-type
+                    item datatype true)
         base-data
         (->> (range n-columns)
              (map (fn [col-idx]
@@ -354,7 +408,7 @@
   (format "#tech.tensor<%s>%s\n%s"
           (name (dtype/get-datatype tens))
           (dtype/shape tens)
-          (corem-pp/pm (->jvm tens :datatype print-datatype))))
+          (corem-pp/pm (->jvm tens))))
 
 
 (defmethod print-method Tensor

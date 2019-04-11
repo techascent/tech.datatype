@@ -31,7 +31,9 @@
                      make-float-double-unary-op
                      make-all-datatype-unary-op
                      unary-iterable-map
-                     unary-reader-map)
+                     unary-reader-map
+                     unary-iterable
+                     unary-reader)
 
 
 (impl/export-symbols tech.datatype.binary-op
@@ -40,7 +42,24 @@
                      make-binary-op
                      make-numeric-binary-op
                      make-long-binary-op
-                     make-double-binary-op)
+                     make-double-binary-op
+                     binary-iterable
+                     binary-reader)
+
+
+(impl/export-symbols tech.datatype.boolean-op
+                     boolean-unary-iterable-map
+                     boolean-unary-reader-map
+                     boolean-binary-iterable-map
+                     boolean-binary-reader-map
+                     make-boolean-binary-op
+                     make-boolean-unary-op
+                     make-numeric-binary-boolean-op
+                     make-all-datatype-binary-boolean-op
+                     boolean-unary-iterable
+                     boolean-unary-reader
+                     boolean-binary-iterable
+                     boolean-binary-reader)
 
 
 (impl/export-symbols tech.datatype.functional.impl
@@ -103,7 +122,7 @@
     (let [bool-op (if (satisfies? dtype-proto/PToUnaryBooleanOp bool-op)
                     bool-op
                     (boolean-op/make-boolean-unary-op
-                     :object (boolean (bool-op arg))))]
+                     :object (boolean (bool-op x))))]
       (boolean-op/unary-argfilter (impl/default-options {})
                                   bool-op
                                   filter-seq))))

@@ -182,13 +182,13 @@
 
 (defmacro make-unary-op
   "Make a unary operation with a given datatype.  The argument is
-  placed into the local namespace as 'arg'.
+  placed into the local namespace as 'x'.
   (make-unary-op :plus10 :int32 (+ arg 10))"
   ([opname datatype body]
    `(reify
       ~(datatype->unary-op-type datatype)
       (getDatatype [item#] ~datatype)
-      (op [item# ~'arg]
+      (op [item# ~'x]
         ~body)
       (invoke [item# arg#]
         (.op item# (casting/datatype->cast-fn :unknown ~datatype arg#)))
@@ -237,18 +237,31 @@
   (let [datatype (or datatype (dtype-base/get-datatype item))]
     (if (= (dtype-proto/op-name un-op) :identity)
       (dtype-proto/->iterable-of-type item datatype unchecked?)
-      (if-let [iter-fn (get unary-op-iter-table (casting/flatten-datatype datatype))]
-        (iter-fn item un-op unchecked?)
-        (throw (ex-info (format "Cannot unary map datatype %s" datatype) {}))))))
+      ;;For object iteration map is probably faster
+      (if (= datatype :object)
+        (map un-op (typecast/datatype->reader :object item))
+        (if-let [iter-fn (get unary-op-iter-table (casting/flatten-datatype datatype))]
+          (iter-fn item un-op unchecked?)
+          (throw (ex-info (format "Cannot unary map datatype %s" datatype) {})))))))
+
+
+(defmacro unary-iterable
+  ([datatype op-code item]
+   `(unary-iterable-map
+     {:datatype ~datatype}
+     (make-unary-op ~datatype ~op-code)
+     ~item))
+  ([op-code item]
+   `(unary-iterable :object ~op-code ~item)))
 
 
 (defn iterable-remove
   [options filter-iter values]
-  (iterator/iterable-mask options
-                          (unary-iterable-map options
-                           (make-unary-op :boolean (not arg))
-                           filter-iter)
-                          values))
+  (iterator/iterable-mask
+   options
+   (unary-iterable :boolean (not x) filter-iter)
+   values))
+
 
 (declare unary-reader-map)
 
@@ -298,6 +311,15 @@
   [{:keys [datatype unchecked?] :as options} un-op item]
   (default-unary-reader-map options un-op item))
 
+
+(defmacro unary-reader
+  ([datatype un-op item]
+   `(unary-reader-map
+     {:datatype ~datatype}
+     (make-unary-op ~datatype ~un-op)
+     ~item))
+  ([un-op item]
+   `(unary-reader :object ~un-op ~item)))
 
 
 (defmacro make-double-unary-op
@@ -390,42 +412,42 @@
 
 
 (def builtin-unary-ops
-  (->> [(make-double-unary-op :floor (Math/floor arg))
-        (make-double-unary-op :ceil (Math/ceil arg))
-        (make-double-unary-op :round (unchecked-double (Math/round arg)))
-        (make-double-unary-op :rint (Math/rint arg))
-        (make-numeric-object-unary-op :- (- arg))
+  (->> [(make-double-unary-op :floor (Math/floor x))
+        (make-double-unary-op :ceil (Math/ceil x))
+        (make-double-unary-op :round (unchecked-double (Math/round x)))
+        (make-double-unary-op :rint (Math/rint x))
+        (make-numeric-object-unary-op :- (- x))
         (make-double-unary-op :logistic
                               (/ 1.0
-                                 (+ 1.0 (Math/exp (- arg)))))
-        (make-double-unary-op :exp (Math/exp arg))
-        (make-double-unary-op :expm1 (Math/expm1 arg))
-        (make-double-unary-op :log (Math/log arg))
-        (make-double-unary-op :log10 (Math/log10 arg))
-        (make-double-unary-op :log1p (Math/log1p arg))
-        (make-double-unary-op :signum (Math/signum arg))
-        (make-double-unary-op :sqrt (Math/sqrt arg))
-        (make-double-unary-op :cbrt (Math/cbrt arg))
-        (make-double-unary-op :abs (Math/abs arg))
-        (make-numeric-unary-op :sq (unchecked-multiply arg arg))
-        (make-double-unary-op :sin (Math/sin arg))
-        (make-double-unary-op :sinh (Math/sinh arg))
-        (make-double-unary-op :cos (Math/cos arg))
-        (make-double-unary-op :cosh (Math/cosh arg))
-        (make-double-unary-op :tan (Math/tan arg))
-        (make-double-unary-op :tanh (Math/tanh arg))
-        (make-double-unary-op :acos (Math/acos arg))
-        (make-double-unary-op :asin (Math/asin arg))
-        (make-double-unary-op :atan (Math/atan arg))
-        (make-double-unary-op :to-degrees (Math/toDegrees arg))
-        (make-double-unary-op :to-radians (Math/toRadians arg))
+                                 (+ 1.0 (Math/exp (- x)))))
+        (make-double-unary-op :exp (Math/exp x))
+        (make-double-unary-op :expm1 (Math/expm1 x))
+        (make-double-unary-op :log (Math/log x))
+        (make-double-unary-op :log10 (Math/log10 x))
+        (make-double-unary-op :log1p (Math/log1p x))
+        (make-double-unary-op :signum (Math/signum x))
+        (make-double-unary-op :sqrt (Math/sqrt x))
+        (make-double-unary-op :cbrt (Math/cbrt x))
+        (make-double-unary-op :abs (Math/abs x))
+        (make-numeric-unary-op :sq (unchecked-multiply x x))
+        (make-double-unary-op :sin (Math/sin x))
+        (make-double-unary-op :sinh (Math/sinh x))
+        (make-double-unary-op :cos (Math/cos x))
+        (make-double-unary-op :cosh (Math/cosh x))
+        (make-double-unary-op :tan (Math/tan x))
+        (make-double-unary-op :tanh (Math/tanh x))
+        (make-double-unary-op :acos (Math/acos x))
+        (make-double-unary-op :asin (Math/asin x))
+        (make-double-unary-op :atan (Math/atan x))
+        (make-double-unary-op :to-degrees (Math/toDegrees x))
+        (make-double-unary-op :to-radians (Math/toRadians x))
 
-        (make-float-double-unary-op :next-up (Math/nextUp arg))
-        (make-float-double-unary-op :next-down (Math/nextDown arg))
-        (make-float-double-unary-op :ulp (Math/ulp arg))
+        (make-float-double-unary-op :next-up (Math/nextUp x))
+        (make-float-double-unary-op :next-down (Math/nextDown x))
+        (make-float-double-unary-op :ulp (Math/ulp x))
 
-        (make-unary-op :bit-not :int64 (bit-not arg))
-        (make-numeric-unary-op :/ (/ arg))
-        (make-all-datatype-unary-op :identity arg)]
+        (make-unary-op :bit-not :int64 (bit-not x))
+        (make-numeric-unary-op :/ (/ x))
+        (make-all-datatype-unary-op :identity x)]
        (map #(vector (dtype-proto/op-name %) %))
        (into {})))

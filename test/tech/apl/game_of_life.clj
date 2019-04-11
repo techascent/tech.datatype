@@ -7,6 +7,7 @@
             [tech.datatype.boolean-op :as bool-op]
             [tech.tensor.impl :as tens-impl]
             [tech.datatype.functional :as dtype-fn]
+            [tech.datatype.protocols :as dtype-proto]
             [clojure.pprint :as pp]
             [clojure.test :refer :all]))
 
@@ -15,9 +16,8 @@
   [lhs rhs]
   (let [membership-set (set (dtype/->vector rhs))]
     (bool-op/boolean-unary-reader
-     {:datatype :object}
-     (bool-op/make-boolean-unary-op
-      :object (contains? membership-set arg))
+     :object
+     (contains? membership-set x)
      lhs)))
 
 
@@ -90,15 +90,14 @@
 
 (defn game-of-life-operator
   [original new-matrix]
-  (-> (binary-op/binary-reader-map
-       {:datatype :int8}
-       (binary-op/make-binary-op :int8
-                                 (unchecked-byte
-                                  (if (or (= 3 y)
-                                          (and (not= 0 x)
-                                               (= 4 y)))
-                                    1
-                                    0)))
+  (-> (binary-op/binary-reader
+       :int8
+       (unchecked-byte
+        (if (or (= 3 y)
+                (and (not= 0 x)
+                     (= 4 y)))
+          1
+          0))
        original
        new-matrix)
       ;;Force the actual result to be calculated.  Else we would get a *huge* chain of reader
@@ -135,7 +134,7 @@
        (unary-op/unary-reader-map
         {:datatype :object}
         (unary-op/make-unary-op :object
-                                (if (= 0 (int arg))
+                                (if (= 0 (int x))
                                   (char 0x02DA)
                                   (char 0x2021))))))
 

@@ -19,6 +19,9 @@
             BooleanOp$ObjectUnary BooleanOp$ObjectBinary]
            [clojure.lang IFn]))
 
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
+
 
 (defn datatype->boolean-unary-type
   [datatype]
@@ -40,7 +43,7 @@
   (let [host-dtype (casting/safe-flatten datatype)]
     `(reify
        ~(datatype->boolean-unary-type host-dtype)
-       (op [item# ~'arg]
+       (op [item# ~'x]
          ~body)
        dtype-proto/PDatatype
        (get-datatype [item#] ~host-dtype)
@@ -385,7 +388,7 @@
 (def boolean-unary-iterable-table (make-boolean-unary-iterable-table))
 
 
-(defn boolean-unary-iterable
+(defn boolean-unary-iterable-map
   "Create an iterable that transforms one sequence of arbitrary datatypes into boolean
   sequence given a boolean unary op."
   [{:keys [unchecked? datatype]} bool-un-op src-data]
@@ -394,18 +397,29 @@
     (create-fn src-data bool-un-op unchecked?)))
 
 
+(defmacro boolean-unary-iterable
+  ([datatype opcode item]
+   `(boolean-unary-iterable-map
+     {:datatype ~datatype}
+     (make-boolean-unary-op ~datatype ~opcode)
+     ~item))
+  ([opcode item]
+   `(boolean-unary-iterable :object ~opcode ~item)))
+
+
 (defn unary-iterable-filter
   "Filter a sequence via a typed unary operation."
   [{:keys [datatype unchecked?] :as options} bool-unary-filter-op filter-seq]
-  (let [bool-iterable (boolean-unary-iterable options bool-unary-filter-op
-                                              filter-seq)]
+  (let [bool-iterable (boolean-unary-iterable-map
+                       options bool-unary-filter-op
+                       filter-seq)]
     (iterator/iterable-mask options bool-iterable filter-seq)))
 
 
 (defn unary-argfilter
   "Returns a (potentially infinite) sequence of indexes that pass the filter."
   [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
-  (let [bool-iterable (boolean-unary-iterable options bool-unary-filter-op filter-seq)]
+  (let [bool-iterable (boolean-unary-iterable-map options bool-unary-filter-op filter-seq)]
     (iterator/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
 
 
@@ -454,7 +468,7 @@
 (def boolean-binary-iterable-table (make-boolean-binary-iterable-table))
 
 
-(defn boolean-binary-iterable
+(defn boolean-binary-iterable-map
   "Create an iterable that transforms one sequence of arbitrary datatypes into boolean
   sequence given a boolean binary op."
   [{:keys [unchecked? datatype]} bool-binary-op lhs-data rhs-data]
@@ -463,10 +477,20 @@
     (create-fn lhs-data rhs-data bool-binary-op unchecked?)))
 
 
+(defmacro boolean-binary-iterable
+  ([datatype opcode lhs rhs]
+   `(boolean-binary-iterablemap
+     {:datatype ~datatype}
+     (make-boolean-binary-op ~datatype ~opcode)
+     ~lhs ~rhs))
+  ([opcode lhs rhs]
+   `(boolean-binary-iterable :object ~opcode lhs rhs)))
+
+
 (defn binary-argfilter
   "Returns a (potentially infinite) sequence of indexes that pass the filter."
   [{:keys [unchecked? datatype] :as options} bool-binary-filter-op lhs-seq rhs-seq]
-  (let [bool-iterable (boolean-binary-iterable options
+  (let [bool-iterable (boolean-binary-iterable-map options
                                                bool-binary-filter-op
                                                lhs-seq rhs-seq)]
     (iterator/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
@@ -502,14 +526,24 @@
 (def boolean-unary-reader-table (make-boolean-unary-reader-table))
 
 
-(defmulti boolean-unary-reader
+(defmulti boolean-unary-reader-map
     "Create an reader that transforms one sequence of arbitrary datatypes into boolean
   reader given a boolean unary op."
   (fn [options bool-unary-op src-reader]
     (dtype-base/buffer-type src-reader)))
 
 
-(defmethod boolean-unary-reader :default
+(defmacro boolean-unary-reader
+  ([datatype opcode item]
+   `(boolean-unary-reader-map
+     {:datatype ~datatype}
+     (make-boolean-unary-op ~datatype ~opcode)
+     ~item))
+  ([opcode item]
+   `(boolean-unary-reader :object ~opcode ~item)))
+
+
+(defmethod boolean-unary-reader-map :default
   [{:keys [unchecked? datatype]} bool-un-op src-data]
   (let [datatype (or datatype (dtype-base/get-datatype src-data))
         create-fn (get boolean-unary-reader-table (casting/safe-flatten datatype))]
@@ -524,7 +558,8 @@
        (let [bool-op# (datatype->boolean-binary ~op-dtype bool-op# unchecked?#)
              lhs-reader# (typecast/datatype->reader ~datatype lhs-seq# unchecked?#)
              rhs-reader# (typecast/datatype->reader ~datatype rhs-seq# unchecked?#)
-             n-elems# (min (.size lhs-reader# rhs-reader#))]
+             n-elems# (min (.size lhs-reader#)
+                           (.size rhs-reader#))]
          (reify
            ~(typecast/datatype->reader-type :boolean)
            (getDatatype [reader#] :boolean)
@@ -552,7 +587,7 @@
 
 
 
-(defmulti boolean-binary-reader
+(defmulti boolean-binary-reader-map
     "Create an reader that transforms one sequence of arbitrary datatypes into boolean
   reader given a boolean binary op."
   (fn [options bool-binary-op lhs rhs]
@@ -560,11 +595,21 @@
      (dtype-base/buffer-type rhs)]))
 
 
-(defmethod boolean-binary-reader :default
+(defmethod boolean-binary-reader-map :default
   [{:keys [unchecked? datatype]} bool-binary-op lhs-data rhs-data]
   (let [datatype (or datatype (dtype-base/get-datatype lhs-data))
         create-fn (get boolean-binary-reader-table (casting/safe-flatten datatype))]
     (create-fn lhs-data rhs-data bool-binary-op unchecked?)))
+
+
+(defmacro boolean-binary-reader
+  ([datatype opcode lhs rhs]
+   `(boolean-binary-reader-map
+     {:datatype ~datatype}
+     (make-boolean-binary-op ~datatype ~opcode)
+     ~lhs ~rhs))
+  ([opcode lhs rhs]
+   `(boolean-binary-reader :object ~opcode ~lhs ~rhs)))
 
 
 (defmacro make-numeric-binary-boolean-op
@@ -581,7 +626,8 @@
                :int32 (make-boolean-binary-op :int32 ~opcode)
                :int64 (make-boolean-binary-op :int64 ~opcode)
                :float32 (make-boolean-binary-op :float32 ~opcode)
-               :float64 (make-boolean-binary-op :float64 ~opcode))
+               :float64 (make-boolean-binary-op :float64 ~opcode)
+               :object (make-boolean-binary-op :object ~opcode))
              (dtype-proto/->binary-boolean-op datatype# unchecked?#))))))
 
 
@@ -603,15 +649,18 @@
 
 
 (def builtin-boolean-unary-ops
-  {:not (make-boolean-unary-op :boolean (not arg))})
+  {:not (make-boolean-unary-op :boolean (not x))})
+
+
+(set! *unchecked-math* false)
 
 
 (def builtin-boolean-binary-ops
   {:and (make-boolean-binary-op :boolean (boolean (and x y)))
    :or (make-boolean-binary-op :boolean (boolean (or x y)))
-   :eq (make-all-datatype-binary-boolean-op (boolean (= x y)))
-   :not-eq (make-all-datatype-binary-boolean-op (boolean (not= x y)))
-   :> (make-numeric-binary-boolean-op (if (> x y) true false))
-   :>= (make-numeric-binary-boolean-op (if (>= x y) true false))
-   :< (make-numeric-binary-boolean-op (if (< x y) true false))
-   :<= (make-numeric-binary-boolean-op (if (<= x y) true false))})
+   :eq (make-all-datatype-binary-boolean-op (= x y))
+   :not-eq (make-all-datatype-binary-boolean-op (not= x y))
+   :> (make-numeric-binary-boolean-op (> x y))
+   :>= (make-numeric-binary-boolean-op (>= x y))
+   :< (make-numeric-binary-boolean-op (< x y))
+   :<= (make-numeric-binary-boolean-op (<= x y))})

@@ -337,10 +337,6 @@ Calls clojure.core.matrix/ecount."
                                   options))
 
 
-;;Make to help make unary operations.
-(refer 'tech.datatype.unary-op :only '[make-unary-op])
-(refer 'tech.datatype.binary-op :only '[make-binary-op])
-
 
 (defn const-iterable
   [value & {:keys [datatype]}]
@@ -374,41 +370,6 @@ Calls clojure.core.matrix/ecount."
   (dtype-iter/iterable-concat options args))
 
 
-(defn unary-iterable-map
-  "Typed unary iteration across an iterable.  Produces a new iterable.
-  (unary-iterable-map
-    {}
-    (unary-op/make-unary-op :int32 (* b-stride
-                                      (+ arg b-offset)))
-    new-idx-buf)"
-  [options un-op item]
-  (unary-op/unary-iterable-map options un-op item))
-
-
-(defn binary-iterable-map
-  "Typed binary iteration across 2 iterables.  Length is the short of the two
-  iterables.  Produces a new iterable."
-  [options bin-op lhs rhs]
-  (binary-op/binary-iterable-map options bin-op lhs rhs))
-
-
-(refer 'tech.datatype.boolean-op :only '[make-boolean-unary-op
-                                         make-boolean-binary-op
-                                         unary-iterable-filter
-                                         unary-argfilter
-                                         binary-argfilter])
-
-
-(defn boolean-unary-iterable
-  "Take an iterable and transform it to a boolean iterable via operation."
-  [bool-un-op src-data & {:keys [unchecked? datatype] :as options}]
-  (dtype-bool/boolean-unary-iterable options bool-un-op src-data))
-
-
-(defn boolean-binary-iterable
-  "Take 2 iterables and transform then to 1 boolean iterable via op."
-  [bool-binary-op lhs-data rhs-data {:keys [unchecked? datatype] :as options}]
-  (dtype-bool/boolean-binary-iterable options bool-binary-op lhs-data rhs-data))
 
 
 (defn reader?
@@ -424,6 +385,7 @@ Calls clojure.core.matrix/ecount."
                                 (:unchecked? options)))
 
 (defn ->reader
+  "Convert to a reader of the item's datatype"
   [item]
   (->reader-of-type item))
 
@@ -464,55 +426,6 @@ Calls clojure.core.matrix/ecount."
    indexes values (assoc options :datatype datatype)))
 
 
-;;Argsort, binary search take typed comparators
-(refer 'tech.datatype.comparator :only '[make-comparator])
-
-
-(defn argsort
-  "Return a list of indexes in sorted-values order.  Values must be
-  convertible to a reader.  Sorts least-to-greatest by default
-  unless either reverse? is specified or a correctly typed comparator
-  is provided.
-  Returns an int32 array or indexes."
-  [values & {:keys [parallel?
-                    typed-comparator
-                    datatype
-                    reverse?]
-             :or {parallel? true}
-             :as options}]
-  (dtype-sort/argsort values (assoc options :parallel? parallel?)))
-
-
-(defn binary-search
-  "Perform a binary search of (convertible to reader) values for target and return a
-  tuple of [found? elem-pos-or-insert-pos].  If the element is found, the elem-pos
-  contains the index.  If the element is not found, then it contains the index where the
-  element would be inserted to maintain sort order of the values."
-  [values target & {:keys [datatype unchecked?]
-                    :or {datatype (get-datatype values)}
-                    :as options}]
-  (dtype-search/binary-search
-   values target (assoc options :datatype datatype)))
-
-
-(defn unary-reader-map
-  "Typed unary iteration across an reader.  Produces a new reader that evaluates
-  the unary op at access time.
-  (unary-iterable-map
-    (unary-op/make-unary-op :int32 (* b-stride
-                                      (+ arg b-offset)))
-    new-idx-buf)"
-  [options un-op item]
-  (unary-op/unary-reader-map options un-op item))
-
-
-(defn binary-reader-map
-  "Typed binary iteration across 2 readers.  Length is the shorter of the two
-  readers.  Produces a new reader that performs operation at access time."
-  [options bin-op lhs rhs]
-  (binary-op/binary-reader-map options bin-op lhs rhs))
-
-
 (defn ->writer-of-type
   "Create a writer of a specific type."
   [src-item & [datatype options]]
@@ -522,6 +435,7 @@ Calls clojure.core.matrix/ecount."
 
 
 (defn ->writer
+  "Convert to a reader of the item's datatype"
   [item]
   (->writer-of-type item))
 

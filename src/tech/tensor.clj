@@ -1,8 +1,11 @@
 (ns tech.tensor
   (:require [tech.datatype :as dtype]
+            [tech.datatype.protocols :as dtype-proto]
             [tech.tensor.impl :as impl]
             [tech.tensor.dimensions :as dims]
-            [tech.datatype.functional :as dtype-fn]))
+            [tech.tensor.dimensions.shape :as shape]
+            [tech.datatype.functional :as dtype-fn]
+            [tech.datatype.functional.impl :as func-impl]))
 
 
 (defn ->tensor
@@ -59,7 +62,6 @@
 
 (defn select
   [tens & args]
-
   (let [tens (impl/ensure-tensor tens)
         {new-dims :dims
          buf-offset :elem-offset
@@ -70,12 +72,54 @@
                            new-dims)))
 
 
+(defn broadcast
+  "Create a larger tensor by repeating dimensions of a smaller tensor."
+  [tens bcast-shape]
+  (let [tens-shape (dtype/shape tens)
+        n-tens-elems (dtype/ecount tens)
+        n-bcast-elems (shape/ecount bcast-shape)
+        num-tens-shape (count tens-shape)
+        {:keys [shape strides offsets max-shape] :as tens-dims} (:dimensions tens)]
+    (when-not (every? number? bcast-shape)
+      (throw (ex-info "Broadcast shapes must only be numbers" {})))
+    (when-not (>= n-bcast-elems
+                  n-tens-elems)
+      (throw (ex-info (format "Improper broadcast, broadcast shape (%s) is smaller than tens (%s)"
+                              bcast-shape tens-shape)
+                      {})))
+    (when-not (every? (fn [[item-dim bcast-dim]]
+                        (= 0 (rem (int bcast-dim)
+                                  (int item-dim))))
+                      (map vector tens-shape (take-last num-tens-shape bcast-shape)))
+      (throw (ex-info (format "Broadcast shape (%s) is not commensurate with tensor shape %s"
+                              bcast-shape tens-shape)
+                      {})))
+    (assoc tens :dimensions
+           (dims/dimensions shape :strides strides :offsets offsets
+                            :max-shape bcast-shape))))
+
+
 (defn clone
   [tens & {:keys [datatype]}]
   (let [datatype (or datatype
                      (dtype/get-datatype tens))
-        new-tens (new-tensor (dtype/shape tens)
-                             :datatype datatype)]
+        new-buffer (if (satisfies? dtype-proto/PPrototype (impl/tensor->buffer tens))
+                     (dtype/from-prototype (impl/tensor->buffer tens)
+                                           :datatype datatype
+                                           :shape (dtype/shape
+                                                   (impl/tensor->buffer tens)))
+                     (dtype/make-container (impl/container-type)
+                                           datatype
+                                           (dtype/ecount tens)))
+        new-tens (impl/construct-tensor
+                  new-buffer
+                  (dims/dimensions (dtype/shape tens)))]
     (dtype/copy! (dtype/->reader-of-type tens (:datatype datatype))
                  (dtype/->writer new-tens))
     new-tens))
+
+
+(func-impl/export-symbols tech.tensor.impl
+                          ->core-matrix
+                          ->core-matrix-vector
+                          ->jvm)

@@ -28,8 +28,8 @@
   `(fn [data-seq# sparse-value#]
      (let [sparse-value# (casting/datatype->cast-fn :unkown ~datatype sparse-value#)]
        (boolean-op/boolean-unary-iterable
-        {:datatype ~datatype}
-        (boolean-op/make-boolean-unary-op ~datatype (not= ~'arg sparse-value#))
+        ~datatype
+        (not= ~'x sparse-value#)
         data-seq#))))
 
 
@@ -95,7 +95,7 @@
                         :datatype :boolean)))
 
 
-(defmethod boolean-op/boolean-unary-reader :sparse
+(defmethod boolean-op/boolean-unary-reader-map :sparse
   [options un-op sparse-item]
   (sparse-boolean-unary-map options un-op sparse-item))
 
@@ -230,10 +230,10 @@
             [(reader/make-indexed-reader ordered-indexes new-indexes)
              (reader/make-indexed-reader ordered-indexes new-data)])
           [new-indexes new-data])
-        new-indexes (unary-op/unary-reader-map
-                     {:datatype :int32}
-                     (unary-op/make-unary-op :int32 (-> (* arg b-stride)
-                                                        (+ b-offset)))
+        new-indexes (unary-op/unary-reader
+                     :int32
+                     (-> (* x b-stride)
+                         (+ b-offset))
                      new-indexes)]
     {:indexes new-indexes
      :data new-data}))
@@ -246,9 +246,9 @@
   (let [start-idx-val (int start-idx-val)
         item-len (- (int end-idx-val) start-idx-val)
         sub-item (dtype-proto/sub-buffer sparse-item (int start-idx-val) item-len)]
-    (make-sparse-reader (unary-op/unary-reader-map
-                         {:datatype :int32}
-                         (unary-op/make-unary-op :int32 (+ arg start-idx-val))
+    (make-sparse-reader (unary-op/unary-reader
+                         :int32
+                         (+ x start-idx-val)
                          (sparse-proto/index-reader sub-item))
                         (sparse-proto/data-reader sub-item)
                         (dtype-base/ecount sparse-item))))
@@ -380,7 +380,7 @@
   (general-sparse-reader-map options bin-op lhs rhs))
 
 
-(defmethod boolean-op/boolean-binary-reader [:sparse :sparse]
+(defmethod boolean-op/boolean-binary-reader-map [:sparse :sparse]
   [options bin-op sparse-lhs sparse-rhs]
   (sparse-boolean-binary-map options bin-op sparse-lhs sparse-rhs))
 
@@ -422,9 +422,9 @@
        sparse-vec))))
 
 
-(defmethod reduce-op/iterable-reduce :sparse
+(defmethod reduce-op/iterable-reduce-map :sparse
   [options reduce-op values]
   (case (dtype-base/op-name reduce-op)
     :+ (sparse-reduce-+ options values)
     :* (sparse-reduce-* options values)
-    (reduce-op/default-iterable-reduce options reduce-op values)))
+    (reduce-op/default-iterable-reduce-map options reduce-op values)))

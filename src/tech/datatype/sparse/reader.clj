@@ -147,7 +147,7 @@
                                       (unary-op/unary-reader-map
                                        {:datatype :int32}
                                        (unary-op/make-unary-op
-                                        :int32 (- ~'arg offset#))))
+                                        :int32 (- ~'x offset#))))
                  new-data-reader# (dtype-proto/sub-buffer
                                    data-reader# start-elem# sub-len#)]
              (make-sparse-reader new-idx-reader# new-data-reader# length#

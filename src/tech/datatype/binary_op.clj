@@ -237,6 +237,16 @@
       (throw (ex-info (format "Cannot unary map datatype %s" dtype) {})))))
 
 
+(defmacro binary-iterable
+  ([datatype opcode lhs rhs]
+   `(binary-iterable-map
+     {:datatype datatype}
+     (make-binary-op ~datatype ~opcode)
+     ~lhs ~rhs))
+  ([opcode lhs rhs]
+   `(binary-iterable :object ~opcode lhs rhs)))
+
+
 (defmacro make-binary-op-reader-table
   []
   `(->> [~@(for [dtype casting/base-datatypes]
@@ -288,6 +298,16 @@
 (defmethod binary-reader-map :default
   [{:keys [datatype unchecked?] :as options} bin-op lhs rhs]
   (default-binary-reader-map options bin-op lhs rhs))
+
+
+(defmacro binary-reader
+  ([datatype opcode lhs rhs]
+   `(binary-reader-map
+     {:datatype ~datatype}
+     (make-binary-op ~datatype ~opcode)
+     ~lhs ~rhs))
+  ([opcode lhs rhs]
+   `(binary-reader :object ~opcode ~lhs ~rhs)))
 
 
 (defmacro make-double-binary-op

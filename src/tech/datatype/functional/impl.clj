@@ -14,7 +14,11 @@
                      boolean-unary-reader
                      boolean-binary-iterable
                      boolean-binary-reader
-                     datatype->boolean-binary]
+                     datatype->boolean-binary
+                     boolean-unary-iterable-map
+                     boolean-binary-iterable-map
+                     boolean-unary-reader-map
+                     boolean-binary-reader-map]
              :as boolean-op]
             [tech.datatype.iterator :as iterator]
             [tech.datatype.argtypes :as argtypes]
@@ -79,7 +83,7 @@
                             values 1)
         :object (.finalize (datatype->reduce-op :object reduce-op unchecked?)
                            values 1))
-      (reduce-op/iterable-reduce options reduce-op values))))
+      (reduce-op/iterable-reduce-map options reduce-op values))))
 
 
 (defn apply-unary-op
@@ -204,9 +208,9 @@
   [{:keys [datatype unchecked?] :as options} un-op arg]
   (case (argtypes/arg->arg-type arg)
     :reader
-    (boolean-unary-reader options un-op arg)
+    (boolean-unary-reader-map options un-op arg)
     :iterable
-    (boolean-unary-iterable options un-op arg)
+    (boolean-unary-iterable-map options un-op arg)
     :scalar
     (let [datatype (or datatype (dtype-base/get-datatype arg))]
       (if (= :no-op un-op)
@@ -257,11 +261,11 @@
             arg2-type (argtypes/arg->arg-type arg2)
             op-map-fn (case op-arg-type
                         :iterable
-                        (partial boolean-binary-iterable
+                        (partial boolean-binary-iterable-map
                                  (assoc options :datatype datatype)
                                  bin-op)
                         :reader
-                        (partial boolean-binary-reader
+                        (partial boolean-binary-reader-map
                                  (assoc options :datatype datatype)
                                  bin-op)
                         :scalar
@@ -415,23 +419,23 @@
          (let [value-reader# (typecast/datatype->reader ~datatype values#)
                n-elems# (.size value-reader#)]
            (reduce-op/iterable-reduce
-            {:datatype ~datatype}
-            (binary/make-binary-op :int32 (if (~op
-                                               (.read value-reader# ~'x)
-                                               (.read value-reader# ~'y))
-                                          ~'x
-                                          ~'y))
+            :int32
+            (if (~op
+                 (.read value-reader# ~'accum)
+                 (.read value-reader# ~'next))
+              ~'accum
+              ~'next)
             (reader/reader-range :int32 0 n-elems#)))))
     `(fn [values#]
        (let [value-reader# (typecast/datatype->reader ~datatype values#)
              n-elems# (.size value-reader#)]
          (reduce-op/iterable-reduce
-          {:datatype ~datatype}
-          (binary/make-binary-op :int32 (if (~op
-                                             (.read value-reader# ~'x)
-                                             (.read value-reader# ~'y))
-                                          ~'x
-                                          ~'y))
+          :int32
+          (if (~op
+               (.read value-reader# ~'accum)
+               (.read value-reader# ~'next))
+            ~'accum
+            ~'next)
           (reader/reader-range :int32 0 n-elems#))))))
 
 
@@ -450,10 +454,12 @@
 
 (defn argmax
   "Return index of first maximal value"
-  [{:keys [datatype]} values]
-  (let [datatype (or datatype (dtype-base/get-datatype values))
-        maxarg-fn (get maxarg-table (casting/safe-flatten datatype))]
-    (maxarg-fn values)))
+  ([{:keys [datatype]} values]
+   (let [datatype (or datatype (dtype-base/get-datatype values))
+         maxarg-fn (get maxarg-table (casting/safe-flatten datatype))]
+     (maxarg-fn values)))
+  ([values]
+   (argmax {} values)))
 
 (defmacro make-minarg
   [datatype]
@@ -463,10 +469,12 @@
 
 (defn argmin
   "Return index of first minimal value"
-  [{:keys [datatype]} values]
-  (let [datatype (or datatype (dtype-base/get-datatype values))
-        minarg-fn (get minarg-table (casting/safe-flatten datatype))]
-    (minarg-fn values)))
+  ([{:keys [datatype]} values]
+   (let [datatype (or datatype (dtype-base/get-datatype values))
+         minarg-fn (get minarg-table (casting/safe-flatten datatype))]
+     (minarg-fn values)))
+  ([values]
+   (argmin {} values)))
 
 (defmacro make-last-maxarg
   [datatype]
@@ -476,10 +484,12 @@
 
 (defn argmax-last
   "Return index of last maximal value"
-  [{:keys [datatype]} values]
-  (let [datatype (or datatype (dtype-base/get-datatype values))
-        maxarg-fn (get last-maxarg-table (casting/safe-flatten datatype))]
-    (maxarg-fn values)))
+  ([{:keys [datatype]} values]
+   (let [datatype (or datatype (dtype-base/get-datatype values))
+         maxarg-fn (get last-maxarg-table (casting/safe-flatten datatype))]
+     (maxarg-fn values)))
+  ([values]
+   (argmax-last {}  values)))
 
 (defmacro make-last-minarg
   [datatype]
@@ -487,12 +497,15 @@
 
 (def last-minarg-table (make-no-boolean-macro-table make-last-minarg))
 
+
 (defn argmin-last
   "Return index of first minimal value"
-  [{:keys [datatype]} values]
-  (let [datatype (or datatype (dtype-base/get-datatype values))
-        minarg-fn (get last-minarg-table (casting/safe-flatten datatype))]
-    (minarg-fn values)))
+  ([{:keys [datatype]} values]
+   (let [datatype (or datatype (dtype-base/get-datatype values))
+         minarg-fn (get last-minarg-table (casting/safe-flatten datatype))]
+     (minarg-fn values)))
+  ([values]
+   (argmin-last {} values)))
 
 
 (defmacro impl-compare-arg-op
@@ -502,15 +515,14 @@
            n-elems# (.size value-reader#)
            comparator# (comparator/datatype->comparator ~datatype comparator#)]
        (reduce-op/iterable-reduce
-        {:datatype ~datatype}
-        (binary/make-binary-op
-         :int32 (if (<= (.compare
-                         comparator#
-                         (.read value-reader# ~'x)
-                         (.read value-reader# ~'y))
-                        0)
-                  ~'x
-                  ~'y))
+        :int32
+        (if (<= (.compare
+                 comparator#
+                 (.read value-reader# ~'accum)
+                 (.read value-reader# ~'next))
+                0)
+          ~'accum
+          ~'next)
         (reader/reader-range :int32 0 n-elems#)))))
 
 (def compare-arg-ops (make-no-boolean-macro-table impl-compare-arg-op))
@@ -518,10 +530,12 @@
 (defn argcompare
   "Given a reader of values and a comparator, return the first item where
   the comparator's value is less than zero."
-  [{:keys [datatype]} values comp-item]
-  (let [datatype (or datatype (dtype-base/get-datatype values))
-        compare-fn (get compare-arg-ops (casting/safe-flatten datatype))]
-    (compare-fn values comp-item)))
+  ([{:keys [datatype]} values comp-item]
+   (let [datatype (or datatype (dtype-base/get-datatype values))
+         compare-fn (get compare-arg-ops (casting/safe-flatten datatype))]
+     (compare-fn values comp-item)))
+  ([values comp-item]
+   (argcompare {} values comp-item)))
 
 
 (defmacro impl-compare-last-arg-op
@@ -531,15 +545,14 @@
            n-elems# (.size value-reader#)
            comparator# (comparator/datatype->comparator ~datatype comparator#)]
        (reduce-op/iterable-reduce
-        {:datatype ~datatype}
-        (binary/make-binary-op
-         :int32 (if (>= (.compare
-                         comparator#
-                         (.read value-reader# ~'x)
-                         (.read value-reader# ~'y))
-                        0)
-                  ~'y
-                  ~'x))
+        :int32
+        (if (>= (.compare
+                 comparator#
+                 (.read value-reader# ~'accum)
+                 (.read value-reader# ~'next))
+                0)
+          ~'accum
+          ~'next)
         (reader/reader-range :int32 0 n-elems#)))))
 
 (def compare-last-arg-ops (make-no-boolean-macro-table impl-compare-last-arg-op))
@@ -547,7 +560,9 @@
 (defn argcompare-last
   "Given a reader of values and a comparator, return the last item where
   the comparator's value is less than zero."
-  [{:keys [datatype]} values comp-item]
-  (let [datatype (or datatype (dtype-base/get-datatype values))
-        compare-fn (get compare-last-arg-ops (casting/safe-flatten datatype))]
-    (compare-fn values comp-item)))
+  ([{:keys [datatype]} values comp-item]
+   (let [datatype (or datatype (dtype-base/get-datatype values))
+         compare-fn (get compare-last-arg-ops (casting/safe-flatten datatype))]
+     (compare-fn values comp-item)))
+  ([values comp-item]
+   (argcompare-last {} values comp-item)))

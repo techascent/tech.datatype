@@ -302,18 +302,30 @@
 (def iterable-reduce-table (make-iterable-reduce-table))
 
 
-(defmulti iterable-reduce
+(defmulti iterable-reduce-map
   (fn [options reduce-op values]
     (dtype-base/buffer-type values)))
 
 
-(defn default-iterable-reduce
+(defn default-iterable-reduce-map
   [{:keys [datatype unchecked?] :as options} reduce-op values]
   (let [datatype (or datatype (dtype-base/get-datatype values))
         reduce-fn (get iterable-reduce-table (casting/safe-flatten datatype))]
     (reduce-fn reduce-op values unchecked?)))
 
 
-(defmethod iterable-reduce :default
+(defmethod iterable-reduce-map :default
   [options reduce-op values]
-  (default-iterable-reduce options reduce-op values))
+  (default-iterable-reduce-map options reduce-op values))
+
+
+(defmacro iterable-reduce
+  ([datatype update-code finalize-code values]
+   `(iterable-reduce-map
+     {:datatype ~datatype}
+     (make-reduce-op ~datatype ~update-code ~finalize-code)
+     ~values))
+  ([datatype update-code values]
+   `(iterable-reduce ~datatype ~update-code ~'accum ~values))
+  ([update-code values]
+   `(iterable-reduce :object ~update-code ~'accum ~values)))

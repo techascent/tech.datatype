@@ -2,12 +2,7 @@
   "https://youtu.be/a9xAKttWgP4"
   (:require [tech.tensor :as tens]
             [tech.datatype :as dtype]
-            [tech.datatype.unary-op :as unary-op]
-            [tech.datatype.binary-op :as binary-op]
-            [tech.datatype.boolean-op :as bool-op]
-            [tech.tensor.impl :as tens-impl]
             [tech.datatype.functional :as dtype-fn]
-            [tech.datatype.protocols :as dtype-proto]
             [clojure.pprint :as pp]
             [clojure.test :refer :all]))
 
@@ -15,8 +10,7 @@
 (defn membership
   [lhs rhs]
   (let [membership-set (set (dtype/->vector rhs))]
-    (bool-op/boolean-unary-reader
-     :object
+    (dtype-fn/boolean-unary-reader
      (contains? membership-set x)
      lhs)))
 
@@ -62,7 +56,7 @@
 
 (def bool-tens (-> range-tens
                    (membership [1 2 3 4 7])
-                   ;;convert to zeros/ones for display
+                   ;;convert to zeros/ones for display.
                    (tens/clone :datatype :int8)))
 
 (def take-tens (apl-take bool-tens [5 7]))
@@ -90,8 +84,11 @@
 
 (defn game-of-life-operator
   [original new-matrix]
-  (-> (binary-op/binary-reader
+  ;;We do a typed reader here so that everything happens in byte space with no boxing.
+  (-> (dtype-fn/binary-reader
        :int8
+       ;;Clojure conservatively interprets all integers as longs so we have to specify
+       ;;that we want a byte.
        (unchecked-byte
         (if (or (= 3 y)
                 (and (not= 0 x)
@@ -100,9 +97,10 @@
           0))
        original
        new-matrix)
-      ;;Force the actual result to be calculated.  Else we would get a *huge* chain of reader
-      ;;maps.
-      (tens/clone :datatype :int8)))
+      ;;Force the actual result to be calculated.  Else we would get a *huge* chain of
+      ;;reader maps.  We don't have to specify the datatype here because the statement
+      ;;above produced an int8 (byte) reader.
+      (tens/clone)))
 
 
 (def next-gen (game-of-life-operator R-matrix summed))
@@ -131,12 +129,10 @@
 (defn mat->pic-mat
   [R]
   (->> R
-       (unary-op/unary-reader-map
-        {:datatype :object}
-        (unary-op/make-unary-op :object
-                                (if (= 0 (int x))
-                                  (char 0x02DA)
-                                  (char 0x2021))))))
+       (dtype-fn/unary-reader
+        (if (= 0 (int x))
+          (char 0x02DA)
+          (char 0x2021)))))
 
 
 (defn print-life-generations
@@ -165,4 +161,4 @@
          (->> (life-seq RR)
               (take 1000)
               last
-              (tens-impl/->jvm)))))
+              (tens/->jvm)))))

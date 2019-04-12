@@ -126,6 +126,7 @@
          (iterables [item#]
            (sparse-proto/readers item#))
          sparse-proto/PToSparseReader
+         (convertible-to-sparse-reader? [item#] true)
          (->sparse-reader [item#] item#)
          dtype-proto/PBufferType
          (buffer-type [item#] :sparse)

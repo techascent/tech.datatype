@@ -19,6 +19,7 @@
   (:require [clojure.core.matrix.macros :refer [c-for]]
             [clojure.core.matrix.protocols :as mp]
             [clojure.core.matrix :as m]
+            [tech.jna :as jna]
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
             [tech.datatype.typecast :as typecast]
@@ -115,20 +116,19 @@
   (base/buffer-type item))
 
 
-(defn conainer-type
-  "sparse, typed-buffer, list, or native-buffer"
+(defn container-type
+  "sparse, typed-buffer, list, or native-buffer.  nil means
+  unknown."
   [item]
   (cond
-    (typecast/as-list item)
+    (dtype-proto/list-convertible? item)
     :list
-    (typecast/as-ptr item)
+    (jna/ptr-convertible? item)
     :native-buffer
-    (typecast/as-nio-buffer item)
+    (dtype-proto/nio-convertible? item)
     :typed-buffer
-    (sparse-proto/is-sparse? item)
-    :sparse
-    :else
-    :unknown))
+    (sparse-proto/sparse-convertible? item)
+    :sparse))
 
 
 (defn set-value!

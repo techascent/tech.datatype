@@ -64,13 +64,21 @@
                                             ~intermediate-datatype
                                             value#)))
        dtype-proto/PToNioBuffer
-       (->buffer-backing-store [reader#]
-         (when (satisfies? dtype-proto/PToNioBuffer)
-           (dtype-proto/->buffer-backing-store ~buffer)))
+       (convertible-to-nio-buffer? [writer#]
+         (dtype-proto/nio-convertible? ~buffer))
+       (->buffer-backing-store [writer#]
+         (dtype-proto/as-nio-buffer ~buffer))
        dtype-proto/PToList
-       (->list-backing-store [reader#]
-         (when (satisfies? dtype-proto/PToList ~buffer)
-           (dtype-proto/->list-backing-store ~buffer)))
+       (convertible-to-fastutil-list? [writer#]
+         (dtype-proto/list-convertible? ~buffer))
+       (->list-backing-store [writer#]
+         (dtype-proto/as-list ~buffer))
+       jna/PToPtr
+       (is-jna-ptr-convertible? [writer#]
+         (jna/ptr-convertible? ~buffer))
+       (->ptr-backing-store [writer#]
+         (jna/as-ptr ~buffer))
+
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
@@ -94,13 +102,21 @@
                                             ~intermediate-datatype
                                             value#)))
        dtype-proto/PToNioBuffer
-       (->buffer-backing-store [reader#]
-         (when (satisfies? dtype-proto/PToNioBuffer ~buffer)
-           (dtype-proto/->buffer-backing-store ~buffer)))
+       (convertible-to-nio-buffer? [writer#]
+         (dtype-proto/nio-convertible? ~buffer))
+       (->buffer-backing-store [writer#]
+         (dtype-proto/as-nio-buffer ~buffer))
        dtype-proto/PToList
-       (->list-backing-store [reader#]
-         (when (satisfies? dtype-proto/PToList ~buffer)
-           (dtype-proto/->list-backing-store ~buffer)))
+       (convertible-to-fastutil-list? [writer#]
+         (dtype-proto/list-convertible? ~buffer))
+       (->list-backing-store [writer#]
+         (dtype-proto/as-list ~buffer))
+       jna/PToPtr
+       (is-jna-ptr-convertible? [writer#]
+         (jna/ptr-convertible? ~buffer))
+       (->ptr-backing-store [writer#]
+         (jna/as-ptr ~buffer))
+
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)

@@ -424,8 +424,7 @@
 
 (defn as-ptr
   ^Pointer [item]
-  (when (satisfies? jna/PToPtr item)
-    (jna/->ptr-backing-store item)))
+  (jna/as-ptr item))
 
 
 (defn as-array
@@ -436,14 +435,12 @@
 
 (defn as-nio-buffer
   [item]
-  (when (satisfies? dtype-proto/PToNioBuffer item)
-    (dtype-proto/->buffer-backing-store item)))
+  (dtype-proto/as-nio-buffer item))
 
 
 (defn as-list
   [item]
-  (when (satisfies? dtype-proto/PToList item)
-    (dtype-proto/->list-backing-store item)))
+  (dtype-proto/as-list item))
 
 
 (defn as-byte-buffer

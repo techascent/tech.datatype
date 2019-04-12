@@ -101,7 +101,8 @@
                                [(jna/->ptr-backing-store item#)]))}
 
      dtype-proto/PToNioBuffer
-     {:->buffer-backing-store (fn [item#] item#)}
+     {:convertible-to-nio-buffer? (fn [item#] true)
+      :->buffer-backing-store (fn [item#] item#)}
 
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
@@ -166,7 +167,11 @@
 
 
      jna/PToPtr
-     {:->ptr-backing-store
+     {:is-jna-ptr-convertible?
+      (fn [item#]
+        (let [item# (datatype->buffer-cast-fn ~datatype item#)]
+          (.isDirect item#)))
+      :->ptr-backing-store
       (fn [item#]
         (let [item# (datatype->buffer-cast-fn ~datatype item#)]
           (when (.isDirect item#)

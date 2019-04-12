@@ -56,7 +56,8 @@
                         (make-array-of-type datatype# (base/shape->ecount shape#)))}
 
      dtype-proto/PToNioBuffer
-     {:->buffer-backing-store (fn [item#] (datatype->buffer-creation ~datatype item#))}
+     {:convertible-to-nio-buffer? (fn [item#] true)
+      :->buffer-backing-store (fn [item#] (datatype->buffer-creation ~datatype item#))}
 
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
@@ -71,7 +72,8 @@
                     (dtype-proto/sub-buffer (dtype-proto/->buffer-backing-store buffer#)
                                             offset# length#))}
      dtype-proto/PToList
-     {:->list-backing-store (fn [item#]
+     {:convertible-to-fastutil-list? (fn [item#] true)
+      :->list-backing-store (fn [item#]
                               (typecast/wrap-array-with-list item#))}
      dtype-proto/PToReader
      {:->reader-of-type (fn [item# datatype# unchecked?#]
@@ -131,6 +133,7 @@
                          (alength (as-boolean-array src-ary)))))
 
   dtype-proto/PToList
+  (convertible-to-fastutil-list? [item] true)
   (->list-backing-store [item]
     (typecast/wrap-array-with-list item))
 
@@ -264,7 +267,8 @@
            (typed-buffer/set-datatype (dtype-proto/get-datatype buffer))))}
 
     dtype-proto/PToList
-    {:->list-backing-store (fn [item#]
+    {:convertible-to-fastutil-list? (fn [item#] true)
+     :->list-backing-store (fn [item#]
                              (ObjectArrayList/wrap item# (base/ecount item#)))}
 
 

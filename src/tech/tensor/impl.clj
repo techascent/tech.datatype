@@ -14,6 +14,7 @@
               [tech.datatype.boolean-op :as boolean-op]
               [tech.datatype.typecast :as typecast]
               [tech.datatype :as dtype]
+              [tech.jna :as jna]
               [clojure.core.matrix.protocols :as mp]
               [clojure.core.matrix :as m]
               [clojure.core.matrix.impl.pprint :as corem-pp])
@@ -95,13 +96,27 @@
 
 
   dtype-proto/PToNioBuffer
+  (convertible-to-nio-buffer? [item]
+    (dtype-proto/nio-convertible? buffer))
   (->buffer-backing-store [item]
-    (typecast/as-nio-buffer buffer))
+    (when (simple-dimensions? dimensions)
+      (typecast/as-nio-buffer buffer)))
 
 
   dtype-proto/PToList
+  (convertible-to-fastutil-list? [item]
+    (dtype-proto/list-convertible? buffer))
   (->list-backing-store [item]
-    (typecast/as-list item))
+    (when (simple-dimensions? dimensions)
+      (typecast/as-list buffer)))
+
+
+  jna/PToPtr
+  (is-jna-ptr-convertible? [item]
+    (jna/ptr-convertible? buffer))
+  (->ptr-backing-store [item]
+    (when (simple-dimensions? dimensions)
+      (jna/as-ptr buffer)))
 
 
   dtype-proto/PToArray
@@ -165,6 +180,8 @@
 
 
   sparse-proto/PToSparseReader
+  (convertible-to-sparse-reader? [item]
+    (sparse-proto/sparse-convertible? buffer))
   (->sparse-reader [item]
     (when-let [reader (cond
                         (satisfies? sparse-proto/PSparse buffer)

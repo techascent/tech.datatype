@@ -291,6 +291,7 @@
 
 
   sparse-proto/PToSparseReader
+  (convertible-to-sparse-reader? [item] true)
   (->sparse-reader [item]
     (-> (make-base-reader item)
         (sparse-proto/set-stride b-stride)))

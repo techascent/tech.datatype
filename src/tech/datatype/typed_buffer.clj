@@ -41,11 +41,14 @@
     (dtype-proto/->backing-store-seq backing-store))
 
   dtype-proto/PToNioBuffer
+  (convertible-to-nio-buffer? [item]
+    (dtype-proto/nio-convertible? backing-store))
   (->buffer-backing-store [item]
-    (when (satisfies? dtype-proto/PToNioBuffer backing-store)
-      (dtype-proto/->buffer-backing-store backing-store)))
+    (dtype-proto/as-nio-buffer backing-store))
 
   dtype-proto/PToList
+  (convertible-to-fastutil-list? [item]
+    (dtype-proto/list-convertible? backing-store))
   (->list-backing-store [item]
     (when (satisfies? dtype-proto/PToList backing-store)
       (dtype-proto/->list-backing-store backing-store)))
@@ -103,7 +106,8 @@
                           (dtype-proto/as-list backing-store)
                           (reader/make-list-reader item)
                           :else
-                          (dtype-proto/->reader-of-type backing-store datatype unchecked?))]
+                          (dtype-proto/->reader-of-type backing-store
+                                                        datatype unchecked?))]
       (cond-> direct-reader
         (not= reader-datatype datatype)
         (dtype-proto/->reader-of-type reader-datatype unchecked?))))
@@ -128,9 +132,10 @@
                                options))
 
   jna/PToPtr
+  (is-jna-ptr-convertible? [item]
+    (jna/ptr-convertible? backing-store))
   (->ptr-backing-store [item]
-    (when (satisfies? jna/PToPtr backing-store)
-      (jna/->ptr-backing-store backing-store)))
+    (jna/as-ptr backing-store))
 
   mp/PElementCount
   (element-count [item] (mp/element-count backing-store)))

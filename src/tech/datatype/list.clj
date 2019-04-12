@@ -140,7 +140,8 @@
                            (.size)))}
 
      dtype-proto/PToList
-     {:->list-backing-store (fn [item#] item#)}))
+     {:convertible-to-fastutil-list? (fn [item#] true)
+      :->list-backing-store (fn [item#] item#)}))
 
 
 (extend-list-type ByteList :int8)
@@ -327,22 +328,6 @@
 (extend-list DoubleList :float64)
 (extend-list BooleanList :boolean)
 (extend-list ObjectList :object)
-
-
-(defmacro extend-array-with-list
-  [ary-type]
-  `(clojure.core/extend
-       ~ary-type
-     dtype-proto/PToList
-     {:->list-backing-store (fn [item#] (wrap-array item#))}))
-
-(extend-array-with-list (Class/forName "[B"))
-(extend-array-with-list (Class/forName "[S"))
-(extend-array-with-list (Class/forName "[I"))
-(extend-array-with-list (Class/forName "[J"))
-(extend-array-with-list (Class/forName "[F"))
-(extend-array-with-list (Class/forName "[D"))
-(extend-array-with-list (Class/forName "[Z"))
 
 
 (defn make-list

@@ -54,6 +54,7 @@
 
 
 (defprotocol PToSparseReader
+  (convertible-to-sparse-reader? [item])
   (->sparse-reader [item]
     "Sparse readers implement:
 PSparse
@@ -62,10 +63,18 @@ tech.datatype.protocols/PToReader
 clojure.core.matrix.protocols/PElementCount"))
 
 
+(defn sparse-convertible?
+  [item]
+  (when (and item
+             (satisfies? PToSparseReader item))
+    (or (satisfies? PSparse item)
+        (convertible-to-sparse-reader? item))))
+
+
 (defn is-sparse?
   [item]
   (or (satisfies? PSparse item)
-      (satisfies? PToSparseReader item)))
+      (sparse-convertible? item)))
 
 
 (defn ->sparse

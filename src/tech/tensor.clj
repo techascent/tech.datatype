@@ -79,19 +79,22 @@
         n-tens-elems (dtype/ecount tens)
         n-bcast-elems (shape/ecount bcast-shape)
         num-tens-shape (count tens-shape)
-        {:keys [shape strides offsets max-shape] :as tens-dims} (:dimensions tens)]
+        {:keys [shape strides offsets max-shape]
+         :as tens-dims} (:dimensions tens)]
     (when-not (every? number? bcast-shape)
       (throw (ex-info "Broadcast shapes must only be numbers" {})))
     (when-not (>= n-bcast-elems
                   n-tens-elems)
-      (throw (ex-info (format "Improper broadcast, broadcast shape (%s) is smaller than tens (%s)"
+      (throw (ex-info
+              (format "Improper broadcast shape (%s), smaller than tens (%s)"
                               bcast-shape tens-shape)
                       {})))
     (when-not (every? (fn [[item-dim bcast-dim]]
                         (= 0 (rem (int bcast-dim)
                                   (int item-dim))))
                       (map vector tens-shape (take-last num-tens-shape bcast-shape)))
-      (throw (ex-info (format "Broadcast shape (%s) is not commensurate with tensor shape %s"
+      (throw (ex-info
+              (format "Broadcast shape (%s) is not commensurate with tensor shape %s"
                               bcast-shape tens-shape)
                       {})))
     (assoc tens :dimensions
@@ -100,15 +103,15 @@
 
 
 (defn clone
-  [tens & {:keys [datatype]}]
-  (let [datatype (or datatype
-                     (dtype/get-datatype tens))
+  [tens & {:keys [datatype
+                  container-type]}]
+  (let [datatype (or datatype (dtype/get-datatype tens))
         new-buffer (if (satisfies? dtype-proto/PPrototype (impl/tensor->buffer tens))
                      (dtype/from-prototype (impl/tensor->buffer tens)
                                            :datatype datatype
                                            :shape (dtype/shape
                                                    (impl/tensor->buffer tens)))
-                     (dtype/make-container (impl/container-type)
+                     (dtype/make-container (impl/container-type container-type)
                                            datatype
                                            (dtype/ecount tens)))
         new-tens (impl/construct-tensor

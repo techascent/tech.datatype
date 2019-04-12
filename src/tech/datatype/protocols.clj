@@ -68,13 +68,21 @@
   shares the backing store with the buffer.  Result may not exactly
   represent the value of the item itself as the backing store may require
   element-by-element conversion to represent the value of the item."
+  (convertible-to-nio-buffer? [item])
   (->buffer-backing-store [item]))
+
+
+(defn nio-convertible?
+  [item]
+  (when (and item (satisfies? PToNioBuffer item))
+    (convertible-to-nio-buffer? item)))
 
 
 (defn as-nio-buffer
   [item]
-  (when (and item (satisfies? PToNioBuffer item))
+  (when (nio-convertible? item)
     (->buffer-backing-store item)))
+
 
 (defprotocol PNioBuffer
   (position [item])
@@ -108,12 +116,20 @@
 
 (defprotocol PToList
   "Generically implemented for anything that implements ->array"
+  (convertible-to-fastutil-list? [item])
   (->list-backing-store [item]))
 
 
-(defn as-list [item]
+(defn list-convertible?
+  [item]
   (when (and item (satisfies? PToList item))
+    (convertible-to-fastutil-list? item)))
+
+
+(defn as-list [item]
+  (when (list-convertible? item)
     (->list-backing-store item)))
+
 
 
 (defprotocol PToWriter

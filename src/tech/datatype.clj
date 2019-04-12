@@ -21,6 +21,7 @@
             [clojure.core.matrix :as m]
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
+            [tech.datatype.typecast :as typecast]
             [tech.datatype.protocols :as dtype-proto]
             [tech.datatype.array :as dtype-array]
             [tech.datatype.nio-buffer :as dtype-nio]
@@ -112,6 +113,22 @@
   "Return the type of buffer.  Current options are :dense or :sparse"
   [item]
   (base/buffer-type item))
+
+
+(defn conainer-type
+  "sparse, typed-buffer, list, or native-buffer"
+  [item]
+  (cond
+    (typecast/as-list item)
+    :list
+    (typecast/as-ptr item)
+    :native-buffer
+    (typecast/as-nio-buffer item)
+    :typed-buffer
+    (sparse-proto/is-sparse? item)
+    :sparse
+    :else
+    :unknown))
 
 
 (defn set-value!

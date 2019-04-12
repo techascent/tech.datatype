@@ -12,6 +12,7 @@
               [tech.datatype.binary-op :as binary-op]
               [tech.datatype.reduce-op :as reduce-op]
               [tech.datatype.boolean-op :as boolean-op]
+              [tech.datatype.typecast :as typecast]
               [tech.datatype :as dtype]
               [clojure.core.matrix.protocols :as mp]
               [clojure.core.matrix :as m]
@@ -95,16 +96,12 @@
 
   dtype-proto/PToNioBuffer
   (->buffer-backing-store [item]
-    (when (and (simple-dimensions? dimensions)
-               (satisfies? dtype-proto/PToNioBuffer buffer))
-      (dtype-proto/->buffer-backing-store buffer)))
+    (typecast/as-nio-buffer buffer))
 
 
   dtype-proto/PToList
   (->list-backing-store [item]
-    (when (and (simple-dimensions? dimensions)
-               (satisfies? dtype-proto/PToList buffer))
-      (dtype-proto/->list-backing-store buffer)))
+    (typecast/as-list item))
 
 
   dtype-proto/PToArray

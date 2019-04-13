@@ -22,8 +22,7 @@
         abs-min-shape (mapv min item-shape abs-new-shape)
         reshape-item (apply tens/select item (map range abs-min-shape))
         retval (tens/new-tensor abs-new-shape
-                                :datatype (dtype/get-datatype item)
-                                :container-type (tens/container-type item))
+                                :datatype (dtype/get-datatype item))
         copy-item (apply tens/select retval
                          (map (fn [n-elems orig-item]
                                 (if (>= orig-item 0)
@@ -31,9 +30,9 @@
                                   (take-last n-elems (range (- orig-item)))))
                               abs-min-shape
                               new-shape))]
-    (dtype/copy! (dtype/->reader reshape-item)
-                 (dtype/->writer copy-item))
+    (dtype/copy! reshape-item copy-item)
     retval))
+
 
 (defn rotate-vertical
   [tens amount]
@@ -111,9 +110,7 @@
   [R]
   (->> (for [horz-amount rotate-arg
              vert-amount rotate-arg]
-         (-> R
-             (rotate-vertical vert-amount)
-             (rotate-horizontal horz-amount)))
+         (tens/rotate R [horz-amount vert-amount]))
        (apply dtype-fn/+)
        (game-of-life-operator R)))
 
@@ -121,6 +118,9 @@
 (defn life-seq
   [R]
   (cons R (lazy-seq (life-seq (life R)))))
+
+
+(def half-RR (apl-take R-matrix [-10 -20]))
 
 
 (def RR (-> (apl-take R-matrix [-10 -20])

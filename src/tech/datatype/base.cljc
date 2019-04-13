@@ -97,14 +97,25 @@
    (dtype-proto/make-container container-type datatype elem-seq {})))
 
 
+(defn sub-buffer
+  [item off len]
+  (when-not (<= (+ (int off) (int len))
+                (ecount item))
+    (throw (ex-info "Sub buffer out of range." {})))
+  (if (and (= (int off) 0)
+           (= (int len) (ecount item)))
+    item
+    (dtype-proto/sub-buffer item off len)))
+
+
 (defn copy!
   "copy elem-count src items to dest items.  Options may contain unchecked in which you
   get unchecked operations."
   ([src src-offset dest dest-offset elem-count options]
    (base-macros/check-range src src-offset elem-count)
    (base-macros/check-range dest dest-offset elem-count)
-   (let [src (dtype-proto/sub-buffer src src-offset elem-count)
-         dest (dtype-proto/sub-buffer dest dest-offset elem-count)]
+   (let [src (sub-buffer src src-offset elem-count)
+         dest (sub-buffer dest dest-offset elem-count)]
      (dtype-proto/copy! dest src options))
    dest)
   ([src src-offset dst dst-offset elem-count]

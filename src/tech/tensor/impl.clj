@@ -139,10 +139,21 @@
   (set-constant! [item offset value elem-count]
     (if (simple-dimensions? dimensions)
       (dtype-proto/set-constant! buffer offset value elem-count)
-      (dtype-proto/set-constant! (writer/make-indexed-writer
-                                  (dimensions->index-reader dimensions)
-                                  buffer)
-                                 offset value elem-count)))
+      (if (= :sparse (dtype/buffer-type buffer))
+        (dtype-proto/write-indexes! buffer
+                                    (-> (dimensions->index-reader dimensions)
+                                        (dtype-base/sub-buffer offset elem-count))
+                                    (sparse-reader/const-sparse-reader
+                                     value
+                                     (dtype-base/get-datatype item)
+                                     elem-count)
+                                    {:indexes-in-order?
+                                     (dims/access-increasing? dimensions)})
+        (dtype-proto/set-constant! (writer/make-indexed-writer
+                                    (dimensions->index-reader dimensions)
+                                    buffer
+                                    {})
+                                   offset value elem-count))))
 
 
   dtype-proto/PWriteIndexes
@@ -151,7 +162,8 @@
       (dtype-proto/write-indexes! buffer indexes values options)
       (dtype-proto/write-indexes! buffer (reader/make-indexed-reader
                                           indexes
-                                          (dimensions->index-reader dimensions))
+                                          (dimensions->index-reader dimensions)
+                                          {:datatype :int32})
                                   values options)))
 
 
@@ -194,12 +206,25 @@
         ;;sparse to global sparse.
         (let [{:keys [indexes data]} (sparse-proto/readers reader)
               addr-inverter (dimensions->index-inverter dimensions)
-              index-seq (->> indexes
-                             (map-indexed vector)
-                             (mapcat (fn [[data-index global-index]]
-                                       (->> (.localToGlobal addr-inverter global-index)
-                                            (map #(vector data-index %)))))
-                             (sort-by second))]
+              direct? (dims/direct? dimensions)
+              raw-shape (if direct?
+                          (:shape dimensions)
+                          (shape/shape->count-vec (:shape dimensions)))
+              broadcasting? (not= (:max-shape dimensions)
+                                  raw-shape)
+              access-increasing? (dims/access-increasing? dimensions)
+              dense? (dims/dense? dimensions)
+              index-seq (map-indexed vector indexes)
+              index-seq (if (and dense? (not broadcasting?))
+                          (map (fn [[data-index global-index]]
+                                 [data-index (first (.localToGlobal addr-inverter global-index))])
+                               index-seq)
+                          (mapcat (fn [[data-index global-index]]
+                                    (->> (.localToGlobal addr-inverter global-index)
+                                         (map #(vector data-index %))))))
+              index-seq (if (or broadcasting? (not access-increasing?))
+                          (sort-by second index-seq)
+                          index-seq)]
           (sparse-reader/make-sparse-reader
            (dtype-proto/make-container :list :int32
                                        (map second index-seq)
@@ -207,7 +232,9 @@
            (reader/make-indexed-reader (dtype-proto/make-container
                                         :list :int32 (map first index-seq)
                                         {:unchecked? true})
-                                       reader)))))))
+                                       data
+                                       {})
+           (dtype/ecount item)))))))
 
 
 (defn construct-tensor
@@ -428,3 +455,33 @@
 (defmethod print-method Tensor
   [tens w]
   (.write ^Writer w (tensor->string tens)))
+
+
+(defmethod dtype-proto/copy! [:tensor :dense]
+  [dst src options]
+  (dtype-proto/copy! dst (tensor->base-buffer-type src) options)
+  dst)
+
+
+(defmethod dtype-proto/copy! [:tensor :sparse]
+  [dst src options]
+  (dtype-proto/copy! dst (tensor->base-buffer-type src) options)
+  dst)
+
+
+(defmethod dtype-proto/copy! [:dense :tensor]
+  [dst src options]
+  (dtype-proto/copy! (tensor->base-buffer-type dst) src options)
+  dst)
+
+
+(defmethod dtype-proto/copy! [:sparse :tensor]
+  [dst src options]
+  (dtype-proto/copy! (tensor->base-buffer-type dst) src options)
+  dst)
+
+
+(defmethod dtype-proto/copy! [:tensor :tensor]
+  [dst src options]
+  (dtype-proto/copy! (tensor->base-buffer-type dst) (tensor->base-buffer-type src) options)
+  dst)

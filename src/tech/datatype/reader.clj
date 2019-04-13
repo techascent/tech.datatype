@@ -62,86 +62,87 @@
    intermediate-datatype
    buffer-datatype
    unchecked?]
-  `(if ~unchecked?
-     (reify
-       ~reader-type
-       (getDatatype [reader#] ~intermediate-datatype)
-       (size [reader#] (int (mp/element-count ~buffer)))
-       (read [reader# idx#]
-         (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
-             (unchecked-full-cast ~buffer-datatype ~intermediate-datatype
-                                  ~reader-datatype)))
-       (iterator [reader#] (reader->iterator reader#))
-       (invoke [reader# arg#]
-         (.read reader# (int arg#)))
-       dtype-proto/PToBackingStore
-       (->backing-store-seq [item#]
-         (dtype-proto/->backing-store-seq ~buffer))
-       dtype-proto/PToNioBuffer
-       (convertible-to-nio-buffer? [reader#]
-         (dtype-proto/nio-convertible? ~buffer))
-       (->buffer-backing-store [reader#]
-         (dtype-proto/as-nio-buffer ~buffer))
-       dtype-proto/PToList
-       (convertible-to-fastutil-list? [reader#]
-         (dtype-proto/list-convertible? ~buffer))
-       (->list-backing-store [reader#]
-         (dtype-proto/as-list ~buffer))
-       jna/PToPtr
-       (is-jna-ptr-convertible? [reader#]
-         (jna/ptr-convertible? ~buffer))
-       (->ptr-backing-store [reader#]
-         (jna/as-ptr ~buffer))
+  `(let [n-elems# (int (mp/element-count ~buffer))]
+     (if ~unchecked?
+       (reify
+         ~reader-type
+         (getDatatype [reader#] ~intermediate-datatype)
+         (size [reader#] n-elems#)
+         (read [reader# idx#]
+           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
+               (unchecked-full-cast ~buffer-datatype ~intermediate-datatype
+                                    ~reader-datatype)))
+         (iterator [reader#] (reader->iterator reader#))
+         (invoke [reader# arg#]
+           (.read reader# (int arg#)))
+         dtype-proto/PToBackingStore
+         (->backing-store-seq [item#]
+           (dtype-proto/->backing-store-seq ~buffer))
+         dtype-proto/PToNioBuffer
+         (convertible-to-nio-buffer? [reader#]
+           (dtype-proto/nio-convertible? ~buffer))
+         (->buffer-backing-store [reader#]
+           (dtype-proto/as-nio-buffer ~buffer))
+         dtype-proto/PToList
+         (convertible-to-fastutil-list? [reader#]
+           (dtype-proto/list-convertible? ~buffer))
+         (->list-backing-store [reader#]
+           (dtype-proto/as-list ~buffer))
+         jna/PToPtr
+         (is-jna-ptr-convertible? [reader#]
+           (jna/ptr-convertible? ~buffer))
+         (->ptr-backing-store [reader#]
+           (jna/as-ptr ~buffer))
 
 
-       dtype-proto/PBuffer
-       (sub-buffer [buffer# offset# length#]
-         (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
-       dtype-proto/PSetConstant
-       (set-constant! [item# offset# value# elem-count#]
-         (dtype-proto/set-constant! ~buffer offset#
-                                    (casting/cast value# ~intermediate-datatype)
-                                    elem-count#)))
-     (reify
-       ~reader-type
-       (getDatatype [reader#] ~intermediate-datatype)
-       (size [reader#] (int (mp/element-count ~buffer)))
-       (read [reader# idx#]
-         (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
-             (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
-                                      ~reader-datatype)))
-       (iterator [reader#] (reader->iterator reader#))
-       (invoke [reader# arg#]
-         (.read reader# (int arg#)))
-       dtype-proto/PToBackingStore
-       (->backing-store-seq [item#]
-         (dtype-proto/->backing-store-seq ~buffer))
-       dtype-proto/PToNioBuffer
-       (convertible-to-nio-buffer? [reader#]
-         (dtype-proto/nio-convertible? ~buffer))
-       (->buffer-backing-store [reader#]
-         (dtype-proto/as-nio-buffer ~buffer))
-       dtype-proto/PToList
-       (convertible-to-fastutil-list? [reader#]
-         (dtype-proto/list-convertible? ~buffer))
-       (->list-backing-store [reader#]
-         (dtype-proto/as-list ~buffer))
-       jna/PToPtr
-       (is-jna-ptr-convertible? [reader#]
-         (jna/ptr-convertible? ~buffer))
-       (->ptr-backing-store [reader#]
-         (jna/as-ptr ~buffer))
+         dtype-proto/PBuffer
+         (sub-buffer [buffer# offset# length#]
+           (-> (dtype-proto/sub-buffer ~buffer offset# length#)
+               (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
+         dtype-proto/PSetConstant
+         (set-constant! [item# offset# value# elem-count#]
+           (dtype-proto/set-constant! ~buffer offset#
+                                      (casting/cast value# ~intermediate-datatype)
+                                      elem-count#)))
+       (reify
+         ~reader-type
+         (getDatatype [reader#] ~intermediate-datatype)
+         (size [reader#] n-elems#)
+         (read [reader# idx#]
+           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
+               (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
+                                        ~reader-datatype)))
+         (iterator [reader#] (reader->iterator reader#))
+         (invoke [reader# arg#]
+           (.read reader# (int arg#)))
+         dtype-proto/PToBackingStore
+         (->backing-store-seq [item#]
+           (dtype-proto/->backing-store-seq ~buffer))
+         dtype-proto/PToNioBuffer
+         (convertible-to-nio-buffer? [reader#]
+           (dtype-proto/nio-convertible? ~buffer))
+         (->buffer-backing-store [reader#]
+           (dtype-proto/as-nio-buffer ~buffer))
+         dtype-proto/PToList
+         (convertible-to-fastutil-list? [reader#]
+           (dtype-proto/list-convertible? ~buffer))
+         (->list-backing-store [reader#]
+           (dtype-proto/as-list ~buffer))
+         jna/PToPtr
+         (is-jna-ptr-convertible? [reader#]
+           (jna/ptr-convertible? ~buffer))
+         (->ptr-backing-store [reader#]
+           (jna/as-ptr ~buffer))
 
-       dtype-proto/PBuffer
-       (sub-buffer [buffer# offset# length#]
-         (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
-       dtype-proto/PSetConstant
-       (set-constant! [item# offset# value# elem-count#]
-         (dtype-proto/set-constant! ~buffer offset#
-                                    (casting/cast value# ~intermediate-datatype)
-                                    elem-count#)))))
+         dtype-proto/PBuffer
+         (sub-buffer [buffer# offset# length#]
+           (-> (dtype-proto/sub-buffer ~buffer offset# length#)
+               (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
+         dtype-proto/PSetConstant
+         (set-constant! [item# offset# value# elem-count#]
+           (dtype-proto/set-constant! ~buffer offset#
+                                      (casting/cast value# ~intermediate-datatype)
+                                      elem-count#))))))
 
 
 (defmacro make-buffer-reader-table

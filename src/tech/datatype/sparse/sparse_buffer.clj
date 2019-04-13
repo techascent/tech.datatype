@@ -41,19 +41,23 @@
          (getDatatype [writer#] desired-dtype#)
          (size [writer#] n-elems#)
          (write [writer# idx# value#]
-           (let [[found?# insert-pos#] (dtype-search/binary-search
-                                        indexes# idx# {:datatype :int32})
-                 insert-pos# (int insert-pos#)]
-             (if (= sparse-value# value#)
-               (when found?#
-                 (do
-                   (.remove index-mutable# insert-pos#)
-                   (.remove data-mutable# insert-pos#)))
-               (if found?#
-                 (.write data-writer# insert-pos# value#)
-                 (do
-                   (.insert data-mutable# insert-pos# value#)
-                   (.insert index-mutable# insert-pos# idx#))))))
+           ;;We are not threadsafe.   Nor are we going to be.
+           (locking writer#
+             (let [idx# (+ (* idx# b-stride#)
+                           b-offset#)
+                   [found?# insert-pos#] (dtype-search/binary-search
+                                          indexes# idx# {:datatype :int32})
+                   insert-pos# (int insert-pos#)]
+               (if (= sparse-value# value#)
+                 (when found?#
+                   (do
+                     (.remove index-mutable# insert-pos#)
+                     (.remove data-mutable# insert-pos#)))
+                 (if found?#
+                   (.write data-writer# insert-pos# value#)
+                   (do
+                     (.insert data-mutable# insert-pos# value#)
+                     (.insert index-mutable# insert-pos# idx#)))))))
          (invoke [writer# idx# value#]
            (.write writer# (int idx#) (casting/datatype->cast-fn
                                        :unknown ~datatype value#)))
@@ -81,7 +85,7 @@
                                           (+ b-elem-count b-offset)
                                           :sparse-value sparse-value
                                           :datatype (dtype-base/get-datatype sparse-buf))
-        (dtype-proto/sub-buffer b-offset b-elem-count))))
+        (dtype-base/sub-buffer b-offset b-elem-count))))
 
 
 (defmacro make-sparse-merge
@@ -172,11 +176,12 @@
                          ^long b-elem-count
                          sparse-value
                          indexes
-                         data]
+                         data
+                         buffer-datatype]
   mp/PElementCount
   (element-count [item] (quot b-elem-count b-stride))
   dtype-proto/PDatatype
-  (get-datatype [item] (dtype-base/get-datatype data))
+  (get-datatype [item] buffer-datatype)
 
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
@@ -193,7 +198,8 @@
                       (* length b-stride)
                       sparse-value
                       indexes
-                      data)))
+                      data
+                      buffer-datatype)))
 
   dtype-proto/PCopyRawData
   (copy-raw->item! [item dest dest-offset options]
@@ -234,59 +240,62 @@
 
   dtype-proto/PWriteIndexes
   (write-indexes! [item new-indexes new-values options]
-    (let [n-elems (dtype-base/ecount new-indexes)]
-      (when-not (= n-elems 0)
-        (let [{new-indexes :indexes
-               new-values :data} (sparse-base/unordered-global-space->ordered-local-space
-                                  new-indexes new-values b-offset b-stride
-                                  (:indexes-in-order? options))
-              idx-reader (typecast/datatype->reader :int32 new-indexes)
-              start-idx (.read idx-reader 0)
-              end-idx (.read idx-reader (- n-elems 1))
-              offset (long (second (dtype-search/binary-search indexes start-idx {:datatype :int32})))
-              [found? end-offset] (dtype-search/binary-search indexes end-idx {:datatype :int32})
-              length (- (long (if found?
-                                (+ (long end-offset) 1)
-                                end-offset))
-                        offset)
-              sub-indexes (dtype-proto/sub-buffer indexes offset length)
-              sub-data (dtype-proto/sub-buffer data offset length)
-              merge-fn (get sparse-merge-table (casting/safe-flatten (dtype-base/get-datatype item)))
-              {union-indexes :indexes
-               union-data :data}
-              (merge-fn sparse-value sub-indexes sub-data
-                        new-indexes new-values (:unchecked? options))]
-          (dtype-base/remove-range! indexes offset length)
-          (dtype-base/remove-range! data offset length)
-          (dtype-base/insert-block! indexes offset union-indexes {:unchecked? true})
-          (dtype-base/insert-block! data offset union-data {:unchecked? true})))))
+    (locking item
+      (let [n-elems (dtype-base/ecount new-indexes)]
+        (when-not (= n-elems 0)
+          (let [{new-indexes :indexes
+                 new-values :data} (sparse-base/unordered-global-space->ordered-local-space
+                                    new-indexes new-values b-offset b-stride
+                                    (:indexes-in-order? options))
+                idx-reader (typecast/datatype->reader :int32 new-indexes)
+                start-idx (.read idx-reader 0)
+                end-idx (.read idx-reader (- n-elems 1))
+                offset (long (second (dtype-search/binary-search indexes start-idx {:datatype :int32})))
+                [found? end-offset] (dtype-search/binary-search indexes end-idx {:datatype :int32})
+                length (- (long (if found?
+                                  (+ (long end-offset) 1)
+                                  end-offset))
+                          offset)
+                sub-indexes (dtype-base/sub-buffer indexes offset length)
+                sub-data (dtype-base/sub-buffer data offset length)
+                merge-fn (get sparse-merge-table (casting/safe-flatten (dtype-base/get-datatype item)))
+                {union-indexes :indexes
+                 union-data :data}
+                (merge-fn sparse-value sub-indexes sub-data
+                          new-indexes new-values (:unchecked? options))]
+            (dtype-base/remove-range! indexes offset length)
+            (dtype-base/remove-range! data offset length)
+            (dtype-base/insert-block! indexes offset union-indexes {:unchecked? true})
+            (dtype-base/insert-block! data offset union-data {:unchecked? true})))))
+    item)
 
 
   dtype-proto/PSetConstant
   (set-constant! [item offset value length]
-    (when-not (<= (+ (int offset) (int length))
-                  (dtype-base/ecount item))
-      (throw (ex-info (format "Request count (%s) out of range (%s)")
-                      (+ (int offset) (int length))
-                      (dtype-base/ecount item))))
-    (let [item-dtype (dtype-base/get-datatype item)
-          value (casting/cast value item-dtype)
-          offset (int offset)
-          length (int length)]
-      (if (and (= sparse-value value)
-               (= b-stride 1))
-        (let [start-idx (global->local offset b-offset b-stride)
-              end-idx (+ start-idx (max 0 (- length 1)))
-              start-pos (int (second (dtype-search/binary-search indexes start-idx {:datatype :int32})))
-              end-pos (int (second (dtype-search/binary-search indexes end-idx {:datatype :int32})))
-              length (- end-pos start-pos)]
-          (dtype-base/remove-range! indexes start-pos length)
-          (dtype-base/remove-range! data start-pos length))
-        (dtype-proto/write-indexes! item
-                                    (reader/reader-range :int32 offset (+ length offset))
-                                    (reader/make-const-reader value item-dtype length)
-                                    {:unchecked? true
-                                     :indexes-in-order? true})))
+    (locking item
+      (when-not (<= (+ (int offset) (int length))
+                    (dtype-base/ecount item))
+        (throw (ex-info (format "Request count (%s) out of range (%s)")
+                        (+ (int offset) (int length))
+                        (dtype-base/ecount item))))
+      (let [item-dtype (dtype-base/get-datatype item)
+            value (casting/cast value item-dtype)
+            offset (int offset)
+            length (int length)]
+        (if (and (= sparse-value value)
+                 (= b-stride 1))
+          (let [start-idx (global->local offset b-offset b-stride)
+                end-idx (+ start-idx (max 0 (- length 1)))
+                start-pos (int (second (dtype-search/binary-search indexes start-idx {:datatype :int32})))
+                end-pos (int (second (dtype-search/binary-search indexes end-idx {:datatype :int32})))
+                length (- end-pos start-pos)]
+            (dtype-base/remove-range! indexes start-pos length)
+            (dtype-base/remove-range! data start-pos length))
+          (dtype-proto/write-indexes! item
+                                      (reader/reader-range :int32 offset (+ length offset))
+                                      (reader/make-const-reader value item-dtype length)
+                                      {:unchecked? true
+                                       :indexes-in-order? true}))))
     item)
 
 
@@ -324,7 +333,8 @@
                     b-elem-count
                     sparse-value
                     indexes
-                    data))
+                    data
+                    buffer-datatype))
 
   (stride [item] b-stride)
 
@@ -345,9 +355,10 @@
   [src dst options]
   (when-not (sparse-proto/is-sparse? src)
     (throw (ex-info "Source item must be sparse" {})))
-  (let [n-elems (dtype-base/ecount src)
+  (let [src (sparse-proto/->sparse-reader src)
+        n-elems (dtype-base/ecount src)
         {src-indexes :indexes
-         src-data :data} (sparse-proto/readers (sparse-proto/->sparse src))]
+         src-data :data} (sparse-proto/readers src)]
     (dtype-proto/set-constant! dst 0 (sparse-proto/sparse-value src) n-elems)
     (dtype-proto/write-indexes! dst src-indexes src-data
                                 (assoc options :indexes-in-order? true))
@@ -378,7 +389,8 @@
                     (dtype-proto/make-container :list datatype data-reader {}))]
     (->SparseBuffer 0 1 n-elems
                     sparse-value
-                    index-list data-list)))
+                    index-list data-list
+                    datatype)))
 
 
 (defmethod dtype-proto/make-container :sparse

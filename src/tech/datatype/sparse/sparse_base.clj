@@ -83,7 +83,8 @@
 (defn sparse-boolean-unary-map
   [options un-op sparse-item]
   (let [datatype (or (:datatype options)
-                     (dtype-base/get-datatype sparse-item))]
+                     (dtype-base/get-datatype sparse-item))
+        sparse-item (sparse-proto/->sparse sparse-item)]
     (make-sparse-reader (sparse-proto/index-reader sparse-item)
                         (impl/apply-unary-boolean-op {} un-op
                                                      (sparse-proto/data-reader
@@ -227,8 +228,8 @@
         [new-indexes new-values]
         (if-not indexes-in-order?
           (let [ordered-indexes (argsort/argsort new-indexes {:datatype :int32})]
-            [(reader/make-indexed-reader ordered-indexes new-indexes)
-             (reader/make-indexed-reader ordered-indexes new-data)])
+            [(reader/make-indexed-reader ordered-indexes new-indexes {})
+             (reader/make-indexed-reader ordered-indexes new-data {})])
           [new-indexes new-data])
         new-indexes (unary-op/unary-reader
                      :int32
@@ -271,7 +272,9 @@
 
 (defn sparse-binary-map
   [options bin-op sparse-lhs sparse-rhs]
-  (let [datatype (or (:datatype options)
+  (let [sparse-lhs (sparse-proto/->sparse-reader sparse-lhs)
+        sparse-rhs (sparse-proto/->sparse-reader sparse-rhs)
+        datatype (or (:datatype options)
                      (dtype-base/get-datatype sparse-lhs))
         flat-dtype (casting/safe-flatten datatype)
         union-fn (get sparse-binary-op-table [datatype datatype])

@@ -18,7 +18,7 @@
         stride-sparse (sparse-proto/set-stride next-sparse 3)]
     (is (= [[0 0] [1 2] [2 4] [3 6]] (->pairs (sparse-proto/index-seq test-sparse))))
     (is (= [[0 0] [1 2] [2 4]] (->pairs (-> (dtype/sub-buffer test-sparse 0 6)
-                                        (sparse-proto/index-seq)))))
+                                            (sparse-proto/index-seq)))))
     (is (= [[0 1] [1 3] [2 5]] (->pairs (sparse-proto/index-seq next-sparse))))
     (is (= [[1 1]] (->pairs (sparse-proto/index-seq stride-sparse))))
     (is (= (mapv float [1 0 1 0 1 0 1]) (dtype/->vector test-sparse)))
@@ -95,9 +95,9 @@
              (dtype/get-value sub-buf 0)))
       (dtype/set-value! sub-buf 1 255)
       (dtype/copy! sub-buf test-ary)
-      (is (= [255 0 1 2 3]
+      (is (= [254 255 1 2 3]
              (vec test-ary)))
-      (is (= [255 0 1 2 3]
+      (is (= [254 255 1 2 3]
              (-> (dtype/clone sub-buf)
                  (dtype/->vector))))
       (is (= :uint32

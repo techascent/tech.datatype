@@ -172,7 +172,8 @@
 
 
      dtype-proto/PToNioBuffer
-     {:->buffer-backing-store (fn [item#]
+     {:convertible-to-nio-buffer? (fn [item#] true)
+      :->buffer-backing-store (fn [item#]
                                 (let [item# (datatype->array-list-cast-fn
                                              ~datatype item#)]
                                   (datatype->buffer-creation-length
@@ -340,17 +341,21 @@
 
 (defmethod dtype-proto/make-container :list
   [container-type datatype elem-count-or-seq options]
-  (let [typed-buf (if (or (instance? RandomAccess elem-count-or-seq)
-                          (satisfies? dtype-proto/PToReader elem-count-or-seq)
-                          (number? elem-count-or-seq)
-                          (not (instance? Iterable elem-count-or-seq)))
-                    (typed-buffer/make-typed-buffer
-                     datatype
-                     elem-count-or-seq options)
+  (let [host-datatype? (= datatype (casting/host-flatten datatype))
+        typed-buf (if (or (number? elem-count-or-seq)
+                          (instance? RandomAccess elem-count-or-seq)
+                          (and (not (instance? Iterable elem-count-or-seq))
+                               (satisfies? dtype-proto/PToReader elem-count-or-seq)))
+                    (-> (typed-buffer/make-typed-buffer
+                         datatype
+                         elem-count-or-seq options)
+                        :backing-store
+                        dtype-proto/->list-backing-store)
                     (let [list-data (make-list (casting/host-flatten datatype) 0)]
                       (mutable/iterable->list elem-count-or-seq
                                               list-data
                                               {:unchecked? (:unchecked? options)
                                                :datatype datatype})))]
-    (-> (dtype-proto/->list-backing-store typed-buf)
-        (typed-buffer/set-datatype datatype))))
+    (if host-datatype?
+      typed-buf
+      (typed-buffer/set-datatype typed-buf datatype))))

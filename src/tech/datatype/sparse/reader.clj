@@ -78,14 +78,15 @@
 
 (defmacro make-indexed-data-reader
   [datatype]
-  `(fn [index-reader# data-reader# n-elems# zero-val#]
+  `(fn [index-reader# data-reader# n-elems# zero-val# datatype#]
      (let [local-data-reader# (typecast/datatype->reader ~datatype data-reader# true)
+           index-reader# (typecast/datatype->reader :int32 index-reader# true)
            n-elems# (int n-elems#)
            idx-count# (dtype-base/ecount index-reader#)
            zero-val# (casting/datatype->cast-fn :unknown ~datatype zero-val#)]
        (reify
          ~(typecast/datatype->reader-type datatype)
-         (getDatatype [reader#] (dtype-proto/get-datatype data-reader#))
+         (getDatatype [reader#] datatype#)
          (size [reader#] n-elems#)
          (read [reader# idx#]
            (let [[found?# data-idx#] (dtype-search/binary-search
@@ -185,18 +186,21 @@
   [index-reader data-reader n-elems & {:keys [datatype
                                               sparse-value]}]
   (let [datatype (casting/safe-flatten
-                  (or datatype (dtype-base/get-datatype data-reader)))
+                  (or datatype (safe-get-datatype data-reader)))
         create-fn (get indexed-reader-table datatype)
-        sparse-value (or sparse-value (make-sparse-value datatype))]
-    (create-fn (->reader index-reader datatype)
-               (->reader data-reader datatype)
+        sparse-value (or sparse-value (make-sparse-value datatype))
+        buf-len (int (second (dtype-search/binary-search
+                              index-reader n-elems {})))]
+    (create-fn (dtype-base/sub-buffer (->reader index-reader :int32) 0 buf-len)
+               (dtype-base/sub-buffer (->reader data-reader datatype) 0 buf-len)
                n-elems
-               sparse-value)))
+               sparse-value
+               datatype)))
 
 
 (defn const-sparse-reader
   [item-value & [datatype n-elems]]
-  (let [datatype (or datatype (dtype-base/get-value item-value))
+  (let [datatype (or datatype (dtype-base/get-datatype item-value))
         n-elems (int (or n-elems Integer/MAX_VALUE))
         value (casting/cast item-value datatype)]
     (make-sparse-reader [] [] n-elems

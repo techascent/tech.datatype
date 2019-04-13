@@ -1,5 +1,6 @@
 (ns tech.datatype.typecast
   (:require [tech.datatype.protocols :as dtype-proto]
+            [tech.datatype.protocols.impl :as dtype-proto-impl]
             [tech.jna :as jna]
             [tech.datatype.casting :as casting]
             [clojure.core.matrix.protocols :as mp])
@@ -561,11 +562,24 @@
     :object 'ObjectArrayList))
 
 
+(defmacro wrap-array-fastpath
+  [datatype src-data]
+  (case datatype
+    :int8 `(ByteArrayList/wrap ^bytes ~src-data)
+    :int16 `(ShortArrayList/wrap ^shorts ~src-data)
+    :int32 `(IntArrayList/wrap ^ints ~src-data)
+    :int64 `(LongArrayList/wrap ^longs ~src-data)
+    :float32 `(FloatArrayList/wrap ^floats ~src-data)
+    :float64 `(DoubleArrayList/wrap ^doubles ~src-data)
+    :boolean `(BooleanArrayList/wrap ^booleans ~src-data)
+    `(ObjectArrayList/wrap (as-object-array ~src-data))))
+
 
 (defn wrap-array-with-list
-  [src-data]
-  (if (satisfies? dtype-proto/PDatatype src-data)
-    (case (dtype-proto/get-datatype src-data)
+  [src-data & [datatype]]
+  (let [datatype (or datatype
+                     (dtype-proto-impl/safe-get-datatype src-data))]
+    (case datatype
       :int8 (ByteArrayList/wrap ^bytes src-data)
       :int16 (ShortArrayList/wrap ^shorts src-data)
       :int32 (IntArrayList/wrap ^ints src-data)
@@ -573,8 +587,7 @@
       :float32 (FloatArrayList/wrap ^floats src-data)
       :float64 (DoubleArrayList/wrap ^doubles src-data)
       :boolean (BooleanArrayList/wrap ^booleans src-data)
-      (ObjectArrayList/wrap (as-object-array src-data)))
-    (ObjectArrayList/wrap (as-object-array src-data))))
+      (ObjectArrayList/wrap (as-object-array src-data)))))
 
 
 (defn datatype->mutable-type

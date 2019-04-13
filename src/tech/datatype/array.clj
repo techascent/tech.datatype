@@ -74,7 +74,7 @@
      dtype-proto/PToList
      {:convertible-to-fastutil-list? (fn [item#] true)
       :->list-backing-store (fn [item#]
-                              (typecast/wrap-array-with-list item#))}
+                              (typecast/wrap-array-fastpath ~datatype item#))}
      dtype-proto/PToReader
      {:->reader-of-type (fn [item# datatype# unchecked?#]
                           (dtype-proto/->reader-of-type
@@ -135,7 +135,7 @@
   dtype-proto/PToList
   (convertible-to-fastutil-list? [item] true)
   (->list-backing-store [item]
-    (typecast/wrap-array-with-list item))
+    (typecast/wrap-array-fastpath :boolean item))
 
 
   dtype-proto/PToWriter
@@ -223,8 +223,7 @@
      (make-object-array-of-type datatype elem-count-or-seq options)
      (if-let [cons-fn (get @*array-constructors* datatype)]
        (cons-fn elem-count-or-seq options)
-       (throw (ex-info (format "Failed to find constructor for datatype %s" datatype)
-                       {:datatype datatype})))))
+       (make-object-array-of-type Object elem-count-or-seq options))))
   ([datatype elem-count-or-seq]
    (make-array-of-type datatype elem-count-or-seq {})))
 

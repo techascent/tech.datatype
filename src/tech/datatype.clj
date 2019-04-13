@@ -339,7 +339,7 @@ Calls clojure.core.matrix/ecount."
   [buffer offset & [length]]
   (let [length (or length (max 0 (- (ecount buffer)
                                     (long offset))))]
-    (dtype-proto/sub-buffer buffer offset length)))
+    (base/sub-buffer buffer offset length)))
 
 
 (defn ->iterable-of-type

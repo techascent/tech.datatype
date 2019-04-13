@@ -10,10 +10,10 @@
 
 (defn ->tensor
   [data & {:keys [datatype container-type]
-           :or {container-type :typed-buffer}
            :as options}]
   (let [data-shape (dtype/shape data)
         datatype (impl/datatype datatype)
+        container-type (impl/container-type container-type)
         n-elems (apply * 1 data-shape)]
     (impl/construct-tensor
      (first
@@ -26,13 +26,33 @@
 
 (defn new-tensor
   [shape & {:keys [datatype container-type]
-            :or {container-type :typed-buffer}
             :as options}]
   (let [datatype (impl/datatype datatype)
+        container-type (impl/container-type container-type)
         n-elems (apply * 1 shape)]
     (impl/construct-tensor
      (dtype/make-container container-type datatype n-elems options)
      (dims/dimensions shape))))
+
+
+(defn clone
+  [tens & {:keys [datatype
+                  container-type]}]
+  (let [datatype (or datatype (dtype/get-datatype tens))
+        container-type (impl/container-type (or container-type
+                                                (dtype/container-type tens)))
+        new-buffer (if (satisfies? dtype-proto/PPrototype (impl/tensor->buffer tens))
+                     (dtype/from-prototype (impl/tensor->buffer tens)
+                                           :datatype datatype
+                                           :shape (dtype/shape
+                                                   (impl/tensor->buffer tens)))
+                     (dtype/make-container (impl/container-type container-type)
+                                           datatype
+                                           (dtype/ecount tens)))
+        new-tens (impl/construct-tensor
+                  new-buffer
+                  (dims/dimensions (dtype/shape tens)))]
+    (dtype/copy! tens new-tens)))
 
 
 (defn rotate
@@ -101,25 +121,6 @@
            (dims/dimensions shape :strides strides :offsets offsets
                             :max-shape bcast-shape))))
 
-
-(defn clone
-  [tens & {:keys [datatype
-                  container-type]}]
-  (let [datatype (or datatype (dtype/get-datatype tens))
-        new-buffer (if (satisfies? dtype-proto/PPrototype (impl/tensor->buffer tens))
-                     (dtype/from-prototype (impl/tensor->buffer tens)
-                                           :datatype datatype
-                                           :shape (dtype/shape
-                                                   (impl/tensor->buffer tens)))
-                     (dtype/make-container (impl/container-type container-type)
-                                           datatype
-                                           (dtype/ecount tens)))
-        new-tens (impl/construct-tensor
-                  new-buffer
-                  (dims/dimensions (dtype/shape tens)))]
-    (dtype/copy! (dtype/->reader-of-type tens (:datatype datatype))
-                 (dtype/->writer new-tens))
-    new-tens))
 
 
 (func-impl/export-symbols tech.tensor.impl

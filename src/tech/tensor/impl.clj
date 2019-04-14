@@ -56,7 +56,7 @@
   (dims/->local->global dimensions))
 
 
-(defn- simple-dimensions?
+(defn simple-dimensions?
   [dimensions]
   (and (dims/direct? dimensions)
        (dims/access-increasing? dimensions)
@@ -217,7 +217,8 @@
               index-seq (map-indexed vector indexes)
               index-seq (if (and dense? (not broadcasting?))
                           (map (fn [[data-index global-index]]
-                                 [data-index (first (.localToGlobal addr-inverter global-index))])
+                                 [data-index (first (.localToGlobal
+                                                     addr-inverter global-index))])
                                index-seq)
                           (mapcat (fn [[data-index global-index]]
                                     (->> (.localToGlobal addr-inverter global-index)
@@ -268,9 +269,9 @@
 
 
 (defn mutable?
+  "Does this tensor have the ability to be written to."
   [tens]
   (satisfies? dtype-proto/PToWriter (tensor->buffer tens)))
-
 
 
 (defn tensor->base-buffer-type

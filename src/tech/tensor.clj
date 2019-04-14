@@ -5,7 +5,8 @@
             [tech.tensor.dimensions :as dims]
             [tech.tensor.dimensions.shape :as shape]
             [tech.datatype.functional :as dtype-fn]
-            [tech.datatype.functional.impl :as func-impl]))
+            [tech.datatype.functional.impl :as func-impl]
+            [tech.datatype.sparse.protocols :as sparse-proto]))
 
 
 (defn ->tensor
@@ -53,6 +54,26 @@
                   new-buffer
                   (dims/dimensions (dtype/shape tens)))]
     (dtype/copy! tens new-tens)))
+
+
+(defn tensor-force
+  "Ensure any delayed operations happen for this and reads from this tensor
+  happen reasonably fast.  For sparse this probably means cloning."
+  [tens]
+  (let [buffer-type (dtype/buffer-type (:buffer tens))
+        new-tens (if (= :sparse buffer-type)
+                   (impl/construct-tensor
+                    (sparse-proto/->sparse-reader tens)
+                    (dims/dimensions (dtype/shape tens)))
+                   ;;force a potentially deep reader chain.
+                   (clone tens))]
+    ;;force actual creation of dimension transforms
+    (dims/->global->local (:dimensions new-tens))
+    ;;Sparse always needs the inverse transform
+    (when (= :sparse buffer-type)
+      (dims/->local->global (:dimensions new-tens)))
+    new-tens))
+
 
 
 (defn rotate
@@ -124,6 +145,7 @@
 
 
 (func-impl/export-symbols tech.tensor.impl
+                          mutable?
                           ->core-matrix
                           ->core-matrix-vector
                           ->jvm)

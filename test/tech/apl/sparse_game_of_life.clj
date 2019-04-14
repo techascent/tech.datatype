@@ -51,7 +51,10 @@
 
 
   (def RR (-> (apl-gol/apl-take R-matrix [-10 -20])
-              (apl-gol/apl-take [15 35]))))
+              (apl-gol/apl-take [15 35])))
+
+  (def bigRR (-> (apl-gol/apl-take R-matrix [-1000 -2000])
+                 (apl-gol/apl-take [1500 3500]))))
 
 
 

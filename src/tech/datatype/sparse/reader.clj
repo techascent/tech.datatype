@@ -90,7 +90,8 @@
          (size [reader#] n-elems#)
          (read [reader# idx#]
            (let [[found?# data-idx#] (dtype-search/binary-search
-                                      index-reader# (int idx#) {})]
+                                      index-reader# (int idx#)
+                                      {:datatype :int32})]
              (if found?#
                (.read local-data-reader# (int data-idx#))
                zero-val#)))
@@ -140,9 +141,11 @@
                                      n-elems#)
                              {})))
            (let [start-elem# (int (second (dtype-search/binary-search
-                                           index-reader# offset# {})))
+                                           index-reader# offset#
+                                           {:datatype :int32})))
                  end-elem# (int (second (dtype-search/binary-search
-                                         index-reader# (+ offset# length#) {})))
+                                         index-reader# (+ offset# length#)
+                                         {:datatype :int32})))
                  sub-len# (- end-elem# start-elem#)
                  new-idx-reader# (->> (dtype-proto/sub-buffer
                                        index-reader# start-elem# sub-len#)
@@ -190,7 +193,8 @@
         create-fn (get indexed-reader-table datatype)
         sparse-value (or sparse-value (make-sparse-value datatype))
         buf-len (int (second (dtype-search/binary-search
-                              index-reader n-elems {})))]
+                              index-reader n-elems
+                              {:datatype :int32})))]
     (create-fn (dtype-base/sub-buffer (->reader index-reader :int32) 0 buf-len)
                (dtype-base/sub-buffer (->reader data-reader datatype) 0 buf-len)
                n-elems

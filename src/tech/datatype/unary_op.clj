@@ -239,7 +239,7 @@
       (dtype-proto/->iterable-of-type item datatype unchecked?)
       ;;For object iteration map is probably faster
       (if (= datatype :object)
-        (map un-op (typecast/datatype->reader :object item))
+        (map (datatype->unary-op :object un-op true) item)
         (if-let [iter-fn (get unary-op-iter-table (casting/flatten-datatype datatype))]
           (iter-fn item un-op unchecked?)
           (throw (ex-info (format "Cannot unary map datatype %s" datatype) {})))))))
@@ -332,7 +332,8 @@
   `(reify
      dtype-proto/PToUnaryOp
      (->unary-op [item# datatype# unchecked?#]
-       (when-not (casting/numeric-type? datatype#)
+       (when-not (or (= :object datatype#)
+                     (casting/numeric-type? datatype#))
          (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
        (case (casting/safe-flatten datatype#)
          :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
@@ -340,7 +341,9 @@
          :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
          :int64 (make-unary-op ~opname :int64 ~op-code)
          :float32 (make-unary-op ~opname :float32 ~op-code)
-         :float64 (make-unary-op ~opname :float64 ~op-code)))
+         :float64 (make-unary-op ~opname :float64 ~op-code)
+         :object (-> (make-unary-op ~opname :float64 ~op-code)
+                     (dtype-proto/->unary-op :object true))))
      dtype-proto/PDatatype
      (get-datatype [item#] :float64)
      dtype-proto/POperator

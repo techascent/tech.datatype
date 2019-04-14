@@ -126,3 +126,27 @@
       (boolean-op/unary-argfilter (impl/default-options {})
                                   bool-op
                                   filter-seq))))
+
+
+(defn magnitude-squared
+  [item & [options]]
+  (let [un-map (unary-iterable-map options (:sq unary/builtin-unary-ops) item)]
+    (reduce-op/iterable-reduce-map options (:+ binary/builtin-binary-ops) un-map)))
+
+
+(defn magnitude
+  (^double [item options]
+   (Math/sqrt (double (magnitude-squared item options))))
+  (^double [item]
+   (Math/sqrt (double (magnitude-squared item nil)))))
+
+
+(defn dot-product
+  ([lhs rhs bin-op reduce-op options]
+   (reduce-op/dot-product options lhs rhs bin-op reduce-op))
+  ([lhs rhs bin-op reduce-op]
+   (reduce-op/dot-product nil lhs rhs bin-op reduce-op))
+  ([lhs rhs]
+   (reduce-op/dot-product nil lhs rhs
+                          (:* binary/builtin-binary-ops)
+                          (:+ binary/builtin-binary-ops))))

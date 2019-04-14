@@ -329,3 +329,55 @@
    `(iterable-reduce ~datatype ~update-code ~'accum ~values))
   ([update-code values]
    `(iterable-reduce :object ~update-code ~'accum ~values)))
+
+
+(defmacro make-dot-product-op
+  [datatype]
+  `(fn [lhs# rhs# bin-op# reduce-op# unchecked?#]
+     (let [lhs# (typecast/datatype->iter ~datatype lhs# unchecked?#)
+           rhs# (typecast/datatype->iter ~datatype rhs# unchecked?#)
+           bin-op# (binary-op/datatype->binary-op ~datatype bin-op# true)
+           reduce-op# (datatype->reduce-op ~datatype reduce-op# true)]
+       (loop [n-elems# 0
+              sum# (casting/datatype->sparse-value ~datatype)]
+         (if (and (.hasNext lhs#)
+                  (.hasNext rhs#))
+           (recur (unchecked-inc n-elems#)
+                  (if (= 0 n-elems#)
+                    (.op bin-op#
+                         (typecast/datatype->iter-next-fn ~datatype lhs#)
+                         (typecast/datatype->iter-next-fn ~datatype rhs#))
+                    (.update reduce-op#
+                             sum#
+                             (.op bin-op#
+                                  (typecast/datatype->iter-next-fn ~datatype lhs#)
+                                  (typecast/datatype->iter-next-fn ~datatype rhs#)))))
+           (.finalize reduce-op# sum# n-elems#))))))
+
+
+(defmacro make-dot-product-table
+  []
+  `(->> [~@(for [dtype casting/base-host-datatypes]
+             [dtype `(make-dot-product-op ~dtype)])]
+        (into {})))
+
+
+(def dot-product-table (make-dot-product-table))
+
+
+(defn default-dot-product
+  [{:keys [datatype unchecked?]} lhs rhs bin-op reduce-op]
+  (let [datatype (or datatype (dtype-base/get-datatype lhs))
+        dot-prod-fn (get dot-product-table datatype)]
+    (dot-prod-fn lhs rhs bin-op reduce-op unchecked?)))
+
+
+(defmulti dot-product
+  (fn [options lhs rhs bin-op reduce-op]
+    [(dtype-base/buffer-type lhs)
+     (dtype-base/buffer-type rhs)]))
+
+
+(defmethod dot-product :default
+  [options lhs rhs bin-op reduce-op]
+  (default-dot-product options lhs rhs bin-op reduce-op))

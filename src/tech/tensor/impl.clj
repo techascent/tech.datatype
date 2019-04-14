@@ -276,9 +276,11 @@
 
 (defn tensor->base-buffer-type
   [tens]
-  (assoc tens :buffer-type
-         (dtype/buffer-type
-          (tensor->buffer tens))))
+  (if (tensor? tens)
+    (assoc tens :buffer-type
+           (dtype/buffer-type
+            (tensor->buffer tens)))
+    tens))
 
 
 (defmethod unary-op/unary-reader-map :tensor
@@ -484,5 +486,42 @@
 
 (defmethod dtype-proto/copy! [:tensor :tensor]
   [dst src options]
-  (dtype-proto/copy! (tensor->base-buffer-type dst) (tensor->base-buffer-type src) options)
+  (dtype-proto/copy! (tensor->base-buffer-type dst)
+                     (tensor->base-buffer-type src) options)
   dst)
+
+
+(defmacro impl-dot-product
+  [match-criteria]
+  `(defmethod reduce-op/dot-product ~match-criteria
+     [options# lhs# rhs# bin-op# reduce-op#]
+     (when (or (not= 1 (count (dtype-base/shape lhs#)))
+               (not= 1 (count (dtype-base/shape rhs#))))
+       (throw (ex-info "Dot product called incorrectly"
+                       {:lhs-shape (dtype-base/shape lhs#)
+                        :rhs-shape (dtype-base/shape rhs#)})))
+     (reduce-op/dot-product
+      options#
+      (tensor->base-buffer-type lhs#)
+      (tensor->base-buffer-type rhs#)
+      bin-op#
+      reduce-op#)))
+
+
+(def all-tensor-combos
+  [[:tensor :tensor]
+   [:tensor :dense]
+   [:dense :tensor]
+   [:tensor :sparse]
+   [:sparse :tensor]])
+
+
+(defmacro impl-all-tensor-combos
+  [target-macro]
+  `(do
+     ~@(->> all-tensor-combos
+            (map (fn [combo]
+                   `(~target-macro ~combo))))))
+
+
+(impl-all-tensor-combos impl-dot-product)

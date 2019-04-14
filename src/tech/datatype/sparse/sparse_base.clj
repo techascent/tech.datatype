@@ -431,3 +431,24 @@
     :+ (sparse-reduce-+ options values)
     :* (sparse-reduce-* options values)
     (reduce-op/default-iterable-reduce-map options reduce-op values)))
+
+
+(defn default-sparse-dot-product
+  [options lhs rhs bin-op reduce-op]
+  (let [bin-map (binary-op/binary-reader-map options bin-op lhs rhs)]
+    (reduce-op/iterable-reduce-map options reduce-op bin-map)))
+
+
+(defmethod reduce-op/dot-product [:sparse :dense]
+  [options lhs rhs bin-op reduce-op]
+  (default-sparse-dot-product options lhs rhs bin-op reduce-op))
+
+
+(defmethod reduce-op/dot-product [:dense :sparse]
+  [options lhs rhs bin-op reduce-op]
+  (default-sparse-dot-product options lhs rhs bin-op reduce-op))
+
+
+(defmethod reduce-op/dot-product [:sparse :sparse]
+  [options lhs rhs bin-op reduce-op]
+  (default-sparse-dot-product options lhs rhs bin-op reduce-op))

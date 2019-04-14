@@ -247,10 +247,13 @@
 
 (defmethod matrix-matrix-dispatch [:dense :dense :* :+]
   [alpha lhs rhs bin-op reduce-op options]
-  (let [lhs-dtype (dtype/get-datatype lhs)]
+  (let [lhs-dtype (dtype/get-datatype lhs)
+        rhs (impl/ensure-tensor rhs)]
     (if (and (or (= lhs-dtype :float32)
                  (= lhs-dtype :float64))
-             (blas/has-blas?))
+             (blas/has-blas?)
+             (= 1 (apply min (get-in lhs [:dimensions :strides])))
+             (= 1 (apply min (get-in rhs [:dimensions :strides]))))
       (let [[lhs-shape rhs-shape] (mmul-check lhs rhs)
             lhs (external-force-dense lhs)
             rhs (external-force-dense rhs)
@@ -263,38 +266,27 @@
             rhs-strides (get-in rhs [:dimensions :strides])
             lhs-min-stride (int (apply min lhs-strides))
             rhs-min-stride (int (apply min rhs-strides))
+            lhs-max-stride (int (apply max lhs-strides))
+            rhs-max-stride (int (apply max rhs-strides))
+            c-max-stride (int (apply max (get-in C [:dimensions :strides])))
             lhs-trans? (= lhs-min-stride (first lhs-strides))
             rhs-trans? (= rhs-min-stride (first rhs-strides))
             gemv? (= 1 (second rhs-shape))]
-        (println gemv? lhs-trans? rhs-trans? lhs-shape rhs-shape
-                 lhs-min-stride rhs-min-stride
-                 lhs-strides rhs-strides)
         (if gemv?
           ((case lhs-dtype
              :float32 blas/cblas_sgemv
              :float64 blas/cblas_dgemv)
            :row-major lhs-trans?
            (first lhs-shape)  (second lhs-shape)
-           alpha (:buffer lhs) lhs-min-stride (:buffer rhs) rhs-min-stride
+           alpha (:buffer lhs) lhs-max-stride (:buffer rhs) rhs-min-stride
            beta (:buffer C) 1)
-          (do
-            (println "gemm case" alpha beta
-                     (dtype/->vector (:buffer lhs))
-                     (dtype/->vector (:buffer rhs))
-                     (dtype/->vector (:buffer C)))
-            (blas/cblas_dgemm
-             :column-major false false
-             (first lhs-shape) (first rhs-shape) (second lhs-shape)
-             alpha (:buffer lhs) 1 (:buffer rhs) 1
-             beta (:buffer C) 1)
-            (println C)
-            (comment ((case lhs-dtype
-                        :float32 blas/cblas_sgemm
-                        :float64 blas/cblas_dgemm)
-                      :row-major lhs-trans? rhs-trans?
-                      (first lhs-shape) (second lhs-shape) (second rhs-shape)
-                      alpha (:buffer lhs) lhs-min-stride (:buffer rhs) rhs-min-stride
-                      beta (:buffer C) 1))))
+          ((case lhs-dtype
+             :float32 blas/cblas_sgemm
+             :float64 blas/cblas_dgemm)
+           :row-major lhs-trans? rhs-trans?
+           (first lhs-shape) (first rhs-shape) (second lhs-shape)
+           alpha (:buffer lhs) lhs-max-stride (:buffer rhs) rhs-max-stride
+           beta (:buffer C) c-max-stride))
         C)
       (default-matrix-matrix alpha lhs rhs bin-op reduce-op options))))
 
@@ -302,9 +294,10 @@
 (defn matrix-multiply
   "lhs - 2 dimensional tensor.
   rhs - Either 2 dimensional tensor or 1 dimensional vector.
+  alpha - multiply result by alpha.
   reduction operators - *,+"
-  [lhs rhs]
-  (matrix-matrix-dispatch nil lhs rhs
+  [lhs rhs & [alpha]]
+  (matrix-matrix-dispatch alpha lhs rhs
                           (:* binary-op/builtin-binary-ops)
                           (:+ binary-op/builtin-binary-ops)
                           {}))

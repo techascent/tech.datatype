@@ -368,7 +368,7 @@
 (defn default-dot-product
   [{:keys [datatype unchecked?]} lhs rhs bin-op reduce-op]
   (let [datatype (or datatype (dtype-base/get-datatype lhs))
-        dot-prod-fn (get dot-product-table datatype)]
+        dot-prod-fn (get dot-product-table (casting/safe-flatten datatype))]
     (dot-prod-fn lhs rhs bin-op reduce-op unchecked?)))
 
 

@@ -14,6 +14,10 @@
               [tech.datatype.boolean-op :as boolean-op]
               [tech.datatype.typecast :as typecast]
               [tech.datatype :as dtype]
+              [tech.datatype.functional :as dtype-fn]
+              [tech.tensor.typecast :as tens-typecast]
+              [tech.tensor.protocols :as tens-proto]
+              [tech.libs.blas :as blas]
               [tech.jna :as jna]
               [clojure.core.matrix.protocols :as mp]
               [clojure.core.matrix :as m]
@@ -36,12 +40,12 @@
      ~@body))
 
 
-(defn datatype
+(defn default-datatype
   [& [dtype-or-nil]]
   (or dtype-or-nil *datatype*))
 
 
-(defn container-type
+(defn default-container-type
   [& [container-type]]
   (or container-type *container-type*))
 
@@ -235,7 +239,14 @@
                                         {:unchecked? true})
                                        data
                                        {})
-           (dtype/ecount item)))))))
+           (dtype/ecount item))))))
+
+  tens-proto/PToTensorReader
+  (->tensor-reader-of-type [item datatype unchecked?]
+
+    )
+
+  )
 
 
 (defn construct-tensor
@@ -247,6 +258,20 @@
 (defn tensor?
   [item]
   (instance? Tensor item))
+
+
+(defn tensor-buffer-type
+  [tens]
+  (if (tensor? tens)
+    (dtype/buffer-type (:buffer tens))
+    (dtype/buffer-type tens)))
+
+
+(defn tensor-container-type
+  [tens]
+  (if (tensor? tens)
+    (dtype/container-type (:buffer tens))
+    (dtype/container-type tens)))
 
 
 (defn ensure-tensor
@@ -281,6 +306,144 @@
            (dtype/buffer-type
             (tensor->buffer tens)))
     tens))
+
+(defn ->tensor
+  [data & {:keys [datatype container-type]
+           :as options}]
+  (let [data-shape (dtype/shape data)
+        datatype (default-datatype datatype)
+        container-type (default-container-type container-type)
+        n-elems (apply * 1 data-shape)]
+    (construct-tensor
+     (first
+      (dtype/copy-raw->item!
+       data
+       (dtype/make-container container-type datatype n-elems options)
+       0 options))
+     (dims/dimensions data-shape))))
+
+
+(defn new-tensor
+  [shape & {:keys [datatype container-type]
+            :as options}]
+  (let [datatype (default-datatype datatype)
+        container-type (default-container-type container-type)
+        n-elems (apply * 1 shape)]
+    (construct-tensor
+     (dtype/make-container container-type datatype n-elems options)
+     (dims/dimensions shape))))
+
+
+(defn clone
+  [tens & {:keys [datatype
+                  container-type]}]
+  (let [datatype (or datatype (dtype/get-datatype tens))
+        container-type (default-container-type (or container-type
+                                                (dtype/container-type tens)))
+        new-buffer (if (satisfies? dtype-proto/PPrototype (tensor->buffer tens))
+                     (dtype/from-prototype (tensor->buffer tens)
+                                           :datatype datatype
+                                           :shape (dtype/shape
+                                                   (tensor->buffer tens)))
+                     (dtype/make-container (default-container-type container-type)
+                                           datatype
+                                           (dtype/ecount tens)))
+        new-tens (construct-tensor
+                  new-buffer
+                  (dims/dimensions (dtype/shape tens)))]
+    (dtype/copy! tens new-tens)))
+
+
+(defn tensor-force
+  "Ensure any delayed operations happen for this and reads from this tensor
+  happen reasonably fast.  For sparse this probably means cloning."
+  [tens]
+  (let [buffer-type (dtype/buffer-type (:buffer tens))
+        new-tens (if (= :sparse buffer-type)
+                   (construct-tensor
+                    (sparse-proto/->sparse-reader tens)
+                    (dims/dimensions (dtype/shape tens)))
+                   ;;force a potentially deep reader chain.
+                   (if (or (not (simple-dimensions? (:dimensions tens)))
+                           ;;In the case of a reader chain, we will no longer
+                           ;;be able to get the buffer back from the tensor.
+                           (not (dtype-proto/as-nio-buffer tens)))
+                     (clone tens)
+                     tens))]
+    ;;force actual creation of dimension transforms
+    (dims/->global->local (:dimensions new-tens))
+    ;;Sparse always needs the inverse transform
+    (when (= :sparse buffer-type)
+      (dims/->local->global (:dimensions new-tens)))
+    new-tens))
+
+
+
+(defn rotate
+  [tens rotate-vec]
+  (let [tens (ensure-tensor tens)]
+    (assoc tens :dimensions
+           (dims/rotate (tensor->dimensions tens)
+                        (mapv #(* -1 (long %)) rotate-vec)))))
+
+
+(defn reshape
+  [tens new-shape]
+  (let [tens (ensure-tensor tens)
+        new-dims (dims/in-place-reshape (:dimensions tens)
+                                        new-shape)]
+    (construct-tensor
+     (dtype/sub-buffer (tensor->buffer tens)
+                       0 (dims/buffer-ecount new-dims))
+     new-dims)))
+
+
+(defn transpose
+  [tens transpose-vec]
+  (let [tens (ensure-tensor tens)]
+    (update tens :dimensions dims/transpose transpose-vec)))
+
+
+(defn select
+  [tens & args]
+  (let [tens (ensure-tensor tens)
+        {new-dims :dims
+         buf-offset :elem-offset
+         buf-len :buffer-length}
+        (apply dims/select (:dimensions tens) args)]
+    (construct-tensor (-> (tensor->buffer tens)
+                               (dtype/sub-buffer buf-offset buf-len))
+                           new-dims)))
+
+
+(defn broadcast
+  "Create a larger tensor by repeating dimensions of a smaller tensor."
+  [tens bcast-shape]
+  (let [tens-shape (dtype/shape tens)
+        n-tens-elems (dtype/ecount tens)
+        n-bcast-elems (shape/ecount bcast-shape)
+        num-tens-shape (count tens-shape)
+        {:keys [shape strides offsets max-shape]
+         :as tens-dims} (:dimensions tens)]
+    (when-not (every? number? bcast-shape)
+      (throw (ex-info "Broadcast shapes must only be numbers" {})))
+    (when-not (>= n-bcast-elems
+                  n-tens-elems)
+      (throw (ex-info
+              (format "Improper broadcast shape (%s), smaller than tens (%s)"
+                              bcast-shape tens-shape)
+                      {})))
+    (when-not (every? (fn [[item-dim bcast-dim]]
+                        (= 0 (rem (int bcast-dim)
+                                  (int item-dim))))
+                      (map vector tens-shape (take-last num-tens-shape bcast-shape)))
+      (throw (ex-info
+              (format "Broadcast shape (%s) is not commensurate with tensor shape %s"
+                              bcast-shape tens-shape)
+                      {})))
+    (assoc tens :dimensions
+           (dims/dimensions shape :strides strides :offsets offsets
+                            :max-shape bcast-shape))))
 
 
 (defmethod unary-op/unary-reader-map :tensor
@@ -525,3 +688,125 @@
 
 
 (impl-all-tensor-combos impl-dot-product)
+
+
+
+(defmulti matrix-matrix-dispatch
+  (fn [alpha lhs rhs bin-op reduce-op options]
+    [(tensor-buffer-type lhs)
+     (tensor-buffer-type rhs)
+     (dtype-base/op-name bin-op)
+     (dtype-base/op-name reduce-op)]))
+
+(defn- mmul-check
+  [lhs rhs]
+  (let [lhs-shape (dtype/shape lhs)
+        rhs-shape (dtype/shape rhs)
+        rhs-shape (if (= 1 (count rhs-shape))
+                    [(first rhs-shape) 1]
+                    rhs-shape)]
+    (when-not (and (= 2 (count lhs-shape))
+                   (= 2 (count rhs-shape)))
+      (throw (ex-info "Both items must have shape count 2" {})))
+    (when-not (= (second lhs-shape) (first rhs-shape))
+      (throw (ex-info "Inner dimensions don't match"
+                      {:lhs-shape lhs-shape
+                       :rhs-shape rhs-shape})))
+    [lhs-shape rhs-shape]))
+
+
+(defn- default-matrix-matrix
+  [alpha lhs rhs bin-op reduce-op options]
+  (let [[lhs-shape rhs-shape] (mmul-check lhs rhs)
+        lhs-rows (->> (range (first lhs-shape))
+                      (mapv #(select lhs % :all)))
+        rhs-columns (->> (range (second rhs-shape))
+                         (mapv #(select rhs :all %)))
+        result-container-type (or (:container-type options)
+                                  (if (and (= :sparse (dtype/container-type lhs))
+                                           (= :sparse (dtype/container-type rhs)))
+                                    :sparse
+                                    :list))
+        datatype (or (:datatype options)
+                     (dtype/get-datatype lhs))
+        new-tens (construct-tensor
+                  (->> (for [row lhs-rows
+                             col rhs-columns]
+                         [row col])
+                       (pmap #(dtype-fn/dot-product (first %)
+                                                    (second %)
+                                                    bin-op reduce-op
+                                                    {:datatype datatype}))
+                       (dtype/make-container result-container-type datatype))
+                  (dims/dimensions [(first lhs-shape) (second rhs-shape)]))]
+    (cond->> new-tens
+      alpha
+      (dtype-fn/apply-binary-op {:datatype datatype} bin-op alpha))))
+
+
+(defmethod matrix-matrix-dispatch :default
+  [alpha lhs rhs bin-op reduce-op options]
+  (default-matrix-matrix alpha lhs rhs bin-op reduce-op options))
+
+
+(defn- external-force-dense
+  "Extern fn calls can take any stride order but they cannot take
+  offsets or a reader chain."
+  [tens]
+  (let [any-offsets? (every? #(= 0 %) (:offsets (:dimensions tens)))
+        nio-access? (dtype-proto/as-nio-buffer tens)
+        tens-shape (dtype/shape tens)]
+    (if (or any-offsets?
+            (not nio-access?)
+            ;;Matrixes can only have a minimum stride of 1.
+            ;;Vectors can have any stride, however.
+            (and (= 2 (count tens-shape))
+                 (not= 1 (apply min (get-in tens [:dimensions :strides])))))
+      (clone tens)
+      tens)))
+
+
+(defmethod matrix-matrix-dispatch [:dense :dense :* :+]
+  [alpha lhs rhs bin-op reduce-op options]
+  (let [lhs-dtype (dtype/get-datatype lhs)
+        rhs (ensure-tensor rhs)]
+    (if (and (or (= lhs-dtype :float32)
+                 (= lhs-dtype :float64))
+             (blas/has-blas?))
+      (let [[lhs-shape rhs-shape] (mmul-check lhs rhs)
+            ;;It is worth it to copy because copy is a O(N) while matrix*matrix is
+            ;;O(N^3).
+            lhs (external-force-dense lhs)
+            rhs (external-force-dense rhs)
+            alpha (if alpha (double alpha) 1.0)
+            beta 0.0
+            C (new-tensor [(first lhs-shape) (second rhs-shape)]
+                          :datatype lhs-dtype
+                          :container-type :typed-buffer)
+            lhs-strides (get-in lhs [:dimensions :strides])
+            rhs-strides (get-in rhs [:dimensions :strides])
+            lhs-min-stride (int (apply min lhs-strides))
+            rhs-min-stride (int (apply min rhs-strides))
+            lhs-max-stride (int (apply max lhs-strides))
+            rhs-max-stride (int (apply max rhs-strides))
+            c-max-stride (int (apply max (get-in C [:dimensions :strides])))
+            lhs-trans? (= lhs-min-stride (first lhs-strides))
+            rhs-trans? (= rhs-min-stride (first rhs-strides))
+            gemv? (= 1 (second rhs-shape))]
+        (if gemv?
+          ((case lhs-dtype
+             :float32 blas/cblas_sgemv
+             :float64 blas/cblas_dgemv)
+           :row-major lhs-trans?
+           (first lhs-shape)  (second lhs-shape)
+           alpha (:buffer lhs) lhs-max-stride (:buffer rhs) rhs-min-stride
+           beta (:buffer C) 1)
+          ((case lhs-dtype
+             :float32 blas/cblas_sgemm
+             :float64 blas/cblas_dgemm)
+           :row-major lhs-trans? rhs-trans?
+           (first lhs-shape) (first rhs-shape) (second lhs-shape)
+           alpha (:buffer lhs) lhs-max-stride (:buffer rhs) rhs-max-stride
+           beta (:buffer C) c-max-stride))
+        C)
+      (default-matrix-matrix alpha lhs rhs bin-op reduce-op options))))

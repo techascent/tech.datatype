@@ -2,9 +2,11 @@
   (:require [clojure.test :refer :all]
             [tech.datatype :as dtype]
             [tech.datatype.base :as base]
+            [tech.datatype.casting :as casting]
+            [tech.datatype.primitive]
+            [tech.datatype.list]
             [clojure.core.matrix :as m]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [tech.datatype.java-primitive :as primitive])
+            [clojure.core.matrix.macros :refer [c-for]])
   (:import [java.nio FloatBuffer]))
 
 
@@ -28,29 +30,30 @@
     (dtype/copy-raw->item! double-array-seq output-doubles 0)
     (is (= (vec output-doubles) (mapv double (flatten input-seq))))))
 
+
 (defn basic-copy
   [src-fn dest-fn src-dtype dst-dtype]
-  (let [ary (src-fn src-dtype (range 10))
-        buf (dest-fn dst-dtype 10)
-        retval (dtype/make-array-of-type :float64 10)]
+  (let [ary (dtype/make-container src-fn src-dtype (range 10))
+        buf (dtype/make-container dest-fn dst-dtype 10)
+        retval (dtype/make-jvm-container :float64 10)]
     ;;copy starting at position 2 of ary into position 4 of buf 4 elements
     (dtype/copy! ary 2 buf 4 4)
     (dtype/copy! buf 0 retval 0 10)
     (is (m/equals [0 0 0 0 2 3 4 5 0 0]
-                  (vec retval)))))
+                  (mapv int (dtype/->vector retval)))
+        (pr-str {:src-fn src-fn :dest-fn dest-fn
+                 :src-dtype src-dtype :dst-dtype dst-dtype}))))
 
 
-(def create-functions [dtype/make-array-of-type
-                       dtype/make-buffer-of-type])
-
+(def create-functions [:typed-buffer :native-buffer :list :sparse])
 
 
 (deftest generalized-copy-test
-  (->> (for [src-fn create-functions
-             dst-fn create-functions
-             src-dtype primitive/datatypes
-             dst-dtype primitive/datatypes]
-         (basic-copy src-fn dst-fn src-dtype dst-dtype))
+  (->> (for [src-container create-functions
+             dst-container create-functions
+             src-dtype casting/numeric-types
+             dst-dtype casting/numeric-types]
+         (basic-copy src-container dst-container src-dtype dst-dtype))
        dorun))
 
 
@@ -60,8 +63,7 @@
             (aset src-data idx (double-array (repeat 10 idx))))
         dst-data (float-array (* 5 10))]
     ;;This should not hit any slow paths.
-    (with-bindings {#'base/*error-on-slow-path* true}
-      (dtype/copy-raw->item! src-data dst-data 0))
+    (dtype/copy-raw->item! src-data dst-data 0)
     (is (= (vec (float-array (flatten (map #(repeat 10 %) (range 5)))))
            (vec dst-data)))))
 
@@ -81,9 +83,9 @@
 
 
 (deftest offset-buffers-should-copy-correctly
-  (let [^FloatBuffer fbuf (dtype/make-buffer-of-type :float32 (range 10))
-        _ (.position fbuf 3)
-        result-buf (dtype/make-array-of-type :float32 (dtype/ecount fbuf))]
+  (let [fbuf (-> (dtype/make-buffer-of-type :float32 (range 10))
+                 (dtype/sub-buffer 3))
+        result-buf (dtype/make-jvm-container :float32 (dtype/ecount fbuf))]
     (dtype/copy! fbuf result-buf)
     (is (= (dtype/get-value fbuf 0)
            (float 3)))
@@ -97,7 +99,8 @@
                        [(int 1) :int32]
                        [(long 1) :int64]
                        [(float 1) :float32]
-                       [(double 1) :float64]]]
+                       [(double 1) :float64]
+                       [(boolean false) :boolean]]]
     (is (= dtype (dtype/get-datatype cls)))))
 
 
@@ -131,23 +134,22 @@
                                  (dtype/copy! src-buf 0 dst-buf 0 num-items
                                               {:unchecked? true}))
 
-          raw-copy (get @base/*copy-table* [:nio-buffer :nio-buffer
-                                            :float32 :float32 true])
-          raw-dtype-copy (fn []
-                           (raw-copy src-buf 0 dst-buf 0 num-items {:unchecked? true}))
-          generic-copy (fn []
-                         (base/generic-copy! src-buf 0 dst-buf 0 num-items
-                                             {:unchecked? true}))
-
           make-array (fn []
-                       (dtype/make-array-of-type :float32 dst-buf))
+                       (dtype/make-container :java-array :float32 dst-buf))
+          marshal-buf (int-array num-items)
+          ;;If you have to do a marshalling copy then exploiting parallelism will be
+          ;;your best bet.  It costs a lot to marshal across datatypes, esp. int->float.
+          marshal-copy (fn []
+                         (dtype/copy! src-data 0
+                                      marshal-buf 0
+                                      num-items
+                                      {:unchecked? true}))
           fns {:array-copy array-copy
                :buffer-copy buffer-copy
                :dtype-copy dtype-copy
                :unchecked-dtype-copy unchecked-dtype-copy
-               :raw-copy raw-dtype-copy
                :make-array make-array
-               :generic-copy generic-copy}
+               :marshal-copy marshal-copy}
           run-timed-fns (fn []
                           (->> fns
                                (map (fn [[fn-name time-fn]]
@@ -169,30 +171,31 @@
 
 (deftest boolean-support
   (is (= [0 1 0]
-         (-> (dtype/make-array-of-type :int8 [false true false])
+         (-> (dtype/make-container :java-array  :int8 [false true false])
              (dtype/->vector))))
 
 
   (is (= [0 1 0]
-         (-> (dtype/make-array-of-type :int8 (boolean-array [false true false]))
+         (-> (dtype/make-container :java-array :int8
+                                   (boolean-array [false true false]))
              (dtype/->vector))))
 
 
   (is (= [0 1 0]
          (-> (dtype/copy! (boolean-array [false true false]) 0
-                          (dtype/make-array-of-type :int8 3) 0
+                          (dtype/make-jvm-container :int8 3) 0
                           3
                           {:unchecked? true})
              (dtype/->vector))))
 
 
   (is (= [false true false]
-         (-> (dtype/make-array-of-type :boolean [0 1 0])
+         (-> (dtype/make-jvm-container :boolean [0 1 0])
              (dtype/->vector))))
 
 
   (is (= [false true false]
-         (-> (dtype/make-array-of-type :boolean [0.0 0.01 0.0])
+         (-> (dtype/make-jvm-container :boolean [0.0 0.01 0.0])
              (dtype/->vector))))
 
   (is (= true (dtype/cast 10 :boolean)))

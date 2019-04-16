@@ -53,8 +53,18 @@
   (def RR (-> (apl-gol/apl-take R-matrix [-10 -20])
               (apl-gol/apl-take [15 35])))
 
+  ;;4K time tests
   (def bigRR (-> (apl-gol/apl-take R-matrix [-1000 -2000])
-                 (apl-gol/apl-take [1500 3500]))))
+                 (apl-gol/apl-take [3840 2160]))))
+
+
+(defn bigRR-time-test
+  []
+  (dotimes [iter 5]
+    (time
+     (->> (apl-gol/life-seq bigRR)
+          (take 1000)
+          last))))
 
 
 

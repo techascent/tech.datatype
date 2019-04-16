@@ -33,6 +33,10 @@
                           ->jvm)
 
 
+(func-impl/export-symbols tech.tensor.typecast
+                          datatype->tensor-reader)
+
+
 
 (defn matrix-multiply
   "lhs - 2 dimensional tensor.

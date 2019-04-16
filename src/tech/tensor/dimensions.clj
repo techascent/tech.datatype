@@ -275,8 +275,8 @@
      (invoke [item# idx#] (.read item# (int idx#)))
      (invoke [item# row# col#] (.read2d item# (int row#) (int col#)))
      (applyTo [item# arglist#] (.tensorRead
-                                ^tech.tensor.IntReader (first arglist#)
-                                (typecast/datatype->iter :int32 (rest arglist#))))
+                                ^tech.tensor.IntReader item#
+                                (typecast/datatype->iter :int32 arglist#)))
      (iterator [item#] (typecast/reader->iterator item#))
      tech.tensor.IntReader
      (read2d [~'reader ~'row ~'col] ~tenscode2d)

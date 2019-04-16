@@ -72,10 +72,14 @@
   (->buffer-backing-store [item]))
 
 
+(extend-type Object
+  PToNioBuffer
+  (convertible-to-nio-buffer? [item] false))
+
+
 (defn nio-convertible?
   [item]
-  (when (and item (satisfies? PToNioBuffer item))
-    (convertible-to-nio-buffer? item)))
+  (convertible-to-nio-buffer? item))
 
 
 (defn as-nio-buffer
@@ -118,6 +122,11 @@
   "Generically implemented for anything that implements ->array"
   (convertible-to-fastutil-list? [item])
   (->list-backing-store [item]))
+
+
+(extend-type Object
+  PToList
+  (convertible-to-fastutil-list? [item] false))
 
 
 (defn list-convertible?

@@ -39,14 +39,15 @@
 (defn ->object-reader ^ObjectReader [item unchecked?] (implement-reader-cast :object))
 
 
-(defmacro datatype->reader
-  [datatype reader & [unchecked?]]
+(defmacro datatype->tensor-reader
+  "Convert an item into a know tensor reader type."
+  [item datatype & [unchecked?]]
   (case (casting/safe-flatten datatype)
-    :int8 `(->int8-reader ~reader ~unchecked?)
-    :int16 `(->int16-reader ~reader ~unchecked?)
-    :int32 `(->int32-reader ~reader ~unchecked?)
-    :int64 `(->int64-reader ~reader ~unchecked?)
-    :float32 `(->float32-reader ~reader ~unchecked?)
-    :float64 `(->float64-reader ~reader ~unchecked?)
-    :boolean `(->boolean-reader ~reader ~unchecked?)
-    :object `(->object-reader ~reader ~unchecked?)))
+    :int8 `(->int8-reader ~item ~unchecked?)
+    :int16 `(->int16-reader ~item ~unchecked?)
+    :int32 `(->int32-reader ~item ~unchecked?)
+    :int64 `(->int64-reader ~item ~unchecked?)
+    :float32 `(->float32-reader ~item ~unchecked?)
+    :float64 `(->float64-reader ~item ~unchecked?)
+    :boolean `(->boolean-reader ~item ~unchecked?)
+    :object `(->object-reader ~item ~unchecked?)))

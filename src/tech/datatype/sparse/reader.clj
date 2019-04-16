@@ -192,7 +192,7 @@
                   (or datatype (safe-get-datatype data-reader)))
         create-fn (get indexed-reader-table datatype)
         sparse-value (or sparse-value (make-sparse-value datatype))
-        buf-len (int (seecond (dtype-search/binary-search
+        buf-len (int (second (dtype-search/binary-search
                               index-reader n-elems
                               {:datatype :int32})))]
     (create-fn (dtype-base/sub-buffer (->reader index-reader :int32) 0 buf-len)

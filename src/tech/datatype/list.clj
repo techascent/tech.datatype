@@ -292,7 +292,7 @@
                           (int (:offset ary-data#))
                           (int (:length ary-data#)))
             ;;next, try list.
-            (let [list-values# (when (satisfies? dtype-proto/PToList values#)
+            (let [list-values# (when (dtype-proto/list-convertible? values#)
                                  (dtype-proto/->list-backing-store values#))]
               (if (and list-values#
                        (= ~datatype (casting/flatten-datatype

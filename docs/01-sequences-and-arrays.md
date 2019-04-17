@@ -24,7 +24,7 @@ distinct (if we have some form of scalar memory along with sets) and group-by to
 system but we cannot in fact efficiently add sort.
 
 
-John McCarthy came along and in 1955 and invented LISP which is I think a beautiful
+John McCarthy came along and in 1958 and invented LISP which is I think a beautiful
 language because it is based on simple principles build a complete turing machine.  He
 had the insight to build the compiler in LISP and to make the boundaries between the
 compiler and the program blurry so that you could flow between programming the actual

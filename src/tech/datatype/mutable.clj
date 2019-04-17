@@ -63,9 +63,7 @@
                           `(unchecked-full-cast
                             ~'value ~mutable-dtype ~intermediate-dtype ~buffer-dtype))))
        (remove [mut-item# idx#]
-         (datatype->single-remove-fn ~buffer-dtype ~buffer idx#))
-       (removeRange [mut-item# idx# count#]
-         (.removeElements ~buffer idx# (+ idx# count#))))
+         (datatype->single-remove-fn ~buffer-dtype ~buffer idx#)))
      (reify ~mutable-cls
        (getDatatype [mut-item#] ~intermediate-dtype)
        (size [mut-item#] (.size ~buffer))
@@ -78,9 +76,7 @@
                           `(checked-full-write-cast
                             ~'value ~mutable-dtype ~intermediate-dtype ~buffer-dtype))))
        (remove [mut-item# idx#]
-         (datatype->single-remove-fn ~buffer-dtype ~buffer idx#))
-       (removeRange [mut-item# idx# count#]
-         (.removeElements ~buffer idx# (+ idx# count#))))))
+         (datatype->single-remove-fn ~buffer-dtype ~buffer idx#)))))
 
 
 (defmacro make-list-mutable-table
@@ -124,9 +120,7 @@
                                        ~intermediate-dtype
                                        ~inner-dtype)))
        (remove [item# idx#]
-         (.remove ~inner-mutable idx#))
-       (removeRange [item# idx# count#]
-         (.removeRange ~inner-mutable idx# count#)))
+         (.remove ~inner-mutable idx#)))
      (reify ~outer-mutable-cls
        (getDatatype [item#] ~intermediate-dtype)
        (size [mut-item#] (.size ~inner-mutable))
@@ -141,9 +135,7 @@
                                            ~intermediate-dtype
                                            ~inner-dtype)))
        (remove [item# idx#]
-         (.remove ~inner-mutable idx#))
-       (removeRange [item# idx# count#]
-         (.removeRange ~inner-mutable idx# count#)))))
+         (.remove ~inner-mutable idx#)))))
 
 
 (defmacro make-marshal-mutable-table

@@ -122,6 +122,11 @@
         (dtype-proto/->mutable-of-type mutable-datatype unchecked?)))
 
 
+  dtype-proto/PRemoveRange
+  (remove-range! [item idx count]
+    (dtype-proto/remove-range! backing-store idx count))
+
+
   dtype-proto/PInsertBlock
   (insert-block! [item idx values options]
     (dtype-proto/insert-block! backing-store

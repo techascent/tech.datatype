@@ -146,8 +146,8 @@
 
 (defn remove-range!
   [item idx count]
-  (.removeRange ^ObjectMutable (dtype-proto/->mutable-of-type item :object false)
-                idx count))
+  (dtype-proto/remove-range! item idx count))
+
 
 (defn insert-block!
   [item idx values & [options]]

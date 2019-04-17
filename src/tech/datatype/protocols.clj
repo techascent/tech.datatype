@@ -48,6 +48,9 @@
 (defprotocol PReadIndexes
   (read-indexes! [item indexes values options]))
 
+(defprotocol PRemoveRange
+  (remove-range! [item idx n-elems]))
+
 (defprotocol PInsertBlock
   (insert-block! [item idx values options]))
 

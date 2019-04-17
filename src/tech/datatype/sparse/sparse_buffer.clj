@@ -258,7 +258,8 @@
                           offset)
                 sub-indexes (dtype-base/sub-buffer indexes offset length)
                 sub-data (dtype-base/sub-buffer data offset length)
-                merge-fn (get sparse-merge-table (casting/safe-flatten (dtype-base/get-datatype item)))
+                merge-fn (get sparse-merge-table (casting/safe-flatten
+                                                  (dtype-base/get-datatype item)))
                 {union-indexes :indexes
                  union-data :data}
                 (merge-fn sparse-value sub-indexes sub-data

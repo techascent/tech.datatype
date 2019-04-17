@@ -275,6 +275,12 @@
           (throw (ex-info (format "Failed to find mutable %s->%s"
                                   ~datatype mut-dtype#) {}))))}
 
+     dtype-proto/PRemoveRange
+     {:remove-range!
+      (fn [list-item# idx# count#]
+        (let [list-item# (datatype->list-cast-fn ~datatype list-item#)]
+          (.removeElements list-item# idx# (+ (int idx#) (int count#)))))}
+
      dtype-proto/PInsertBlock
      {:insert-block!
       (fn [list-item# idx# values# options#]

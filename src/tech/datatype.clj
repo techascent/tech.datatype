@@ -313,9 +313,7 @@ Calls clojure.core.matrix/ecount."
 
 (defn remove-range!
   [item start-idx n-elems]
-  (let [mut-item ^MutableRemove (dtype-proto/->mutable-of-type
-                                 item (get-datatype item) true)]
-    (.removeRange mut-item start-idx n-elems))
+  (base/remove-range! item start-idx n-elems)
   item)
 
 

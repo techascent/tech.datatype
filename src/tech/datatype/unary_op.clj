@@ -289,22 +289,6 @@
         (into {})))
 
 
-(let [un-op# (datatype->unary-op ~dtype un-op# true)
-      src-reader# (typecast/datatype->reader ~dtype item#
-                                             unchecked?#)
-      src-dtype# (dtype-base/get-datatype src-reader#)
-      constructor# #(unary-reader-map
-                     {:datatype %2
-                      :unchecked? %3}
-                     un-op#
-                     %1)]
-  (reader/make-derived-reader ~dtype src-dtype# unchecked?#
-                              src-reader#
-                              (->> (.read src-reader# ~'idx)
-                                   (.op un-op#))
-                              constructor#))
-
-
 (def unary-op-reader-table (make-unary-op-reader-table))
 
 

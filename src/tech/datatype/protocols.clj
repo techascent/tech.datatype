@@ -107,18 +107,18 @@
   "Take a'thing' and convert it to an array that exactly represents the value
   of the data."
   (->sub-array [item]
-    "Noncopying convert to a map of {:array-data :offset :length} or nil if impossible")
+    "Noncopying convert to a map of {:java-array :offset :length} or nil if impossible")
   (->array-copy [item]
     "Convert to an array containing a copy of the data"))
 
 (defn ->array [item]
   (if (satisfies? PToArray item)
     (when-let [ary-data (->sub-array item)]
-      (let [{:keys [array-data offset length]} ary-data]
+      (let [{:keys [java-array offset length]} ary-data]
         (when (and (= (int offset) 0)
-                   (= (int (mp/element-count array-data))
+                   (= (int (mp/element-count java-array))
                       (int length)))
-          array-data)))))
+          java-array)))))
 
 
 (defprotocol PToList

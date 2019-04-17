@@ -245,47 +245,47 @@
     (cond
       ;;Very fast path
       (and dst-ptr src-ary)
-      (let [{:keys [array-data offset]} src-ary
+      (let [{:keys [java-array offset]} src-ary
             array-offset (int offset)]
         (case src-dtype
-          :int8 (.write dst-ptr 0 ^bytes array-data array-offset n-elems)
-          :int16 (.write dst-ptr 0 ^shorts array-data array-offset n-elems)
-          :int32 (.write dst-ptr 0 ^ints array-data array-offset n-elems)
-          :int64 (.write dst-ptr 0 ^longs array-data array-offset n-elems)
-          :float32 (.write dst-ptr 0 ^floats array-data array-offset n-elems)
-          :float64 (.write dst-ptr 0 ^doubles array-data array-offset n-elems)))
+          :int8 (.write dst-ptr 0 ^bytes java-array array-offset n-elems)
+          :int16 (.write dst-ptr 0 ^shorts java-array array-offset n-elems)
+          :int32 (.write dst-ptr 0 ^ints java-array array-offset n-elems)
+          :int64 (.write dst-ptr 0 ^longs java-array array-offset n-elems)
+          :float32 (.write dst-ptr 0 ^floats java-array array-offset n-elems)
+          :float64 (.write dst-ptr 0 ^doubles java-array array-offset n-elems)))
       (and dst-ary src-ptr)
-      (let [{:keys [array-data offset]} dst-ary
+      (let [{:keys [java-array offset]} dst-ary
             array-offset (int offset)]
         (case src-dtype
-          :int8 (.read src-ptr 0 ^bytes array-data array-offset n-elems)
-          :int16 (.read src-ptr 0 ^shorts array-data array-offset n-elems)
-          :int32 (.read src-ptr 0 ^ints array-data array-offset n-elems)
-          :int64 (.read src-ptr 0 ^longs array-data array-offset n-elems)
-          :float32 (.read src-ptr 0 ^floats array-data array-offset n-elems)
-          :float64 (.read src-ptr 0 ^doubles array-data array-offset n-elems)))
+          :int8 (.read src-ptr 0 ^bytes java-array array-offset n-elems)
+          :int16 (.read src-ptr 0 ^shorts java-array array-offset n-elems)
+          :int32 (.read src-ptr 0 ^ints java-array array-offset n-elems)
+          :int64 (.read src-ptr 0 ^longs java-array array-offset n-elems)
+          :float32 (.read src-ptr 0 ^floats java-array array-offset n-elems)
+          :float64 (.read src-ptr 0 ^doubles java-array array-offset n-elems)))
       (and src-buf dst-buf)
       (memcpy dst-buf src-buf (* n-elems (casting/numeric-byte-width src-dtype)))
       (and src-list dst-ary)
-      (let [{:keys [array-data offset]} dst-ary
+      (let [{:keys [java-array offset]} dst-ary
             array-offset (int offset)]
         (case src-dtype
           :int8 (.getElements ^ByteList src-list 0
-                              ^bytes array-data array-offset n-elems)
+                              ^bytes java-array array-offset n-elems)
           :int16 (.getElements ^ShortList src-list 0
-                               ^shorts array-data array-offset n-elems)
+                               ^shorts java-array array-offset n-elems)
           :int32 (.getElements ^IntList src-list 0
-                               ^ints array-data array-offset n-elems)
+                               ^ints java-array array-offset n-elems)
           :int64 (.getElements ^LongList src-list 0
-                               ^longs array-data array-offset n-elems)
+                               ^longs java-array array-offset n-elems)
           :float32 (.getElements ^FloatList src-list 0
-                                 ^floats array-data array-offset n-elems)
+                                 ^floats java-array array-offset n-elems)
           :float64 (.getElements ^DoubleList src-list 0
-                                 ^doubles array-data array-offset n-elems)
+                                 ^doubles java-array array-offset n-elems)
           :boolean (.getElements ^BooleanList src-list 0
-                                 ^booleans array-data array-offset n-elems)
+                                 ^booleans java-array array-offset n-elems)
           (.getElements ^ObjectList src-list 0
-                        ^objects array-data array-offset n-elems)))
+                        ^objects java-array array-offset n-elems)))
       (and src-list dst-list)
       (case src-dtype
           :int8 (.addAll ^ByteList src-list 0 ^ByteList dst-list)

@@ -108,7 +108,7 @@
      {:->sub-array (fn [item#]
                      (let [item# (datatype->buffer-cast-fn ~datatype item#)]
                        (when-not (.isDirect item#)
-                         {:array-data (.array item#)
+                         {:java-array (.array item#)
                           :offset (.position item#)
                           :length (mp/element-count item#)})))
       :->array-copy (fn [item#]

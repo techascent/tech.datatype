@@ -221,7 +221,7 @@ Calls clojure.core.matrix/ecount."
   "Returns map of the backing array plus a length and offset
   of nil of this item is not array backed.  The sub array may not match
   the container in datatype.
-  {:array-data :offset :length}"
+  {:java-array :offset :length}"
   [item]
   (dtype-proto/->sub-array item))
 

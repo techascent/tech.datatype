@@ -61,7 +61,7 @@
 
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
-                     {:array-data item#
+                     {:java-array item#
                       :offset 0
                       :length (base/ecount item#)})
       :->array-copy (fn [item#]
@@ -124,7 +124,7 @@
 
   dtype-proto/PToArray
   (->sub-array [item]
-    {:array-data item
+    {:java-array item
      :offset 0
      :length (alength ^booleans item)})
   (->array-copy [src-ary]
@@ -282,7 +282,7 @@
                        (make-array-of-type datatype (base/shape->ecount shape)))}
 
     dtype-proto/PToArray
-    {:->sub-array (fn [item] {:array-data item
+    {:->sub-array (fn [item] {:java-array item
                               :offset 0
                               :length (base/ecount item)})
      :->array-copy (fn [src-ary]

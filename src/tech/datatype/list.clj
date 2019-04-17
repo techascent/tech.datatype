@@ -246,7 +246,7 @@
      {:->sub-array (fn [item#]
                      (when-let [ary-list# (datatype->as-array-list ~datatype item#)]
                        (let [dst-ary# (.elements ary-list#)]
-                         {:array-data dst-ary#
+                         {:java-array dst-ary#
                           :offset 0
                           :length (.size ary-list#)})))
       :->array-copy (fn [item#]
@@ -291,10 +291,10 @@
           ;;first, try array as they are most general
           (if (and ary-data#
                    (= ~datatype (casting/flatten-datatype
-                                 (dtype-proto/get-datatype (:array-data ary-data#)))))
+                                 (dtype-proto/get-datatype (:java-array ary-data#)))))
             (.addElements list-item# idx#
                           (typecast/datatype->array-cast-fn
-                           ~datatype (:array-data ary-data#))
+                           ~datatype (:java-array ary-data#))
                           (int (:offset ary-data#))
                           (int (:length ary-data#)))
             ;;next, try list.

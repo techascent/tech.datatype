@@ -47,7 +47,7 @@ prepare a course on doing business data processing.
 During the development of the course, Ken realized that the mathematical notation that
 he was using was lacking in expressiveness so he designed new notation.  He then failed
 to get tenure at Harvard because in 5 years he had only published "one little book".
-Later, while working at IBM and published two books: "A Programming Language" and
+Later, while working at IBM his team published two books: "A Programming Language" and
 "Automatic Data Processing."  He and a team completed an initial working batch-mode
 implementation of the language in 1965 and a timeshare version in 1967.  He received the
 Turing Award in 1979 and continued on to make the opensource J programming language.

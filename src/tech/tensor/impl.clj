@@ -481,10 +481,24 @@
     new-tens))
 
 
+(defn broadcast?
+  [tens]
+  (let [dimensions (:dimensions tens)]
+    (not= (shape/shape->count-vec (:shape dimensions))
+          (:max-shape dimensions))))
+
+
+(defn broadcast-error
+  [tens]
+  (let [tens (ensure-tensor tens)]
+    (when (broadcast? tens)
+      (throw (ex-info "Operation does not support broadcast" {})))
+    tens))
+
 
 (defn rotate
   [tens rotate-vec]
-  (let [tens (ensure-tensor tens)]
+  (let [tens (broadcast-error tens)]
     (assoc tens :dimensions
            (dims/rotate (tensor->dimensions tens)
                         (mapv #(* -1 (long %)) rotate-vec)))))
@@ -492,7 +506,7 @@
 
 (defn reshape
   [tens new-shape]
-  (let [tens (ensure-tensor tens)
+  (let [tens (broadcast-error tens)
         new-dims (dims/in-place-reshape (:dimensions tens)
                                         new-shape)]
     (construct-tensor
@@ -503,13 +517,13 @@
 
 (defn transpose
   [tens transpose-vec]
-  (let [tens (ensure-tensor tens)]
+  (let [tens (broadcast-error tens)]
     (update tens :dimensions dims/transpose transpose-vec)))
 
 
 (defn select
   [tens & args]
-  (let [tens (ensure-tensor tens)
+  (let [tens (broadcast-error tens)
         {new-dims :dims
          buf-offset :elem-offset
          buf-len :buffer-length}
@@ -522,7 +536,8 @@
 (defn broadcast
   "Create a larger tensor by repeating dimensions of a smaller tensor."
   [tens bcast-shape]
-  (let [tens-shape (dtype/shape tens)
+  (let [tens (broadcast-error tens)
+        tens-shape (dtype/shape tens)
         n-tens-elems (dtype/ecount tens)
         n-bcast-elems (shape/ecount bcast-shape)
         num-tens-shape (count tens-shape)
@@ -823,13 +838,12 @@
   (let [[lhs-shape rhs-shape] (mmul-check lhs rhs)
         lhs-rows (->> (range (first lhs-shape))
                       (mapv #(select lhs % :all)))
+        rhs-trans (-> (transpose rhs [1 0])
+                      (tensor-force))
         rhs-columns (->> (range (second rhs-shape))
-                         (mapv #(select rhs :all %)))
+                         (mapv #(select rhs-trans % :all)))
         result-container-type (or (:container-type options)
-                                  (if (and (= :sparse (dtype/container-type lhs))
-                                           (= :sparse (dtype/container-type rhs)))
-                                    :sparse
-                                    :list))
+                                  :list)
         datatype (or (:datatype options)
                      (dtype/get-datatype lhs))
         new-tens (construct-tensor
@@ -856,22 +870,25 @@
   "Extern fn calls can take any stride order but they cannot take
   offsets or a reader chain."
   [tens]
-  (let [any-offsets? (every? #(= 0 %) (:offsets (:dimensions tens)))
-        nio-access? (dtype-proto/as-nio-buffer tens)
+  (let [any-offsets? (not (every? #(= 0 %) (:offsets (:dimensions tens))))
+        nio-access? (dtype-proto/as-nio-buffer (:buffer tens))
+        broadcast? (broadcast? tens)
+        min-stride (apply min (get-in tens [:dimensions :strides]))
         tens-shape (dtype/shape tens)]
     (if (or any-offsets?
             (not nio-access?)
+            broadcast?
             ;;Matrixes can only have a minimum stride of 1.
             ;;Vectors can have any stride, however.
             (and (= 2 (count tens-shape))
-                 (not= 1 (apply min (get-in tens [:dimensions :strides])))))
-      (clone tens :container-type :list)
+                 (not= 1 min-stride)))
+      (clone tens :container-type :native-buffer)
       tens)))
 
 (defn blas-matrix-matrix
   [alpha lhs rhs bin-op reduce-op options]
     (let [lhs-dtype (dtype/get-datatype lhs)
-        rhs (ensure-tensor rhs)]
+          rhs (ensure-tensor rhs)]
     (if (and (or (= lhs-dtype :float32)
                  (= lhs-dtype :float64))
              (blas/has-blas?))
@@ -907,7 +924,7 @@
              :float32 blas/cblas_sgemm
              :float64 blas/cblas_dgemm)
            :row-major lhs-trans? rhs-trans?
-           (first lhs-shape) (first rhs-shape) (second lhs-shape)
+           (first lhs-shape) (second rhs-shape) (first rhs-shape)
            alpha (:buffer lhs) lhs-max-stride (:buffer rhs) rhs-max-stride
            beta (:buffer C) c-max-stride))
         C)
@@ -936,30 +953,33 @@
         [lhs-shape rhs-shape] (mmul-check lhs rhs)
         ;;Simplify as much as possible.
         lhs (tensor-force lhs)
-        rhs (tensor-force rhs)
+        rhs-trans (tensor-force (transpose rhs [1 0]))
         lhs-row-indexes (->> (tens-proto/->tensor-reader-of-type lhs op-datatype true)
                              sparse-proto/index-seq
                              (map (comp first :global-dims))
                              distinct)
-        rhs-col-indexes (->> (tens-proto/->tensor-reader-of-type rhs op-datatype true)
+        rhs-col-indexes (->> (tens-proto/->tensor-reader-of-type rhs-trans
+                                                                 op-datatype true)
                              sparse-proto/index-seq
-                             (map (comp second :global-dims))
+                             (map (comp first :global-dims))
                              distinct)
         result-rows (int (first lhs-shape))
         result-columns (int (second rhs-shape))
         new-tens (new-tensor [result-rows result-columns]
                              :datatype op-datatype
                              :container-type :sparse)
-        tens-writer (dtype/->writer-of-type new-tens op-datatype)]
+        tens-writer (dtype/->writer-of-type new-tens op-datatype)
+        rhs-columns (mapv  #(vector % (select rhs-trans % :all))
+                           rhs-col-indexes)]
     ;;do the thing
     (->> (for [row-index lhs-row-indexes
-               col-index rhs-col-indexes]
+               [col-index column] rhs-columns]
            (let [row-index (int row-index)
                  col-index (int col-index)]
              (tens-writer (+ (* row-index result-columns)
                              col-index)
                           (dtype-fn/dot-product (select lhs row-index :all)
-                                                (select rhs :all col-index)))))
+                                                column))))
          (pmap identity)
          dorun)
     (cond->> new-tens

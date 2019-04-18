@@ -90,7 +90,7 @@
                    (dtype-proto/->backing-store-seq data-reader#)))
          sparse-proto/PSparse
          (index-seq [reader#]
-           (get-index-seq 1 index-reader#))
+           (get-index-seq index-reader#))
          (sparse-value [reader#] zero-val#)
          (sparse-ecount [reader#] (- n-elems# idx-count#))
          (readers [item#]

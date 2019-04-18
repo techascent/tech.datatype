@@ -273,8 +273,10 @@
                         (or (instance? tech.datatype.sparse.protocols.PSparse buffer)
                             (satisfies? sparse-proto/PSparse buffer))
                         buffer
-                        (or (instance? tech.datatype.sparse.protocols.PToSparseReader buffer)
-                            (satisfies? sparse-proto/PToSparseReader buffer))
+                        (or (instance? tech.datatype.sparse.protocols.PToSparseReader
+                                       buffer)
+                            (satisfies? sparse-proto/PToSparseReader
+                                        buffer))
                         (sparse-proto/->sparse-reader buffer))]
       (if (simple-dimensions? dimensions)
         reader
@@ -290,18 +292,21 @@
                                   raw-shape)
               access-increasing? (dims/access-increasing? dimensions)
               dense? (dims/dense? dimensions)
-              index-seq (map-indexed vector indexes)
-              index-seq (if (and dense? (not broadcasting?))
-                          (map (fn [[data-index global-index]]
-                                 [data-index (first (.localToGlobal
-                                                     addr-inverter global-index))])
-                               index-seq)
-                          (mapcat (fn [[data-index global-index]]
-                                    (->> (.localToGlobal addr-inverter global-index)
-                                         (map #(vector data-index %))))))
-              index-seq (if (or broadcasting? (not access-increasing?))
-                          (sort-by second index-seq)
-                          index-seq)]
+              index-seq (seq (map-indexed vector indexes))
+              index-seq (when index-seq
+                          (if (and dense? (not broadcasting?))
+                            (map (fn [[data-index global-index]]
+                                   [data-index (first (.localToGlobal
+                                                       addr-inverter global-index))])
+                                 index-seq)
+                            (mapcat (fn [[data-index global-index]]
+                                      (->> (.localToGlobal addr-inverter global-index)
+                                           (map #(vector data-index %))))
+                                    index-seq)))
+              index-seq (when index-seq
+                          (if (or broadcasting? (not access-increasing?))
+                            (sort-by second index-seq)
+                            index-seq))]
           (sparse-reader/make-sparse-reader
            (dtype-proto/make-container :list :int32
                                        (map second index-seq)
@@ -321,14 +326,22 @@
           indexes (dimensions->index-reader dimensions)
           item-shape (mp/get-shape item)]
       (case (casting/safe-flatten datatype)
-        :int8 (make-tensor-reader :int8 datatype item-shape indexes data-reader sparse-data)
-        :int16 (make-tensor-reader :int16 datatype item-shape indexes data-reader sparse-data)
-        :int32 (make-tensor-reader :int32 datatype item-shape indexes data-reader sparse-data)
-        :int64 (make-tensor-reader :int64 datatype item-shape indexes data-reader sparse-data)
-        :float32 (make-tensor-reader :float32 datatype item-shape indexes data-reader sparse-data)
-        :float64 (make-tensor-reader :float64 datatype item-shape indexes data-reader sparse-data)
-        :boolean (make-tensor-reader :boolean datatype item-shape indexes data-reader sparse-data)
-        :object (make-tensor-reader :object datatype item-shape indexes data-reader sparse-data)))))
+        :int8 (make-tensor-reader :int8 datatype item-shape
+                                  indexes data-reader sparse-data)
+        :int16 (make-tensor-reader :int16 datatype item-shape
+                                   indexes data-reader sparse-data)
+        :int32 (make-tensor-reader :int32 datatype item-shape
+                                   indexes data-reader sparse-data)
+        :int64 (make-tensor-reader :int64 datatype item-shape
+                                   indexes data-reader sparse-data)
+        :float32 (make-tensor-reader :float32 datatype item-shape
+                                     indexes data-reader sparse-data)
+        :float64 (make-tensor-reader :float64 datatype item-shape
+                                     indexes data-reader sparse-data)
+        :boolean (make-tensor-reader :boolean datatype item-shape
+                                     indexes data-reader sparse-data)
+        :object (make-tensor-reader :object datatype item-shape
+                                    indexes data-reader sparse-data)))))
 
 
 (defn construct-tensor

@@ -238,14 +238,17 @@
       (let [n-elems (dtype-base/ecount new-indexes)]
         (when-not (= n-elems 0)
           (let [{new-indexes :indexes
-                 new-values :data} (sparse-base/unordered-global-space->ordered-local-space
-                                    new-indexes new-values b-offset
-                                    (:indexes-in-order? options))
+                 new-values :data}
+                (sparse-base/unordered-global-space->ordered-local-space
+                 new-indexes new-values b-offset
+                 (:indexes-in-order? options))
                 idx-reader (typecast/datatype->reader :int32 new-indexes)
                 start-idx (.read idx-reader 0)
                 end-idx (.read idx-reader (- n-elems 1))
-                offset (long (second (dtype-search/binary-search indexes start-idx {:datatype :int32})))
-                [found? end-offset] (dtype-search/binary-search indexes end-idx {:datatype :int32})
+                offset (long (second (dtype-search/binary-search indexes start-idx
+                                                                 {:datatype :int32})))
+                [found? end-offset] (dtype-search/binary-search indexes end-idx
+                                                                {:datatype :int32})
                 length (- (long (if found?
                                   (+ (long end-offset) 1)
                                   end-offset))
@@ -370,13 +373,15 @@
                         (dtype-proto/make-container :list datatype 0 {})
                         (long elem-seq)
                         (assoc options :datatype datatype))
-    (let [reader-data (sparse-base/data->sparse-reader
+    (let [sparse-value (or (:sparse-value options)
+                           (sparse-reader/make-sparse-value
+                            datatype))
+          reader-data (sparse-base/data->sparse-reader
                        (dtype-proto/->iterable-of-type
                         elem-seq datatype (:unchecked? options))
                        (merge options
                               {:datatype datatype
-                               :sparse-value (sparse-reader/make-sparse-value
-                                              datatype)}))
+                               :sparse-value sparse-value}))
           {:keys [indexes data]} (sparse-proto/readers reader-data)]
       (make-sparse-buffer indexes data
                           (dtype-base/ecount reader-data)

@@ -2,7 +2,6 @@
   (:require [tech.datatype.typecast :refer :all]
             [tech.datatype.protocols :as dtype-proto]
             [tech.jna :as jna]
-            [tech.jna.base :as jna-base]
             [tech.datatype.casting :as casting]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.typecast :as typecast]
@@ -37,7 +36,7 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(jna/def-jna-fn (jna-base/c-library-name) memcpy
+(jna/def-jna-fn (jna/c-library-name) memcpy
   "Copy bytes from one object to another"
   Pointer
   [dst ensure-ptr-like]

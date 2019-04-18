@@ -298,7 +298,7 @@ namespace contains the core mappings that bind the builtin operations to an
 apply function specialized for each operation.
 
 
-```
+```clojure
 user> (require '[tech.datatype.functional :as dtype-fn])
 nil
 user> (dtype-fn/+ 5 (range 10))
@@ -323,9 +323,9 @@ general and extends to the tensor operations later.
 
 The rules of the return type of the operation are applied in order as follows:
 
-1.  If any of the arguments are iterable, an iterable is returned.
-2.  If any are readers, a reader is returned.
-3.  A scalar is returned.
+1.  If any of the arguments are iterable, an iterable is returned
+2.  If any are readers, a reader is returned
+3.  A scalar is returned
 
 
 These rules are setup to give the most flexibility possible to downstream operations

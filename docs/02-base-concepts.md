@@ -381,7 +381,7 @@ expectations when dealing with sparse buffers:
 ## In Closing
 
 
-This is a quick walkthrough of the base functionality layers of the datatype system.  We
+This is a quick walkthrough of the base functionality of the datatype system.  We
 haven't convered the tensor extensions and we haven't covered sparse in depth.  We have,
 however, covered enough of the core concepts so as to allow for a fairly complete
 understanding barring the tensor extension.

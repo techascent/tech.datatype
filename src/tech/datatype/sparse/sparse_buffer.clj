@@ -32,7 +32,6 @@
            data# (:data item#)
            index-mutable# (typecast/datatype->mutable :int32 indexes#)
            data-mutable# (typecast/datatype->mutable ~datatype data# unchecked?#)
-           data-writer# (typecast/datatype->writer ~datatype data# unchecked?#)
            src-dtype# (dtype-base/get-datatype item#)
            n-elems# (dtype-base/ecount item#)]
        (reify
@@ -52,7 +51,8 @@
                      (.remove index-mutable# insert-pos#)
                      (.remove data-mutable# insert-pos#)))
                  (if found?#
-                   (.write data-writer# insert-pos# value#)
+                   (.write (typecast/datatype->writer ~datatype data# unchecked?#)
+                           insert-pos# value#)
                    (do
                      (.insert data-mutable# insert-pos# value#)
                      (.insert index-mutable# insert-pos# idx#)))))))

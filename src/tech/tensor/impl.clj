@@ -89,6 +89,17 @@
            global-strides)))
 
 
+(defn- sparse-reader->index-seq
+  [sparse-reader shape & [strides]]
+  (let [strides (or strides (dims/extend-strides shape))]
+    (->> (when sparse-reader
+           (sparse-proto/index-seq sparse-reader))
+         (map (fn [{:keys [global-index] :as item}]
+                (assoc item
+                       :global-dims
+                       (global-address->global-shape global-index strides)))))))
+
+
 (defmacro make-tensor-reader
   [reader-datatype datatype item-shape indexer reader sparse-reader]
   `(let [^tech.tensor.IntReader indexer# ~indexer
@@ -129,12 +140,7 @@
          (.read data# (apply indexer# arglist#)))
        sparse-proto/PSparse
        (index-seq [item#]
-         (->> (when ~sparse-reader
-                (sparse-proto/index-seq ~sparse-reader))
-              (map (fn [{:keys [~'global-index] :as item#}]
-                     (assoc item#
-                            :global-dims
-                            (global-address->global-shape ~'global-index strides#))))))
+         (sparse-reader->index-seq ~sparse-reader shape# strides#))
        (sparse-value [item#] (sparse-proto/sparse-value ~sparse-reader))
        (sparse-ecount [item#] (sparse-proto/sparse-ecount ~sparse-reader))
        (readers [item#] (sparse-proto/readers ~sparse-reader))
@@ -142,7 +148,9 @@
 
        sparse-proto/PToSparseReader
        (convertible-to-sparse-reader? [item#] (nil? ~sparse-reader))
-       (->sparse-reader [item#] ~sparse-reader))))
+       (->sparse-reader [item#] ~sparse-reader)
+       dtype-proto/PBufferType
+       (buffer-type [item#] :sparse))))
 
 
 (defrecord Tensor [buffer dimensions buffer-type]
@@ -793,7 +801,7 @@
      (dtype-base/op-name bin-op)
      (dtype-base/op-name reduce-op)]))
 
-(defn- mmul-check
+(defn mmul-check
   [lhs rhs]
   (let [lhs-shape (dtype/shape lhs)
         rhs-shape (dtype/shape rhs)
@@ -857,13 +865,12 @@
             ;;Vectors can have any stride, however.
             (and (= 2 (count tens-shape))
                  (not= 1 (apply min (get-in tens [:dimensions :strides])))))
-      (clone tens)
+      (clone tens :container-type :list)
       tens)))
 
-
-(defmethod matrix-matrix-dispatch [:dense :dense :* :+]
+(defn blas-matrix-matrix
   [alpha lhs rhs bin-op reduce-op options]
-  (let [lhs-dtype (dtype/get-datatype lhs)
+    (let [lhs-dtype (dtype/get-datatype lhs)
         rhs (ensure-tensor rhs)]
     (if (and (or (= lhs-dtype :float32)
                  (= lhs-dtype :float64))
@@ -905,3 +912,56 @@
            beta (:buffer C) c-max-stride))
         C)
       (default-matrix-matrix alpha lhs rhs bin-op reduce-op options))))
+
+
+(defmethod matrix-matrix-dispatch [:dense :dense :* :+]
+  [alpha lhs rhs bin-op reduce-op options]
+  (blas-matrix-matrix alpha lhs rhs bin-op reduce-op options))
+
+
+(defmethod matrix-matrix-dispatch [:sparse :dense :* :+]
+  [alpha lhs rhs bin-op reduce-op options]
+  (blas-matrix-matrix alpha lhs rhs bin-op reduce-op options))
+
+
+(defmethod matrix-matrix-dispatch [:dense :sparse :* :+]
+  [alpha lhs rhs bin-op reduce-op options]
+  (blas-matrix-matrix alpha lhs rhs bin-op reduce-op options))
+
+
+(defmethod matrix-matrix-dispatch [:sparse :sparse :* :+]
+  [alpha lhs rhs bin-op reduce-op options]
+  (let [op-datatype (or (:datatype options)
+                        (dtype/get-datatype lhs))
+        [lhs-shape rhs-shape] (mmul-check lhs rhs)
+        ;;Simplify as much as possible.
+        lhs (tensor-force lhs)
+        rhs (tensor-force rhs)
+        lhs-row-indexes (->> (tens-proto/->tensor-reader-of-type lhs op-datatype true)
+                             sparse-proto/index-seq
+                             (map (comp first :global-dims))
+                             distinct)
+        rhs-col-indexes (->> (tens-proto/->tensor-reader-of-type rhs op-datatype true)
+                             sparse-proto/index-seq
+                             (map (comp second :global-dims))
+                             distinct)
+        result-rows (int (first lhs-shape))
+        result-columns (int (second rhs-shape))
+        new-tens (new-tensor [result-rows result-columns]
+                             :datatype op-datatype
+                             :container-type :sparse)
+        tens-writer (dtype/->writer-of-type new-tens op-datatype)]
+    ;;do the thing
+    (->> (for [row-index lhs-row-indexes
+               col-index rhs-col-indexes]
+           (let [row-index (int row-index)
+                 col-index (int col-index)]
+             (tens-writer (+ (* row-index result-columns)
+                             col-index)
+                          (dtype-fn/dot-product (select lhs row-index :all)
+                                                (select rhs :all col-index)))))
+         (pmap identity)
+         dorun)
+    (cond->> new-tens
+      alpha
+      (dtype-fn/apply-binary-op {:datatype op-datatype} bin-op alpha))))

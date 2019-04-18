@@ -315,7 +315,7 @@
                     {})))
   (let [sparse-lhs (when (sparse-proto/is-sparse? lhs)
                      (sparse-proto/->sparse lhs))
-        sparse-rhs (when (sparse-proto/is-sparse?+ rhs)
+        sparse-rhs (when (sparse-proto/is-sparse? rhs)
                      (sparse-proto/->sparse rhs))
         any-dense? (or (nil? sparse-lhs)
                        (nil? sparse-rhs))

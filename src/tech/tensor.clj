@@ -49,6 +49,12 @@
   alpha - multiply result by alpha.
   reduction operators - *,+"
   [lhs rhs & [alpha]]
+  (when-not (= (dtype/get-datatype lhs)
+               (dtype/get-datatype rhs))
+    (throw (ex-info (format "Argument datatype mismatch: %s vs %s"
+                            (name (dtype/get-datatype lhs))
+                            (name (dtype/get-datatype rhs)))
+                    {})))
   (impl/matrix-matrix-dispatch alpha lhs rhs
                                (:* binary-op/builtin-binary-ops)
                                (:+ binary-op/builtin-binary-ops)

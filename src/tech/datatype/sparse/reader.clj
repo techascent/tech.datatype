@@ -20,24 +20,10 @@
 
 
 (defn get-index-seq
-  "Given the offset and stride of the buffer
-  return an index sequence that contains a sequence of
-  tuples that contain"
-  [data-stride index-iterable]
-  (let [data-stride (int data-stride)
-        index-seq (->> (dtype-proto/->iterable-of-type index-iterable :int32 false)
-                       (map-indexed #(->IndexSeqRec %1 %2)))]
-
-    (if (= 1 data-stride)
-      index-seq
-      (->> index-seq
-           ;; only return indexes which are commensurate with the stride.
-           (map (fn [record]
-                  (let [global-index (int (:global-index record))]
-                    (when (= 0 (rem global-index data-stride))
-                      (assoc record :global-index
-                             (quot global-index data-stride))))))
-           (remove nil?)))))
+  "Create an index-seq out of an int32 reader"
+  [index-iterable]
+  (->> (dtype-proto/->iterable-of-type index-iterable :int32 false)
+       (map-indexed #(->IndexSeqRec %1 %2))))
 
 
 (defn index-seq->readers
@@ -107,21 +93,6 @@
            (get-index-seq 1 index-reader#))
          (sparse-value [reader#] zero-val#)
          (sparse-ecount [reader#] (- n-elems# idx-count#))
-         (set-stride [item# new-stride#]
-           (when-not (= 0 (rem n-elems# new-stride#))
-             (throw (ex-info (format
-                              "Element count %s is not commensurate with stride %s."
-                              n-elems# new-stride#)
-                             {})))
-           (if (= 1 (int new-stride#))
-             item#
-             (let [new-idx-seq# (get-index-seq new-stride# index-reader#)
-                   {indexes# :indexes
-                    data# :data} (index-seq->readers new-idx-seq# data-reader#)]
-               (make-sparse-reader indexes# data#
-                                   (quot n-elems# (int new-stride#))
-                                   :sparse-value zero-val#))))
-         (stride [item#] 1)
          (readers [item#]
            {:indexes index-reader#
             :data data-reader#})
@@ -184,7 +155,7 @@
 
 
 (defn make-sparse-reader
-  "A sparse reader has no stride or offset but satisfies all of the necessary protocols.
+  "A sparse reader has no offset but satisfies all of the necessary protocols.
   It does not satisfy the writer or mutable protocols."
   [index-reader data-reader n-elems & {:keys [datatype
                                               sparse-value]}]

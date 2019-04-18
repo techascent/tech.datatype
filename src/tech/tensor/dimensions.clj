@@ -423,24 +423,23 @@ to be reversed for the most efficient implementation."
           (let [rev-shape (int-array reverse-shape)
                 rev-strides (int-array reverse-strides)
                 rev-offsets (int-array reverse-offsets)
-                num-items (alength rev-max-shape)
                 shape-0 (aget rev-shape 0)
-                shape-1 (int (if (>= 2 n-dims)
+                shape-1 (int (if (>= n-dims 2)
                                (aget rev-shape 1)
                                1))
                 offset-0 (aget rev-offsets 0)
-                offset-1 (int (if (>= 2 n-dims)
+                offset-1 (int (if (>= n-dims 2)
                                 (aget rev-offsets 1)
                                 0))
                 stride-0 (aget rev-strides 0)
-                stride-1 (int (if (>= 2 n-dims)
+                stride-1 (int (if (>= n-dims 2)
                                 (aget rev-strides 1)
                                 0))]
             (if (and (not broadcast?)
-                     (<= num-items 2)
+                     (<= n-dims 2)
                      access-increasing?)
               ;;Common cases with offsetting
-              (if (= 2 num-items)
+              (if (= 2 n-dims)
                 (impl-int-reader
                  n-elems
                  (let [first-elem (rem (unchecked-add idx offset-0) shape-0)
@@ -465,7 +464,7 @@ to be reversed for the most efficient implementation."
                  (loop [idx (long 0)
                         arg (long arg)
                         offset (long 0)]
-                   (if (< idx num-items)
+                   (if (< idx n-dims)
                      (let [next-max (aget rev-max-shape idx)
                            next-stride (aget rev-strides idx)
                            next-dim (aget rev-shape idx)

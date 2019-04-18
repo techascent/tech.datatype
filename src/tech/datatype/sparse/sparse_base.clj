@@ -222,9 +222,8 @@
 (def sparse-binary-op-table (make-sparse-binary-op-table))
 
 (defn unordered-global-space->ordered-local-space
-  [new-indexes new-data b-offset b-stride indexes-in-order?]
+  [new-indexes new-data b-offset indexes-in-order?]
   (let [b-offset (int b-offset)
-        b-stride (int b-stride)
         [new-indexes new-values]
         (if-not indexes-in-order?
           (let [ordered-indexes (argsort/argsort new-indexes {:datatype :int32})]
@@ -233,8 +232,7 @@
           [new-indexes new-data])
         new-indexes (unary-op/unary-reader
                      :int32
-                     (-> (* x b-stride)
-                         (+ b-offset))
+                     (+ x b-offset)
                      new-indexes)]
     {:indexes new-indexes
      :data new-data}))

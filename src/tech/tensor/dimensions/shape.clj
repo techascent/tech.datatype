@@ -24,12 +24,13 @@
      :min-item item-seq
      :max-item item-seq
      :scalar? true}
-    (do
-      (when-not (seq item-seq)
-        (throw (ex-info "Nil sequence in check monotonic" {})))
-      (let [n-elems (count item-seq)
-            first-item (long (first item-seq))
-            last-item (long (last item-seq))
+    (let [item-seq (cond
+                     (vector? item-seq) item-seq
+                     (dtype/reader? item-seq) (dtype/->reader-of-type item-seq :int32)
+                     :else (vec item-seq))]
+      (let [n-elems (dtype/ecount item-seq)
+            first-item (long (item-seq 0))
+            last-item (long (item-seq (- n-elems 1)))
             min-item (min first-item last-item)
             max-item (max first-item last-item)
             retval {:min-item min-item

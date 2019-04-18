@@ -15,9 +15,9 @@
         {:type :+
          :min-item 0
          :max-item (- (long dim) 1)}
-        (dtype/reader? dim) dim
         (shape/classified-sequence? dim) dim
-        (sequential? dim) (shape/classify-sequence dim)
+        (or (sequential? dim)
+            (dtype/reader? dim)) (shape/classify-sequence dim)
         :else
         (throw (ex-info "Failed to recognize dimension type"
                         {:dimension dim}))))
@@ -27,9 +27,9 @@
   [select-arg]
   (cond
     (number? select-arg) (shape/classify-sequence select-arg)
-    (dtype/reader? select-arg) select-arg
     (shape/classified-sequence? select-arg) select-arg
-    (sequential? select-arg) (shape/classify-sequence select-arg)
+    (or (sequential? select-arg)
+        (dtype/reader? select-arg)) (shape/classify-sequence select-arg)
     (= :all select-arg) select-arg
     (= :lla select-arg) select-arg
     :else

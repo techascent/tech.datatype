@@ -137,8 +137,6 @@
                             (global-address->global-shape ~'global-index strides#))))))
        (sparse-value [item#] (sparse-proto/sparse-value ~sparse-reader))
        (sparse-ecount [item#] (sparse-proto/sparse-ecount ~sparse-reader))
-       (set-stride [item# new-stride#] (sparse-proto/set-stride ~sparse-reader new-stride#))
-       (stride [item#] (sparse-proto/stride ~sparse-reader))
        (readers [item#] (sparse-proto/readers ~sparse-reader))
        (iterables [item] (sparse-proto/iterables ~sparse-reader))
 

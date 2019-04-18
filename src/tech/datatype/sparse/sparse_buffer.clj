@@ -25,7 +25,6 @@
   [datatype]
   `(fn [item# desired-dtype# unchecked?#]
      (let [b-offset# (long (:b-offset item#))
-           b-stride# (long (:b-stride item#))
            b-elem-count# (long (:b-elem-count item#))
            sparse-value# (casting/datatype->cast-fn :unknown ~datatype
                                                     (:sparse-value item#))
@@ -43,8 +42,7 @@
          (write [writer# idx# value#]
            ;;We are not threadsafe.   Nor are we going to be.
            (locking writer#
-             (let [idx# (+ (* idx# b-stride#)
-                           b-offset#)
+             (let [idx# (+ b-offset# idx#)
                    [found?# insert-pos#] (dtype-search/binary-search
                                           indexes# idx# {:datatype :int32})
                    insert-pos# (int insert-pos#)]
@@ -159,27 +157,24 @@
 
 
 (defn- global->local
-  ^long [^long index ^long b-offset ^long b-stride]
-  (-> (* index b-stride)
-      (+ b-offset)))
+  ^long [^long index ^long b-offset]
+  (+ b-offset))
 
 
 (defn- local->global
-  ^long [^long index ^long b-offset ^long b-stride]
-  (-> (+ index b-offset)
-      (quot b-stride)))
+  ^long [^long index ^long b-offset]
+  (+ index b-offset))
 
 
 
 (defrecord SparseBuffer [^long b-offset
-                         ^long b-stride
                          ^long b-elem-count
                          sparse-value
                          indexes
                          data
                          buffer-datatype]
   mp/PElementCount
-  (element-count [item] (quot b-elem-count b-stride))
+  (element-count [item] b-elem-count)
   dtype-proto/PDatatype
   (get-datatype [item] buffer-datatype)
 
@@ -193,9 +188,8 @@
         (throw (ex-info (format "Requested length: %s greater than existing: %s"
                                 new-ecount old-ecount)
                         {})))
-      (->SparseBuffer (+ b-offset (* offset b-stride))
-                      b-stride
-                      (* length b-stride)
+      (->SparseBuffer (+ b-offset offset)
+                      length
                       sparse-value
                       indexes
                       data
@@ -245,7 +239,7 @@
         (when-not (= n-elems 0)
           (let [{new-indexes :indexes
                  new-values :data} (sparse-base/unordered-global-space->ordered-local-space
-                                    new-indexes new-values b-offset b-stride
+                                    new-indexes new-values b-offset
                                     (:indexes-in-order? options))
                 idx-reader (typecast/datatype->reader :int32 new-indexes)
                 start-idx (.read idx-reader 0)
@@ -283,9 +277,8 @@
             value (casting/cast value item-dtype)
             offset (int offset)
             length (int length)]
-        (if (and (= sparse-value value)
-                 (= b-stride 1))
-          (let [start-idx (global->local offset b-offset b-stride)
+        (if (= sparse-value value)
+          (let [start-idx (global->local offset b-offset)
                 end-idx (+ start-idx (max 0 (- length 1)))
                 start-pos (int (second (dtype-search/binary-search indexes start-idx {:datatype :int32})))
                 end-pos (int (second (dtype-search/binary-search indexes end-idx {:datatype :int32})))
@@ -303,52 +296,28 @@
   sparse-proto/PToSparseReader
   (convertible-to-sparse-reader? [item] true)
   (->sparse-reader [item]
-    (-> (make-base-reader item)
-        (sparse-proto/set-stride b-stride)))
+    (make-base-reader item))
 
   sparse-proto/PSparse
   (index-seq [item]
     (as-> (make-base-reader item) it
       (sparse-proto/index-iterable it)
-      (sparse-reader/get-index-seq b-stride it)))
+      (sparse-reader/get-index-seq it)))
 
   (sparse-value [item] sparse-value)
   (sparse-ecount [item]
     (let [num-non-sparse
           (long (cond
-                  (and (= 0 b-offset)
-                       (= 1 b-stride))
+                  (= 0 b-offset)
                   (dtype-base/ecount indexes)
-                  (= 1 b-stride)
-                  (dtype-base/ecount (make-base-reader item))
                   :else
                   (count (sparse-proto/index-seq item))))]
       (- b-elem-count num-non-sparse)))
 
-  (set-stride [item new-stride]
-    (when-not (= 0 (rem b-elem-count (long new-stride)))
-      (throw (ex-info (format "New stride %s is not commensurate with elem-count %s"
-                              new-stride b-elem-count)
-                      {})))
-    (->SparseBuffer b-offset (* b-stride (int new-stride))
-                    b-elem-count
-                    sparse-value
-                    indexes
-                    data
-                    buffer-datatype))
-
-  (stride [item] b-stride)
-
   (readers [item]
     (sparse-proto/readers (sparse-proto/->sparse-reader item)))
 
-  (iterables [item]
-    (if (= 1 b-stride)
-      (sparse-proto/readers item)
-      (let [base-reader (make-base-reader item)]
-        (sparse-reader/index-seq->iterables
-         (sparse-reader/get-index-seq b-stride base-reader)
-         (sparse-proto/data-reader base-reader))))))
+  (iterables [item] (sparse-proto/readers item)))
 
 
 (defn copy-sparse->any
@@ -388,7 +357,7 @@
                            (= datatype (dtype-base/get-datatype data-reader)))
                     data-reader
                     (dtype-proto/make-container :list datatype data-reader {}))]
-    (->SparseBuffer 0 1 n-elems
+    (->SparseBuffer 0 n-elems
                     sparse-value
                     index-list data-list
                     datatype)))

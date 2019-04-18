@@ -37,6 +37,11 @@
                           datatype->tensor-reader)
 
 
+(defn dimensions-dense?
+  [tensor]
+  (dims/dense? (:dimensions tensor)))
+
+
 
 (defn matrix-multiply
   "lhs - 2 dimensional tensor.

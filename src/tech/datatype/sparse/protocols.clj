@@ -10,10 +10,6 @@
   (sparse-ecount [item]
     "Number of sparse elements in this datastructure.  Constant time query.")
 
-  (set-stride [item new-stride]
-    "Set the stride and return a new buffer sharing the backing store.")
-  (stride [item])
-
   (readers [item]
     "Return a map containing
 {

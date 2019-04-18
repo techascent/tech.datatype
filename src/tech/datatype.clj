@@ -325,6 +325,21 @@ Calls clojure.core.matrix/ecount."
   (dtype-proto/->buffer-backing-store src-ary))
 
 
+(defn as-nio-buffer
+  [src-item]
+  (dtype-proto/as-nio-buffer src-item))
+
+
+(defn as-list
+  [src-item]
+  (dtype-proto/as-list src-item))
+
+
+(defn as-array
+  [src-item]
+  (dtype-proto/->sub-array src-item))
+
+
 (defn ->list-backing-store
   "Convert to a list that stores data for the object.  This may have a different
   datatype than the object."

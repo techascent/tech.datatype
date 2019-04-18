@@ -5,6 +5,7 @@
             [tech.datatype.iterator :as iterator]
             [tech.datatype.functional.impl :as impl]
             [tech.datatype.argsort :as argsort]
+            [tech.datatype.reader :as reader]
             [tech.datatype.boolean-op :as boolean-op]
             [tech.datatype.binary-search :as binary-search]
             [tech.datatype.protocols :as dtype-proto]
@@ -72,6 +73,11 @@
                      apply-binary-op
                      apply-unary-boolean-op
                      apply-binary-boolean-op)
+
+
+(defn indexed-reader
+  [indexes data & {:keys [datatype unchecked?] :as options}]
+  (reader/make-indexed-reader indexes data options))
 
 
 

@@ -356,13 +356,6 @@ and execution time.  These languages describe the algorithm functionally and thu
 natural pairing with the above concepts.
 
 
-This must then include a tensor definition in such a way as to be implementable in
-these environments.  Given this addition we expect to compete successfully against the
-majority of solutions including bespoke hand coded ones for problems that the set of
-problems that Clojure itself solves well and the set of problems that numeric
-programming solve well.
-
-
 The above definitions provide fluidity of datatype, container type, and the data we are
 working with.  Upon this we can build deep, well performing, and low code bindings to
 external libraries and environments specifically in cases where bulk storage and

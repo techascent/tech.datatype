@@ -2,6 +2,7 @@
   (:require [tech.datatype.typecast :refer :all]
             [tech.datatype.protocols :as dtype-proto]
             [tech.jna :as jna]
+            [tech.jna.base :as jna-base]
             [tech.datatype.casting :as casting]
             [clojure.core.matrix.protocols :as mp]
             [tech.datatype.typecast :as typecast]
@@ -36,7 +37,7 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(jna/def-jna-fn "c" memcpy
+(jna/def-jna-fn (jna-base/c-library-name) memcpy
   "Copy bytes from one object to another"
   Pointer
   [dst ensure-ptr-like]
@@ -264,6 +265,13 @@
           :int64 (.read src-ptr 0 ^longs java-array array-offset n-elems)
           :float32 (.read src-ptr 0 ^floats java-array array-offset n-elems)
           :float64 (.read src-ptr 0 ^doubles java-array array-offset n-elems)))
+      ;;Turns out that system/arraycopy is *really* damn fast.
+      (and dst-ary src-ary)
+      (let [{src-array :java-array
+             src-offset :offset} src-ary
+            {dst-array :java-array
+             dst-offset :offset} dst-ary]
+        (System/arraycopy src-array src-offset dst-array dst-offset n-elems))
       (and src-buf dst-buf)
       (memcpy dst-buf src-buf (* n-elems (casting/numeric-byte-width src-dtype)))
       (and src-list dst-ary)

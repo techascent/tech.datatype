@@ -1,6 +1,7 @@
 (ns tech.datatype.nio-buffer
   "Nio buffers really are the workhorses of the entire system."
   (:require [tech.jna :as jna]
+            [tech.jna.base :as jna-base]
             [tech.datatype.io :as dtype-io]
             [tech.datatype.base :as base]
             [tech.datatype.casting :as casting]
@@ -66,7 +67,7 @@
            (< lhs-off (+ rhs-off rhs-len)))))
 
 
-(jna/def-jna-fn "c" memset
+(jna/def-jna-fn (jna-base/c-library-name) memset
   "Set a block of memory to a value"
   Pointer
   [data ensure-ptr-like]

@@ -180,12 +180,13 @@
 
 
 (defmacro check
-  [compile-time-max compile-time-min runtime-val]
+  [compile-time-max compile-time-min runtime-val datatype]
   `(if (or (> ~runtime-val
                 ~compile-time-max)
              (< ~runtime-val
                 ~compile-time-min))
-     (throw (ex-info "Value out of range"
+     (throw (ex-info (format "Value out of range for %s: %s"
+                             (name ~datatype) ~runtime-val)
                      {:min ~compile-time-min
                       :max ~compile-time-max
                       :value ~runtime-val}))
@@ -200,19 +201,23 @@
       :uint8 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                            (check (short 0xff) (short 0)
                                                   (short (datatype->number ~src-dtype
-                                                                           ~val))))
+                                                                           ~val))
+                                                  ~dst-dtype))
       :uint16 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                             (check (int 0xffff) (int 0)
                                                    (int (datatype->number ~src-dtype
-                                                                          ~val))))
+                                                                          ~val))
+                                                   ~dst-dtype))
       :uint32 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                             (check (long 0xffffffff) (int 0)
                                                    (long (datatype->number ~src-dtype
-                                                                           ~val))))
+                                                                           ~val))
+                                                   ~dst-dtype))
       :uint64 `(datatype->unchecked-cast-fn ~src-dtype ~dst-dtype
                                             (check (long Long/MAX_VALUE) (long 0)
                                                    (long (datatype->number ~src-dtype
-                                                                           ~val))))
+                                                                           ~val))
+                                                   ~dst-dtype))
       :int8 `(unchecked-byte (int8-cast ~val))
       :int16 `(unchecked-short (int16-cast ~val))
       :int32 `(unchecked-int (int32-cast ~val))

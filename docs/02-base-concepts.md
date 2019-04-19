@@ -12,10 +12,10 @@ The datatype library provides support for an extend set of primitive datatypes a
 objects.  The base primitive datatypes are:
 
 ```clojure
-user> (require 'tech.datatype.casting)
-user> tech.datatype.casting/base-host-datatypes
+user> (require 'tech.v2.datatype.casting)
+user> tech.v2.datatype.casting/base-host-datatypes
 #{:int32 :int16 :float32 :float64 :int64 :int8 :boolean :object}
-user> tech.datatype.casting/base-datatypes
+user> tech.v2.datatype.casting/base-datatypes
 #{:int32 :int16 :float32 :float64 :int64 :uint64 :uint16 :int8 :uint32 :boolean :object
   :uint8}
 ```
@@ -23,17 +23,17 @@ user> tech.datatype.casting/base-datatypes
 It includes operators to change between types both at compile time and at runtime:
 
 ```clojure
-user> (require '[tech.datatype.casting :as casting])
+user> (require '[tech.v2.datatype.casting :as casting])
 nil
 user> (casting/cast 128 :int8)
-Execution error (IllegalArgumentException) at tech.datatype.casting/int8-cast (casting.clj:152).
+Execution error (IllegalArgumentException) at tech.v2.datatype.casting/int8-cast (casting.clj:152).
 Value out of range for byte: 128
 user> (casting/cast 127 :int8)
 127
 user> (casting/unchecked-cast 128 :int8)
 -128
 user> (casting/cast -128 :uint8)
-Execution error (ExceptionInfo) at tech.datatype.casting/fn (casting.clj:261).
+Execution error (ExceptionInfo) at tech.v2.datatype.casting/fn (casting.clj:261).
 Value out of range
 user> (casting/unchecked-cast -128 :uint8)
 128
@@ -44,7 +44,7 @@ We can find out the datatype of anything in the system by querying it:
 
 
 ```clojure
-user> (require '[tech.datatype :as dtype])
+user> (require '[tech.v2.datatype :as dtype])
 :tech.resource.gc Reference thread starting
 nil
 user> (dtype/get-datatype 1)
@@ -61,7 +61,7 @@ writer protocol implementation for the set of default container types:
 
 ```clojure
 
-user> (require '[tech.datatype :as dtype])
+user> (require '[tech.v2.datatype :as dtype])
 :tech.resource.gc Reference thread starting
 nil
 user> (def test-ary (int-array (range 10)))
@@ -73,7 +73,7 @@ user> (def test-ary (int-array [254 0 1 2 3]))
 user> (vec (dtype/->reader-of-type test-ary :uint8))
 [254 0 1 2 3]
 user> (vec (dtype/->reader-of-type test-ary :int8))
-Execution error (IllegalArgumentException) at tech.datatype.casting/int8-cast (casting.clj:152).
+Execution error (IllegalArgumentException) at tech.v2.datatype.casting/int8-cast (casting.clj:152).
 Value out of range for byte: 254
 user> (def test-writer (dtype/->writer-of-type test-ary :uint8))
 #'user/test-writer
@@ -82,7 +82,7 @@ nil
 user> test-ary
 [128, 0, 1, 2, 3]
 user> (.write test-writer 0 -1)
-Execution error (ExceptionInfo) at tech.datatype.writer$fn$reify__38421/write (writer.clj:272).
+Execution error (ExceptionInfo) at tech.v2.datatype.writer$fn$reify__38421/write (writer.clj:272).
 Value out of range
 ```
 
@@ -122,10 +122,10 @@ user> (dtype/->buffer-backing-store test-ary)
 user> (dtype/->list-backing-store test-ary)
 [0 1 2 3 4 5 6 7 8 9]
 user> (dtype/->mutable-of-type test-ary :int32)
-Execution error (IllegalArgumentException) at tech.datatype.protocols/eval31323$fn$G (protocols.clj:153).
-No implementation of method: :->mutable-of-type of protocol: #'tech.datatype.protocols/PToMutable found for class: [I
+Execution error (IllegalArgumentException) at tech.v2.datatype.protocols/eval31323$fn$G (protocols.clj:153).
+No implementation of method: :->mutable-of-type of protocol: #'tech.v2.datatype.protocols/PToMutable found for class: [I
 user> (dtype/->mutable-of-type (dtype/->list-backing-store test-ary) :int32)
-#object[tech.datatype.mutable$fn$reify__39892 0x1f3d5040 "tech.datatype.mutable$fn$reify__39892@1f3d5040"]
+#object[tech.v2.datatype.mutable$fn$reify__39892 0x1f3d5040 "tech.v2.datatype.mutable$fn$reify__39892@1f3d5040"]
 ```
 
 We expect to be able to move data between disparate container types as the system will
@@ -255,7 +255,7 @@ user> sparse-buf
  :data [1 1 1 1],
  :buffer-datatype :int32}
 user> (dtype/->reader-of-type sparse-buf)
-#object[tech.datatype.sparse.reader$fn$reify__48659 0x50739307 "tech.datatype.sparse.reader$fn$reify__48659@50739307"]
+#object[tech.v2.datatype.sparse.reader$fn$reify__48659 0x50739307 "tech.v2.datatype.sparse.reader$fn$reify__48659@50739307"]
 user> (def sparse-reader *1)
 #'user/sparse-reader
 user> (dtype/buffer-type sparse-buf)
@@ -276,12 +276,12 @@ that you can create an operation and map it to a reader (or two readers) inline 
 operation and the mapping will be lazy and fully typed:
 
 ```clojure
-user> (require '[tech.datatype.unary-op :as unary-op])
+user> (require '[tech.v2.datatype.unary-op :as unary-op])
 nil
 user> (vec test-reader)
 [0.0 1.0 3.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0]
 user> (unary-op/unary-reader :int32 (+ x 10) test-reader)
-#object[tech.datatype.unary_op$fn$reify__43534 0x678f64f1 "tech.datatype.unary_op$fn$reify__43534@678f64f1"]
+#object[tech.v2.datatype.unary_op$fn$reify__43534 0x678f64f1 "tech.v2.datatype.unary_op$fn$reify__43534@678f64f1"]
 user> (vec *1)
 [10 11 13 13 14 15 16 17 18 19]
 ```
@@ -293,25 +293,25 @@ on the buffer type of reader or writer
 ## Functional
 
 Given anything convertible to a reader, we can apply operations defined in the
-unary-op/binary-op/boolean-op/reduce-op namespaces.  The tech.datatype.functional
+unary-op/binary-op/boolean-op/reduce-op namespaces.  The tech.v2.datatype.functional
 namespace contains the core mappings that bind the builtin operations to an
 apply function specialized for each operation.
 
 
 ```clojure
-user> (require '[tech.datatype.functional :as dtype-fn])
+user> (require '[tech.v2.datatype.functional :as dtype-fn])
 nil
 user> (dtype-fn/+ 5 (range 10))
-#object[tech.datatype.unary_op$fn$reify__43416 0x33bbc29b "tech.datatype.unary_op$fn$reify__43416@33bbc29b"]
+#object[tech.v2.datatype.unary_op$fn$reify__43416 0x33bbc29b "tech.v2.datatype.unary_op$fn$reify__43416@33bbc29b"]
 user> (vec *1)
 [5 6 7 8 9 10 11 12 13 14]
 user> (dtype-fn/+ (float-array (range 10)) (dtype/make-container :list :int32 (range 10 0 -1)))
-#object[tech.datatype.binary_op$fn$reify__44914 0x4ca2f978 "tech.datatype.binary_op$fn$reify__44914@4ca2f978"]
+#object[tech.v2.datatype.binary_op$fn$reify__44914 0x4ca2f978 "tech.v2.datatype.binary_op$fn$reify__44914@4ca2f978"]
 user> (vec *1)
 [10.0 10.0 10.0 10.0 10.0 10.0 10.0 10.0 10.0 10.0]
 
 user> (dtype-fn/> (float-array (range 10)) (dtype/make-container :list :int32 (range 10 0 -1)))
-#object[tech.datatype.boolean_op$fn$reify__48175 0x7b8e463f "tech.datatype.boolean_op$fn$reify__48175@7b8e463f"]
+#object[tech.v2.datatype.boolean_op$fn$reify__48175 0x7b8e463f "tech.v2.datatype.boolean_op$fn$reify__48175@7b8e463f"]
 user> (vec *1)
 [false false false false false false true true true true]
 ```
@@ -339,7 +339,7 @@ user> test-data
 user> (dtype-fn/argsort test-data)
 [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
 user> (dtype-fn/indexed-reader *1 test-data)
-#object[tech.datatype.reader$fn$reify__36268 0x906c535 "tech.datatype.reader$fn$reify__36268@906c535"]
+#object[tech.v2.datatype.reader$fn$reify__36268 0x906c535 "tech.v2.datatype.reader$fn$reify__36268@906c535"]
 user> (vec *1)
 [1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0]
 user> (def indexed-reader *2)

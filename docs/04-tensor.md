@@ -145,10 +145,10 @@ data vector.
 
 
 ```clojure
-user> (require '[tech.datatype :as dtype])
+user> (require '[tech.v2.datatype :as dtype])
 :tech.resource.gc Reference thread starting
 nil
-user> (require '[tech.tensor :as tens])
+user> (require '[tech.v2.tensor :as tens])
 nil
 user> (def first-tensor (tens/->tensor (->> (range 9)
                                             (partition 3))))
@@ -163,13 +163,13 @@ user> first-tensor
   :max-shape [3 3],
   :global->local
   #<dimensions$create_dimension_transforms$reify__48624@71aa7a11:
-    #object[tech.tensor.dimensions$get_elem_dims_global$reify__48557 0x439da0d "tech.tensor.dimensions$get_elem_dims_global$reify__48557@439da0d"]>,
+    #object[tech.v2.tensor.dimensions$get_elem_dims_global$reify__48557 0x439da0d "tech.v2.tensor.dimensions$get_elem_dims_global$reify__48557@439da0d"]>,
   :local->global
   #<dimensions$create_dimension_transforms$reify__48628@49a4c41e:
-    #object[tech.tensor.dimensions$get_elem_dims_local$reify__48599 0x7c033cbe "tech.tensor.dimensions$get_elem_dims_local$reify__48599@7c033cbe"]>},
+    #object[tech.v2.tensor.dimensions$get_elem_dims_local$reify__48599 0x7c033cbe "tech.v2.tensor.dimensions$get_elem_dims_local$reify__48599@7c033cbe"]>},
  :buffer-type :tensor}
 user> (println first-tensor)
-#tech.tensor<float64>[3 3]
+#tech.v2.tensor<float64>[3 3]
 [[0.000 1.000 2.000]
  [3.000 4.000 5.000]
  [6.000 7.000 8.000]]
@@ -179,7 +179,7 @@ user> (dtype/->vector first-tensor)
 user> (vec (dtype/->reader-of-type first-tensor :int32))
 [0 1 2 3 4 5 6 7 8]
 user> (tens/->tensor first-tensor)
-Execution error (IllegalArgumentException) at tech.datatype.base/eval34844$fn (base.cljc:256).
+Execution error (IllegalArgumentException) at tech.v2.datatype.base/eval34844$fn (base.cljc:256).
 Don't know how to create ISeq from: clojure.lang.Keyword
 user> (tens/->jvm first-tensor)
 [[0.0 1.0 2.0] [3.0 4.0 5.0] [6.0 7.0 8.0]]
@@ -188,13 +188,13 @@ user> (def int-data (dtype/copy! first-tensor (int-array 9)))
 user> int-data
 [0, 1, 2, 3, 4, 5, 6, 7, 8]
 user> (println (tens/transpose first-tensor [1 0]))
-#tech.tensor<float64>[3 3]
+#tech.v2.tensor<float64>[3 3]
 [[0.000 3.000 6.000]
  [1.000 4.000 7.000]
  [2.000 5.000 8.000]]
  nil
 user> (println (tens/broadcast first-tensor [6 3]))
-#tech.tensor<float64>[6 3]
+#tech.v2.tensor<float64>[6 3]
 [[0.000 1.000 2.000]
  [3.000 4.000 5.000]
  [6.000 7.000 8.000]
@@ -203,17 +203,17 @@ user> (println (tens/broadcast first-tensor [6 3]))
  [6.000 7.000 8.000]]
 nil
 user> (println (tens/rotate first-tensor [0 1]))
-#tech.tensor<float64>[3 3]
+#tech.v2.tensor<float64>[3 3]
 [[2.000 0.000 1.000]
  [5.000 3.000 4.000]
  [8.000 6.000 7.000]]
 nil
 user> (println (tens/select first-tensor 1 :all))
-#tech.tensor<float64>[3]
+#tech.v2.tensor<float64>[3]
 [3.000 4.000 5.000]
 nil
 user> (println (tens/select first-tensor :all 2))
-#tech.tensor<float64>[3]
+#tech.v2.tensor<float64>[3]
 [2.000 5.000 8.000]
 
 user> (def sparse-tens (tens/new-tensor [1000 1000] :container-type :sparse))

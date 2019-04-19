@@ -89,7 +89,7 @@ To set a specific sparse value, use the full version of the make container proto
 
 ```clojure
 
-user> (require '[tech.datatype :as dtype])
+user> (require '[tech.v2.datatype :as dtype])
 :tech.resource.gc Reference thread starting
 nil
 user> (dtype/make-container :sparse :int32 [1 0 1 0 1 0 1])

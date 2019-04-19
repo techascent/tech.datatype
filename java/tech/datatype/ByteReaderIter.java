@@ -5,8 +5,8 @@ import clojure.lang.Keyword;
 
 public class ByteReaderIter implements IOBase, ByteIter
 {
-  int idx;
-  int num_elems;
+  long idx;
+  long num_elems;
   ByteReader reader;
   public ByteReaderIter(ByteReader _reader)
   {
@@ -15,7 +15,7 @@ public class ByteReaderIter implements IOBase, ByteIter
     reader = _reader;
   }
   public Keyword getDatatype() { return reader.getDatatype(); }
-  public int size() { return num_elems - idx; }
+  public long size() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public byte nextByte() {
     byte retval = reader.read(idx);

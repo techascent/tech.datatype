@@ -1,8 +1,10 @@
 package tech.datatype;
 
+import clojure.lang.Keyword;
 
 public interface IntMutable extends MutableRemove
 {
-  void insert(int idx, int value);
+  void insert(long idx, int value);
   void append(int value);
+  default Keyword getDatatype () { return Keyword.intern(null, "int32"); }
 }

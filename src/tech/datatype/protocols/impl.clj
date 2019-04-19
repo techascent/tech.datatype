@@ -8,10 +8,4 @@
   "Fastest version of a get-datatype that assumes item implements PDatatype
   but does not require it."
   [item]
-  (cond
-    (instance? PDatatype item) (.get_datatype ^PDatatype item)
-    (instance? Datatype item) (.getDatatype ^Datatype item)
-    (satisfies? dtype-proto/PDatatype item)
-    (dtype-proto/get-datatype item)
-    :else
-    :object))
+  (dtype-proto/get-datatype item))

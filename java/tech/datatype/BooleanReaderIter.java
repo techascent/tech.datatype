@@ -5,8 +5,8 @@ import clojure.lang.Keyword;
 
 public class BooleanReaderIter implements IOBase, BooleanIter
 {
-  int idx;
-  int num_elems;
+  long idx;
+  long num_elems;
   BooleanReader reader;
   public BooleanReaderIter(BooleanReader _reader)
   {
@@ -15,7 +15,7 @@ public class BooleanReaderIter implements IOBase, BooleanIter
     reader = _reader;
   }
   public Keyword getDatatype() { return reader.getDatatype(); }
-  public int size() { return num_elems - idx; }
+  public long size() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public boolean nextBoolean() {
     boolean retval = reader.read(idx);

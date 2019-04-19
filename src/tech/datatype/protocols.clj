@@ -13,6 +13,11 @@
   (get-datatype [item] (.getDatatype item)))
 
 
+(extend-type Object
+  PDatatype
+  (get-datatype [item] :object))
+
+
 (extend-type Countable
   mp/PElementCount
   (element-count [item] (.size item)))

@@ -68,7 +68,7 @@
        (dims/dense? dimensions)
        (or (nil? (:max-shape dimensions))
            (= (:max-shape dimensions)
-              (shape/shape->count-vec (:shape dimensions))))))
+              (:shape dimensions)))))
 
 
 (defn- simple-vector-dimensions?
@@ -102,19 +102,24 @@
 
 (defmacro make-tensor-reader
   [reader-datatype datatype item-shape indexer reader sparse-reader]
-  `(let [^tech.tensor.IntReader indexer# ~indexer
+  `(let [^tech.tensor.IntTensorReader indexer# ~indexer
          data# (typecast/datatype->reader ~reader-datatype ~reader)
-         ^tech.datatype.IntReader base-reader# indexer#
          shape# ~item-shape
-         n-elems# (int (apply * 1 shape#))
+         n-elems# (long (apply * 1 shape#))
          n-dims# (count shape#)
          strides# (dims/extend-strides shape#)]
      (reify
        ~(tens-typecast/datatype->tensor-reader-type reader-datatype)
+       (getDatatype [item#] ~datatype)
+       (size [item#] n-elems#)
+       (read [item# idx#]
+         (.read data# (.read indexer# idx#)))
        (read2d [reader# row# col#]
          (.read data# (.read2d indexer# row# col#)))
        (tensorRead [reader# indexes#]
          (.read data# (.tensorRead indexer# indexes#)))
+       (applyTo [item# arglist#]
+         (.read data# (apply indexer# arglist#)))
 
        mp/PDimensionInfo
        (dimensionality [m] n-dims#)
@@ -127,17 +132,7 @@
            (throw (ex-info "Array does not have specific dimension"
                            {:dimension-number dimension-number#
                             :shape shape#}))))
-       ~(typecast/datatype->reader-type reader-datatype)
-       (getDatatype [item#] ~datatype)
-       (size [item#] n-elems#)
-       (read [item# idx#]
-         (.read data# (.read base-reader# idx#)))
-       (invoke [item# arg#]
-         (.read item# (int arg#)))
-       (invoke [item# row# col#]
-         (.read2d item# (int row#) (int col#)))
-       (applyTo [item# arglist#]
-         (.read data# (apply indexer# arglist#)))
+
        sparse-proto/PSparse
        (index-seq [item#]
          (sparse-reader->index-seq ~sparse-reader shape# strides#))
@@ -146,11 +141,57 @@
        (readers [item#] (sparse-proto/readers ~sparse-reader))
        (iterables [item] (sparse-proto/iterables ~sparse-reader))
 
-       sparse-proto/PToSparseReader
-       (convertible-to-sparse-reader? [item#] (nil? ~sparse-reader))
-       (->sparse-reader [item#] ~sparse-reader)
+       sparse-proto/PToSparse
+       (convertible-to-sparse? [item#] (not (nil? ~sparse-reader)))
+       (->sparse [item#] item#)
        dtype-proto/PBufferType
-       (buffer-type [item#] :sparse))))
+       (buffer-type [item#] (if ~sparse-reader
+                              :sparse
+                              :dense)))))
+
+
+(defn- make-tensor-base-sparse-reader
+  [buffer dimensions]
+  (when-let [reader (sparse-proto/as-sparse buffer)]
+    (if (simple-dimensions? dimensions)
+      reader
+      ;;Else we have a somewhat significant translation step from local
+      ;;sparse to global sparse.
+      (let [{:keys [indexes data]} (sparse-proto/readers reader)
+            addr-inverter (dimensions->index-inverter dimensions)
+            direct? (dims/direct? dimensions)
+            raw-shape (if direct?
+                        (:shape dimensions)
+                        (shape/shape->count-vec (:shape dimensions)))
+            broadcasting? (not= (:max-shape dimensions)
+                                raw-shape)
+            access-increasing? (dims/access-increasing? dimensions)
+            dense? (dims/dense? dimensions)
+            index-seq (seq (map-indexed vector indexes))
+            index-seq (when index-seq
+                        (if (and dense? (not broadcasting?))
+                          (map (fn [[data-index global-index]]
+                                 [data-index (first (.localToGlobal
+                                                     addr-inverter global-index))])
+                               index-seq)
+                          (mapcat (fn [[data-index global-index]]
+                                    (->> (.localToGlobal addr-inverter global-index)
+                                         (map #(vector data-index %))))
+                                  index-seq)))
+            index-seq (when index-seq
+                        (if (or broadcasting? (not access-increasing?))
+                          (sort-by second index-seq)
+                          index-seq))]
+        (sparse-reader/make-sparse-reader
+         (dtype-proto/make-container :list :int32
+                                     (map second index-seq)
+                                     {:unchecked? true})
+         (reader/make-indexed-reader (dtype-proto/make-container
+                                      :list :int32 (map first index-seq)
+                                      {:unchecked? true})
+                                     data
+                                     {})
+         (dims/ecount dimensions))))))
 
 
 (defrecord Tensor [buffer dimensions buffer-type]
@@ -250,9 +291,11 @@
 
   dtype-proto/PToReader
   (->reader-of-type [item datatype unchecked?]
-    (reader/make-indexed-reader (dimensions->index-reader dimensions)
-                                (dtype-proto/->reader-of-type buffer datatype unchecked?)
-                                {:datatype datatype}))
+    (let [data-reader (dtype-proto/->reader-of-type
+                       buffer datatype unchecked?)]
+      (if (simple-dimensions? dimensions)
+        data-reader
+        (tens-proto/->tensor-reader-of-type item datatype unchecked?))))
 
 
   dtype-proto/PToWriter
@@ -272,84 +315,50 @@
     (or buffer-type (dtype-proto/buffer-type buffer)))
 
 
-  sparse-proto/PToSparseReader
-  (convertible-to-sparse-reader? [item]
+  ;;Tensors implement only a small subset of the sparse protocols
+  ;;For the full set, calling sparse-proto/as-sparse is your only option.
+  sparse-proto/PSparse
+  (index-seq [item]
+    (sparse-reader->index-seq (sparse-proto/as-sparse item) (dtype/shape item)))
+  (sparse-value [item]
+    (when-let [sparse-data (sparse-proto/as-sparse buffer)]
+      (sparse-proto/sparse-value buffer)))
+
+
+  sparse-proto/PToSparse
+  (convertible-to-sparse? [item]
     (sparse-proto/sparse-convertible? buffer))
-  (->sparse-reader [item]
-    (when-let [reader (cond
-                        ;;Instance checks are faster than protocol checks.
-                        (or (instance? tech.datatype.sparse.protocols.PSparse buffer)
-                            (satisfies? sparse-proto/PSparse buffer))
-                        buffer
-                        (or (instance? tech.datatype.sparse.protocols.PToSparseReader
-                                       buffer)
-                            (satisfies? sparse-proto/PToSparseReader
-                                        buffer))
-                        (sparse-proto/->sparse-reader buffer))]
-      (if (simple-dimensions? dimensions)
-        reader
-        ;;Else we have a somewhat significant translation step from local
-        ;;sparse to global sparse.
-        (let [{:keys [indexes data]} (sparse-proto/readers reader)
-              addr-inverter (dimensions->index-inverter dimensions)
-              direct? (dims/direct? dimensions)
-              raw-shape (if direct?
-                          (:shape dimensions)
-                          (shape/shape->count-vec (:shape dimensions)))
-              broadcasting? (not= (:max-shape dimensions)
-                                  raw-shape)
-              access-increasing? (dims/access-increasing? dimensions)
-              dense? (dims/dense? dimensions)
-              index-seq (seq (map-indexed vector indexes))
-              index-seq (when index-seq
-                          (if (and dense? (not broadcasting?))
-                            (map (fn [[data-index global-index]]
-                                   [data-index (first (.localToGlobal
-                                                       addr-inverter global-index))])
-                                 index-seq)
-                            (mapcat (fn [[data-index global-index]]
-                                      (->> (.localToGlobal addr-inverter global-index)
-                                           (map #(vector data-index %))))
-                                    index-seq)))
-              index-seq (when index-seq
-                          (if (or broadcasting? (not access-increasing?))
-                            (sort-by second index-seq)
-                            index-seq))]
-          (sparse-reader/make-sparse-reader
-           (dtype-proto/make-container :list :int32
-                                       (map second index-seq)
-                                       {:unchecked? true})
-           (reader/make-indexed-reader (dtype-proto/make-container
-                                        :list :int32 (map first index-seq)
-                                        {:unchecked? true})
-                                       data
-                                       {})
-           (dtype/ecount item))))))
+  (->sparse [item]
+    (if (simple-dimensions? dimensions)
+      (sparse-proto/as-sparse buffer)
+      (make-tensor-base-sparse-reader buffer dimensions)))
 
   tens-proto/PToTensorReader
   (->tensor-reader-of-type [item datatype unchecked?]
-    (let [sparse-data (when (sparse-proto/is-sparse? buffer)
-                        (sparse-proto/->sparse-reader item))
-          data-reader (dtype-proto/->reader-of-type buffer datatype unchecked?)
-          indexes (dimensions->index-reader dimensions)
-          item-shape (mp/get-shape item)]
-      (case (casting/safe-flatten datatype)
-        :int8 (make-tensor-reader :int8 datatype item-shape
-                                  indexes data-reader sparse-data)
-        :int16 (make-tensor-reader :int16 datatype item-shape
-                                   indexes data-reader sparse-data)
-        :int32 (make-tensor-reader :int32 datatype item-shape
-                                   indexes data-reader sparse-data)
-        :int64 (make-tensor-reader :int64 datatype item-shape
-                                   indexes data-reader sparse-data)
-        :float32 (make-tensor-reader :float32 datatype item-shape
+    (if (and (simple-dimensions? dimensions)
+             (instance? (resolve (tens-typecast/datatype->tensor-reader-type datatype)) buffer))
+      buffer
+      (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
+            data-reader (dtype-proto/->reader-of-type buffer datatype unchecked?)
+            indexes (dimensions->index-reader dimensions)
+            item-shape (mp/get-shape item)]
+        (case (casting/safe-flatten datatype)
+          :int8 (make-tensor-reader :int8 datatype item-shape
+                                    indexes data-reader sparse-data)
+          :int16 (make-tensor-reader :int16 datatype item-shape
                                      indexes data-reader sparse-data)
-        :float64 (make-tensor-reader :float64 datatype item-shape
+          :int32 (make-tensor-reader :int32 datatype item-shape
                                      indexes data-reader sparse-data)
-        :boolean (make-tensor-reader :boolean datatype item-shape
+          :int64 (make-tensor-reader :int64 datatype item-shape
                                      indexes data-reader sparse-data)
-        :object (make-tensor-reader :object datatype item-shape
-                                    indexes data-reader sparse-data)))))
+          :float32 (make-tensor-reader :float32 datatype item-shape
+                                       indexes data-reader sparse-data)
+          :float64 (make-tensor-reader :float64 datatype item-shape
+                                       indexes data-reader sparse-data)
+          :boolean (make-tensor-reader :boolean datatype item-shape
+                                       indexes data-reader sparse-data)
+          :object (make-tensor-reader :object datatype item-shape
+                                      indexes data-reader sparse-data))))))
 
 
 (defn construct-tensor
@@ -464,7 +473,7 @@
   (let [buffer-type (dtype/buffer-type (:buffer tens))
         new-tens (if (= :sparse buffer-type)
                    (construct-tensor
-                    (sparse-proto/->sparse-reader tens)
+                    (sparse-proto/as-sparse tens)
                     (dims/dimensions (dtype/shape tens)))
                    ;;force a potentially deep reader chain.
                    (if (or (not (simple-dimensions? (:dimensions tens)))
@@ -954,12 +963,11 @@
         ;;Simplify as much as possible.
         lhs (tensor-force lhs)
         rhs-trans (tensor-force (transpose rhs [1 0]))
-        lhs-row-indexes (->> (tens-proto/->tensor-reader-of-type lhs op-datatype true)
+        lhs-row-indexes (->> lhs
                              sparse-proto/index-seq
                              (map (comp first :global-dims))
                              distinct)
-        rhs-col-indexes (->> (tens-proto/->tensor-reader-of-type rhs-trans
-                                                                 op-datatype true)
+        rhs-col-indexes (->> rhs-trans
                              sparse-proto/index-seq
                              (map (comp first :global-dims))
                              distinct)

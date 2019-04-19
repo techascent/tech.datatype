@@ -13,7 +13,8 @@
                                 :datatype datatype)]
     (is (= [[30 80] [80 255]]
            (-> (tens/matrix-multiply test-mat (tens/transpose test-mat [1 0]))
-               (tens/->jvm :datatype :int32))))
+               (tens/->jvm :datatype :int32)))
+        (with-out-str (println container-type datatype)))
 
 
     (is (= [[25 30 35 40 45]
@@ -22,7 +23,8 @@
             [40 51 62 73 84]
             [45 58 71 84 97]]
            (-> (tens/matrix-multiply (tens/transpose test-mat [1 0]) test-mat)
-               (tens/->jvm :datatype :int32))))))
+               (tens/->jvm :datatype :int32)))
+        (with-out-str (println container-type datatype)))))
 
 
 (deftest basic-mm

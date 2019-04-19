@@ -98,9 +98,9 @@
             :data data-reader#})
          (iterables [item#]
            (sparse-proto/readers item#))
-         sparse-proto/PToSparseReader
-         (convertible-to-sparse-reader? [item#] true)
-         (->sparse-reader [item#] item#)
+         sparse-proto/PToSparse
+         (convertible-to-sparse? [item#] true)
+         (->sparse [item#] item#)
          dtype-proto/PBufferType
          (buffer-type [item#] :sparse)
          dtype-proto/PBuffer
@@ -161,12 +161,13 @@
                                               sparse-value]}]
   (let [datatype (casting/safe-flatten
                   (or datatype (safe-get-datatype data-reader)))
+        index-reader (typecast/datatype->reader :int32 (->reader index-reader :int32))
         create-fn (get indexed-reader-table datatype)
         sparse-value (or sparse-value (make-sparse-value datatype))
         buf-len (int (second (dtype-search/binary-search
                               index-reader n-elems
                               {:datatype :int32})))]
-    (create-fn (dtype-base/sub-buffer (->reader index-reader :int32) 0 buf-len)
+    (create-fn (dtype-base/sub-buffer index-reader 0 buf-len)
                (dtype-base/sub-buffer (->reader data-reader datatype) 0 buf-len)
                n-elems
                sparse-value

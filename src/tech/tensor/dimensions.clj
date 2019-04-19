@@ -28,6 +28,7 @@
             IndexingSystem$Forward
             IndexingSystem$Backward
             IntReader]
+           [java.util List]
            [it.unimi.dsi.fastutil.ints IntArrayList]
            [clojure.lang IDeref]))
 
@@ -40,8 +41,7 @@
   "With no error checking, setup a new stride for the given shape.
   If some of the original strides are known, they can be passed in."
   [shape & [original-strides]]
-  (let [shape (typecast/datatype->reader :int32 shape)
-        n-shape (.size shape)
+  (let [n-shape (dtype/ecount shape)
         n-original-strides (count original-strides)
         max-stride-idx (if (= 0 n-original-strides)
                          0
@@ -64,7 +64,7 @@
                     local-idx)
                   (do
                     (aset strides local-idx (* (aget strides max-stride-idx)
-                                               (.read shape (+ local-idx 1))))
+                                               (int (shape (+ local-idx 1)))))
                     local-idx)))]
           (recur (unchecked-inc idx) (int max-stride-idx)))))
     ;;Using persistent vectors for short things is often faster.
@@ -74,10 +74,37 @@
 (declare create-dimension-transforms)
 
 
-(defrecord Dimensions [shape strides offsets max-shape
+(defrecord Dimensions [shape strides offsets max-shape dense?
                        ;;Implementations of IDeref
                        global->local
                        local->global])
+
+(defn calculate-dense?
+  "This gets called a *lot*."
+  [shape strides]
+  (let [n-shape (count shape)
+        ^List shape shape
+        ^List strides strides]
+    (and (shape/direct-shape? shape)
+         (if (= 1 n-shape)
+           (= 1 (long (first strides)))
+           (let [[max-stride num-shape]
+                 (loop [item-idx 0
+                        max-stride (long 1)
+                        num-shape (long 1)]
+                   (if (< item-idx n-shape)
+                     (let [shape-entry (long (.get shape item-idx))
+                           stride-entry (long (.get strides item-idx))
+                           new-max-stride (if-not (= 1 shape-entry)
+                                            (* stride-entry shape-entry)
+                                            max-stride)]
+                       (recur (inc item-idx)
+                              (if (> new-max-stride max-stride)
+                                new-max-stride
+                                max-stride)
+                              (* num-shape shape-entry)))
+                     [max-stride num-shape]))]
+             (= max-stride num-shape))))))
 
 
 (defn dimensions
@@ -101,6 +128,7 @@
       (create-dimension-transforms
        (->Dimensions shape [1] [0]
                      (shape/shape->count-vec shape)
+                     true
                      nil nil))
       (let [strides (if (= n-elems (dtype-base/ecount strides))
                       strides
@@ -113,7 +141,10 @@
                            vec)
                       offsets)
             max-shape (or max-shape (shape/shape->count-vec shape))
-            half-retval (->Dimensions shape strides offsets max-shape nil nil)]
+            half-retval (->Dimensions
+                         shape strides offsets max-shape
+                         (calculate-dense? shape strides)
+                         nil nil)]
         (create-dimension-transforms half-retval)))))
 
 
@@ -173,23 +204,8 @@
 
 
 (defn dense?
-  [{:keys [shape strides]}]
-  (and (shape/direct-shape? shape)
-       (if (= 1 (count shape))
-         (= 1 (long (first strides)))
-         (let [[shape strides] (->> (map vector shape strides)
-                                    ;;remove trivial shape/stride combinations
-                                    (remove #(= 1 (first %)))
-                                    ;;sort into known orientation
-                                    (sort-by second >)
-                                    ;;replace back to original
-                                    ((fn [shp-strd]
-                                       [(mapv first shp-strd)
-                                        (mapv second shp-strd)])))
-               ;;Given there was a remove we could have nothing left.
-               max-stride (first strides)
-               shape-num (apply * 1 (drop 1 shape))]
-           (= max-stride shape-num)))))
+  [dimensions]
+  (:dense? dimensions))
 
 
 (defn direct?
@@ -569,7 +585,7 @@ to be reversed for the most efficient implementation."
              (reader/make-indexed-reader index-ary offsets {:datatype :int32})
              ;;In order to invert an arbitrary transposition, argsort it
              (argsort/argsort index-ary {:datatype :int32})]))
-        shape-obj-reader (typecast/datatype->reader :object shape)
+        shape-obj-reader shape
         ordered-shape (typecast/datatype->reader :int32 (shape/shape->count-vec
                                                          ordered-shape))
         ordered-strides (typecast/datatype->reader :int32 ordered-strides)

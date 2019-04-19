@@ -49,34 +49,28 @@
   (:data (iterables item)))
 
 
-(defprotocol PToSparseReader
-  (convertible-to-sparse-reader? [item])
-  (->sparse-reader [item]
-    "Sparse readers implement:
-PSparse
-tech.datatype.protocols/PDatatype
-tech.datatype.protocols/PToReader
-clojure.core.matrix.protocols/PElementCount"))
+(defprotocol PToSparse
+  (convertible-to-sparse? [item])
+  (->sparse [item]))
+
+
+(extend-type Object
+  PToSparse
+  (convertible-to-sparse? [item] false))
 
 
 (defn sparse-convertible?
   [item]
-  (when (and item
-             (satisfies? PToSparseReader item))
-    (or (satisfies? PSparse item)
-        (convertible-to-sparse-reader? item))))
+  (convertible-to-sparse? item))
 
 
-(defn is-sparse?
+(defn as-sparse
   [item]
-  (or (satisfies? PSparse item)
-      (sparse-convertible? item)))
+  (when (sparse-convertible? item)
+    (->sparse item)))
 
 
-(defn ->sparse
+(defn safe-index-seq
   [item]
-  (cond
-    (satisfies? PSparse item) item
-    (satisfies? PToSparseReader item) (->sparse-reader item)
-    :else
-    (throw (ex-info "Item is not sparse" {}))))
+  (when-let [sparse-item (as-sparse item)]
+    (index-seq sparse-item)))

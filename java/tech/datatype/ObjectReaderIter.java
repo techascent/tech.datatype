@@ -5,8 +5,8 @@ import clojure.lang.Keyword;
 
 public class ObjectReaderIter implements IOBase, ObjectIter
 {
-  int idx;
-  int num_elems;
+  long idx;
+  long num_elems;
   ObjectReader reader;
   public ObjectReaderIter(ObjectReader _reader)
   {
@@ -15,7 +15,7 @@ public class ObjectReaderIter implements IOBase, ObjectIter
     reader = _reader;
   }
   public Keyword getDatatype() { return reader.getDatatype(); }
-  public int size() { return num_elems - idx; }
+  public long size() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public Object next() {
     Object retval = reader.read(idx);

@@ -5,8 +5,8 @@ import clojure.lang.Keyword;
 
 public class FloatReaderIter implements IOBase, FloatIter
 {
-  int idx;
-  int num_elems;
+  long idx;
+  long num_elems;
   FloatReader reader;
   public FloatReaderIter(FloatReader _reader)
   {
@@ -15,7 +15,7 @@ public class FloatReaderIter implements IOBase, FloatIter
     reader = _reader;
   }
   public Keyword getDatatype() { return reader.getDatatype(); }
-  public int size() { return num_elems - idx; }
+  public long size() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public float nextFloat() {
     float retval = reader.read(idx);

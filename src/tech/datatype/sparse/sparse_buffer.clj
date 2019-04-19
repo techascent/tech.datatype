@@ -207,7 +207,7 @@
   dtype-proto/PToArray
   (->sub-array [item] nil)
   (->array-copy [item]
-    (dtype-proto/->array-copy (sparse-proto/->sparse-reader item)))
+    (dtype-proto/->array-copy (sparse-proto/->sparse item)))
 
 
   dtype-proto/PBufferType
@@ -216,7 +216,7 @@
 
   dtype-proto/PToReader
   (->reader-of-type [item datatype unchecked?]
-    (-> (sparse-proto/->sparse-reader item)
+    (-> (sparse-proto/->sparse item)
         (dtype-proto/->reader-of-type datatype unchecked?)))
 
 
@@ -296,39 +296,17 @@
     item)
 
 
-  sparse-proto/PToSparseReader
-  (convertible-to-sparse-reader? [item] true)
-  (->sparse-reader [item]
-    (make-base-reader item))
-
-  sparse-proto/PSparse
-  (index-seq [item]
-    (as-> (make-base-reader item) it
-      (sparse-proto/index-iterable it)
-      (sparse-reader/get-index-seq it)))
-
-  (sparse-value [item] sparse-value)
-  (sparse-ecount [item]
-    (let [num-non-sparse
-          (long (cond
-                  (= 0 b-offset)
-                  (dtype-base/ecount indexes)
-                  :else
-                  (count (sparse-proto/index-seq item))))]
-      (- b-elem-count num-non-sparse)))
-
-  (readers [item]
-    (sparse-proto/readers (sparse-proto/->sparse-reader item)))
-
-  (iterables [item] (sparse-proto/readers item)))
+  sparse-proto/PToSparse
+  (convertible-to-sparse? [item] true)
+  (->sparse [item] (make-base-reader item)))
 
 
 (defn copy-sparse->any
   "Src *must* be a sparse buffer."
   [src dst options]
-  (when-not (sparse-proto/is-sparse? src)
+  (when-not (sparse-proto/sparse-convertible? src)
     (throw (ex-info "Source item must be sparse" {})))
-  (let [src (sparse-proto/->sparse-reader src)
+  (let [src (sparse-proto/->sparse src)
         n-elems (dtype-base/ecount src)
         {src-indexes :indexes
          src-data :data} (sparse-proto/readers src)]

@@ -14,10 +14,10 @@
 (deftest base-sparse-sanity
   (let [test-sparse (dtype/make-container :sparse :float32 [1 0 1 0 1 0 1])
         next-sparse (dtype/make-container :sparse :float32 [0 2 0 4 0 6])]
-    (is (= [[0 0] [1 2] [2 4] [3 6]] (->pairs (sparse-proto/index-seq test-sparse))))
+    (is (= [[0 0] [1 2] [2 4] [3 6]] (->pairs (sparse-proto/safe-index-seq test-sparse))))
     (is (= [[0 0] [1 2] [2 4]] (->pairs (-> (dtype/sub-buffer test-sparse 0 6)
-                                            (sparse-proto/index-seq)))))
-    (is (= [[0 1] [1 3] [2 5]] (->pairs (sparse-proto/index-seq next-sparse))))
+                                            (sparse-proto/safe-index-seq)))))
+    (is (= [[0 1] [1 3] [2 5]] (->pairs (sparse-proto/safe-index-seq next-sparse))))
     (is (= (mapv float [1 0 1 0 1 0 1]) (dtype/->vector test-sparse)))
     (is (= (mapv float [0 2 0 4 0 6]) (dtype/->vector next-sparse)))
     (let [test-sparse (dtype/copy! next-sparse test-sparse)]
@@ -31,7 +31,7 @@
     (is (= [[0 0] [1 2]]
            (-> (dtype/sub-buffer test-sparse 3 3)
                (dtype/sub-buffer 0 3)
-               sparse-proto/index-seq
+               sparse-proto/safe-index-seq
                ->pairs)))
     (let [new-buffer (dtype/copy! (float-array (range 5 8))
                                   (dtype/sub-buffer test-sparse 3 3))]

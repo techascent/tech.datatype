@@ -270,8 +270,8 @@
 
 (defn sparse-binary-map
   [options bin-op sparse-lhs sparse-rhs]
-  (let [sparse-lhs (sparse-proto/->sparse-reader sparse-lhs)
-        sparse-rhs (sparse-proto/->sparse-reader sparse-rhs)
+  (let [sparse-lhs (sparse-proto/->sparse sparse-lhs)
+        sparse-rhs (sparse-proto/->sparse sparse-rhs)
         datatype (or (:datatype options)
                      (dtype-base/get-datatype sparse-lhs))
         flat-dtype (casting/safe-flatten datatype)
@@ -313,9 +313,9 @@
                             (dtype-base/ecount lhs)
                             (dtype-base/ecount rhs))
                     {})))
-  (let [sparse-lhs (when (sparse-proto/is-sparse? lhs)
+  (let [sparse-lhs (when (sparse-proto/sparse-convertible? lhs)
                      (sparse-proto/->sparse lhs))
-        sparse-rhs (when (sparse-proto/is-sparse? rhs)
+        sparse-rhs (when (sparse-proto/sparse-convertible? rhs)
                      (sparse-proto/->sparse rhs))
         any-dense? (or (nil? sparse-lhs)
                        (nil? sparse-rhs))

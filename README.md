@@ -43,14 +43,14 @@ Library c found at [:system "c"]
 
 
 * [basic operations](test/tech/v2/datatype_test.clj)
-* [unsigned operations](test/tech/v2/typed_buffer_test.clj)
+* [unsigned operations](test/tech/v2/datatype/typed_buffer_test.clj)
 * [game of life](test/tech/v2/apl/game_of_life.clj)
 * [sparse game of life](test/tech/v2/apl/sparse_game_of_life.clj)
 
 
 ## License
 
-2Copyright © 2019 TechAscent, LLC.
+Copyright © 2019 TechAscent, LLC.
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.

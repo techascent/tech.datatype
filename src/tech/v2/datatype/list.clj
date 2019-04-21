@@ -2,6 +2,7 @@
   (:require [tech.v2.datatype.base :as base]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.array :as dtype-array]
+            [tech.v2.datatype.nio-buffer :as nio-buffer]
             [tech.v2.datatype.typed-buffer :as typed-buffer]
             [tech.v2.datatype.reader :refer [make-buffer-reader] :as reader]
             [tech.v2.datatype.writer :refer [make-buffer-writer] :as writer]

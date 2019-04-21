@@ -256,8 +256,8 @@
                    (let [bin-op# (datatype->binary-op ~dtype bin-op# true)
                          lhs-reader# (typecast/datatype->reader ~dtype lhs# unchecked?#)
                          rhs-reader# (typecast/datatype->reader ~dtype rhs# unchecked?#)
-                         n-elems# (min (.size lhs-reader#)
-                                       (.size rhs-reader#))]
+                         n-elems# (min (.lsize lhs-reader#)
+                                       (.lsize rhs-reader#))]
                      (-> (reify ~(typecast/datatype->reader-type dtype)
                            (getDatatype [item#] ~dtype)
                            (lsize [item#] n-elems#)

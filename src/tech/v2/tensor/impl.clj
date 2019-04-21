@@ -111,7 +111,7 @@
      (reify
        ~(tens-typecast/datatype->tensor-reader-type reader-datatype)
        (getDatatype [item#] ~datatype)
-       (size [item#] n-elems#)
+       (lsize [item#] n-elems#)
        (read [item# idx#]
          (.read data# (.read indexer# idx#)))
        (read2d [reader# row# col#]

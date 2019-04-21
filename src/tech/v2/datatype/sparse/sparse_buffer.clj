@@ -37,7 +37,7 @@
        (reify
          ~(typecast/datatype->writer-type datatype)
          (getDatatype [writer#] desired-dtype#)
-         (size [writer#] n-elems#)
+         (lsize [writer#] n-elems#)
          (write [writer# idx# value#]
            ;;We are not threadsafe.   Nor are we going to be.
            (locking writer#
@@ -56,9 +56,6 @@
                    (do
                      (.insert data-mutable# insert-pos# value#)
                      (.insert index-mutable# insert-pos# idx#)))))))
-         (invoke [writer# idx# value#]
-           (.write writer# (int idx#) (casting/datatype->cast-fn
-                                       :unknown ~datatype value#)))
          dtype-proto/PSetConstant
          (set-constant! [writer# offset# value# elem-count#]
            (dtype-proto/set-constant! item# offset# value# elem-count#))))))

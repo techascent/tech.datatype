@@ -286,14 +286,11 @@
   `(reify
      IndexingSystem$Forward
      (getDatatype [item#] :int32)
-     (size [item#] ~n-elems)
+     (lsize [item#] ~n-elems)
      (read [item# ~'idx] ~opcode)
-     (invoke [item# idx#] (.read item# (int idx#)))
-     (invoke [item# row# col#] (.read2d item# (int row#) (int col#)))
      (applyTo [item# arglist#] (.tensorRead
                                 ^tech.v2.tensor.IntTensorReader item#
                                 (typecast/datatype->iter :int32 arglist#)))
-     (iterator [item#] (typecast/reader->iterator item#))
      tech.v2.tensor.IntTensorReader
      (read2d [~'reader ~'row ~'col] ~tenscode2d)
      (tensorRead [~'reader ~'indexes] ~tenscode)))
@@ -542,7 +539,7 @@ to be reversed for the most efficient implementation."
         shape (typecast/datatype->reader :int32 shape)
         offsets (typecast/datatype->reader :int32 offsets)
         addr (int addr)
-        n-elems (.size strides)
+        n-elems (.lsize strides)
         retval (dtype/make-container :list :int32 0)
         retval-mut (typecast/datatype->mutable :int32 retval)]
     (loop [idx 0
@@ -602,7 +599,7 @@ to be reversed for the most efficient implementation."
              (typecast/datatype->reader :int32 safe-shape)]))
         ^IntReader shape-mults shape-mults
         ^IntReader shape-int-reader shape-int-reader
-        n-global-shape (.size global-shape)]
+        n-global-shape (.lsize global-shape)]
     (cond
       (and direct?
            strides-increasing?

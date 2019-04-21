@@ -409,7 +409,7 @@
 (defn- ->list
   ^List [item]
   (when-not (instance? List item)
-    (throw (ex-info "ITem is not a list." {})))
+    (throw (ex-info "Item is not a list." {})))
   item)
 
 

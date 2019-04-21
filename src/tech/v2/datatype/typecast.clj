@@ -240,6 +240,25 @@
     :object `(->object-iter ~reader ~unchecked?)))
 
 
+(defmacro datatype->pure-iter
+  "Much faster if you are dealing with persistent vectors or a pure sequence as it
+  doesn't require creating a wrapper iterator or hitting protocols."
+  [datatype reader & [unchecked?]]
+  (case datatype
+    :int8 `(->int8-iter ~reader ~unchecked?)
+    :uint8 `(->uint8-iter ~reader ~unchecked?)
+    :int16 `(->int16-iter ~reader ~unchecked?)
+    :uint16 `(->uint16-iter ~reader ~unchecked?)
+    :int32 `(->int32-iter ~reader ~unchecked?)
+    :uint32 `(->uint32-iter ~reader ~unchecked?)
+    :int64 `(->int64-iter ~reader ~unchecked?)
+    :uint64 `(->uint64-iter ~reader ~unchecked?)
+    :float32 `(->float32-iter ~reader ~unchecked?)
+    :float64 `(->float64-iter ~reader ~unchecked?)
+    :boolean `(->boolean-iter ~reader ~unchecked?)
+    :object `(->iter ~reader)))
+
+
 
 (defn ->int8-fast-iter ^ByteIter [item] item)
 (defn ->uint8-fast-iter ^ShortIter [item] item)

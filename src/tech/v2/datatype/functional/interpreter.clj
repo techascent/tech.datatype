@@ -1,4 +1,4 @@
-(ns tech.v2.datatype.functional.iterpreter
+(ns tech.v2.datatype.functional.interpreter
   (:require [tech.v2.datatype.functional.impl :as func-impl]
             [tech.v2.datatype.functional :as dtype-fn]))
 

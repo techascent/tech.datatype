@@ -93,7 +93,7 @@
                     reverse?]
              :or {parallel? true}
              :as options}]
-  (let [options (impl/default-options (assoc options :parallel? true))]
+  (let [options (impl/default-options (assoc options :parallel? parallel?))]
     (argsort/argsort (sparse-reader/->reader values)
                      (impl/default-options options))))
 

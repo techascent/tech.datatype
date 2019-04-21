@@ -53,7 +53,7 @@
   `(if ~unchecked?
      (reify ~mutable-cls
        (getDatatype [mut-item#] ~intermediate-dtype)
-       (size [mut-item#] (.size ~buffer))
+       (lsize [mut-item#] (.size ~buffer))
        (insert [mut-item# idx# value#]
          (.add ~buffer idx# (unchecked-full-cast
                              value# ~mutable-dtype ~intermediate-dtype ~buffer-dtype)))
@@ -66,7 +66,7 @@
          (datatype->single-remove-fn ~buffer-dtype ~buffer idx#)))
      (reify ~mutable-cls
        (getDatatype [mut-item#] ~intermediate-dtype)
-       (size [mut-item#] (.size ~buffer))
+       (lsize [mut-item#] (.size ~buffer))
        (insert [mut-item# idx# value#]
          (.add ~buffer idx# (checked-full-write-cast
                              value# ~mutable-dtype ~intermediate-dtype ~buffer-dtype)))
@@ -106,7 +106,7 @@
   `(if ~unchecked?
      (reify ~outer-mutable-cls
        (getDatatype [item#] ~intermediate-dtype)
-       (size [mut-item#] (.size ~inner-mutable))
+       (lsize [mut-item#] (.lsize ~inner-mutable))
        (insert [item# idx# value#]
          (.insert ~inner-mutable idx#
                   (unchecked-full-cast value#
@@ -123,7 +123,7 @@
          (.remove ~inner-mutable idx#)))
      (reify ~outer-mutable-cls
        (getDatatype [item#] ~intermediate-dtype)
-       (size [mut-item#] (.size ~inner-mutable))
+       (lsize [mut-item#] (.lsize ~inner-mutable))
        (insert [item# idx# value#]
          (.insert ~inner-mutable idx#
                   (checked-full-write-cast value# ~outer-dtype

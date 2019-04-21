@@ -260,16 +260,12 @@
                                        (.size rhs-reader#))]
                      (-> (reify ~(typecast/datatype->reader-type dtype)
                            (getDatatype [item#] ~dtype)
-                           (size [item#] n-elems#)
+                           (lsize [item#] n-elems#)
                            (read [item# idx#]
                              (.op bin-op#
                                   (.read lhs-reader# idx#)
                                   (.read rhs-reader# idx#)))
-                           (iterator [item#]
-                             (make-binary-op-iterator
-                              ~dtype lhs-reader# rhs-reader# bin-op# unchecked?#) )
-                           (invoke [item# idx#]
-                             (.read item# (int idx#)))
+
                            dtype-proto/PToBackingStore
                            (->backing-store-seq  [item#]
                              (concat (dtype-proto/->backing-store-seq lhs-reader#)

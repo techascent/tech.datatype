@@ -11,11 +11,11 @@ public class ShortReaderIter implements IOBase, ShortIter
   public ShortReaderIter(ShortReader _reader)
   {
     idx = 0;
-    num_elems = _reader.size();
+    num_elems = _reader.lsize();
     reader = _reader;
   }
   public Keyword getDatatype() { return reader.getDatatype(); }
-  public long size() { return num_elems - idx; }
+  public long lsize() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public short nextShort() {
     short retval = reader.read(idx);

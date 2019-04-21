@@ -11,11 +11,11 @@ public class IntReaderIter implements IOBase, IntIter
   public IntReaderIter(IntReader _reader)
   {
     idx = 0;
-    num_elems = _reader.size();
+    num_elems = _reader.lsize();
     reader = _reader;
   }
   public Keyword getDatatype() { return reader.getDatatype(); }
-  public long size() { return num_elems - idx; }
+  public long lsize() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public int nextInt() {
     int retval = reader.read(idx);

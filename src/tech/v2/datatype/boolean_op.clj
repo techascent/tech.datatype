@@ -566,22 +566,19 @@
        (let [bool-op# (datatype->boolean-binary ~op-dtype bool-op# unchecked?#)
              lhs-reader# (typecast/datatype->reader ~datatype lhs-seq# unchecked?#)
              rhs-reader# (typecast/datatype->reader ~datatype rhs-seq# unchecked?#)
-             n-elems# (min (.size lhs-reader#)
-                           (.size rhs-reader#))]
+             n-elems# (min (.lsize lhs-reader#)
+                           (.lsize rhs-reader#))]
          (reify
            ~(typecast/datatype->reader-type :boolean)
            (getDatatype [reader#] :boolean)
-           (size [reader#] n-elems#)
+           (lsize [reader#] n-elems#)
            (read [reader# idx#]
              (when (>= idx# n-elems#)
                (throw (ex-info (format "Index out of range: %s >= %s"
                                        idx# n-elems#) {})))
              (.op bool-op#
                   (.read lhs-reader# idx#)
-                  (.read rhs-reader# idx#)))
-           (iterator [reader#] (typecast/reader->iterator reader#))
-           (invoke [reader# arg#]
-             (.read reader# (int arg#))))))))
+                  (.read rhs-reader# idx#))))))))
 
 
 (defmacro make-boolean-binary-reader-table

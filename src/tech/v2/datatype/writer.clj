@@ -52,17 +52,12 @@
      (reify
        ~writer-type
        (getDatatype [writer#] ~intermediate-datatype)
-       (size [writer#] (int (mp/element-count ~buffer)))
+       (lsize [writer#] (int (mp/element-count ~buffer)))
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
           (unchecked-full-cast value# ~writer-datatype
                                ~intermediate-datatype
                                ~buffer-datatype)))
-       (invoke [item# idx# value#] (.write item# (int idx#)
-                                           (casting/datatype->unchecked-cast-fn
-                                            :unknown
-                                            ~intermediate-datatype
-                                            value#)))
        dtype-proto/PToNioBuffer
        (convertible-to-nio-buffer? [writer#]
          (dtype-proto/nio-convertible? ~buffer))
@@ -90,17 +85,12 @@
                                     elem-count#)))
      (reify ~writer-type
        (getDatatype [writer#] ~intermediate-datatype)
-       (size [writer#] (int (mp/element-count ~buffer)))
+       (lsize [writer#] (int (mp/element-count ~buffer)))
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
                              (checked-full-write-cast value# ~writer-datatype
                                                       ~intermediate-datatype
                                                       ~buffer-datatype)))
-       (invoke [item# idx# value#] (.write item# (int idx#)
-                                           (casting/datatype->cast-fn
-                                            :unknown
-                                            ~intermediate-datatype
-                                            value#)))
        dtype-proto/PToNioBuffer
        (convertible-to-nio-buffer? [writer#]
          (dtype-proto/nio-convertible? ~buffer))
@@ -202,15 +192,9 @@
       (reify
         ~(typecast/datatype->writer-type writer-datatype)
         (getDatatype [writer#] runtime-datatype#)
-        (size [writer#] n-elems#)
+        (lsize [writer#] n-elems#)
         (write [writer# ~'idx ~'value]
           ~writer-op)
-        (invoke [item# idx# value#]
-          (.write item# (int idx#)
-                  (casting/datatype->cast-fn
-                   :unknown
-                   ~writer-datatype
-                   value#)))
         dtype-proto/PToBackingStore
         (->backing-store-seq [writer#]
           (dtype-proto/->backing-store-seq src-writer#))
@@ -220,7 +204,7 @@
               (~create-fn runtime-datatype# unchecked?#))))))
   ([writer-datatype runtime-datatype unchecked? src-writer writer-op create-fn]
    `(make-derived-writer ~writer-datatype ~runtime-datatype ~unchecked?
-                         ~src-writer ~writer-op ~create-fn (.size ~'src-writer))))
+                         ~src-writer ~writer-op ~create-fn (.lsize ~'src-writer))))
 
 
 (defn- make-object-wrapper
@@ -315,19 +299,13 @@
   `(let [idx-reader# (datatype->reader :int32 ~indexes true)
          values# (datatype->writer ~datatype ~values ~unchecked?)
          writer-dtype# (dtype-proto/get-datatype ~values)
-         n-elems# (.size idx-reader#)]
+         n-elems# (.lsize idx-reader#)]
      (reify
        ~(typecast/datatype->writer-type datatype)
        (getDatatype [writer#] writer-dtype#)
-       (size [writer#] n-elems#)
+       (lsize [writer#] n-elems#)
        (write [writer# idx# value#]
          (.write values# (.read idx-reader# idx#) value#))
-       (invoke [item# idx# value#]
-         (.write item# (int idx#)
-                 (casting/datatype->cast-fn
-                  :unknown
-                  ~datatype
-                  value#)))
        dtype-proto/PToBackingStore
        (->backing-store-seq [writer#]
          (dtype-proto/->backing-store-seq values#))

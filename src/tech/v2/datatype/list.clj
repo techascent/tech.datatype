@@ -307,8 +307,8 @@
                 ;;fallback to element by element
                 (let [item-reader# (typecast/datatype->reader
                                     ~datatype values# (:unchecked? options#))
-                      n-values# (.size item-reader#)]
-                  (c-for [iter-idx# (int 0) (< iter-idx# n-values#) (inc iter-idx#)]
+                      n-values# (.lsize item-reader#)]
+                  (c-for [iter-idx# (long 0) (< iter-idx# n-values#) (inc iter-idx#)]
                          (.add list-item# (+ idx# iter-idx#)
                                (.read item-reader# iter-idx#)))))))))}))
 

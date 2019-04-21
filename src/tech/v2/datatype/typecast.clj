@@ -13,6 +13,7 @@
             FloatWriter FloatReader FloatMutable FloatReaderIter FloatIter
             DoubleWriter DoubleReader DoubleMutable DoubleReaderIter DoubleIter
             BooleanWriter BooleanReader BooleanMutable BooleanReaderIter BooleanIter]
+           [java.util Iterator]
            [com.sun.jna Pointer]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
@@ -190,7 +191,8 @@
   `(when ~'item
      (if (instance? ~(resolve (datatype->iter-type datatype)) ~'item)
        ~'item
-       (.iterator ^Iterable (dtype-proto/->iterable-of-type ~'item ~datatype ~'unchecked?)))))
+       (.iterator ^Iterable (dtype-proto/->iterable-of-type
+                             ~'item ~datatype ~'unchecked?)))))
 
 
 (defn ->int8-iter ^ByteIter [item unchecked?] (implement-iter-cast :int8))
@@ -205,6 +207,20 @@
 (defn ->float64-iter ^DoubleIter [item unchecked?] (implement-iter-cast :float64))
 (defn ->boolean-iter ^BooleanIter [item unchecked?] (implement-iter-cast :boolean))
 (defn ->object-iter ^ObjectIter [item unchecked?] (implement-iter-cast :object))
+
+
+(defn ->iterable
+  "Whatever it is, make it iterable."
+  ^Iterable [src-item]
+  (if (instance? Iterable src-item)
+    src-item
+    (dtype-proto/->iterable-of-type
+     src-item (dtype-proto-impl/safe-get-datatype src-item) false)))
+
+
+(defn ->iter
+  ^Iterator [item]
+  (.iterator (->iterable item)))
 
 
 (defmacro datatype->iter

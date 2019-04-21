@@ -20,7 +20,7 @@
 
 (extend-type Countable
   mp/PElementCount
-  (element-count [item] (.size item)))
+  (element-count [item] (.lsize item)))
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."

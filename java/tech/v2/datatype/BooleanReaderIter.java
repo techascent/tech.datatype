@@ -11,11 +11,11 @@ public class BooleanReaderIter implements IOBase, BooleanIter
   public BooleanReaderIter(BooleanReader _reader)
   {
     idx = 0;
-    num_elems = _reader.size();
+    num_elems = _reader.lsize();
     reader = _reader;
   }
   public Keyword getDatatype() { return reader.getDatatype(); }
-  public long size() { return num_elems - idx; }
+  public long lsize() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public boolean nextBoolean() {
     boolean retval = reader.read(idx);

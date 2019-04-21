@@ -336,7 +336,8 @@
   tens-proto/PToTensorReader
   (->tensor-reader-of-type [item datatype unchecked?]
     (if (and (simple-dimensions? dimensions)
-             (instance? (resolve (tens-typecast/datatype->tensor-reader-type datatype)) buffer))
+             (instance? (resolve (tens-typecast/datatype->tensor-reader-type datatype))
+                        buffer))
       buffer
       (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
             data-reader (dtype-proto/->reader-of-type buffer datatype unchecked?)

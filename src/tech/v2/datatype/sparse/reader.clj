@@ -67,13 +67,13 @@
   `(fn [index-reader# data-reader# n-elems# zero-val# datatype#]
      (let [local-data-reader# (typecast/datatype->reader ~datatype data-reader# true)
            index-reader# (typecast/datatype->reader :int32 index-reader# true)
-           n-elems# (int n-elems#)
+           n-elems# (long n-elems#)
            idx-count# (dtype-base/ecount index-reader#)
            zero-val# (casting/datatype->cast-fn :unknown ~datatype zero-val#)]
        (reify
          ~(typecast/datatype->reader-type datatype)
          (getDatatype [reader#] datatype#)
-         (size [reader#] n-elems#)
+         (lsize [reader#] n-elems#)
          (read [reader# idx#]
            (let [[found?# data-idx#] (dtype-search/binary-search
                                       index-reader# (int idx#)
@@ -81,9 +81,6 @@
              (if found?#
                (.read local-data-reader# (int data-idx#))
                zero-val#)))
-         (invoke [reader# idx#]
-           (.read reader# (int idx#)))
-         (iterator [reader#] (typecast/reader->iterator reader#))
          dtype-proto/PToBackingStore
          (->backing-store-seq [item#]
            (concat (dtype-proto/->backing-store-seq index-reader#)

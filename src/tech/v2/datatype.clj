@@ -41,7 +41,8 @@
             [tech.v2.datatype.boolean-op :as dtype-bool]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer])
-  (:import [tech.v2.datatype MutableRemove ObjectMutable])
+  (:import [tech.v2.datatype MutableRemove ObjectMutable]
+           [java.util Iterator])
   (:refer-clojure :exclude [cast]))
 
 
@@ -366,6 +367,10 @@ Calls clojure.core.matrix/ecount."
                                   (or datatype (get-datatype src-item))
                                   options))
 
+
+(defn ->iterable
+  ^Iterable [src-item]
+  (typecast/->iterable src-item))
 
 
 (defn const-iterable

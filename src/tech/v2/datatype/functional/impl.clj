@@ -347,15 +347,18 @@
             (= argnum-types #{:unary :binary})
             `(when-not (> ~'n-args 0)
                (throw (ex-info (format "Operator called with too few (%s) arguments."
-                                       ~'n-args))))
+                                       ~'n-args)
+                               {})))
             (= argnum-types #{:unary})
             `(when-not (= ~'n-args 1)
                (throw (ex-info (format "Operator takes 1 argument, (%s) given."
-                                       ~'n-args))))
+                                       ~'n-args)
+                               {})))
             (= argnum-types #{:binary})
-            `(when-not (> ~'n-args 1)
+            `(when-not (> ~'n-args 0)
                (throw (ex-info (format "Operator called with too few (%s) arguments"
-                                       ~'n-args))))
+                                       ~'n-args)
+                               {})))
             :else
             (throw (ex-info "Incorrect op types" {:types argnum-types
                                                   :op-types op-types})))
@@ -364,12 +367,21 @@
                ~'options {:datatype ~'datatype
                           :unchecked? *unchecked?*}]
            (if (= ~'n-args 1)
-             ~(if (contains? op-types :boolean-unary)
+             ~(cond
+                (contains? op-types :boolean-unary)
                 `(apply-unary-boolean-op
                   ~'options
                   (get boolean-op/builtin-boolean-unary-ops
                        ~op-name)
                   (first ~'args))
+                ;;A binary operator applied to 1 arg is a reduction
+                (contains? op-types :binary)
+                `(apply-reduce-op
+                  ~'options
+                  (get binary/builtin-binary-ops
+                       ~op-name)
+                  (first ~'args))
+                :else
                 `(apply-unary-op
                   ~'options
                   (get unary/builtin-unary-ops ~op-name)

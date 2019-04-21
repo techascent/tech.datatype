@@ -221,13 +221,9 @@
           item-count (.size item)]
       (-> (reify ObjectReader
             (getDatatype [_] :object)
-            (size [_] item-count)
+            (lsize [_] item-count)
             (read [_ idx]
-              (.get item idx))
-            (iterator [item-reader]
-              (typecast/reader->iterator item-reader))
-            (invoke [item-reader idx]
-              (.read item-reader (int idx))))
+              (.get item idx)))
           (dtype-proto/->reader-of-type datatype unchecked?)))))
 
 

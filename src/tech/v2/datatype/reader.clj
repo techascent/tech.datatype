@@ -67,14 +67,12 @@
        (reify
          ~reader-type
          (getDatatype [reader#] ~intermediate-datatype)
-         (size [reader#] n-elems#)
+         (lsize [reader#] n-elems#)
          (read [reader# idx#]
            (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
                (unchecked-full-cast ~buffer-datatype ~intermediate-datatype
                                     ~reader-datatype)))
-         (iterator [reader#] (reader->iterator reader#))
-         (invoke [reader# arg#]
-           (.read reader# (int arg#)))
+
          dtype-proto/PToBackingStore
          (->backing-store-seq [item#]
            (dtype-proto/->backing-store-seq ~buffer))
@@ -107,7 +105,7 @@
        (reify
          ~reader-type
          (getDatatype [reader#] ~intermediate-datatype)
-         (size [reader#] n-elems#)
+         (lsize [reader#] n-elems#)
          (read [reader# idx#]
            (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
                (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
@@ -219,11 +217,9 @@
       (reify
         ~(typecast/datatype->reader-type reader-datatype)
         (getDatatype [reader#] runtime-datatype#)
-        (size [reader#] n-elems#)
+        (lsize [reader#] n-elems#)
         (read [reader# ~'idx]
           ~reader-op)
-        (iterator [item#] (typecast/reader->iterator item#))
-        (invoke [item# idx#] (.read item# idx#))
         dtype-proto/PToBackingStore
         (->backing-store-seq [reader#]
           (dtype-proto/->backing-store-seq src-reader#))
@@ -233,7 +229,7 @@
               (~create-fn runtime-datatype# unchecked?#))))))
   ([reader-datatype runtime-datatype unchecked? src-reader reader-op create-fn]
    `(make-derived-reader ~reader-datatype ~runtime-datatype ~unchecked?
-                         ~src-reader ~reader-op ~create-fn (.size ~'src-reader))))
+                         ~src-reader ~reader-op ~create-fn (.lsize ~'src-reader))))
 
 
 (defn- make-object-wrapper
@@ -362,11 +358,8 @@
                   ~(casting/datatype->safe-host-type datatype))]
        (reify ~(typecast/datatype->reader-type datatype)
          (getDatatype [reader#] ~datatype)
-         (size [reader#] num-elems#)
-         (read [reader# idx#] item#)
-         (iterator [reader#] (typecast/reader->iterator reader#))
-         (invoke [reader# arg#]
-           (.read reader# (int arg#)))))))
+         (lsize [reader#] num-elems#)
+         (read [reader# idx#] item#)))))
 
 (defmacro make-const-reader-table
   []
@@ -389,14 +382,12 @@
   [datatype reader-type indexes values unchecked?]
   `(let [idx-reader# (datatype->reader :int32 ~indexes true)
          values# (datatype->reader ~datatype ~values ~unchecked?)
-         n-elems# (.size idx-reader#)]
+         n-elems# (.lsize idx-reader#)]
      (reify ~reader-type
        (getDatatype [item#] ~datatype)
-       (size [item#] (.size idx-reader#))
+       (lsize [item#] (.lsize idx-reader#))
        (read [item# idx#]
          (.read values# (.read idx-reader# idx#)))
-       (iterator [item#] (reader->iterator item#))
-       (invoke [item# idx#] (.read item# (int idx#)))
        dtype-proto/PToBackingStore
        (->backing-store-seq [item]
          (concat (dtype-proto/->backing-store-seq idx-reader#)
@@ -472,22 +463,19 @@
      (let [start# (casting/datatype->cast-fn :unknown ~datatype start#)
            end# (casting/datatype->cast-fn :unknown ~datatype end#)
            increment# (casting/datatype->cast-fn :unkown ~datatype increment#)
-           n-elems# (int (/ (- end# start#)
-                            increment#))]
+           n-elems# (Math/round (double (/ (- end# start#)
+                                           increment#)))]
 
        (reify ~(typecast/datatype->reader-type datatype)
          (getDatatype [item#] ~datatype)
-         (size [item#] n-elems#)
+         (lsize [item#] n-elems#)
          (read [item# idx#]
            (when-not (< idx# n-elems#)
              (throw (ex-info (format "Index out of range: %s >= %s" idx# n-elems#))))
            (casting/datatype->unchecked-cast-fn
             :unknown ~(casting/datatype->safe-host-type datatype)
             (+ (* increment# idx#)
-               start#)))
-         (iterator [item#] (typecast/reader->iterator item#))
-         (invoke [item# idx#]
-           (.read item# (int idx#)))))))
+               start#)))))))
 
 
 (defmacro make-range-reader-table
@@ -511,7 +499,7 @@
   [datatype]
   `(fn [src-reader#]
      (let [src-reader# (typecast/datatype->reader ~datatype src-reader#)
-           n-elems# (.size src-reader#)
+           n-elems# (.lsize src-reader#)
            n-elems-m1# (- n-elems# 1)
            src-dtype# (dtype-proto/get-datatype src-reader#)]
        (make-derived-reader ~datatype src-dtype# true src-reader#

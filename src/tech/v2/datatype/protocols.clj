@@ -173,8 +173,10 @@
 (defprotocol PToBinaryOp
   (->binary-op [item datatype unchecked?]))
 
+
 (defprotocol PToBinaryBooleanOp
   (->binary-boolean-op [item datatype unchecked?]))
+
 
 (defmulti make-container
   (fn [container-type datatype elem-seq-or-count options]

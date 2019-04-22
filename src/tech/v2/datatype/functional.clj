@@ -11,7 +11,9 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.sparse.reader :as sparse-reader])
+            [tech.v2.datatype.sparse.reader :as sparse-reader]
+            [tech.v2.datatype.statistics]
+            [tech.v2.datatype.rolling])
   (:refer-clojure :exclude [+ - / *
                             <= < >= >
                             identity
@@ -73,6 +75,29 @@
                      apply-binary-op
                      apply-unary-boolean-op
                      apply-binary-boolean-op)
+
+
+(impl/export-symbols tech.v2.datatype.statistics
+                     mean
+                     median
+                     geometric-mean
+                     harmonic-mean
+                     variance
+                     variance-population
+                     standard-deviation
+                     standard-deviation-population
+                     standard-error
+                     skewness
+                     skewness-population
+                     kurtosis
+                     kurtosis-population
+                     pearsons-correlation
+                     spearmans-correlation
+                     kendalls-correlation)
+
+
+(impl/export-symbols tech.v2.datatype.rolling
+                     fixed-rolling-window)
 
 
 (defn indexed-reader

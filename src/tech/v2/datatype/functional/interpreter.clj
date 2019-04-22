@@ -79,7 +79,24 @@
                                   :argfilter
                                   :magnitude-squared
                                   :magnitude
-                                  :dot-product]))]
+                                  :dot-product
+                                  :mean
+                                  :median
+                                  :geometric-mean
+                                  :harmonic-mean
+                                  :variance
+                                  :variance-population
+                                  :standard-deviation
+                                  :standard-deviation-population
+                                  :standard-error
+                                  :skewness
+                                  :skewness-population
+                                  :kurtosis
+                                  :kurtosis-population
+                                  :pearsons-correlation
+                                  :spearmans-correlation
+                                  :kendalls-correlation
+                                  :fixed-rolling-window]))]
     (doseq [kwd builtin-set]
       (if-let [public-var (resolve (symbol "tech.v2.datatype.functional"
                                            (name kwd)))]
@@ -88,3 +105,6 @@
                 @public-var))
         (throw (ex-info (format "Failed to find var: %s" (str kwd))))))
     (keys @registration-atom)))
+
+
+(register-base-symbols)

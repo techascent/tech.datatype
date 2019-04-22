@@ -257,6 +257,13 @@
                                  true))))
 
 
+  dtype-proto/PBuffer
+  (sub-buffer [item offset length]
+    (if (simple-dimensions? dimensions)
+      (dtype-proto/sub-buffer buffer offset length)
+      (throw (ex-info "Cannot sub-buffer tensors with complex addressing" {}))))
+
+
   dtype-proto/PSetConstant
   (set-constant! [item offset value elem-count]
     (if (simple-dimensions? dimensions)
@@ -714,7 +721,7 @@
              (map (fn [col-idx]
                     (let [col-offset (* column-len (long col-idx))]
                       (case base-storage
-                        :jvm-array
+                        :java-array
                         (let [retval (dtype/make-array-of-type datatype
                                                                column-len)]
                           (dtype/copy! data-array col-offset

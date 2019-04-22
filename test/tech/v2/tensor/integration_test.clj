@@ -26,3 +26,16 @@
     (doseq [col (tens/columns test-tens)]
       (is (= (tens/->jvm col)
              (vec (dtype/make-container :list :float32 col)))))))
+
+
+
+(deftest block-rows->tensor
+  (let [block-rows (repeatedly 4 #(int-array (range 5)))
+        tensor (tens/new-tensor (dtype/shape block-rows)
+                                :datatype :int32)]
+    (dtype/copy-raw->item! block-rows tensor)
+    (is (= [[0 1 2 3 4]
+            [0 1 2 3 4]
+            [0 1 2 3 4]
+            [0 1 2 3 4]]
+           (tens/->jvm tensor)))))

@@ -171,8 +171,7 @@
      (cond
        (number? elem-count-or-seq)
        (ary-cons-fn elem-count-or-seq)
-       (and (satisfies? dtype-proto/PToReader elem-count-or-seq)
-            (satisfies? dtype-proto/PBuffer elem-count-or-seq))
+       (and (satisfies? dtype-proto/PToReader elem-count-or-seq))
        (if (and (satisfies? dtype-proto/PToArray elem-count-or-seq)
                 (= item-dtype (base/get-datatype elem-count-or-seq)))
          (dtype-proto/->array-copy elem-count-or-seq)

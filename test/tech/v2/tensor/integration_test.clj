@@ -14,3 +14,15 @@
     (doseq [col (tens/columns test-tens)]
       (is (= (tens/->jvm col)
              (vec (dtype/make-container :java-array :float32 col)))))))
+
+
+
+(deftest tensor->list-and-back
+  (let [test-tens (tens/->tensor (partition 3 (range 9)))]
+    (doseq [row (tens/rows test-tens)]
+      (is (= (tens/->jvm row)
+             (vec (dtype/make-container :list :float32 row)))))
+
+    (doseq [col (tens/columns test-tens)]
+      (is (= (tens/->jvm col)
+             (vec (dtype/make-container :list :float32 col)))))))

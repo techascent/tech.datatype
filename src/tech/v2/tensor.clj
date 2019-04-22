@@ -42,6 +42,20 @@
   (dims/dense? (:dimensions tensor)))
 
 
+(defn rows
+  [tens]
+  (let [[n-rows n-cols] (dtype/shape tens)]
+    (->> (range n-rows)
+         (map #(select tens % :all)))))
+
+
+(defn columns
+  [tens]
+  (let [[n-rows n-cols] (dtype/shape tens)]
+    (->> (range n-cols)
+         (map #(select tens :all %)))))
+
+
 
 (defn matrix-multiply
   "lhs - 2 dimensional tensor.

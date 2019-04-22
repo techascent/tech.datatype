@@ -504,8 +504,15 @@ to be reversed for the most efficient implementation."
           ;;Totally general case to encapsulate all the variations including indexed
           ;;dimensions.
           (let [reverse-shape (mapv (fn [item]
-                                      (if (number? item)
+                                      (cond
+                                        (number? item)
                                         (long item)
+                                        (map? item)
+                                        (dtype/->reader-of-type
+                                         (int-array
+                                          (shape/classified-sequence->sequence item))
+                                         :int32)
+                                        :else
                                         (dtype/->reader-of-type item :int32)))
                                     reverse-shape)
                 reverse-stride (typecast/datatype->reader :int32

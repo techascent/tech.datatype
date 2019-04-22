@@ -42,10 +42,12 @@
 
 (defn set-value! [item offset value]
   (.write ^ObjectWriter (dtype-proto/->writer-of-type item :object false)
-          offset value))
+          offset value)
+  item)
 
 (defn set-constant! [item offset value elem-count]
-  (dtype-proto/set-constant! item offset value elem-count))
+  (dtype-proto/set-constant! item offset value elem-count)
+  item)
 
 (defn get-value [item offset]
   (cond

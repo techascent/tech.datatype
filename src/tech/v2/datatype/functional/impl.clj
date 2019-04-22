@@ -114,6 +114,45 @@
         :object (.op (datatype->unary-op :object un-op unchecked?) arg)))))
 
 
+(def datatype-width
+  (->> [:object :float64 [:int64 :uint64]
+        :float32 [:int32 :uint32]
+        [:uint64 :int16]
+        [:int8 :uint8] :boolean]
+       (map-indexed vector)
+       (mapcat (fn [[idx entry]]
+                 (if (keyword? entry)
+                   [[entry idx]]
+                   (map vector entry (repeat idx)))))
+       (into {})))
+
+
+(defn next-integer-type
+  [lhs rhs]
+  (case (max (casting/int-width lhs)
+             (casting/int-width rhs))
+    8 :int16
+    16 :int32
+    :int64))
+
+
+(defn widest-datatype
+  [dtype-seq]
+  (reduce (fn [existing dtype]
+            (if (= existing dtype)
+              existing
+              (let [exist-rank (datatype-width existing)
+                    new-rank (datatype-width dtype)]
+                (cond
+                  (< exist-rank new-rank)
+                  existing
+                  (= exist-rank new-rank)
+                  (next-integer-type existing dtype)
+                  :else
+                  dtype))))
+          dtype-seq))
+
+
 (defn apply-binary-op
   "We perform a left-to-right reduction making scalars/readers/etc.  This matches
   clojure semantics.  Note that the results of this could be a reader, iterable or a
@@ -133,7 +172,9 @@
                       :reader
                       :else
                       :scalar)
-        datatype (or datatype (dtype-base/get-datatype arg1))
+        datatype (or datatype (widest-datatype
+                               (map dtype-base/get-datatype
+                                    (concat [arg1 arg2] args))))
         n-elems (long (if (= op-arg-type :reader)
                         (->> all-args
                              (remove #(= :scalar (argtypes/arg->arg-type %)))
@@ -363,7 +404,10 @@
             (throw (ex-info "Incorrect op types" {:types argnum-types
                                                   :op-types op-types})))
          (let [~'datatype (or *datatype*
-                              (dtype-base/get-datatype (first ~'args)))
+                              (widest-datatype
+                               (map
+                                dtype-base/get-datatype
+                                ~'args)))
                ~'options {:datatype ~'datatype
                           :unchecked? *unchecked?*}]
            (if (= ~'n-args 1)

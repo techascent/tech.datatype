@@ -102,8 +102,15 @@
     :int64 `(Long/compare ~lhs ~rhs)
     :float32 `(Float/compare ~lhs ~rhs)
     :float64 `(Double/compare ~lhs ~rhs)
-    :object `(throw (ex-info "Objects have no default compare fn" {}))))
+    :object `(comparator <)))
 
+
+(defmacro default-comparator
+  [datatype]
+  (if (= datatype :object)
+    `(comparator <)
+    `(make-comparator ~datatype
+                      (default-compare-fn ~datatype ~'lhs ~'rhs))))
 
 
 (extend-protocol dtype-proto/PDatatype

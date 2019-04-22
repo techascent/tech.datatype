@@ -29,8 +29,7 @@
   [datatype]
   `(fn [values# parallel?# reverse?# comparator#]
      (let [comparator# (or comparator#
-                           (make-comparator ~datatype
-                                            (default-compare-fn ~datatype ~'lhs ~'rhs)))
+                           (default-comparator ~datatype))
            n-elems# (int (mp/element-count values#))]
        (if (= n-elems# 0)
          (int-array 0)

@@ -29,7 +29,8 @@
              FloatReader FloatWriter
              DoubleReader DoubleWriter
              BooleanReader BooleanWriter
-             ]))
+             ]
+            [tech.v2.datatype.protocols PToReader]))
 
 
 (set! *warn-on-reflection* true)
@@ -46,12 +47,25 @@
 
 (defmacro parallel-slow-copy
   [datatype dst src unchecked?]
-  `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
-         dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
-         n-elems# (int (mp/element-count ~dst))]
-     (parallel/parallel-for
-      idx# n-elems#
-      (.write dst-writer# idx# (.read src-reader# idx#)))))
+  `(if (or (instance? PToReader ~src)
+           (satisfies? dtype-proto/PToReader ~src))
+    (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
+           dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
+           n-elems# (.lsize dst-writer#)]
+       (parallel/parallel-for
+        idx# n-elems#
+        (.write dst-writer# idx# (.read src-reader# idx#))))
+    ;;Go the *much* slower iterator pathway
+    (let [src-iter# (typecast/datatype->iter ~datatype ~src ~unchecked?)
+          dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)]
+      (->> (range (.lsize dst-writer#))
+           (map (fn [idx#]
+                  [idx# (typecast/datatype->iter-next-fn ~datatype src-iter#)]))
+           ;;Attempt to get at least little bit of parallelism.  Given iterators
+           ;;implicitly make every item dependent upon the one before we can't
+           ;;really do much here aside from potentially
+           (pmap #(dst-writer# (first %) (second %)))
+           dorun))))
 
 
 (defn parallel-slow-copy!

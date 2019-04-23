@@ -29,6 +29,7 @@
             FloatReader FloatWriter FloatMutable
             DoubleReader DoubleWriter DoubleMutable
             BooleanReader BooleanWriter BooleanMutable]
+           [tech.v2.datatype.protocols PToReader]
            [com.sun.jna Pointer]))
 
 
@@ -46,6 +47,8 @@
         src-nio (typecast/as-nio-buffer src)
         dst-list (typecast/as-list dst)
         src-list (typecast/as-list src)
+        src-reader? (or (instance? PToReader src)
+                        (satisfies? dtype-proto/PToReader src))
         dst-buf (or dst-nio dst-list)
         src-buf-dtype (when src-buf (safe-get-datatype src-buf))
         dst-buf-dtype (when dst-buf (safe-get-datatype dst-buf))
@@ -79,9 +82,9 @@
       ;;and the other is an array
       (fast-copy/copy! dst src)
       (cond
-        (and dst-nio dst-type-matches?)
+        (and dst-nio dst-type-matches? src-reader?)
         (fast-copy/parallel-nio-write! dst-nio src unchecked?)
-        (and dst-list dst-type-matches?)
+        (and dst-list dst-type-matches? src-reader?)
         (fast-copy/parallel-list-write! dst-list src unchecked?)
         (and src-nio src-type-matches?)
         (fast-copy/parallel-nio-read! dst src-nio unchecked?)

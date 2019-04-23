@@ -78,10 +78,63 @@ lazy operations.
 
 
 ```clojure
-user> (dtype/copy! (vec (range 10)) (float-array 10))
+;; You will not see major efficiency gains until both sizes of the copy
+;; operation are backed by convertible-to-nio storage.  But copy
+;; will still work.
+user> (dtype/copy! (range 10) (float-array 10))
 [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 user> (type *1)
 [F
+
+;; Faster yet
+user> (dtype/copy! (range 10) (float-array 10))
+[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+
+;; Fastest (by factor of 100 discounting array creation)
+user> (dtype/copy! (float-array (range 10)) (float-array 10))
+[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+
+
+;; Also extremely fast! native->jvm-array transfer is an optimized
+;; operation by the jna base system.
+user> (dtype/copy! (dtype/make-container :native-buffer :float32  (range 10)) (float-array 10))
+[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+
+
+;;Not nearly as fast but allows marshalling between types...safely unless requested otherwise
+user> (dtype/copy! (dtype/make-container :native-buffer :float32  [-1 0 1])
+                   (dtype/make-container :list :uint8 3))
+Execution error (ExceptionInfo) at tech.v2.datatype.writer$fn$reify__35539/write (writer.clj:141).
+Value out of range for uint8: -1
+user> (dtype/copy! (dtype/make-container :native-buffer :float32  [-1 0 1]) 0
+                   (dtype/make-container :list :uint8 3) 0
+                   3
+                   {:unchecked? true})
+{:datatype :uint8, :backing-store [-1 0 1]}
+
+;; The repl doesn't know about unsigned types, but readers do:
+user> (dtype/->reader *1)
+[255 0 1]
+
+
+;; An important form of copying is when you have a heterogeneous source of
+;; data, like a sequence of sequences.  This is called copy-raw->item!
+
+user> (def start-data (partition 3 (range 9)))
+#'user/start-data
+user> start-data
+((0 1 2) (3 4 5) (6 7 8))
+user> (float-array start-data)
+Execution error (ClassCastException) at user/eval53760 (form-init6919172943829999960.clj:111).
+clojure.lang.LazySeq cannot be cast to java.lang.Number
+
+
+;; Copy raw->item! returns the item first, and the final offset second so you can check that it did
+;; indeed copy the amount you intended it to.
+
+user> (dtype/copy-raw->item! start-data (float-array 9))
+[[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0] 9]
+user>
 ```
 
 

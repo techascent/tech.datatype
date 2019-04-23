@@ -256,8 +256,10 @@ user> (tens/->jvm test-tens :datatype :int32
 
 ;; matrix multiply uses blas via jna.  Anything dense will go the blas path
 ;; as the cost to force or complete somthing is roughly O(N) while the cost
-;; of the matrix multiple is O(N*M) or roughly O(N^2).  So we can afford
+;; of the matrix multiply is O(N*M) or roughly O(N^2).  So we can afford
 ;; to copy the data in order to make the matmul efficient.
+;; That being said, if you are going to do a lot of these it would be wise
+;; to force the inputs outside of the matrix multiply method.
 user> (println (tens/matrix-multiply test-tens test-tens))
 19-04-22 20:46:12 chrisn-lt-2 INFO [tech.jna.timbre-log:8] - Library blas found at [:system "blas"]
 #tech.v2.tensor<float64>[3 3]

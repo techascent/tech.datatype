@@ -26,7 +26,8 @@
   [datatype]
   `(if (instance? ~(resolve (datatype->tensor-reader-type datatype)) ~'item)
      ~'item
-     (tensor-proto/->tensor-reader-of-type ~'item ~datatype ~'unchecked?)))
+     (tensor-proto/->tensor-reader ~'item {:datatype ~datatype
+                                           :unchecked? ~'unchecked?})))
 
 
 

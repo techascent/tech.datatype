@@ -245,6 +245,23 @@
     {:from-prototype (fn [src-ary datatype shape]
                        (make-array-of-type datatype (base/shape->ecount shape)))}
 
+
+    dtype-proto/PToReader
+    {:convertible-to-reader? (constantly true)
+     :->reader (fn [item options]
+                 (let [datatype (or (:datatype options)
+                                    (dtype-proto/get-datatype item))]
+                   (-> (dtype-proto/as-list item)
+                       (dtype-proto/->reader (assoc options :datatype datatype)))))}
+
+    dtype-proto/PToWriter
+    {:convertible-to-writer? (constantly true)
+     :->writer (fn [item options]
+                 (let [datatype (or (:datatype options)
+                                    (dtype-proto/get-datatype item))]
+                   (-> (dtype-proto/as-list item)
+                       (dtype-proto/->writer (assoc options :datatype datatype)))))}
+
     dtype-proto/PToArray
     {:->sub-array (fn [item] {:java-array item
                               :offset 0

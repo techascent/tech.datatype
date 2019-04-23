@@ -48,10 +48,11 @@
 (defmacro parallel-slow-copy
   [datatype dst src unchecked?]
   `(if (or (instance? PToReader ~src)
-           (satisfies? dtype-proto/PToReader ~src))
-    (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
+           (dtype-proto/convertible-to-reader? ~src))
+     (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
            dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
            n-elems# (.lsize dst-writer#)]
+
        (parallel/parallel-for
         idx# n-elems#
         (.write dst-writer# idx# (.read src-reader# idx#))))

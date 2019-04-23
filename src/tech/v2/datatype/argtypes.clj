@@ -11,10 +11,10 @@
     :scalar
     (or (instance? tech.v2.datatype.protocols.PToReader arg)
         (instance? RandomAccess arg)
-        (satisfies? dtype-proto/PToReader arg))
+        (dtype-proto/convertible-to-reader? arg))
     :reader
     (or (instance? Iterable arg)
-        (satisfies? dtype-proto/PToIterable arg))
+        (dtype-proto/convertible-to-iterable? arg))
     :iterable
     :else
     :scalar))

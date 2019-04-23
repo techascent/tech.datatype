@@ -227,10 +227,11 @@
   dtype-proto/PToWriter
   (convertible-to-writer? [item] true)
   (->writer [item options]
-    (let [datatype (:datatype options)
-          target-dtype (casting/safe-flatten datatype)
-          writer-fn (get sparse-writer-table target-dtype)]
-      (writer-fn item datatype (:unchecked? options))))
+    (let [data-datatype (dtype-proto/get-datatype data)
+          writer-datatype (or (:datatype options) data-datatype)
+          writer-fn (get sparse-writer-table (casting/safe-flatten data-datatype))]
+      (-> (writer-fn item data-datatype (:unchecked? options))
+          (dtype-proto/->writer options))))
 
 
   dtype-proto/PWriteIndexes

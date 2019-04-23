@@ -345,9 +345,7 @@
                           buffer))
         buffer
         (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
-              data-reader (if sparse-data
-                            sparse-data
-                            (dtype-proto/->reader buffer options))
+              data-reader (dtype-proto/->reader buffer options)
               indexes (dimensions->index-reader dimensions)
               item-shape (mp/get-shape item)]
           (case (casting/safe-flatten datatype)
@@ -714,7 +712,7 @@
         column-len (long (last item-shape))
         n-columns (quot item-ecount column-len)
         datatype (or datatype (dtype-base/get-datatype item))
-        data-array (dtype-proto/->reader item {})
+        data-array (dtype-proto/->reader item {:datatype datatype})
         base-data
         (->> (range n-columns)
              (map (fn [col-idx]

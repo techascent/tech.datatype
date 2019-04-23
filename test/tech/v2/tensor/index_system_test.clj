@@ -29,7 +29,15 @@
    (let [max-stride-idx (int (dtype-fn/argmax {:datatype :int32} strides))
          n-src-buffer-elems
          (* (reader/typed-read :int32 strides max-stride-idx)
-            (reader/typed-read :int32 (shape/shape->count-vec shape)
+            (reader/typed-read :int32 (mapv (fn [shape-entry]
+                                              (cond
+                                                (number? shape-entry)
+                                                (long shape-entry)
+                                                (shape/classified-sequence? shape-entry)
+                                                (+ 1 (:max shape-entry))
+                                                :else
+                                                (+ 1 (apply max (dtype/->iterable shape-entry)))))
+                                            shape)
                                max-stride-idx))
          n-elems (shape/ecount max-shape)
          dimensions (dims/dimensions shape :strides strides :offsets
@@ -72,17 +80,18 @@
      ;;Make sure all addressing systems agree
      (is (= local-forward
             tens-read-forward)
-         explain-str)
+         (str "read-forward" explain-str))
 
      (when (= 2 (count max-shape))
        (is (= local-forward
               tens-2d-read-forward)
-           explain-str))
+           (str "2d-read" explain-str)))
+
 
 
      (is (= (vec forward-elems)
             (vec backward-elems))
-         explain-str)))
+         (str "forward, backward" explain-str))))
   ([shape strides max-shape]
    (base-index-system-test shape strides
                            (reader/make-const-reader
@@ -104,6 +113,8 @@
   (base-index-system-test [2 2] [1 2] [2 2])
   (base-index-system-test [2 2] [1 2] [2 4])
   (base-index-system-test [2 2] [1 2] [4 2])
+
+
 
   (base-index-system-test [2 [1 0]] [2 1] [4 2])
   (base-index-system-test [2 [1 0]] [1 2] [4 6])
@@ -132,4 +143,6 @@
   (base-index-system-test [4 4 3] [12 3 1] [4 4 3])
 
   ;;Image in channels-first
-  (base-index-system-test [3 4 4] [1 12 3] [3 4 4]))
+  (base-index-system-test [3 4 4] [1 12 3] [3 4 4])
+
+  (base-index-system-test [3 [1 2]] [1 3] [3 2]))

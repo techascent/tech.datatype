@@ -229,16 +229,18 @@
 
 (defn base-type-convertible?
   [item]
-  (and (casting/base-host-datatypes (get-datatype item))
+  (and (casting/base-host-datatypes (casting/flatten-datatype (get-datatype item)))
        (or (convertible-to-nio-buffer? item)
            (convertible-to-fastutil-list? item))))
 
 
 (defn as-base-type
   [item]
-  (when (base-type-convertible? item)
-    (or (as-nio-buffer item)
-        (as-list item))))
+  (when-let [retval (or (as-nio-buffer item)
+                   (as-list item))]
+    (when (= (get-datatype item)
+             (get-datatype retval))
+      retval)))
 
 
 (declare make-container)
@@ -250,6 +252,8 @@
     (base-type-convertible? item))
   (->writer [item options]
     (-> (as-base-type item)
+        (->writer (assoc options
+                         :datatype (get-datatype item)))
         (->writer options)))
 
   PToReader
@@ -257,6 +261,8 @@
     (base-type-convertible? item))
   (->reader [item options]
     (-> (as-base-type item)
+        (->reader (assoc options
+                         :datatype (get-datatype item)))
         (->reader options)))
 
   PToIterable
@@ -270,6 +276,8 @@
     (base-type-convertible? item))
   (->mutable [item options]
     (-> (as-base-type item)
+        (->mutable (assoc options
+                         :datatype (get-datatype item)))
         (->mutable options)))
 
   PToArray

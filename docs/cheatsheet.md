@@ -6,6 +6,9 @@
 
 ## Supported Datatypes
 
+Support for the standard C datatypes and conversions between them.
+
+
 ```clojure
 user> (require '[tech.v2.datatype.casting :as casting])
 nil
@@ -23,6 +26,9 @@ user> (casting/unchecked-cast -1 :uint8)
 ```
 
 ## Containers
+
+Make any container you like and move data in between containers fluidly.
+
 
 ```clojure
 user> (dtype/make-container :typed-buffer :float32 5)
@@ -67,6 +73,10 @@ user> (dtype/get-value (dtype/make-container :typed-buffer :int8 (range 10)) 2)
 
 ## Copy
 
+Heavily optimized copying for bulk transfers.   Use this also for completing
+lazy operations.
+
+
 ```clojure
 user> (dtype/copy! (vec (range 10)) (float-array 10))
 [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
@@ -77,27 +87,55 @@ user> (type *1)
 
 ## Math
 
+A small sample of what is available.  Basic elementwise operations along
+with some statistics and a fixed rolling windowing facility.
+
+* If the arguments contain an iterable, an iterable is returned.
+* If the arguments contain a reader, a reader is returned.
+* Else a scalar is returned.
+* All arguments are casted to the widest datatype present.
+* Readers implement List and RandomAccess so they look like persistent vectors in the repl.
+
+
 ```clojure
 user> (require '[tech.v2.datatype.functional :as dtype-fn])
 nil
 user> (def test-data (dtype-fn/+ (range 10 0 -1) 5))
 #'user/test-data
 user> (dtype-fn/argsort test-data)
-:object
 [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
 
 user> test-data
 (15.0 14.0 13.0 12.0 11.0 10.0 9.0 8.0 7.0 6.0)
 user> (dtype-fn/argsort test-data)
-:object
 [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
-;; make sequence a vector to allow indexing
+
+;; Make sequence a vector to allow indexing
 user> (dtype-fn/indexed-reader *1 (vec test-data))
 [6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0]
 
+;; Inline declare a fully typed function to perform producing a new reader.
 
+user> (dtype-fn/unary-reader :float32 (* x 3) *1)
+[18.0 21.0 24.0 27.0 30.0 33.0 36.0 39.0 42.0 45.0]
+
+user> (dtype-fn/binary-reader :float32 (+ x y) *1 *1)
+[36.0 42.0 48.0 54.0 60.0 66.0 72.0 78.0 84.0 90.0]
+
+
+;; Readers all support creating a reader of another type from
+;; the current reader:
+user> (dtype/->reader-of-type *1 :int32)
+[36 42 48 54 60 66 72 78 84 90]
+
+
+;; Kixi.stats is used for stats.  We also include apache commons-math3
+;; so it is available for anything kixi doesn't provide.
 user> (dtype-fn/mean *1)
-10.5
+63.0
+
+;; All stats are lifted into the functional namespace so you don't need to
+;; include this file specifically.
 user> (ns-publics 'tech.v2.datatype.statistics)
 {kurtosis #'tech.v2.datatype.statistics/kurtosis,
  skewness-population #'tech.v2.datatype.statistics/skewness-population,
@@ -129,15 +167,60 @@ user> (dtype-fn/fixed-rolling-window 3 #(apply + %) test-data)
 
 ## Tensors
 
+Generic N-dimensional support built on top of readers.  The combination of
+(something convertible to) a reader/writer *and* a dimension object gets
+you a tensor.
+
+
 ```clojure
 user> (require '[tech.v2.tensor :as tens])
 nil
+;; Make a tensor out of raw data.  The default datatype is double.
 user> (println (tens/->tensor (partition 3 (range 9))))
 #tech.v2.tensor<float64>[3 3]
 [[0.000 1.000 2.000]
  [3.000 4.000 5.000]
  [6.000 7.000 8.000]]
 nil
+
+
+;; Make a tensor out of a reader
+user> (println (tens/reshape (vec (range 9)) [3 3]))
+#tech.v2.tensor<object>[3 3]
+[[0 1 2]
+ [3 4 5]
+ [6 7 8]]
+
+
+;; Cloning allows you to efficiently complete a tensor reader sequence
+user> (def added-tens (dtype-fn/+ (tens/reshape (vec (range 9)) [3 3]) 2))
+#'user/added-tens
+
+;; added-tens in this case just contains a reader that will lazily evaluate the
+;; above expression when necessary.
+user> (println added-tens)
+#tech.v2.tensor<object>[3 3]
+[[2.000 3.000  4.000]
+ [5.000 6.000  7.000]
+ [8.000 9.000 10.000]]
+nil
+
+;; Because it is pure lazy reader, you can't write to this tensor.
+user> (tens/mutable? added-tens)
+false
+
+;; But now we clone, which creates a new tensor and forces the operation.
+;; There is also tensor-force which does different things for dense or sparse.
+user> (def completed (tens/clone added-tens))
+#'user/completed
+user> (tens/mutable? completed)
+true
+user> (def forced (tens/tensor-force added-tens))
+#'user/forced
+user> (tens/mutable? forced)
+true
+
+
 user> (def test-tens (tens/->tensor (partition 3 (range 9))))
 #'user/test-tens
 user> (println (tens/transpose test-tens [1 0]))
@@ -170,6 +253,11 @@ user> (tens/->jvm test-tens :datatype :int32
                   :base-storage :persistent-vector)
 [[0 1 2] [3 4 5] [6 7 8]]
 
+
+;; matrix multiply uses blas via jna.  Anything dense will go the blas path
+;; as the cost to force or complete somthing is roughly O(N) while the cost
+;; of the matrix multiple is O(N*M) or roughly O(N^2).  So we can afford
+;; to copy the data in order to make the matmul efficient.
 user> (println (tens/matrix-multiply test-tens test-tens))
 19-04-22 20:46:12 chrisn-lt-2 INFO [tech.jna.timbre-log:8] - Library blas found at [:system "blas"]
 #tech.v2.tensor<float64>[3 3]
@@ -177,6 +265,8 @@ user> (println (tens/matrix-multiply test-tens test-tens))
  [42.000 54.000  66.000]
  [69.000 90.000 111.000]]
 nil
+
+;; matrix-multiply takes an option scalar alpha that is multiplied into the result.
 user> (println (tens/matrix-multiply test-tens test-tens 3.0))
 #tech.v2.tensor<float64>[3 3]
 [[ 45.000  54.000  63.000]

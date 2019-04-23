@@ -189,24 +189,28 @@ user> (dtype-fn/mean *1)
 
 ;; All stats are lifted into the functional namespace so you don't need to
 ;; include this file specifically.
-user> (ns-publics 'tech.v2.datatype.statistics)
-{kurtosis #'tech.v2.datatype.statistics/kurtosis,
- skewness-population #'tech.v2.datatype.statistics/skewness-population,
- skewness #'tech.v2.datatype.statistics/skewness,
+
+user> (->> (ns-publics 'tech.v2.datatype.statistics)
+           (map first)
+           (sort-by name))
+(geometric-mean
+ harmonic-mean
+ kendalls-correlation
+ kurtosis
+ kurtosis-population
+ mean
+ median
+ pearsons-correlation
+ skewness
+ skewness-population
+ spearmans-correlation
+ standard-deviation
  standard-deviation-population
- #'tech.v2.datatype.statistics/standard-deviation-population,
- mean #'tech.v2.datatype.statistics/mean,
- harmonic-mean #'tech.v2.datatype.statistics/harmonic-mean,
- standard-error #'tech.v2.datatype.statistics/standard-error,
- variance-population #'tech.v2.datatype.statistics/variance-population,
- spearmans-correlation #'tech.v2.datatype.statistics/spearmans-correlation,
- kurtosis-population #'tech.v2.datatype.statistics/kurtosis-population,
- geometric-mean #'tech.v2.datatype.statistics/geometric-mean,
- variance #'tech.v2.datatype.statistics/variance,
- kendalls-correlation #'tech.v2.datatype.statistics/kendalls-correlation,
- standard-deviation #'tech.v2.datatype.statistics/standard-deviation,
- median #'tech.v2.datatype.statistics/median,
- pearsons-correlation #'tech.v2.datatype.statistics/pearsons-correlation}
+ standard-error
+ variance
+ variance-population)
+
+
 user> (dtype-fn/variance *3)
 9.166666666666666
 user> (dtype-fn/fixed-rolling-window 3 dtype-fn/min test-data)

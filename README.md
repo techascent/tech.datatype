@@ -19,28 +19,15 @@ efficient full typed copy functions when the types can be ascertained.
   5. Sparse buffer support
   6. n-dimensional tensor support
   7. Functional math support
+  
+  
+For a quick feel if the library, please check out our [cheatsheet](docs/cheatsheet.md).
 
 
-design documenation is [here](docs).
+Design documenation is [here](docs).
 
 
-
-## Examples
-
-```clojure
-user> (require '[tech.v2.datatype :as dtype])
-:tech.resource.gc Reference thread starting
-nil
-user> (let [ary (dtype/make-container :java-array :float32 (range 10))
-            buf (dtype/make-container :native-buffer :float64 10)]
-        ;;copy starting at position 2 of ary into position 4 of buf 4 elements
-        (dtype/copy! ary 2 buf 4 4)
-        ;;buf now has [0 0 0 0 2 3 4 5 0 0]
-        (dtype/->vector buf))
-Library c found at [:system "c"]
-[0.0 0.0 0.0 0.0 2.0 3.0 4.0 5.0 0.0 0.0]
-```
-
+## Useful Unit Tests To See
 
 * [basic operations](test/tech/v2/datatype_test.clj)
 * [unsigned operations](test/tech/v2/datatype/typed_buffer_test.clj)

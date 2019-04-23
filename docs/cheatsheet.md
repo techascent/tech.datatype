@@ -164,7 +164,8 @@ user> (dtype-fn/argsort test-data)
 user> (dtype-fn/indexed-reader *1 (vec test-data))
 [6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0]
 
-;; Inline declare a fully typed function to perform producing a new reader.
+;; Inline declare a fully typed function to perform a thing producing 
+;; a new reader.
 
 user> (dtype-fn/unary-reader :float32 (* x 3) *1)
 [18.0 21.0 24.0 27.0 30.0 33.0 36.0 39.0 42.0 45.0]

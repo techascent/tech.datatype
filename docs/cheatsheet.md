@@ -155,9 +155,6 @@ user> (require '[tech.v2.datatype.functional :as dtype-fn])
 nil
 user> (def test-data (dtype-fn/+ (range 10 0 -1) 5))
 #'user/test-data
-user> (dtype-fn/argsort test-data)
-[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
-
 user> test-data
 (15.0 14.0 13.0 12.0 11.0 10.0 9.0 8.0 7.0 6.0)
 user> (dtype-fn/argsort test-data)

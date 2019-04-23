@@ -15,7 +15,8 @@
             UnaryOperators$ByteUnary  UnaryOperators$ShortUnary
             UnaryOperators$IntUnary  UnaryOperators$LongUnary
             UnaryOperators$FloatUnary  UnaryOperators$DoubleUnary
-            UnaryOperators$BooleanUnary  UnaryOperators$ObjectUnary]))
+            UnaryOperators$BooleanUnary  UnaryOperators$ObjectUnary]
+           [clojure.lang IFn]))
 
 
 (set! *warn-on-reflection* true)
@@ -41,12 +42,13 @@
   `(clojure.core/extend
        ~(datatype->unary-op-type datatype)
      dtype-proto/PToUnaryOp
-     {:->unary-op
-      (fn [item# datatype# unchecked?#]
+     {:convertible-to-unary-op? (constantly true)
+      :->unary-op
+      (fn [item# options#]
         (when-not (= (dtype-proto/get-datatype item#)
-                     datatype#)
+                     (:datatype options#))
           (throw (ex-info (format "Cannot convert unary operator %s->%s"
-                                  ~datatype datatype#)
+                                  ~datatype (:datatype options#))
                           {})))
         item#)}))
 
@@ -64,7 +66,8 @@
   [datatype item]
   `(if (instance? ~(resolve (datatype->unary-op-type datatype)) ~item)
      ~item
-     (dtype-proto/->unary-op ~item ~datatype ~'unchecked?)))
+     (dtype-proto/->unary-op ~item {:datatype ~datatype
+                                    :unchecked? ~'unchecked?})))
 
 
 (defn int8->unary-op ^UnaryOperators$ByteUnary [item unchecked?]
@@ -159,7 +162,8 @@
   `(clojure.core/extend
        ~(datatype->unary-op-type datatype)
      dtype-proto/PToUnaryOp
-     {:->unary-op (fn [item# un-dtype# unchecked?#]
+     {:convertible-to-unary-op? (constantly true)
+      :->unary-op (fn [item# un-dtype# unchecked?#]
                     (if (= (casting/safe-flatten un-dtype#)
                            ~datatype)
                       item#
@@ -233,10 +237,10 @@
 
 
 (defn unary-iterable-map
-  [{:keys [datatype unchecked?]} un-op item]
+  [{:keys [datatype unchecked?] :as options} un-op item]
   (let [datatype (or datatype (dtype-base/get-datatype item))]
     (if (= (dtype-proto/op-name un-op) :identity)
-      (dtype-proto/->iterable-of-type item datatype unchecked?)
+      (dtype-proto/->iterable item options)
       ;;For object iteration map is probably faster
       (if (= datatype :object)
         (map (datatype->unary-op :object un-op true) item)
@@ -331,19 +335,22 @@
   [opname op-code]
   `(reify
      dtype-proto/PToUnaryOp
-     (->unary-op [item# datatype# unchecked?#]
-       (when-not (or (= :object datatype#)
-                     (casting/numeric-type? datatype#))
-         (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
-       (case (casting/safe-flatten datatype#)
-         :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
-         :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
-         :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
-         :int64 (make-unary-op ~opname :int64 ~op-code)
-         :float32 (make-unary-op ~opname :float32 ~op-code)
-         :float64 (make-unary-op ~opname :float64 ~op-code)
-         :object (-> (make-unary-op ~opname :float64 ~op-code)
-                     (dtype-proto/->unary-op :object true))))
+     (convertible-to-unary-op? [item#] true)
+     (->unary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#]
+         (when-not (or (= :object datatype#)
+                       (casting/numeric-type? datatype#))
+           (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
+         (case (casting/safe-flatten datatype#)
+           :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
+           :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
+           :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+           :int64 (make-unary-op ~opname :int64 ~op-code)
+           :float32 (make-unary-op ~opname :float32 ~op-code)
+           :float64 (make-unary-op ~opname :float64 ~op-code)
+           :object (-> (make-unary-op ~opname :float64 ~op-code)
+                       (dtype-proto/->unary-op {:datatype :object})))))
      dtype-proto/PDatatype
      (get-datatype [item#] :float64)
      dtype-proto/POperator
@@ -354,21 +361,27 @@
   [opname op-code]
   `(reify
      dtype-proto/PToUnaryOp
-     (->unary-op [item# datatype# unchecked?#]
-       (when-not (casting/numeric-type? datatype#)
-         (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
-       (case (casting/safe-flatten datatype#)
-         :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
-         :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
-         :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
-         :int64 (make-unary-op ~opname :int64 ~op-code)
-         :float32 (make-unary-op ~opname :float32 ~op-code)
-         :float64 (make-unary-op ~opname :float64 ~op-code)
-         :object (make-unary-op ~opname :object ~op-code)))
+     (convertible-to-unary-op? [item#] true)
+     (->unary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#]
+         (when-not (casting/numeric-type? datatype#)
+           (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
+         (case (casting/safe-flatten datatype#)
+           :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
+           :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
+           :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+           :int64 (make-unary-op ~opname :int64 ~op-code)
+           :float32 (make-unary-op ~opname :float32 ~op-code)
+           :float64 (make-unary-op ~opname :float64 ~op-code)
+           :object (make-unary-op ~opname :object ~op-code))))
      dtype-proto/PDatatype
      (get-datatype [item#] :object)
      dtype-proto/POperator
-     (op-name [item#] ~opname)))
+     (op-name [item#] ~opname)
+     IFn
+     (invoke [item# ~'x]
+       ~op-code)))
 
 
 (defmacro make-float-double-unary-op
@@ -379,19 +392,26 @@
      dtype-proto/PDatatype
      (get-datatype [item#] :float64)
      dtype-proto/PToUnaryOp
-     (->unary-op [item# datatype# unchecked?#]
-       (when-not (casting/numeric-type? datatype#)
-         (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
-       (let [op-dtype# (if (or (= datatype# :float32)
-                               (= datatype# :float64))
-                         datatype#
-                         :float64)
-             retval# (case op-dtype#
-                       :float32 (make-unary-op ~opname :float32 ~op-code)
-                       :float64 (make-unary-op ~opname :float64 ~op-code))]
-         (if-not (= op-dtype# datatype#)
-           (dtype-proto/->unary-op retval# datatype# unchecked?#)
-           retval#)))))
+     (convertible-to-unary-op? [item#] true)
+     (->unary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#]
+         (when-not (casting/numeric-type? datatype#)
+           (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
+         (let [op-dtype# (if (or (= datatype# :float32)
+                                 (= datatype# :float64))
+                           datatype#
+                           :float64)
+               retval# (case op-dtype#
+                         :float32 (make-unary-op ~opname :float32 ~op-code)
+                         :float64 (make-unary-op ~opname :float64 ~op-code))]
+           (if-not (= op-dtype# datatype#)
+             (dtype-proto/->unary-op retval# options#)
+             retval#))))
+     IFn
+     (invoke [item# ~'x]
+       (let [~'x (double ~'x)]
+         ~op-code))))
 
 (defmacro make-all-datatype-unary-op
   [opname op-code]
@@ -399,16 +419,22 @@
      dtype-proto/POperator
      (op-name [item#] ~opname)
      dtype-proto/PToUnaryOp
-     (->unary-op [item# datatype# unchecked?#]
-       (case (casting/safe-flatten datatype#)
-         :int8 (make-unary-op ~opname :int8 ~op-code)
-         :int16 (make-unary-op ~opname :int16 ~op-code)
-         :int32 (make-unary-op ~opname :int32 ~op-code)
-         :int64 (make-unary-op ~opname :int64 ~op-code)
-         :float32 (make-unary-op ~opname :float32 ~op-code)
-         :float64 (make-unary-op ~opname :float64 ~op-code)
-         :boolean (make-unary-op ~opname :boolean ~op-code)
-         :object (make-unary-op ~opname :object ~op-code)))))
+     (convertible-to-unary-op? [item#] true)
+     (->unary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#]
+         (case (casting/safe-flatten datatype#)
+           :int8 (make-unary-op ~opname :int8 ~op-code)
+           :int16 (make-unary-op ~opname :int16 ~op-code)
+           :int32 (make-unary-op ~opname :int32 ~op-code)
+           :int64 (make-unary-op ~opname :int64 ~op-code)
+           :float32 (make-unary-op ~opname :float32 ~op-code)
+           :float64 (make-unary-op ~opname :float64 ~op-code)
+           :boolean (make-unary-op ~opname :boolean ~op-code)
+           :object (make-unary-op ~opname :object ~op-code))))
+     IFn
+     (invoke [item# ~'x]
+       ~op-code)))
 
 
 (set! *unchecked-math* false)

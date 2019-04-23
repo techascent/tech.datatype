@@ -169,7 +169,7 @@
                      (shape/classified-sequence? shape-val)
                      (shape/classified-sequence-max shape-val)
                      :else
-                     (apply max (dtype/->reader-of-type
+                     (apply max (dtype/->reader
                                  shape-val :int32))))]
     (* shape-val (long stride-val))))
 
@@ -326,10 +326,10 @@ to be reversed for the most efficient implementation."
 
 
 (def rem-int-op (-> (:rem binary-op/builtin-binary-ops)
-                    (dtype-proto/->binary-op :int32 true)))
+                    (dtype-proto/->binary-op {:datatype :int32})))
 
 (def add-int-op (-> (:+ binary-op/builtin-binary-ops)
-                    (dtype-proto/->binary-op :int32 true)))
+                    (dtype-proto/->binary-op {:datatype :int32})))
 
 
 (defn get-elem-dims-global->local
@@ -508,12 +508,12 @@ to be reversed for the most efficient implementation."
                                         (number? item)
                                         (long item)
                                         (map? item)
-                                        (dtype/->reader-of-type
+                                        (dtype/->reader
                                          (int-array
                                           (shape/classified-sequence->sequence item))
                                          :int32)
                                         :else
-                                        (dtype/->reader-of-type item :int32)))
+                                        (dtype/->reader item :int32)))
                                     reverse-shape)
                 reverse-stride (typecast/datatype->reader :int32
                                                           (int-array reverse-strides))

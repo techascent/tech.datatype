@@ -26,7 +26,7 @@
      :scalar? true}
     (let [item-seq (cond
                      (vector? item-seq) item-seq
-                     (dtype/reader? item-seq) (dtype/->reader-of-type item-seq :int32)
+                     (dtype/reader? item-seq) (dtype/->reader item-seq :int32)
                      :else (vec item-seq))]
       (let [n-elems (dtype/ecount item-seq)
             first-item (long (item-seq 0))

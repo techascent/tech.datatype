@@ -212,21 +212,25 @@
 
 
   dtype-proto/PToReader
-  (->reader-of-type [item datatype unchecked?]
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
     (-> (sparse-proto/->sparse item)
-        (dtype-proto/->reader-of-type datatype unchecked?)))
+        (dtype-proto/->reader options)))
 
 
   dtype-proto/PToIterable
-  (->iterable-of-type [item datatype unchecked?]
-    (dtype-proto/->reader-of-type item datatype unchecked?))
+  (convertible-to-iterable? [item] true)
+  (->iterable [item options]
+    (dtype-proto/->reader item options))
 
 
   dtype-proto/PToWriter
-  (->writer-of-type [item datatype unchecked?]
-    (let [target-dtype (casting/safe-flatten datatype)
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (let [datatype (:datatype options)
+          target-dtype (casting/safe-flatten datatype)
           writer-fn (get sparse-writer-table target-dtype)]
-      (writer-fn item datatype unchecked?)))
+      (writer-fn item datatype (:unchecked? options))))
 
 
   dtype-proto/PWriteIndexes
@@ -328,10 +332,10 @@
         sparse-value (casting/cast (or sparse-value
                                        (sparse-reader/make-sparse-value datatype))
                                    datatype)
-        index-list (if (satisfies? dtype-proto/PToMutable index-reader)
+        index-list (if (dtype-proto/convertible-to-mutable? index-reader)
                      index-reader
                      (dtype-proto/make-container :list :int32 index-reader {}))
-        data-list (if (and (satisfies? dtype-proto/PToMutable data-reader)
+        data-list (if (and (dtype-proto/convertible-to-mutable? data-reader)
                            (= datatype (dtype-base/get-datatype data-reader)))
                     data-reader
                     (dtype-proto/make-container :list datatype data-reader {}))]
@@ -352,8 +356,9 @@
                            (sparse-reader/make-sparse-value
                             datatype))
           reader-data (sparse-base/data->sparse-reader
-                       (dtype-proto/->iterable-of-type
-                        elem-seq datatype (:unchecked? options))
+                       (dtype-proto/->iterable
+                        elem-seq {:datatype datatype
+                                  :unchecked? (:unchecked? options)})
                        (merge options
                               {:datatype datatype
                                :sparse-value sparse-value}))

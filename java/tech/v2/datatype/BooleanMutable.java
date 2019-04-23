@@ -4,7 +4,10 @@ import clojure.lang.Keyword;
 
 public interface BooleanMutable extends MutableRemove
 {
-  void insert(long idx, boolean value);
-  void append(boolean value);
   default Keyword getDatatype () { return Keyword.intern(null, "boolean"); }
+  void insert(long idx, boolean value);
+  default void append(boolean value)
+  {
+    insert(lsize(), value);
+  }
 }

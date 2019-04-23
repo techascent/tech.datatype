@@ -1,5 +1,6 @@
 (ns tech.v2.datatype.protocols
-  (:require [clojure.core.matrix.protocols :as mp])
+  (:require [clojure.core.matrix.protocols :as mp]
+            [tech.v2.datatype.casting :as casting])
   (:import [tech.v2.datatype Datatype Countable
             ObjectIter IteratorObjectIter]))
 
@@ -147,35 +148,149 @@
   (when (list-convertible? item)
     (->list-backing-store item)))
 
-
-
+;; Various other type conversions.  These happen quite a lot and we have found that
+;; avoiding 'satisfies' is wise.  In all of these cases, options may contain at least
+;; :datatype and :unchecked?
 (defprotocol PToWriter
-  (->writer-of-type [item datatype unchecked?]))
+  (convertible-to-writer? [item])
+  (->writer [item options]))
+
+(defn as-writer
+  [item & [options]]
+  (when (convertible-to-writer? item)
+    (->writer item options)))
 
 (defprotocol PToReader
-  (->reader-of-type [item datatype unchecked?]))
+  (convertible-to-reader? [item])
+  (->reader [item options]))
+
+(defn as-reader
+  [item & [options]]
+  (when (convertible-to-reader? item)
+    (->reader item options)))
 
 (defprotocol PToMutable
-  (->mutable-of-type [item datatype unchecked?]))
+  (convertible-to-mutable? [item])
+  (->mutable [item options]))
+
+(defn as-mutable
+  [item & [options]]
+  (when (convertible-to-mutable? item)
+    (->mutable item options)))
 
 (defprotocol PToIterable
-  (->iterable-of-type [item datatype unchecked?]))
+  (convertible-to-iterable? [item])
+  (->iterable [item options]))
+
+(defn as-iterable
+  [item & [options]]
+  (when (convertible-to-iterable? item)
+    (->iterable item options)))
 
 (defprotocol POperator
   (op-name [item]))
 
 (defprotocol PToUnaryOp
-  (->unary-op [item datatype unchecked?]))
+  (convertible-to-unary-op? [item])
+  (->unary-op [item options]))
+
+(defn as-unary-op
+  [item & [options]]
+  (when (convertible-to-unary-op? item)
+    (->unary-op item options)))
 
 (defprotocol PToUnaryBooleanOp
-  (->unary-boolean-op [item datatype unchecked?]))
+  (convertible-to-unary-boolean-op? [item])
+  (->unary-boolean-op [item options]))
+
+(defn as-unary-boolean-op
+  [item & [options]]
+  (when (convertible-to-unary-boolean-op? item)
+    (->unary-boolean-op item options)))
 
 (defprotocol PToBinaryOp
-  (->binary-op [item datatype unchecked?]))
+  (convertible-to-binary-op? [item])
+  (->binary-op [item options]))
 
+(defn as-binary-op
+  [item & [options]]
+  (when (convertible-to-binary-op? item)
+    (->binary-op item options)))
 
 (defprotocol PToBinaryBooleanOp
-  (->binary-boolean-op [item datatype unchecked?]))
+  (convertible-to-binary-boolean-op? [item])
+  (->binary-boolean-op [item options]))
+
+(defn as-binary-boolean-op
+  [item & [options]]
+  (when (convertible-to-binary-boolean-op? item)
+    (->binary-boolean-op item options)))
+
+
+(defn base-type-convertible?
+  [item]
+  (and (casting/base-host-datatypes (get-datatype item))
+       (or (convertible-to-nio-buffer? item)
+           (convertible-to-fastutil-list? item))))
+
+
+(defn as-base-type
+  [item]
+  (when (base-type-convertible? item)
+    (or (as-nio-buffer item)
+        (as-list item))))
+
+
+(declare make-container)
+
+
+(extend-type Object
+  PToWriter
+  (convertible-to-writer? [item]
+    (base-type-convertible? item))
+  (->writer [item options]
+    (-> (as-base-type item)
+        (->writer options)))
+
+  PToReader
+  (convertible-to-reader? [item]
+    (base-type-convertible? item))
+  (->reader [item options]
+    (-> (as-base-type item)
+        (->reader options)))
+
+  PToIterable
+  (convertible-to-iterable? [item]
+    (convertible-to-reader? item))
+  (->iterable [item options]
+    (->reader item options))
+
+  PToMutable
+  (convertible-to-mutable? [item]
+    (base-type-convertible? item))
+  (->mutable [item options]
+    (-> (as-base-type item)
+        (->mutable options)))
+
+  PToArray
+  (->sub-array [item] nil)
+  (->array-copy [item]
+    (let [retval
+          (make-container :java-array (get-datatype item) (mp/element-count item) {})]
+      (first (copy-raw->item! item retval 0 {}))))
+
+
+  PToUnaryOp
+  (convertible-to-unary-op? [item] false)
+
+  PToUnaryBooleanOp
+  (convertible-to-unary-boolean-op? [item] false)
+
+  PToBinaryOp
+  (convertible-to-binary-op? [item] false)
+
+  PToBinaryBooleanOp
+  (convertible-to-binary-boolean-op? [item] false))
 
 
 (defmulti make-container

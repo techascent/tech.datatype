@@ -42,7 +42,7 @@
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer])
   (:import [tech.v2.datatype MutableRemove ObjectMutable]
-           [java.util Iterator])
+           [java.util Iterator List RandomAccess])
   (:refer-clojure :exclude [cast]))
 
 
@@ -100,7 +100,7 @@
 
 (defn make-jvm-list
   "Jvm container that allows adding/removing of elements which
-  means is supports the ->mutable-of-type protocol."
+  means is supports the ->mutable protocol."
   [datatype elem-count-or-seq & [options]]
   (make-container :list datatype elem-count-or-seq options))
 
@@ -257,14 +257,14 @@ Calls clojure.core.matrix/ecount."
 
 
 (defn write-block!
-  "Write a block of data to an object.  Values must support ->reader-of-type,
+  "Write a block of data to an object.  Values must support ->reader,
   get-datatype, and core.matrix.protocols/element-count."
   [item offset values & [options]]
   (base/write-block! item offset values options))
 
 
 (defn read-block!
-  "Read a block from an object.  Values must support ->writer-of-type,
+  "Read a block from an object.  Values must support ->writer,
   get-datatype, and core.matrix.protocols/element-count."
   [item offset values & [options]]
   (base/read-block! item offset values options))
@@ -288,15 +288,14 @@ Calls clojure.core.matrix/ecount."
 
 (defn insert!
   [item idx value]
-  (.insert ^ObjectMutable (dtype-proto/->mutable-of-type item :object false)
+  (.insert ^ObjectMutable (dtype-proto/->mutable item {:datatype :object})
            idx value)
   item)
 
 
 (defn remove!
   [item idx]
-  (let [mut-item ^MutableRemove (dtype-proto/->mutable-of-type
-                                 item (get-datatype item) true)]
+  (let [mut-item ^MutableRemove (dtype-proto/->mutable item {})]
     (.remove mut-item (int idx))
     item))
 
@@ -356,21 +355,20 @@ Calls clojure.core.matrix/ecount."
     (base/sub-buffer buffer offset length)))
 
 
-(defn ->iterable-of-type
+(defn ->iterable
   "Create an object that when .iterator is called it returns an iterator that
   derives from tech.v2.datatype.{dtype}Iter.  This iterator class adds 'current'
   to the fastutil typed iterator of the same type.  Current makes implementing
   a few algorithms far easier as they no longer require local state outside of
   the iterator."
   [src-item & [datatype options]]
-  (dtype-proto/->iterable-of-type src-item
-                                  (or datatype (get-datatype src-item))
-                                  options))
-
-
-(defn ->iterable
-  ^Iterable [src-item]
-  (typecast/->iterable src-item))
+  (if (and (not datatype)
+           (instance? Iterable src-item))
+    src-item
+    (dtype-proto/->iterable src-item
+                            (assoc options
+                                   :datatype
+                                   (or datatype (get-datatype src-item))))))
 
 
 (defn const-iterable
@@ -409,20 +407,16 @@ Calls clojure.core.matrix/ecount."
 
 (defn reader?
   [item]
-  (satisfies? dtype-proto/PToReader item))
+  (dtype-proto/convertible-to-reader? item))
 
-
-(defn ->reader-of-type
-  "Create a reader of a specific type."
-  [src-item & [datatype options]]
-  (dtype-proto/->reader-of-type src-item
-                                (or datatype (get-datatype src-item))
-                                (:unchecked? options)))
 
 (defn ->reader
-  "Convert to a reader of the item's datatype"
-  [item]
-  (->reader-of-type item))
+  "Create a reader of a specific type."
+  [src-item & [datatype options]]
+  (dtype-proto/->reader src-item
+                        (assoc options
+                               :datatype
+                               (or datatype (get-datatype src-item)))))
 
 
 (defn const-reader
@@ -461,24 +455,21 @@ Calls clojure.core.matrix/ecount."
    indexes values (assoc options :datatype datatype)))
 
 
-(defn ->writer-of-type
+(defn ->writer
   "Create a writer of a specific type."
   [src-item & [datatype options]]
-  (dtype-proto/->writer-of-type src-item
-                                (or datatype (get-datatype src-item))
-                                (:unchecked? options)))
+  (dtype-proto/->writer src-item
+                        (assoc options
+                               :datatype
+                               (or datatype (get-datatype src-item)))))
 
 
-(defn ->writer
-  "Convert to a reader of the item's datatype"
-  [item]
-  (->writer-of-type item))
 
-
-(defn ->mutable-of-type
+(defn ->mutable
   "Create an object capable of mutating the underlying structure of the data storage.
   Only works for list-backed types."
   [src-item & [datatype options]]
-  (dtype-proto/->mutable-of-type src-item
-                                 (or datatype (get-datatype src-item))
-                                 (:unchecked? options)))
+  (dtype-proto/->mutable src-item
+                         (assoc options
+                                :datatype
+                                (or datatype (get-datatype src-item)))))

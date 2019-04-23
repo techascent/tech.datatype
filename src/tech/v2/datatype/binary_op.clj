@@ -15,7 +15,8 @@
             BinaryOperators$ByteBinary  BinaryOperators$ShortBinary
             BinaryOperators$IntBinary  BinaryOperators$LongBinary
             BinaryOperators$FloatBinary  BinaryOperators$DoubleBinary
-            BinaryOperators$BooleanBinary  BinaryOperators$ObjectBinary]))
+            BinaryOperators$BooleanBinary  BinaryOperators$ObjectBinary]
+           [clojure.lang IFn]))
 
 
 (set! *warn-on-reflection* true)
@@ -40,7 +41,8 @@
   [datatype item]
   `(if (instance? ~(resolve (datatype->binary-op-type datatype)) ~item)
      ~item
-     (dtype-proto/->binary-op ~item ~datatype ~'unchecked?)))
+     (dtype-proto/->binary-op ~item {:datatype~datatype
+                                     :unchecked? ~'unchecked?})))
 
 
 (defn int8->binary-op ^BinaryOperators$ByteBinary [item unchecked?]
@@ -152,15 +154,18 @@
   `(clojure.core/extend
        ~(datatype->binary-op-type datatype)
      dtype-proto/PToBinaryOp
-     {:->binary-op
-      (fn [item# datatype# unchecked?#]
-        (if (= (casting/safe-flatten datatype#)
-               ~datatype)
-          item#
-          (let [marshal-fn# (get marshalling-binary-op-table
-                                 [~datatype (casting/safe-flatten
-                                             datatype#)])]
-            (marshal-fn# item# datatype# unchecked?#))))}))
+     {:convertible-to-binary-op? (constantly true)
+      :->binary-op
+      (fn [item# options#]
+        (let [{datatype# :datatype
+               unchecked?# :unchecked?} options#]
+          (if (= (casting/safe-flatten datatype#)
+                 ~datatype)
+            item#
+            (let [marshal-fn# (get marshalling-binary-op-table
+                                   [~datatype (casting/safe-flatten
+                                               datatype#)])]
+              (marshal-fn# item# datatype# unchecked?#)))))}))
 
 
 (extend-binary-op :int8)
@@ -315,8 +320,11 @@
   [opname op-code]
   `(reify
      dtype-proto/PToBinaryOp
-     (->binary-op [item# datatype# unchecked?#]
-       (let [bin-dtype# (if (casting/numeric-type? datatype#)
+     (convertible-to-binary-op? [item#] true)
+     (->binary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#
+             bin-dtype# (if (casting/numeric-type? datatype#)
                           datatype#
                           :float64)]
          (-> (case (casting/safe-flatten bin-dtype#)
@@ -326,19 +334,27 @@
                :int64 (make-binary-op ~opname :int64 (unchecked-long ~op-code))
                :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
                :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code)))
-             (dtype-proto/->binary-op datatype# unchecked?#))))
+             (dtype-proto/->binary-op options#))))
      dtype-proto/POperator
      (op-name [item#] ~opname)
      dtype-proto/PDatatype
-     (get-datatype [item#] :float64)))
+     (get-datatype [item#] :float64)
+     IFn
+     (invoke [item# x# y#]
+       (let [~'x (double x#)
+             ~'y (double y#)]
+         (unchecked-double ~op-code)))))
 
 
 (defmacro make-numeric-object-binary-op
   [opname op-code]
   `(reify
      dtype-proto/PToBinaryOp
-     (->binary-op [item# datatype# unchecked?#]
-       (let [bin-dtype# (if (casting/numeric-type? datatype#)
+     (convertible-to-binary-op? [item#] true)
+     (->binary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#
+             bin-dtype# (if (casting/numeric-type? datatype#)
                           datatype#
                           :float64)]
          (-> (case (casting/safe-flatten bin-dtype#)
@@ -349,11 +365,14 @@
                :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
                :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
                :object (make-binary-op ~opname :object ~op-code))
-             (dtype-proto/->binary-op datatype# unchecked?#))))
+             (dtype-proto/->binary-op options#))))
      dtype-proto/POperator
      (op-name [item#] ~opname)
      dtype-proto/PDatatype
-     (get-datatype [item#] :object)))
+     (get-datatype [item#] :object)
+     IFn
+     (invoke [item# ~'x ~'y]
+       ~op-code)))
 
 
 (defmacro make-long-binary-op

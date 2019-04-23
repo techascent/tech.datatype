@@ -5,7 +5,10 @@ import clojure.lang.Keyword;
 
 public interface DoubleMutable extends MutableRemove
 {
-  void insert(long idx, double value);
-  void append(double value);
   default Keyword getDatatype () { return Keyword.intern(null, "float64"); }
+  void insert(long idx, double value);
+  default void append(double value)
+  {
+    insert(lsize(), value);
+  }
 }

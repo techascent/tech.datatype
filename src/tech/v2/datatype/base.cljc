@@ -41,8 +41,7 @@
 
 
 (defn set-value! [item offset value]
-  (.write ^ObjectWriter (dtype-proto/->writer-of-type item :object false)
-          offset value)
+  ((dtype-proto/as-writer item {:datatype :object}) offset value)
   item)
 
 (defn set-constant! [item offset value elem-count]
@@ -53,8 +52,8 @@
   (cond
     (instance? RandomAccess item)
     (.get ^List item (int offset))
-    (satisfies? dtype-proto/PToReader item)
-    (.read ^ObjectReader (dtype-proto/->reader-of-type item :object false) (int offset))
+    (dtype-proto/convertible-to-reader? item)
+    ((dtype-proto/->reader item {}) offset)
     (map? item)
     (item offset)
     (= offset 0)
@@ -67,7 +66,8 @@
   [item]
   (if (vector? item)
     item
-    (-> (dtype-proto/->iterable-of-type item :object true)
+    (-> (or (dtype-proto/as-reader item)
+            (dtype-proto/as-iterable item))
         vec)))
 
 
@@ -204,7 +204,15 @@
 
   java.lang.Iterable
   (copy-raw->item! [raw-data ary-target target-offset options]
-    (copy-raw-seq->item! (seq raw-data) ary-target target-offset options)))
+    (copy-raw-seq->item! (seq raw-data) ary-target target-offset options))
+
+  Object
+  (copy-raw->item! [raw-data ary-target offset options]
+    (if-let [reader (dtype-proto/as-reader raw-data)]
+      (raw-dtype-copy! reader ary-target offset options)
+      (if-let [base-type (dtype-proto/as-base-type raw-data)]
+        (raw-dtype-copy! base-type ary-target offset options)
+        (throw (ex-info "Raw copy not supported on object" {}))))))
 
 
 (extend-protocol dtype-proto/PBuffer
@@ -218,7 +226,8 @@
 
 (extend-protocol dtype-proto/PToReader
   RandomAccess
-  (->reader-of-type [item datatype unchecked?]
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
     (let [^List item item
           item-count (.size item)]
       (-> (reify ObjectReader
@@ -226,7 +235,7 @@
             (lsize [_] item-count)
             (read [_ idx]
               (.get item idx)))
-          (dtype-proto/->reader-of-type datatype unchecked?)))))
+          (dtype-proto/->reader options)))))
 
 
 (defmacro extend-reader-type
@@ -260,7 +269,7 @@
           offset (int offset)
           item-dtype (dtype-proto/get-datatype item)
           value (casting/cast value item-dtype)
-          ^ObjectWriter writer (dtype-proto/->writer-of-type item :object false)]
+          ^ObjectWriter writer (dtype-proto/->writer item {:datatype :object})]
       (c-for [idx (int 0) (< idx n-elems) (inc idx)]
              (.write writer idx value))))
 

@@ -100,6 +100,15 @@
 (def list-mutable-table (make-list-mutable-table))
 
 
+(defn make-list-mutable
+  [item & [unchecked?]]
+  (let [item-dtype  (dtype-proto/get-datatype item)
+        list-data (dtype-proto/as-list item)
+        list-dtype (dtype-proto/get-datatype list-data)
+        mut-fn (get list-mutable-table [list-dtype item-dtype])]
+    (mut-fn list-data unchecked?)))
+
+
 (defmacro reify-marshalling-mutable
   [outer-mutable-cls outer-dtype intermediate-dtype
    inner-dtype inner-mutable unchecked?]
@@ -126,11 +135,11 @@
        (lsize [mut-item#] (.lsize ~inner-mutable))
        (insert [item# idx# value#]
          (.insert ~inner-mutable idx#
-                  (checked-full-write-cast value# ~outer-dtype
+                  (checked-full-read-cast value# ~outer-dtype
                                            ~outer-dtype ~inner-dtype)))
        (append [mut-item# value#]
          (.append ~inner-mutable
-                  (checked-full-write-cast value#
+                  (checked-full-read-cast value#
                                            ~outer-dtype
                                            ~intermediate-dtype
                                            ~inner-dtype)))
@@ -164,17 +173,20 @@
   `(clojure.core/extend
        ~(typecast/datatype->mutable-type datatype)
      dtype-proto/PToMutable
-     {:->mutable-of-type
-      (fn [item# mut-dtype# unchecked?#]
-        (if (= mut-dtype# (dtype-proto/get-datatype item#))
-          item#
-          (if-let [mutable-fn# (get marshalling-mutable-table
-                                    [~datatype (casting/flatten-datatype mut-dtype#)])]
-            (mutable-fn# item# unchecked?#)
-            (throw (ex-info (format "Failed to find marshalling mutable: %s %s"
-                                    ~datatype mut-dtype#)
-                            {:src-datatype ~datatype
-                             :dst-datatype mut-dtype#})))))}))
+     {:convertible-to-mutable? (fn [item#] true)
+      :->mutable
+      (fn [item# options#]
+        (let [mut-dtype# (or (:datatype options#) (dtype-proto/get-datatype item#))]
+          (if (= mut-dtype# (dtype-proto/get-datatype item#))
+            item#
+            (if-let [mutable-fn# (get marshalling-mutable-table
+                                      [~datatype (casting/flatten-datatype mut-dtype#)])]
+              (do
+                (mutable-fn# item# (:unchecked? options#)))
+              (throw (ex-info (format "Failed to find marshalling mutable: %s %s"
+                                      ~datatype mut-dtype#)
+                              {:src-datatype ~datatype
+                               :dst-datatype mut-dtype#}))))))}))
 
 (extend-mutable :int8)
 (extend-mutable :int16)

@@ -251,10 +251,7 @@
     (if (and (simple-dimensions? dimensions)
              (satisfies? dtype-proto/PToArray buffer))
       (dtype-proto/->array-copy buffer)
-      (dtype-proto/->array-copy (dtype-proto/->writer-of-type
-                                 item
-                                 (dtype-proto/get-datatype item)
-                                 true))))
+      (dtype-proto/->array-copy (dtype-proto/->writer item {}))))
 
 
   dtype-proto/PBuffer
@@ -297,24 +294,23 @@
 
 
   dtype-proto/PToReader
-  (->reader-of-type [item datatype unchecked?]
-    (let [data-reader (dtype-proto/->reader-of-type
-                       buffer datatype unchecked?)]
+  (convertible-to-reader? [item] (dtype-proto/convertible-to-reader? buffer))
+  (->reader [item options]
+    (let [data-reader (dtype-proto/->reader buffer options)]
       (if (simple-dimensions? dimensions)
         data-reader
-        (tens-proto/->tensor-reader-of-type item datatype unchecked?))))
+        (tens-proto/->tensor-reader item options))))
 
 
   dtype-proto/PToWriter
-  (->writer-of-type [item datatype unchecked?]
-    (let [data-writer (dtype-proto/->writer-of-type
-                       buffer datatype unchecked?)]
+  (convertible-to-writer? [item] (dtype-proto/convertible-to-writer? buffer))
+  (->writer [item options]
+    (let [data-writer (dtype-proto/->writer buffer options)]
       (if (simple-dimensions? dimensions)
         data-writer
         (writer/make-indexed-writer (dimensions->index-reader dimensions)
-                                    (dtype-proto/->writer-of-type
-                                     buffer datatype unchecked?)
-                                    {:datatype datatype}))))
+                                    data-writer
+                                    options))))
 
 
   dtype-proto/PBufferType
@@ -341,32 +337,36 @@
       (make-tensor-base-sparse-reader buffer dimensions)))
 
   tens-proto/PToTensorReader
-  (->tensor-reader-of-type [item datatype unchecked?]
-    (if (and (simple-dimensions? dimensions)
-             (instance? (resolve (tens-typecast/datatype->tensor-reader-type datatype))
-                        buffer))
-      buffer
-      (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
-            data-reader (dtype-proto/->reader-of-type buffer datatype unchecked?)
-            indexes (dimensions->index-reader dimensions)
-            item-shape (mp/get-shape item)]
-        (case (casting/safe-flatten datatype)
-          :int8 (make-tensor-reader :int8 datatype item-shape
-                                    indexes data-reader sparse-data)
-          :int16 (make-tensor-reader :int16 datatype item-shape
-                                     indexes data-reader sparse-data)
-          :int32 (make-tensor-reader :int32 datatype item-shape
-                                     indexes data-reader sparse-data)
-          :int64 (make-tensor-reader :int64 datatype item-shape
-                                     indexes data-reader sparse-data)
-          :float32 (make-tensor-reader :float32 datatype item-shape
+  (convertible-to-tensor-reader? [item] (dtype-proto/convertible-to-reader? buffer))
+  (->tensor-reader [item options]
+    (let [{:keys [datatype unchecked?]} options]
+      (if (and (simple-dimensions? dimensions)
+               (instance? (resolve (tens-typecast/datatype->tensor-reader-type datatype))
+                          buffer))
+        buffer
+        (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
+              data-reader (if sparse-data
+                            sparse-data
+                            (dtype-proto/->reader buffer options))
+              indexes (dimensions->index-reader dimensions)
+              item-shape (mp/get-shape item)]
+          (case (casting/safe-flatten datatype)
+            :int8 (make-tensor-reader :int8 datatype item-shape
+                                      indexes data-reader sparse-data)
+            :int16 (make-tensor-reader :int16 datatype item-shape
                                        indexes data-reader sparse-data)
-          :float64 (make-tensor-reader :float64 datatype item-shape
+            :int32 (make-tensor-reader :int32 datatype item-shape
                                        indexes data-reader sparse-data)
-          :boolean (make-tensor-reader :boolean datatype item-shape
+            :int64 (make-tensor-reader :int64 datatype item-shape
                                        indexes data-reader sparse-data)
-          :object (make-tensor-reader :object datatype item-shape
-                                      indexes data-reader sparse-data))))))
+            :float32 (make-tensor-reader :float32 datatype item-shape
+                                         indexes data-reader sparse-data)
+            :float64 (make-tensor-reader :float64 datatype item-shape
+                                         indexes data-reader sparse-data)
+            :boolean (make-tensor-reader :boolean datatype item-shape
+                                         indexes data-reader sparse-data)
+            :object (make-tensor-reader :object datatype item-shape
+                                        indexes data-reader sparse-data)))))))
 
 
 (defn construct-tensor
@@ -714,8 +714,7 @@
         column-len (long (last item-shape))
         n-columns (quot item-ecount column-len)
         datatype (or datatype (dtype-base/get-datatype item))
-        data-array (dtype-proto/->reader-of-type
-                    item datatype true)
+        data-array (dtype-proto/->reader item {})
         base-data
         (->> (range n-columns)
              (map (fn [col-idx]
@@ -984,7 +983,7 @@
         new-tens (new-tensor [result-rows result-columns]
                              :datatype op-datatype
                              :container-type :sparse)
-        tens-writer (dtype/->writer-of-type new-tens op-datatype)
+        tens-writer (dtype/->writer new-tens {:datatype op-datatype})
         rhs-columns (mapv  #(vector % (select rhs-trans % :all))
                            rhs-col-indexes)]
     ;;do the thing

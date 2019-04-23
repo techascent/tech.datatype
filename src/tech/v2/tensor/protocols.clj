@@ -23,4 +23,10 @@
 
 
 (defprotocol PToTensorReader
-  (->tensor-reader-of-type [item datatype unchecked?]))
+  (convertible-to-tensor-reader? [item])
+  (->tensor-reader [item options]))
+
+
+(extend-type Object
+  PToTensorReader
+  (convertible-to-tensor-reader? [item] false))

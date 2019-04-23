@@ -6,5 +6,8 @@ public interface ByteMutable extends MutableRemove
 {
   default Keyword getDatatype () { return Keyword.intern(null, "int8"); }
   void insert(long idx, byte value);
-  void append(byte value);
+  default void append(byte value)
+  {
+    insert(lsize(), value);
+  }
 }

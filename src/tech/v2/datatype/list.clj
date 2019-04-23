@@ -177,16 +177,7 @@
                      (dtype-proto/->sub-array
                       (dtype-proto/->buffer-backing-store item#)))
       :->array-copy (fn [item#]
-                      (.toArray (datatype->array-list-cast-fn ~datatype item#)))}
-     dtype-proto/PToWriter
-     {:->writer-of-type (fn [item# datatype# unchecked?#]
-                          (-> (dtype-proto/->buffer-backing-store item#)
-                              (dtype-proto/->writer-of-type datatype# unchecked?#)))}
-
-     dtype-proto/PToReader
-     {:->reader-of-type (fn [item# datatype# unchecked?#]
-                          (-> (dtype-proto/->buffer-backing-store item#)
-                              (dtype-proto/->reader-of-type datatype# unchecked?#)))}))
+                      (.toArray (datatype->array-list-cast-fn ~datatype item#)))}))
 
 
 (extend-numeric-list ByteArrayList :int8)
@@ -252,29 +243,33 @@
                           :length (.size ary-list#)})))
       :->array-copy (fn [item#]
                       (.toArray (datatype->list-cast-fn ~datatype item#)))}
+
      dtype-proto/PToWriter
-     {:->writer-of-type
-      (fn [item# writer-datatype# unchecked?#]
-        (if (= writer-datatype# ~datatype)
-          (writer/make-list-writer item# unchecked?#)
-          (-> (writer/make-list-writer item# true)
-              (dtype-proto/->writer-of-type writer-datatype# unchecked?#))))}
+     {:convertible-to-writer? (constantly true)
+      :->writer
+      (fn [item# options#]
+        (let [unchecked?# (:unchecked? options#)]
+          (-> (writer/make-list-writer item# unchecked?#)
+              (dtype-proto/->writer options#))))}
 
      dtype-proto/PToReader
-     {:->reader-of-type
-      (fn [item# reader-datatype# unchecked?#]
-        (cond-> (reader/make-list-reader item#)
-          (not= reader-datatype# ~datatype)
-          (dtype-proto/->reader-of-type reader-datatype# unchecked?#)))}
+     {:convertible-to-reader? (constantly true)
+      :->reader
+      (fn [item# options#]
+        (let [unchecked?# (:unchecked? options#)]
+          (-> (reader/make-list-reader item#)
+              (dtype-proto/->reader options#))))}
+
+     dtype-proto/PToIterable
+     {:convertible-to-iterable? (constantly true)
+      :->iterable (fn [item# options#] (dtype-proto/->reader item# options#))}
 
      dtype-proto/PToMutable
-     {:->mutable-of-type
-      (fn [list-item# mut-dtype# unchecked?#]
-        (if-let [mutable-fn# (get mutable/list-mutable-table
-                                  [~datatype (casting/flatten-datatype mut-dtype#)])]
-          (mutable-fn# list-item# unchecked?#)
-          (throw (ex-info (format "Failed to find mutable %s->%s"
-                                  ~datatype mut-dtype#) {}))))}
+     {:convertible-to-mutable? (constantly true)
+      :->mutable
+      (fn [list-item# options#]
+        (-> (mutable/make-list-mutable list-item# true)
+            (dtype-proto/->mutable options#)))}
 
      dtype-proto/PRemoveRange
      {:remove-range!

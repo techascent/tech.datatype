@@ -77,7 +77,7 @@
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->writer-of-type ~intermediate-datatype ~unchecked?)))
+             (dtype-proto/->writer {:datatype ~intermediate-datatype :unchecked? ~unchecked?})))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
          (dtype-proto/set-constant! ~buffer offset#
@@ -110,7 +110,7 @@
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->writer-of-type ~intermediate-datatype ~unchecked?)))
+             (dtype-proto/->writer {:datatype ~intermediate-datatype :unchecked? ~unchecked?})))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
          (dtype-proto/set-constant! ~buffer offset#
@@ -183,12 +183,12 @@
 
 
 (defmacro make-derived-writer
-  ([writer-datatype runtime-datatype unchecked? src-writer writer-op create-fn n-elems]
+  ([writer-datatype runtime-datatype options src-writer writer-op create-fn n-elems]
    `(let [src-writer# ~src-writer
           ~'src-writer src-writer#
           n-elems# ~n-elems
           runtime-datatype# ~runtime-datatype
-          unchecked?# ~unchecked?]
+          unchecked?# (:unchecked? ~options)]
       (reify
         ~(typecast/datatype->writer-type writer-datatype)
         (getDatatype [writer#] runtime-datatype#)
@@ -201,9 +201,10 @@
         dtype-proto/PBuffer
         (sub-buffer [writer# offset# length#]
           (-> (dtype-proto/sub-buffer src-writer# offset# length#)
-              (~create-fn runtime-datatype# unchecked?#))))))
-  ([writer-datatype runtime-datatype unchecked? src-writer writer-op create-fn]
-   `(make-derived-writer ~writer-datatype ~runtime-datatype ~unchecked?
+              (~create-fn {:datatype runtime-datatype#
+                           :unchecked? unchecked?#}))))))
+  ([writer-datatype runtime-datatype options src-writer writer-op create-fn]
+   `(make-derived-writer ~writer-datatype ~runtime-datatype ~options
                          ~src-writer ~writer-op ~create-fn (.lsize ~'src-writer))))
 
 
@@ -230,26 +231,27 @@
                  dst-writer-datatype casting/all-host-datatypes]
              (let [writer-dtype (casting/safe-flatten dtype)]
                [[dst-writer-datatype dtype]
-                `(fn [dst-writer# unchecked?#]
+                `(fn [dst-writer# options#]
                    (let [dst-writer# (typecast/datatype->writer
-                                      ~dst-writer-datatype dst-writer# true)]
+                                      ~dst-writer-datatype dst-writer# true)
+                         unchecked?# (:unchecked? options#)]
                      (if unchecked?#
-                       (make-derived-writer ~writer-dtype ~dtype true dst-writer#
+                       (make-derived-writer ~writer-dtype ~dtype options# dst-writer#
                                             (.write dst-writer# ~'idx
                                                     (unchecked-full-cast
                                                      ~'value
                                                      ~writer-dtype
                                                      ~dtype
                                                      ~dst-writer-datatype))
-                                            make-marshalling-writer)
-                       (make-derived-writer ~writer-dtype ~dtype false dst-writer#
+                                            dtype-proto/->writer)
+                       (make-derived-writer ~writer-dtype ~dtype options# dst-writer#
                                             (.write dst-writer# ~'idx
-                                                    (checked-full-write-cast
+                                                    (checked-full-read-cast
                                                      ~'value
                                                      ~writer-dtype
                                                      ~dtype
                                                      ~dst-writer-datatype))
-                                            make-marshalling-writer))))]))]
+                                            dtype-proto/->writer))))]))]
         (into {})))
 
 
@@ -257,14 +259,16 @@
 
 
 (defn make-marshalling-writer
-  [dst-writer src-dtype unchecked?]
-  (let [dst-dtype (dtype-proto/get-datatype dst-writer)]
+  [dst-writer options]
+  (let [dst-dtype (dtype-proto/get-datatype dst-writer)
+        src-dtype (or (:datatype options)
+                      (dtype-proto/get-datatype dst-writer))]
     (if (= (casting/safe-flatten dst-dtype) (casting/safe-flatten src-dtype))
       dst-writer
       (let [writer-fn (get marshalling-writer-table
                            [(casting/safe-flatten dst-dtype)
                             (casting/flatten-datatype src-dtype)])
-            dst-writer (writer-fn dst-writer unchecked?)]
+            dst-writer (writer-fn dst-writer options)]
         (if (and (= :object (casting/flatten-datatype src-dtype))
                  (not= :object src-dtype))
           (make-object-wrapper dst-writer src-dtype)
@@ -277,9 +281,10 @@
   `(clojure.core/extend
        ~writer-type
      dtype-proto/PToWriter
-     {:->writer-of-type
-      (fn [item# dtype# unchecked?#]
-        (make-marshalling-writer item# dtype# unchecked?#))}))
+     {:convertible-to-writer? (fn [item#] true)
+      :->writer
+      (fn [item# options#]
+        (make-marshalling-writer item# options#))}))
 
 
 (extend-writer-type ByteWriter :int8)

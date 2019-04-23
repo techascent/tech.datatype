@@ -7,6 +7,7 @@
             [tech.parallel :as parallel]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
+            [tech.v2.datatype.mutable :as mutable]
             [tech.v2.datatype.typecast :as typecast]
             [tech.jna :as jna]
             [clojure.core.matrix.macros :refer [c-for]]
@@ -81,9 +82,13 @@
         (base/copy! item 0 data-buf 0 (base/ecount item)))))
 
   dtype-proto/PToWriter
+  (convertible-to-writer? [item] (dtype-proto/convertible-to-writer? backing-store))
   ;;No marshalling/casting on the writer side.
-  (->writer-of-type [item writer-datatype unchecked?]
-    (let [writer-matches? (= writer-datatype datatype)
+  (->writer [item options]
+    (let [{writer-datatype :datatype
+           unchecked? :unchecked?} options
+          writer-datatype (or writer-datatype datatype)
+          writer-matches? (= writer-datatype datatype)
           src-writer-unchecked? (if writer-matches?
                                   unchecked?
                                   false)
@@ -93,33 +98,59 @@
                           (dtype-proto/as-list backing-store)
                           (writer/make-list-writer item src-writer-unchecked?)
                           :else
-                          (dtype-proto/->writer-of-type backing-store datatype false))]
+                          (dtype-proto/->writer backing-store {:datatype datatype}))]
       (cond-> direct-writer
         (not writer-matches?)
-        (dtype-proto/->writer-of-type writer-datatype unchecked?))))
+        (dtype-proto/->writer {:datatype writer-datatype :unchecked? unchecked?}))))
 
   dtype-proto/PToReader
-  (->reader-of-type [item reader-datatype unchecked?]
-    (let [direct-reader (cond
+  (convertible-to-reader? [item] (dtype-proto/convertible-to-reader? backing-store))
+  (->reader [item options]
+    (let [{reader-datatype :datatype
+           unchecked? :unchecked?} options
+          reader-datatype (or reader-datatype datatype)
+          src-unchecked? true
+          direct-reader (cond
                           (dtype-proto/as-nio-buffer backing-store)
-                          (reader/make-buffer-reader item)
+                          (reader/make-buffer-reader item src-unchecked?)
                           (dtype-proto/as-list backing-store)
-                          (reader/make-list-reader item)
+                          (reader/make-list-reader item src-unchecked?)
                           :else
-                          (dtype-proto/->reader-of-type backing-store
-                                                        datatype unchecked?))]
+                          (dtype-proto/->reader backing-store
+                                                {:datatype datatype
+                                                 :unchecked? unchecked?}))]
       (cond-> direct-reader
         (not= reader-datatype datatype)
-        (dtype-proto/->reader-of-type reader-datatype unchecked?))))
+        (dtype-proto/->reader {:datatype reader-datatype
+                               :unchecked? unchecked?}))))
+
+
+  dtype-proto/PToIterable
+  (convertible-to-iterable? [item] true)
+  (->iterable [item options] (dtype-proto/->reader item options))
 
 
   dtype-proto/PToMutable
-  (->mutable-of-type [item mutable-datatype unchecked?]
-    (-> (dtype-proto/->mutable-of-type
-         backing-store datatype (if (= mutable-datatype datatype)
-                                  unchecked?
-                                  false))
-        (dtype-proto/->mutable-of-type mutable-datatype unchecked?)))
+  (convertible-to-mutable? [item]
+    (dtype-proto/convertible-to-mutable? backing-store))
+  (->mutable [item options]
+    (let [{mutable-datatype :datatype
+           unchecked? :unchecked?} options
+          mutable-datatype (or mutable-datatype datatype)
+          src-unchecked? (if (= mutable-datatype datatype)
+                           unchecked?
+                           false)
+          direct-mutable (cond
+                           (dtype-proto/convertible-to-fastutil-list? backing-store)
+                           (mutable/make-list-mutable item src-unchecked?)
+                           :else
+                           (dtype-proto/->mutable backing-store
+                                                  {:datatype datatype
+                                                   :unchecked? src-unchecked?}))]
+      (cond-> direct-mutable
+        (not= mutable-datatype datatype)
+        (dtype-proto/->mutable {:datatype mutable-datatype
+                                :unchecked? unchecked?}))))
 
 
   dtype-proto/PRemoveRange
@@ -133,7 +164,7 @@
                                idx
                                (if (:unchecked? options)
                                  values
-                                 (dtype-proto/->reader-of-type values datatype false))
+                                 (dtype-proto/->reader values {:datatype datatype}))
                                options))
 
   jna/PToPtr
@@ -160,8 +191,7 @@
   [item]
   (or (instance? TypedBuffer item)
       (or
-       (satisfies? dtype-proto/PToNioBuffer item)
-       (satisfies? dtype-proto/PToList))))
+       (dtype-proto/base-type-convertible? item))))
 
 
 (defn convert-to-typed-buffer
@@ -169,10 +199,10 @@
   (cond
     (instance? TypedBuffer item)
     item
-    (satisfies? dtype-proto/PToNioBuffer item)
-    (->TypedBuffer (dtype-proto/get-datatype item) item)
-    (satisfies? dtype-proto/PToList item)
-    (->TypedBuffer (dtype-proto/get-datatype item) item)
+    (dtype-proto/base-type-convertible? item)
+    (->TypedBuffer (dtype-proto/get-datatype item)
+                   (or (dtype-proto/as-list item)
+                       (dtype-proto/as-nio-buffer item)))
     :else
     (throw (ex-info "Item is not convertible to typed buffer"
                     {:item-type (type item)}))))
@@ -189,21 +219,24 @@
 
 (defn make-typed-buffer
   ([datatype elem-count-or-seq options]
-   (let [host-dtype (casting/datatype->host-datatype datatype)
-         backing-store
-         (if (or (:unchecked? options)
-                 (= host-dtype datatype))
-           (dtype-proto/make-container
-            :java-array host-dtype elem-count-or-seq options)
-           (let [n-elems (if (number? elem-count-or-seq)
+   (let [host-dtype (casting/datatype->host-datatype datatype)]
+     (if (or (:unchecked? options)
+             (= host-dtype datatype))
+       (->TypedBuffer datatype
+                      (dtype-proto/make-container
+                       :java-array host-dtype elem-count-or-seq options))
+       (let [n-elems (if (number? elem-count-or-seq)
                            elem-count-or-seq
                            (base/ecount elem-count-or-seq))
-                 container (dtype-proto/make-container :java-array host-dtype
-                                                       n-elems {})]
-             (when-not (number? elem-count-or-seq)
-               (dtype-proto/copy-raw->item! elem-count-or-seq container 0 options))
-             container))]
-     (->TypedBuffer datatype backing-store)))
+             container (dtype-proto/make-container :java-array host-dtype
+                                                   n-elems {})
+             typed-buf (->TypedBuffer datatype container)]
+         (when-not (number? elem-count-or-seq)
+           (dtype-proto/copy-raw->item! elem-count-or-seq
+                                        typed-buf 0 options))
+
+
+         typed-buf))))
   ([datatype elem-count-or-seq]
    (make-typed-buffer datatype elem-count-or-seq {})))
 

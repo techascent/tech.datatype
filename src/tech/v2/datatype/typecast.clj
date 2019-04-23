@@ -67,7 +67,7 @@
   [datatype]
   `(if (instance? ~(resolve (datatype->writer-type datatype)) ~'item)
      ~'item
-     (dtype-proto/->writer-of-type ~'item ~datatype ~'unchecked?)))
+     (dtype-proto/->writer ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
 
 
 (defn ->int8-writer ^ByteWriter [item unchecked?] (implement-writer-cast :int8))
@@ -135,7 +135,7 @@
   [datatype]
   `(if (instance? ~(resolve (datatype->reader-type datatype)) ~'item)
      ~'item
-     (dtype-proto/->reader-of-type ~'item ~datatype ~'unchecked?)))
+     (dtype-proto/->reader ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
 
 
 (defn ->int8-reader ^ByteReader [item unchecked?] (implement-reader-cast :int8))
@@ -191,8 +191,8 @@
   `(when ~'item
      (if (instance? ~(resolve (datatype->iter-type datatype)) ~'item)
        ~'item
-       (.iterator ^Iterable (dtype-proto/->iterable-of-type
-                             ~'item ~datatype ~'unchecked?)))))
+       (.iterator ^Iterable (dtype-proto/->iterable
+                             ~'item {:datatype~datatype :unchecked? ~'unchecked?})))))
 
 
 (defn ->int8-iter ^ByteIter [item unchecked?] (implement-iter-cast :int8))
@@ -214,8 +214,8 @@
   ^Iterable [src-item]
   (if (instance? Iterable src-item)
     src-item
-    (dtype-proto/->iterable-of-type
-     src-item (dtype-proto-impl/safe-get-datatype src-item) false)))
+    (dtype-proto/->iterable
+     src-item {})))
 
 
 (defn ->iter
@@ -358,7 +358,7 @@
   [datatype]
   `(if (instance? ~(resolve (datatype->mutable-type datatype)) ~'item)
      ~'item
-     (dtype-proto/->mutable-of-type ~'item ~datatype ~'unchecked?)))
+     (dtype-proto/->mutable ~'item {:datatype~datatype :unchecked? ~'unchecked?})))
 
 
 (defn ->int8-mutable

@@ -74,25 +74,7 @@
      dtype-proto/PToList
      {:convertible-to-fastutil-list? (fn [item#] true)
       :->list-backing-store (fn [item#]
-                              (typecast/wrap-array-fastpath ~datatype item#))}
-     dtype-proto/PToReader
-     {:->reader-of-type (fn [item# datatype# unchecked?#]
-                          (dtype-proto/->reader-of-type
-                           (dtype-proto/->buffer-backing-store item#)
-                           datatype# unchecked?#))}
-
-
-     dtype-proto/PToWriter
-     {:->writer-of-type (fn [item# datatype# unchecked?#]
-                          (dtype-proto/->writer-of-type
-                           (dtype-proto/->buffer-backing-store item#)
-                           datatype#
-                           unchecked?#))}
-
-     dtype-proto/PToIterable
-     {:->iterable-of-type (fn [item# datatype# unchecked?#]
-                            (dtype-proto/->reader-of-type
-                             item# datatype# unchecked?#))}))
+                              (typecast/wrap-array-fastpath ~datatype item#))}))
 
 
 (implement-numeric-array-type (Class/forName "[B") :int8)
@@ -135,23 +117,7 @@
   dtype-proto/PToList
   (convertible-to-fastutil-list? [item] true)
   (->list-backing-store [item]
-    (typecast/wrap-array-fastpath :boolean item))
-
-
-  dtype-proto/PToWriter
-  (->writer-of-type [item datatype unchecked?]
-    (dtype-proto/->writer-of-type (dtype-proto/->list-backing-store item)
-                                  datatype unchecked?))
-
-
-  dtype-proto/PToReader
-  (->reader-of-type [item datatype unchecked?]
-    (dtype-proto/->reader-of-type (dtype-proto/->list-backing-store item)
-                                  datatype unchecked?))
-
-  dtype-proto/PToIterable
-  (->iterable-of-type [item datatype unchecked?]
-    (dtype-proto/->reader-of-type item datatype unchecked?)))
+    (typecast/wrap-array-fastpath :boolean item)))
 
 
 (defonce ^:dynamic *array-constructors* (atom {}))
@@ -171,9 +137,8 @@
      (cond
        (number? elem-count-or-seq)
        (ary-cons-fn elem-count-or-seq)
-       (and (satisfies? dtype-proto/PToReader elem-count-or-seq))
-       (if (and (satisfies? dtype-proto/PToArray elem-count-or-seq)
-                (= item-dtype (base/get-datatype elem-count-or-seq)))
+       (and (dtype-proto/convertible-to-reader? elem-count-or-seq))
+       (if (= item-dtype (base/get-datatype elem-count-or-seq))
          (dtype-proto/->array-copy elem-count-or-seq)
          (let [n-elems (base/ecount elem-count-or-seq)]
            (base/copy! elem-count-or-seq 0
@@ -288,24 +253,7 @@
                      (base/copy! src-ary
                                  (make-array-of-type
                                   (base/get-datatype src-ary)
-                                  (alength (as-object-array src-ary)))))}
-    dtype-proto/PToWriter
-    {:->writer-of-type
-     (fn [item# datatype# unchecked?#]
-       (dtype-proto/->writer-of-type (dtype-proto/->list-backing-store item#)
-                                     datatype# unchecked?#))}
-
-
-    dtype-proto/PToReader
-    {:->reader-of-type
-     (fn [item# datatype# unchecked?#]
-       (dtype-proto/->reader-of-type (dtype-proto/->list-backing-store item#)
-                                     datatype# unchecked?#))}
-
-    dtype-proto/PToIterable
-    {:->iterable-of-type (fn [item# datatype# unchecked?#]
-                           (dtype-proto/->reader-of-type
-                            item# datatype# unchecked?#))}))
+                                  (alength (as-object-array src-ary)))))}))
 
 
 (extend-object-array-type (Class/forName "[Ljava.lang.Object;"))

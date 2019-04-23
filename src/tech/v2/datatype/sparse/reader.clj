@@ -22,7 +22,7 @@
 (defn get-index-seq
   "Create an index-seq out of an int32 reader"
   [index-iterable]
-  (->> (dtype-proto/->iterable-of-type index-iterable :int32 false)
+  (->> (dtype-proto/->iterable index-iterable {:datatype :int32})
        (map-indexed #(->IndexSeqRec %1 %2))))
 
 
@@ -158,12 +158,12 @@
                                               sparse-value]}]
   (let [datatype (casting/safe-flatten
                   (or datatype (safe-get-datatype data-reader)))
-        index-reader (typecast/datatype->reader :int32 (->reader index-reader :int32))
         create-fn (get indexed-reader-table datatype)
         sparse-value (or sparse-value (make-sparse-value datatype))
         buf-len (int (second (dtype-search/binary-search
                               index-reader n-elems
                               {:datatype :int32})))]
+
     (create-fn (dtype-base/sub-buffer index-reader 0 buf-len)
                (dtype-base/sub-buffer (->reader data-reader datatype) 0 buf-len)
                n-elems

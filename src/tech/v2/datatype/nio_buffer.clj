@@ -49,8 +49,8 @@
   (copy-raw->item! [raw-data ary-target target-offset options]
     (base/raw-dtype-copy! raw-data ary-target target-offset options))
   dtype-proto/PToIterable
-  (->iterable-of-type [item datatype unchecked?]
-    (dtype-proto/->reader-of-type item datatype unchecked?))
+  (->iterable-of-type [item options]
+    (dtype-proto/->reader item options))
   mp/PElementCount
   (element-count [item] (.remaining item)))
 
@@ -150,20 +150,28 @@
                       (.limit buf# (+ offset# len#))
                       buf#))}
      dtype-proto/PToWriter
-     {:->writer-of-type
-      (fn [item# writer-datatype# unchecked?#]
-        (if (= writer-datatype# ~datatype)
-          (writer/make-buffer-writer item# unchecked?#)
-          (-> (writer/make-buffer-writer item# true)
-              (dtype-proto/->writer-of-type writer-datatype# unchecked?#))))}
+     {:convertible-to-writer? (constantly true)
+      :->writer
+      (fn [item# options#]
+        (let [{writer-datatype# :datatype
+               unchecked?# :unchecked?} options#]
+          (-> (writer/make-buffer-writer item# unchecked?#)
+              (dtype-proto/->writer options#))))}
 
 
      dtype-proto/PToReader
-     {:->reader-of-type
-      (fn [item# reader-datatype# unchecked?#]
-        (cond-> (reader/make-buffer-reader item#)
-          (not= reader-datatype# ~datatype)
-          (dtype-proto/->reader-of-type reader-datatype# unchecked?#)))}
+     {:convertible-to-reader? (constantly true)
+      :->reader
+      (fn [item# options#]
+        (let [{reader-datatype# :datatype
+               unchecked?# :unchecked?} options#]
+          (-> (reader/make-buffer-reader item# unchecked?#)
+              (dtype-proto/->reader options#))))}
+
+
+     dtype-proto/PToIterable
+     {:convertible-to-iterable? (constantly true)
+      :->iterable (fn [item# options#] (dtype-proto/->reader item# options#))}
 
 
      jna/PToPtr

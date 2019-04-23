@@ -96,7 +96,8 @@
          dtype-proto/PBuffer
          (sub-buffer [buffer# offset# length#]
            (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-               (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
+               (dtype-proto/->reader {:datatype~intermediate-datatype
+                                      :unchecked? ~unchecked?})))
          dtype-proto/PSetConstant
          (set-constant! [item# offset# value# elem-count#]
            (dtype-proto/set-constant! ~buffer offset#
@@ -135,7 +136,8 @@
          dtype-proto/PBuffer
          (sub-buffer [buffer# offset# length#]
            (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-               (dtype-proto/->reader-of-type ~intermediate-datatype ~unchecked?)))
+               (dtype-proto/->reader {:datatype ~intermediate-datatype
+                                      :unchecked? ~unchecked?})))
          dtype-proto/PSetConstant
          (set-constant! [item# offset# value# elem-count#]
            (dtype-proto/set-constant! ~buffer offset#
@@ -148,7 +150,7 @@
   `(->> [~@(for [dtype casting/numeric-types]
              (let [buffer-datatype (casting/datatype->host-datatype dtype)]
                [[buffer-datatype dtype]
-                `(fn [buffer#]
+                `(fn [buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
                                                                     buffer#)
                          buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
@@ -158,7 +160,7 @@
                       buffer# buffer-pos#
                       ~(casting/datatype->safe-host-type dtype) ~dtype
                       ~buffer-datatype
-                      true)))]))]
+                      unchecked?#)))]))]
         (into {})))
 
 
@@ -166,13 +168,12 @@
 
 
 (defn make-buffer-reader
-  [item]
+  [item & [unchecked?]]
   (let [nio-buffer (dtype-proto/->buffer-backing-store item)
         item-dtype (dtype-proto/get-datatype item)
         buffer-dtype (dtype-proto/get-datatype nio-buffer)
         buffer-reader-fn (get buffer-reader-table [buffer-dtype item-dtype])]
-
-    (buffer-reader-fn nio-buffer)))
+    (buffer-reader-fn nio-buffer unchecked?)))
 
 
 (defmacro make-list-reader-table
@@ -180,7 +181,7 @@
   `(->> [~@(for [dtype casting/base-datatypes]
              (let [buffer-datatype (casting/datatype->host-datatype dtype)]
                [[buffer-datatype dtype]
-                `(fn [buffer#]
+                `(fn [buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->list-cast-fn
                                   ~buffer-datatype buffer#)]
                      (make-buffer-reader-impl
@@ -189,7 +190,7 @@
                       buffer# 0
                       ~(casting/datatype->safe-host-type dtype) ~dtype
                       ~buffer-datatype
-                      true)))]))]
+                      unchecked?#)))]))]
         (into {})))
 
 
@@ -197,23 +198,23 @@
 
 
 (defn make-list-reader
-  [item]
+  [item & [unchecked?]]
   (let [list-buffer (dtype-proto/->list-backing-store item)
         item-dtype (casting/flatten-datatype (dtype-proto/get-datatype item))
         buffer-dtype (dtype-proto/get-datatype list-buffer)
         list-reader-fn (or (get list-reader-table
                                   [buffer-dtype (casting/flatten-datatype item-dtype)])
                              (get buffer-reader-table [buffer-dtype buffer-dtype]))]
-    (list-reader-fn list-buffer)))
+    (list-reader-fn list-buffer unchecked?)))
 
 
 (defmacro make-derived-reader
-  ([reader-datatype runtime-datatype unchecked? src-reader reader-op create-fn n-elems]
+  ([reader-datatype runtime-datatype options src-reader reader-op create-fn n-elems]
    `(let [src-reader# ~src-reader
           ~'src-reader src-reader#
           n-elems# ~n-elems
           runtime-datatype# ~runtime-datatype
-          unchecked?# ~unchecked?]
+          unchecked?# (:unchecked? ~options)]
       (reify
         ~(typecast/datatype->reader-type reader-datatype)
         (getDatatype [reader#] runtime-datatype#)
@@ -226,14 +227,16 @@
         dtype-proto/PBuffer
         (sub-buffer [reader# offset# length#]
           (-> (dtype-proto/sub-buffer src-reader# offset# length#)
-              (~create-fn runtime-datatype# unchecked?#))))))
-  ([reader-datatype runtime-datatype unchecked? src-reader reader-op create-fn]
-   `(make-derived-reader ~reader-datatype ~runtime-datatype ~unchecked?
+              (~create-fn (assoc ~options
+                                 :datatype
+                                 runtime-datatype#)))))))
+  ([reader-datatype runtime-datatype options src-reader reader-op create-fn]
+   `(make-derived-reader ~reader-datatype ~runtime-datatype ~options
                          ~src-reader ~reader-op ~create-fn (.lsize ~'src-reader))))
 
 
 (defn- make-object-wrapper
-  [reader datatype unchecked?]
+  [reader datatype options]
   (let [item-dtype (safe-get-datatype reader)]
     (when-not (and (= :object (casting/flatten-datatype item-dtype))
                    (= :object (casting/flatten-datatype datatype)))
@@ -243,7 +246,7 @@
     (if (= datatype item-dtype)
       reader
       (let [obj-reader (typecast/datatype->reader :object reader)]
-        (make-derived-reader :object datatype unchecked? obj-reader
+        (make-derived-reader :object datatype options obj-reader
                              (.read src-reader idx) make-object-wrapper)))))
 
 
@@ -253,11 +256,12 @@
 (defmacro make-marshalling-reader-macro
   [src-dtype intermediate-dtype]
   (let [dst-dtype (casting/safe-flatten intermediate-dtype)]
-    `(fn [src-reader# unchecked?#]
+    `(fn [src-reader# options#]
        (let [src-reader# (typecast/datatype->reader ~src-dtype
-                                                    src-reader# true)]
+                                                    src-reader# true)
+             unchecked?# (:unchecked? options#)]
          (if unchecked?#
-           (make-derived-reader ~dst-dtype ~intermediate-dtype true src-reader#
+           (make-derived-reader ~dst-dtype ~intermediate-dtype options# src-reader#
                                 (let [value# (.read ~'src-reader ~'idx)]
                                   (unchecked-full-cast
                                    value#
@@ -265,7 +269,7 @@
                                    ~intermediate-dtype
                                    ~dst-dtype))
                                 make-marshalling-reader)
-           (make-derived-reader ~dst-dtype ~intermediate-dtype true src-reader#
+           (make-derived-reader ~dst-dtype ~intermediate-dtype options# src-reader#
                                 (let [value# (.read ~'src-reader ~'idx)]
                                   (checked-full-write-cast
                                    value#
@@ -289,8 +293,10 @@
 
 
 (defn make-marshalling-reader
-  [src-reader dest-dtype unchecked?]
-  (let [src-dtype (safe-get-datatype src-reader)]
+  [src-reader options]
+  (let [src-dtype (safe-get-datatype src-reader)
+        dest-dtype (or (:datatype options)
+                       (dtype-proto/get-datatype src-reader))]
     (if (= src-dtype dest-dtype)
       src-reader
       (let [src-reader (if (= (casting/flatten-datatype src-dtype)
@@ -301,10 +307,10 @@
                                                 (casting/datatype->safe-host-type
                                                  src-dtype))
                                                (casting/flatten-datatype dest-dtype)])]
-                           (reader-fn src-reader unchecked?)))
+                           (reader-fn src-reader {:unchecked? (:unchecked? options)})))
             src-dtype (dtype-proto/get-datatype src-reader)]
         (if (not= src-dtype dest-dtype)
-          (make-object-wrapper src-reader dest-dtype true)
+          (make-object-wrapper src-reader dest-dtype {:unchecked? true})
           src-reader)))))
 
 
@@ -313,13 +319,15 @@
   `(clojure.core/extend
        ~reader-type
      dtype-proto/PToIterable
-     {:->iterable-of-type
-      (fn [item# dtype# unchecked?#]
-        (dtype-proto/->reader-of-type item# dtype# unchecked?#))}
+     {:convertible-to-iterable? (fn [item#] true)
+      :->iterable
+      (fn [item# options#]
+        (dtype-proto/->reader item# options#))}
      dtype-proto/PToReader
-     {:->reader-of-type
-      (fn [item# dtype# unchecked?#]
-        (make-marshalling-reader item# dtype# unchecked?#))}
+     {:convertible-to-reader? (fn [item#] true)
+      :->reader
+      (fn [item# options#]
+        (make-marshalling-reader item# options#))}
      dtype-proto/PBuffer
      {:sub-buffer (fn [item# offset# length#]
                     (let [src-reader# (typecast/datatype->reader ~datatype item# true)
@@ -328,14 +336,14 @@
                           ~'length (int length#)
                           end-elem# (+ ~'offset ~'length)]
                       (make-derived-reader
-                       ~datatype src-dtype# false src-reader#
+                       ~datatype src-dtype# {} src-reader#
                        (do
                          (when-not (< ~'idx ~'length)
                            (throw (ex-info (format "Index out of range: %s > %s" ~'idx
                                                    ~'length)
                                            {})))
                          (.read ~'src-reader (+ ~'idx ~'offset)))
-                       dtype-proto/->reader-of-type
+                       dtype-proto/->reader
                        ~'length)))}))
 
 
@@ -502,10 +510,10 @@
            n-elems# (.lsize src-reader#)
            n-elems-m1# (- n-elems# 1)
            src-dtype# (dtype-proto/get-datatype src-reader#)]
-       (make-derived-reader ~datatype src-dtype# true src-reader#
+       (make-derived-reader ~datatype src-dtype# {:unchecked? true} src-reader#
                             (.read src-reader#
                                    (- n-elems-m1# ~'idx))
-                            dtype-proto/->reader-of-type
+                            dtype-proto/->reader
                             n-elems#))))
 
 (defmacro make-reverse-reader-table

@@ -140,7 +140,7 @@
 
 (defn list-convertible?
   [item]
-  (when (and item (satisfies? PToList item))
+  (when (and item (convertible-to-fastutil-list? item))
     (convertible-to-fastutil-list? item)))
 
 

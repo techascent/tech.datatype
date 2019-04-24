@@ -167,11 +167,6 @@
                                    ~datatype (.elements item#) (.size item#))))}
 
 
-     dtype-proto/PBuffer
-     {:sub-buffer (fn [buffer# offset# length#]
-                    (dtype-proto/sub-buffer (dtype-proto/->buffer-backing-store buffer#)
-                                            offset# length#))}
-
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
                      (dtype-proto/->sub-array
@@ -186,6 +181,48 @@
 (extend-numeric-list LongArrayList :int64)
 (extend-numeric-list FloatArrayList :float32)
 (extend-numeric-list DoubleArrayList :float64)
+
+
+(defn extend-array-list
+  [typename]
+  (clojure.core/extend
+      typename
+    dtype-proto/PToWriter
+    {:convertible-to-writer? (constantly true)
+     :->writer
+     (fn [item options]
+       (let [unchecked? (:unchecked? options)]
+         (-> (writer/make-list-writer item unchecked?)
+             (dtype-proto/->writer options))))}
+
+    dtype-proto/PToReader
+    {:convertible-to-reader? (constantly true)
+     :->reader
+     (fn [item options]
+       (let [unchecked? (:unchecked? options)]
+         (-> (reader/make-list-reader item)
+             (dtype-proto/->reader options))))}
+
+    dtype-proto/PToIterable
+    {:convertible-to-iterable? (constantly true)
+     :->iterable (fn [item options] (dtype-proto/->reader item options))}
+
+    dtype-proto/PToMutable
+    {:convertible-to-mutable? (constantly true)
+     :->mutable
+     (fn [list-item options]
+       (-> (mutable/make-list-mutable list-item true)
+           (dtype-proto/->mutable options)))}))
+
+
+(extend-array-list ByteArrayList)
+(extend-array-list ShortArrayList)
+(extend-array-list IntArrayList)
+(extend-array-list LongArrayList)
+(extend-array-list FloatArrayList)
+(extend-array-list DoubleArrayList)
+(extend-array-list BooleanArrayList)
+(extend-array-list ObjectArrayList)
 
 
 (defmacro datatype->as-array-list

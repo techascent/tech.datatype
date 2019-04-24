@@ -185,12 +185,19 @@
         (throw (ex-info (format "Requested length: %s greater than existing: %s"
                                 new-ecount old-ecount)
                         {})))
-      (->SparseBuffer (+ b-offset offset)
-                      length
-                      sparse-value
-                      indexes
-                      data
-                      buffer-datatype)))
+      (let [[indexes data] (if-not (= new-ecount old-ecount)
+                             (let [buf-len (int (second (dtype-search/binary-search
+                                                         indexes new-ecount
+                                                         {:datatype :int32})))]
+                               [(dtype-proto/sub-buffer indexes 0 buf-len)
+                                (dtype-proto/sub-buffer data 0 buf-len)])
+                             [indexes data])]
+        (->SparseBuffer (+ b-offset offset)
+                        length
+                        sparse-value
+                        indexes
+                        data
+                        buffer-datatype))))
 
   dtype-proto/PCopyRawData
   (copy-raw->item! [item dest dest-offset options]
@@ -363,7 +370,8 @@
                        (merge options
                               {:datatype datatype
                                :sparse-value sparse-value}))
-          {:keys [indexes data]} (sparse-proto/readers reader-data)]
+          {:keys [indexes data]} (sparse-proto/readers reader-data)
+          [indexes data] (map dtype-proto/as-list [indexes data])]
       (make-sparse-buffer indexes data
                           (dtype-base/ecount reader-data)
                           {:sparse-value (sparse-proto/sparse-value reader-data)

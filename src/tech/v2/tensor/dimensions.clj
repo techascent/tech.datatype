@@ -582,7 +582,7 @@ to be reversed for the most efficient implementation."
         n-shape (count shape)
         offsets (or offsets (reader/make-const-reader 0 :int32 n-shape))
         shape-mins (if dims-direct?
-                     (dtype/->reader (int-array n-shape))
+                     (reader/make-const-reader 0 :int32 n-shape)
                      (mapv (fn [shape-entry]
                              (cond
                                (number? shape-entry)
@@ -599,23 +599,27 @@ to be reversed for the most efficient implementation."
             [(reader/make-indexed-reader index-ary shape {:datatype :object})
              (reader/make-indexed-reader index-ary strides {:datatype :int32})
              (reader/make-indexed-reader index-ary offsets {:datatype :int32})
-             (reader/make-indexed-reader index-ary shape-mins {:datatype :int32})
+             (if dims-direct?
+               shape-mins
+               (reader/make-indexed-reader index-ary shape-mins {:datatype :int32}))
              ;;In order to invert an arbitrary transposition, argsort it
              (argsort/argsort index-ary {:datatype :int32})]))
         shape-obj-reader shape
         ;;Convert ordered shape into pure addresses
         ordered-shape (typecast/datatype->reader
                        :int32
-                       (mapv (fn [shape-entry]
-                               (cond
-                                 (number? shape-entry)
-                                 shape-entry
-                                 (shape/classified-sequence? shape-entry)
-                                 (+ 1 (long (:max shape-entry)))
-                                 :else
-                                 (+ 1 (long
-                                       (apply max (dtype/->iterable shape-entry))))))
-                             ordered-shape))
+                       (if dims-direct?
+                         ordered-shape
+                         (mapv (fn [shape-entry]
+                                 (cond
+                                   (number? shape-entry)
+                                   shape-entry
+                                   (shape/classified-sequence? shape-entry)
+                                   (+ 1 (long (:max shape-entry)))
+                                   :else
+                                   (+ 1 (long
+                                         (apply max (dtype/->iterable shape-entry))))))
+                               ordered-shape)))
         ordered-strides (typecast/datatype->reader :int32 ordered-strides)
         ordered-offsets (typecast/datatype->reader :int32 ordered-offsets)
         global-shape (typecast/datatype->reader :int32 (if (and strides-increasing?

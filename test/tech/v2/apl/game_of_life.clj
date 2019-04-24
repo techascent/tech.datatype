@@ -113,9 +113,12 @@
          (tens/rotate R [horz-amount vert-amount]))
        ;;This doesn't help the dense version much but it gives
        ;;the sparse version at least some parallelism
-       (pmap #(if (= :sparse (tens/tensor-buffer-type %))
-                (tens/tensor-force %)
-                %))
+       ;;Simple parallel reduction
+       (partition-all 2)
+       (pmap (fn [items]
+               (if (= 2 (count items))
+                 (apply dtype-fn/+ items)
+                 (first items))))
        (apply dtype-fn/+)
        (game-of-life-operator R)))
 

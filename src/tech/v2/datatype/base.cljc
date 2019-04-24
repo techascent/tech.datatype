@@ -216,7 +216,7 @@
 
 
 (extend-protocol dtype-proto/PBuffer
-  RandomAccess
+  List
   (sub-buffer [item offset length]
     (let [^List item item
           offset (int offset)

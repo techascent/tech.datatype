@@ -70,7 +70,7 @@
 
 
 (defn parallel-slow-copy!
-  [dst src unchecked?]
+  [dst src & [unchecked?]]
   (case (safe-get-datatype dst)
     :int8 (parallel-slow-copy :int8 dst src unchecked?)
     :uint8 (parallel-slow-copy :uint8 dst src unchecked?)
@@ -97,7 +97,7 @@
 
 
 (defn serial-slow-copy!
-  [dst src unchecked?]
+  [dst src & [unchecked?]]
   (case (safe-get-datatype dst)
     :int8 (serial-slow-copy :int8 dst src unchecked?)
     :uint8 (serial-slow-copy :uint8 dst src unchecked?)
@@ -126,7 +126,7 @@
 
 
 (defn parallel-nio-write!
-  [dst src unchecked?]
+  [dst src & [unchecked?]]
   (case (safe-get-datatype dst)
     :int8 (impl-nio-write :int8 dst src unchecked?)
     :int16 (impl-nio-write :int16 dst src unchecked?)
@@ -147,7 +147,7 @@
 
 
 (defn parallel-list-write!
-  [dst src unchecked?]
+  [dst src & [unchecked?]]
   (case (safe-get-datatype dst)
     :int8 (impl-list-write :int8 dst src unchecked?)
     :int16 (impl-list-write :int16 dst src unchecked?)
@@ -160,7 +160,7 @@
 
 
 (defn parallel-write!
-  [item src unchecked?]
+  [item src & [unchecked?]]
   (let [item-dtype (cond-> (safe-get-datatype item)
                      unchecked?
                      casting/datatype->host-datatype)
@@ -187,7 +187,7 @@
 
 
 (defn parallel-nio-read!
-  [dst src unchecked?]
+  [dst src & [unchecked?]]
   (case (safe-get-datatype src)
     :int8 (impl-nio-read :int8 dst src unchecked?)
     :int16 (impl-nio-read :int16 dst src unchecked?)
@@ -208,7 +208,7 @@
 
 
 (defn parallel-list-read!
-  [dst src unchecked?]
+  [dst src & [unchecked?]]
   (case (safe-get-datatype src)
     :int8 (impl-list-read :int8 dst src unchecked?)
     :int16 (impl-list-read :int16 dst src unchecked?)
@@ -221,7 +221,7 @@
 
 
 (defn parallel-read!
-  [item src unchecked?]
+  [item src & [unchecked?]]
   (let [src-dtype (safe-get-datatype src)
         src-buf (typecast/as-nio-buffer src)
         src-list (typecast/as-list src)]
@@ -309,23 +309,24 @@
           (.getElements ^ObjectList src-list 0
                         ^objects java-array array-offset n-elems)))
       (and src-list dst-list)
-      (case src-dtype
-          :int8 (.addAll ^ByteList src-list 0 ^ByteList dst-list)
-          :int16 (.addAll ^ShortList src-list 0 ^ShortList dst-list)
-          :int32 (.addAll ^IntList src-list 0 ^IntList dst-list)
-          :int64 (.addAll ^LongList src-list 0 ^LongList dst-list)
-          :float32 (.addAll ^FloatList src-list 0 ^FloatList dst-list)
-          :float64 (.addAll ^DoubleList src-list 0 ^DoubleList dst-list)
-          :boolean (.addAll ^BooleanList src-list 0 ^BooleanList dst-list)
-          (.addAll ^ObjectList src-list 0 ^ObjectList dst-list))
+      (do
+        (case src-dtype
+          :int8 (.addAll ^ByteList dst-list 0 ^ByteList src-list)
+          :int16 (.addAll ^ShortList dst-list 0 ^ShortList src-list)
+          :int32 (.addAll ^IntList dst-list 0 ^IntList src-list)
+          :int64 (.addAll ^LongList dst-list 0 ^LongList src-list)
+          :float32 (.addAll ^FloatList dst-list 0 ^FloatList src-list)
+          :float64 (.addAll ^DoubleList dst-list 0 ^DoubleList src-list)
+          :boolean (.addAll ^BooleanList dst-list 0 ^BooleanList src-list)
+          (.addAll ^ObjectList dst-list 0 ^ObjectList src-list)))
       dst-buf
-      (parallel-nio-write! dst-buf src)
+      (parallel-nio-write! dst-buf src true)
       dst-list
-      (parallel-list-write! dst-list src)
+      (parallel-list-write! dst-list src true)
       src-buf
-      (parallel-nio-read! dst-buf src)
+      (parallel-nio-read! dst-buf src true)
       src-list
-      (parallel-list-read! dst-buf src)
+      (parallel-list-read! dst-buf src true)
       :else
       (parallel-slow-copy! dst src true)))
   dst)

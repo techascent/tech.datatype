@@ -71,7 +71,7 @@ Once we have the non-transposed result, if a transpose operator was applied to t
 dimension object we can transpose the result and get the correct dimensions back.
 
 
-We now define a global linear address space which as the same number of elements as the
+We now define a global linear address space which has the same number of elements as the
 shape and is represented by iterating through the entire shape in row-major format.  For
 the initial dimension object, the mapping from the global address space to the local
 address space is the identity function.  For the transposed object the mapping from

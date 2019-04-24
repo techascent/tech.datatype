@@ -373,8 +373,9 @@ expectations when dealing with sparse buffers:
 
 1.  Unary operations are constant time.
 2.  Binary operations are linear with respect to the union of non-sparse-indexes.
-3.  Storage is space is linear with respect to the non-sparse-indexes.
+3.  Storage space is linear with respect to the non-sparse-indexes.
 4.  Assignment is linear with respect to the union of non-sparse-indexes.
+5.  Conversion to CSR and CSC formats is efficient, 0(NS) in the worst case.
 
 
 

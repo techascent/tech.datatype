@@ -4,8 +4,8 @@
 Sparse storage support is an important element to numeric computing systems as it allows
 desktop machines to processing and work with data of very high element counts.  This
 data comes in problems of loosely coupled systems and is common in NLP algorithms.  We
-present a simplified but but fully functional sparse storage system built upon the
-concepts of the previous documents.  For a sparse item, we assume on of the values is
+present a simplified but fully functional sparse storage system built upon the
+concepts of the previous documents.  For a sparse item, we assume one of the values is
 far, far more prevalent than other values.  The number of non-sparse elements we will
 call `NS`.
 
@@ -16,7 +16,7 @@ Key objects of sparse storage are as follows:
 
 1.  Unary operations are constant time.
 2.  Binary operations are linear with respect to the union of non-sparse-indexes.
-3.  Storage is space is linear with respect to the non-sparse-indexes.
+3.  Storage space is linear with respect to the non-sparse-indexes.
 4.  Assignment is linear with respect to the union of non-sparse-indexes.
 5.  Conversion to CSR and CSC formats is efficient, 0(NS) in the worst case.
 

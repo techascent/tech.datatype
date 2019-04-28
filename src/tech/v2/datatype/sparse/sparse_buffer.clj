@@ -56,6 +56,23 @@
                    (do
                      (.insert data-mutable# insert-pos# value#)
                      (.insert index-mutable# insert-pos# idx#)))))))
+
+         dtype-proto/PBufferType
+         (buffer-type [writer#] :sparse)
+
+         sparse-proto/PToSparse
+         (convertible-to-sparse? [writer#] true)
+         (->sparse [writer#] (sparse-proto/->sparse item#))
+
+         dtype-proto/PWriteIndexes
+         (write-indexes! [writer# indexes# values# options#]
+           (dtype-proto/write-indexes! item# indexes# values# options#))
+
+         dtype-proto/PBuffer
+         (sub-buffer [writer# offset# length#]
+           (-> (dtype-proto/sub-buffer item# offset# length#)
+               (dtype-proto/->writer {:datatype desired-dtype#
+                                      :unchecked? unchecked?#})))
          dtype-proto/PSetConstant
          (set-constant! [writer# offset# value# elem-count#]
            (dtype-proto/set-constant! item# offset# value# elem-count#))))))

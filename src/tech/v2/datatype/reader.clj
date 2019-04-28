@@ -92,6 +92,11 @@
          (->ptr-backing-store [reader#]
            (jna/as-ptr ~buffer))
 
+         dtype-proto/PToArray
+         (->sub-array [reader#]
+           (dtype-proto/->sub-array ~buffer))
+         (->array-copy [reader#]
+           (dtype-proto/->array-copy ~buffer))
 
          dtype-proto/PBuffer
          (sub-buffer [buffer# offset# length#]
@@ -132,6 +137,12 @@
            (jna/ptr-convertible? ~buffer))
          (->ptr-backing-store [reader#]
            (jna/as-ptr ~buffer))
+
+         dtype-proto/PToArray
+         (->sub-array [reader#]
+           (dtype-proto/->sub-array ~buffer))
+         (->array-copy [reader#]
+           (dtype-proto/->array-copy ~buffer))
 
          dtype-proto/PBuffer
          (sub-buffer [buffer# offset# length#]

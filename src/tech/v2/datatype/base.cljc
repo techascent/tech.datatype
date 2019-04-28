@@ -109,6 +109,10 @@
     item
     (dtype-proto/sub-buffer item off len)))
 
+(defn- requires-sub-buffer
+  [item off len]
+  (not (and (= (int off) 0)
+            (= (int len) (ecount item)))))
 
 (defn copy!
   "copy elem-count src items to dest items.  Options may contain unchecked in which you
@@ -116,8 +120,14 @@
   ([src src-offset dest dest-offset elem-count options]
    (base-macros/check-range src src-offset elem-count)
    (base-macros/check-range dest dest-offset elem-count)
-   (let [src (sub-buffer src src-offset elem-count)
-         dest (sub-buffer dest dest-offset elem-count)]
+   ;;Src may be iterable in which case there is no sub buffer
+   ;;option available.
+   (let [src (if (requires-sub-buffer src src-offset elem-count)
+               (sub-buffer (dtype-proto/->reader src {})
+                           src-offset elem-count)
+               src)
+         dest (sub-buffer (dtype-proto/->writer dest {})
+                          dest-offset elem-count)]
      (dtype-proto/copy! dest src options))
    dest)
   ([src src-offset dst dst-offset elem-count]

@@ -73,11 +73,17 @@
          (jna/ptr-convertible? ~buffer))
        (->ptr-backing-store [writer#]
          (jna/as-ptr ~buffer))
+       dtype-proto/PToArray
+       (->sub-array [reader#]
+         (dtype-proto/->sub-array ~buffer))
+       (->array-copy [reader#]
+         (dtype-proto/->array-copy ~buffer))
 
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->writer {:datatype ~intermediate-datatype :unchecked? ~unchecked?})))
+             (dtype-proto/->writer {:datatype ~intermediate-datatype
+                                    :unchecked? ~unchecked?})))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
          (dtype-proto/set-constant! ~buffer offset#
@@ -107,10 +113,17 @@
        (->ptr-backing-store [writer#]
          (jna/as-ptr ~buffer))
 
+       dtype-proto/PToArray
+       (->sub-array [reader#]
+         (dtype-proto/->sub-array ~buffer))
+       (->array-copy [reader#]
+         (dtype-proto/->array-copy ~buffer))
+
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~buffer offset# length#)
-             (dtype-proto/->writer {:datatype ~intermediate-datatype :unchecked? ~unchecked?})))
+             (dtype-proto/->writer {:datatype ~intermediate-datatype
+                                    :unchecked? ~unchecked?})))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
          (dtype-proto/set-constant! ~buffer offset#
@@ -284,7 +297,24 @@
      {:convertible-to-writer? (fn [item#] true)
       :->writer
       (fn [item# options#]
-        (make-marshalling-writer item# options#))}))
+        (make-marshalling-writer item# options#))}
+     dtype-proto/PBuffer
+     {:sub-buffer (fn [item# offset# length#]
+                    (let [src-writer# (typecast/datatype->writer ~datatype item# true)
+                          src-dtype# (dtype-proto/get-datatype src-writer#)
+                          ~'offset (int offset#)
+                          ~'length (int length#)
+                          end-elem# (+ ~'offset ~'length)]
+                      (make-derived-writer
+                       ~datatype src-dtype# {} src-writer#
+                       (do
+                         (when-not (< ~'idx ~'length)
+                           (throw (ex-info (format "Index out of range: %s > %s" ~'idx
+                                                   ~'length)
+                                           {})))
+                         (.write ~'src-writer (+ ~'idx ~'offset) ~'value))
+                       dtype-proto/->writer
+                       ~'length)))}))
 
 
 (extend-writer-type ByteWriter :int8)

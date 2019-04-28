@@ -465,8 +465,7 @@
 
 (defn as-array
   [item]
-  (when (satisfies? dtype-proto/PToArray item)
-    (dtype-proto/->sub-array item)))
+  (dtype-proto/->sub-array item))
 
 
 (defn as-nio-buffer

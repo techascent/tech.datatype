@@ -8,6 +8,9 @@
 
 
 (deftest cheatsheet-test
+  (let [float-data (dtype/copy! (range 10) (float-array 10))]
+    (is (= [0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0]
+           (dtype/->vector float-data))))
   (let [test-data (dtype-fn/+ (range 10 0 -1) 5)
         indexes (dtype-fn/argsort test-data)]
     (is (= [6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0]

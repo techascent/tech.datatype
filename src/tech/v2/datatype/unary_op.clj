@@ -281,8 +281,7 @@
                                                                 unchecked?#)
                          src-dtype# (dtype-base/get-datatype src-reader#)
                          constructor# #(unary-reader-map
-                                        {:datatype %2
-                                         :unchecked? %3}
+                                        (select-keys %2 [:unchecked?])
                                         un-op#
                                         %1)]
                      (reader/make-derived-reader ~dtype src-dtype# unchecked?#

@@ -167,6 +167,22 @@
                                    ~datatype (.elements item#) (.size item#))))}
 
 
+     dtype-proto/PToWriter
+    {:convertible-to-writer? (constantly true)
+     :->writer
+     (fn [item# options#]
+       (-> (dtype-proto/as-nio-buffer item#)
+           (dtype-proto/->writer options#)))}
+
+
+    dtype-proto/PToReader
+    {:convertible-to-reader? (constantly true)
+     :->reader
+     (fn [item# options#]
+       (-> (dtype-proto/as-nio-buffer item#)
+           (dtype-proto/->reader options#)))}
+
+
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
                      (dtype-proto/->sub-array
@@ -200,7 +216,7 @@
      :->reader
      (fn [item options]
        (let [unchecked? (:unchecked? options)]
-         (-> (reader/make-list-reader item)
+         (-> (reader/make-list-reader item unchecked?)
              (dtype-proto/->reader options))))}
 
     dtype-proto/PToIterable

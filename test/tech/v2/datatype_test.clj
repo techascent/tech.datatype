@@ -42,7 +42,8 @@
     (is (m/equals [0 0 0 0 2 3 4 5 0 0]
                   (mapv int (dtype/->vector retval)))
         (pr-str {:src-fn src-fn :dest-fn dest-fn
-                 :src-dtype src-dtype :dst-dtype dst-dtype}))))
+                 :src-dtype src-dtype :dst-dtype dst-dtype}))
+    (is (= 10 (dtype/ecount buf)))))
 
 
 (def create-functions [:typed-buffer :native-buffer :list :sparse])

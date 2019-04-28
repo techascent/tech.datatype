@@ -308,17 +308,6 @@
                                  ^booleans java-array array-offset n-elems)
           (.getElements ^ObjectList src-list 0
                         ^objects java-array array-offset n-elems)))
-      (and src-list dst-list)
-      (do
-        (case src-dtype
-          :int8 (.addAll ^ByteList dst-list 0 ^ByteList src-list)
-          :int16 (.addAll ^ShortList dst-list 0 ^ShortList src-list)
-          :int32 (.addAll ^IntList dst-list 0 ^IntList src-list)
-          :int64 (.addAll ^LongList dst-list 0 ^LongList src-list)
-          :float32 (.addAll ^FloatList dst-list 0 ^FloatList src-list)
-          :float64 (.addAll ^DoubleList dst-list 0 ^DoubleList src-list)
-          :boolean (.addAll ^BooleanList dst-list 0 ^BooleanList src-list)
-          (.addAll ^ObjectList dst-list 0 ^ObjectList src-list)))
       dst-buf
       (parallel-nio-write! dst-buf src true)
       dst-list

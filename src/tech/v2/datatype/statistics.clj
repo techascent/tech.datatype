@@ -10,7 +10,8 @@
 
 (defn- kixi-apply
   [kixi-fn item]
-  (transduce identity kixi-fn (typecast/->iterable item)))
+  (transduce identity kixi-fn (or (dtype-proto/as-reader item)
+                                  (dtype-proto/as-iterable item))))
 
 
 (defn mean

@@ -304,7 +304,8 @@
      (clojure.core/extend
          ~(datatype->boolean-binary-type datatype)
        dtype-proto/PToBinaryBooleanOp
-       {:->binary-boolean-op
+       {:convertible-to-binary-boolean-op? (constantly true)
+        :->binary-boolean-op
         (fn [item# options#]
           (let [{dtype# :datatype
                  unchecked?# :unchecked?} options#]
@@ -336,7 +337,8 @@
      (clojure.core/extend
          ~(dtype-binary/datatype->binary-op-type datatype)
        dtype-proto/PToBinaryBooleanOp
-       {:->binary-boolean-op
+       {:convertible-to-binary-boolean-op? (constantly true)
+        :->binary-boolean-op
         (fn [item# options#]
           (let [{datatype# :datatype
                  unchecked?# :unchecked?} options#
@@ -362,6 +364,7 @@
 
 (extend-type BinaryOperators$BooleanBinary
   dtype-proto/PToBinaryBooleanOp
+  (convertible-to-binary-boolean-op? [item] true)
   (->binary-boolean-op [item dtype unchecked?]
     (if (= :boolean dtype)
       item
@@ -639,6 +642,7 @@
   [opcode]
   `(reify
      dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [item#] true)
      (->binary-boolean-op [item# options#]
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#
@@ -663,6 +667,7 @@
   [opcode]
   `(reify
      dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [item#] true)
      (->binary-boolean-op [item# options#]
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#

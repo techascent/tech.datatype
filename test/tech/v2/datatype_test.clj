@@ -206,3 +206,13 @@
   (is (= 1 (dtype/cast true :int16)))
 
   (is (= 0.0 (dtype/cast false :float64))))
+
+
+(deftest list-regression
+  (is (= (Class/forName "[D")
+         (type (dtype/->array-copy
+                (dtype/make-container :list :float64 10)))))
+  (is (= (Class/forName "[D")
+         (type (dtype/->array-copy
+                (-> (dtype/make-container :list :float64 10)
+                    (dtype/sub-buffer 2 2)))))))

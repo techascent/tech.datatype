@@ -188,7 +188,8 @@
                      (dtype-proto/->sub-array
                       (dtype-proto/->buffer-backing-store item#)))
       :->array-copy (fn [item#]
-                      (.toArray (datatype->array-list-cast-fn ~datatype item#)))}))
+                      (dtype-proto/->array-copy
+                       (dtype-proto/->buffer-backing-store item#)))}))
 
 
 (extend-numeric-list ByteArrayList :int8)
@@ -295,7 +296,13 @@
                           :offset 0
                           :length (.size ary-list#)})))
       :->array-copy (fn [item#]
-                      (.toArray (datatype->list-cast-fn ~datatype item#)))}
+                      (.toArray (datatype->list-cast-fn ~datatype item#)
+                                (typecast/datatype->array-cast-fn
+                                 ~datatype
+                                 (dtype-proto/make-container
+                                  :java-array (casting/flatten-datatype
+                                               (dtype-proto/get-datatype item#))
+                                  0 {}))))}
 
      dtype-proto/PToWriter
      {:convertible-to-writer? (constantly true)

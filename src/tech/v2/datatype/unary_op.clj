@@ -163,14 +163,17 @@
        ~(datatype->unary-op-type datatype)
      dtype-proto/PToUnaryOp
      {:convertible-to-unary-op? (constantly true)
-      :->unary-op (fn [item# un-dtype# unchecked?#]
-                    (if (= (casting/safe-flatten un-dtype#)
-                           ~datatype)
-                      item#
-                      (let [marshal-fn# (get marshalling-unary-op-table
-                                             [~datatype (casting/safe-flatten
-                                                         un-dtype#)])]
-                        (marshal-fn# item# un-dtype# unchecked?#))))}))
+      :->unary-op (fn [item# options#]
+                    (let [un-dtype# (or (:datatype options#)
+                                        (dtype-proto/get-datatype item#))
+                          unchecked?# (:unchecked? options#)]
+                      (if (= (casting/safe-flatten un-dtype#)
+                             ~datatype)
+                        item#
+                        (let [marshal-fn# (get marshalling-unary-op-table
+                                               [~datatype (casting/safe-flatten
+                                                           un-dtype#)])]
+                          (marshal-fn# item# un-dtype# unchecked?#)))))}))
 
 
 (extend-unary-op :int8)
@@ -395,8 +398,9 @@
      (->unary-op [item# options#]
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#]
-         (when-not (casting/numeric-type? datatype#)
-           (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
+         (when-not (#{:float64 :float32 :object} (casting/flatten-datatype
+                                                  datatype#))
+           (throw (ex-info (format "datatype is not float or double: %s" datatype#) {})))
          (let [op-dtype# (if (or (= datatype# :float32)
                                  (= datatype# :float64))
                            datatype#
@@ -445,30 +449,30 @@
         (make-double-unary-op :round (unchecked-double (Math/round x)))
         (make-double-unary-op :rint (Math/rint x))
         (make-numeric-object-unary-op :- (- x))
-        (make-double-unary-op :logistic
-                              (/ 1.0
-                                 (+ 1.0 (Math/exp (- x)))))
-        (make-double-unary-op :exp (Math/exp x))
-        (make-double-unary-op :expm1 (Math/expm1 x))
-        (make-double-unary-op :log (Math/log x))
-        (make-double-unary-op :log10 (Math/log10 x))
-        (make-double-unary-op :log1p (Math/log1p x))
-        (make-double-unary-op :signum (Math/signum x))
-        (make-double-unary-op :sqrt (Math/sqrt x))
-        (make-double-unary-op :cbrt (Math/cbrt x))
-        (make-double-unary-op :abs (Math/abs x))
+        (make-float-double-unary-op :logistic
+                                    (/ 1.0
+                                       (+ 1.0 (Math/exp (- x)))))
+        (make-float-double-unary-op :exp (Math/exp x))
+        (make-float-double-unary-op :expm1 (Math/expm1 x))
+        (make-float-double-unary-op :log (Math/log x))
+        (make-float-double-unary-op :log10 (Math/log10 x))
+        (make-float-double-unary-op :log1p (Math/log1p x))
+        (make-float-double-unary-op :signum (Math/signum x))
+        (make-float-double-unary-op :sqrt (Math/sqrt x))
+        (make-float-double-unary-op :cbrt (Math/cbrt x))
+        (make-float-double-unary-op :abs (Math/abs x))
         (make-numeric-unary-op :sq (unchecked-multiply x x))
-        (make-double-unary-op :sin (Math/sin x))
-        (make-double-unary-op :sinh (Math/sinh x))
-        (make-double-unary-op :cos (Math/cos x))
-        (make-double-unary-op :cosh (Math/cosh x))
-        (make-double-unary-op :tan (Math/tan x))
-        (make-double-unary-op :tanh (Math/tanh x))
-        (make-double-unary-op :acos (Math/acos x))
-        (make-double-unary-op :asin (Math/asin x))
-        (make-double-unary-op :atan (Math/atan x))
-        (make-double-unary-op :to-degrees (Math/toDegrees x))
-        (make-double-unary-op :to-radians (Math/toRadians x))
+        (make-float-double-unary-op :sin (Math/sin x))
+        (make-float-double-unary-op :sinh (Math/sinh x))
+        (make-float-double-unary-op :cos (Math/cos x))
+        (make-float-double-unary-op :cosh (Math/cosh x))
+        (make-float-double-unary-op :tan (Math/tan x))
+        (make-float-double-unary-op :tanh (Math/tanh x))
+        (make-float-double-unary-op :acos (Math/acos x))
+        (make-float-double-unary-op :asin (Math/asin x))
+        (make-float-double-unary-op :atan (Math/atan x))
+        (make-float-double-unary-op :to-degrees (Math/toDegrees x))
+        (make-float-double-unary-op :to-radians (Math/toRadians x))
 
         (make-float-double-unary-op :next-up (Math/nextUp x))
         (make-float-double-unary-op :next-down (Math/nextDown x))

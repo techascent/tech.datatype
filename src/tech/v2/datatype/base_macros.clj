@@ -1,5 +1,5 @@
 (ns tech.v2.datatype.base-macros
-  (:require [clojure.core.matrix :as m]))
+  (:require [tech.v2.datatype.protocols :as dtype-proto]))
 
 (defmacro try-catch-any
   [try-body & catch-body]
@@ -12,9 +12,9 @@
 (defmacro check-range
   [item offset elem-count]
   `(when-not (<= (+ ~offset ~elem-count)
-                 (m/ecount ~item))
+                 (dtype-proto/ecount ~item))
      (throw (ex-info (format "%s offset + n-elems > ecount range violation"
                              ~(name item))
                      {:offset ~offset
                       :n-elems ~elem-count
-                      :length (m/ecount ~item)}))))
+                      :length (dtype-proto/ecount ~item)}))))

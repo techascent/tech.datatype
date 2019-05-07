@@ -4,14 +4,11 @@
             [tech.v2.datatype.io :as dtype-io]
             [tech.v2.datatype.base :as base]
             [tech.jna :as jna]
-            [tech.parallel :as parallel]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.mutable :as mutable]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.jna :as jna]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [clojure.core.matrix.protocols :as mp])
+            [tech.jna :as jna])
   (:import [com.sun.jna Pointer]
            [tech.v2.datatype.protocols PDatatype]))
 
@@ -173,8 +170,8 @@
   (->ptr-backing-store [item]
     (jna/as-ptr backing-store))
 
-  mp/PElementCount
-  (element-count [item] (mp/element-count backing-store)))
+  dtype-proto/PCountable
+  (ecount [item] (dtype-proto/ecount backing-store)))
 
 
 (defn typed-buffer?

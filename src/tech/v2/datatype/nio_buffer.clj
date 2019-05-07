@@ -18,14 +18,11 @@
                      cls-type->read-fn
                      cls-type->write-fn
                      cls-type->pos-fn]]
-            [clojure.core.matrix.protocols :as mp]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
-            [tech.v2.datatype.fast-copy :as fast-copy]
             [tech.jna :as jna]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [tech.parallel :as parallel]
-            [tech.v2.datatype.array])
+            [tech.v2.datatype.array]
+            [tech.parallel.for :as parallel-for])
   (:import [com.sun.jna Pointer Native]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
@@ -50,9 +47,7 @@
     (base/raw-dtype-copy! raw-data ary-target target-offset options))
   dtype-proto/PToIterable
   (->iterable-of-type [item options]
-    (dtype-proto/->reader item options))
-  mp/PElementCount
-  (element-count [item] (.remaining item)))
+    (dtype-proto/->reader item options)))
 
 
 (declare make-buffer-of-type)
@@ -110,11 +105,11 @@
                        (when-not (.isDirect item#)
                          {:java-array (.array item#)
                           :offset (.position item#)
-                          :length (mp/element-count item#)})))
+                          :length (dtype-proto/ecount item#)})))
       :->array-copy (fn [item#]
                       (let [dst-ary# (base/make-container
                                       :java-array ~datatype
-                                      (mp/element-count item#))]
+                                      (dtype-proto/ecount item#))]
                         (base/copy! item# dst-ary#)))}
      dtype-proto/PNioBuffer
      {:position (fn [item#] (.position (datatype->buffer-cast-fn ~datatype item#)))
@@ -136,7 +131,7 @@
                     (int value#)
                     (* elem-count# (casting/numeric-byte-width ~datatype)))
             (let [buf-pos# (.position item#)]
-              (parallel/parallel-for
+              (parallel-for/parallel-for
                idx# elem-count#
                (buf-put item# (+ idx# offset#) buf-pos# value#))))))}
 

@@ -7,7 +7,9 @@
               [tech.v2.tensor.dimensions :as dims]
               [tech.v2.tensor.dimensions.shape :as shape]
               [tech.v2.datatype.reader :as reader]
+              [tech.v2.datatype.readers.indexed :as indexed-reader]
               [tech.v2.datatype.writer :as writer]
+              [tech.v2.datatype.writers.indexed :as indexed-writer]
               [tech.v2.datatype.functional.impl :as fn-impl]
               [tech.v2.datatype.unary-op :as unary-op]
               [tech.v2.datatype.binary-op :as binary-op]
@@ -19,10 +21,7 @@
               [tech.v2.tensor.typecast :as tens-typecast]
               [tech.v2.tensor.protocols :as tens-proto]
               [tech.v2.libs.blas :as blas]
-              [tech.jna :as jna]
-              [clojure.core.matrix.protocols :as mp]
-              [clojure.core.matrix :as m]
-              [clojure.core.matrix.impl.pprint :as corem-pp])
+              [tech.jna :as jna])
     (:import [tech.v2.datatype IntReader
               IndexingSystem$Backward]
              [java.io Writer]))
@@ -121,17 +120,8 @@
        (applyTo [item# arglist#]
          (.read data# (apply indexer# arglist#)))
 
-       mp/PDimensionInfo
-       (dimensionality [m] n-dims#)
-       (get-shape [m] shape#)
-       (is-scalar? [m] false)
-       (is-vector? [m] true)
-       (dimension-count [m dimension-number#]
-         (if (<= n-dims# (int dimension-number#))
-           (get shape# dimension-number#)
-           (throw (ex-info "Array does not have specific dimension"
-                           {:dimension-number dimension-number#
-                            :shape shape#}))))
+       dtype-proto/PShape
+       (shape [m] shape#)
 
        sparse-proto/PSparse
        (index-seq [item#]
@@ -186,11 +176,11 @@
          (dtype-proto/make-container :list :int32
                                      (map second index-seq)
                                      {:unchecked? true})
-         (reader/make-indexed-reader (dtype-proto/make-container
-                                      :list :int32 (map first index-seq)
-                                      {:unchecked? true})
-                                     data
-                                     {})
+         (indexed-reader/make-indexed-reader (dtype-proto/make-container
+                                              :list :int32 (map first index-seq)
+                                              {:unchecked? true})
+                                             data
+                                             {})
          (dims/ecount dimensions))))))
 
 
@@ -199,22 +189,12 @@
   (get-datatype [item] (dtype-base/get-datatype buffer))
 
 
-  mp/PElementCount
-  (element-count [item] (dims/ecount dimensions))
+  dtype-proto/PCountable
+  (ecount [item] (dims/ecount dimensions))
 
 
-  mp/PDimensionInfo
-  (dimensionality [m] (count (mp/get-shape m)))
-  (get-shape [m] (dims/shape dimensions))
-  (is-scalar? [m] false)
-  (is-vector? [m] true)
-  (dimension-count [m dimension-number]
-    (let [shape (mp/get-shape m)]
-      (if (<= (count shape) (long dimension-number))
-        (get shape dimension-number)
-        (throw (ex-info "Array does not have specific dimension"
-                        {:dimension-number dimension-number
-                         :shape shape})))))
+  dtype-proto/PShape
+  (shape [m] (dims/shape dimensions))
 
 
   dtype-proto/PToNioBuffer
@@ -275,7 +255,7 @@
                                      elem-count)
                                     {:indexes-in-order?
                                      (dims/access-increasing? dimensions)})
-        (dtype-proto/set-constant! (writer/make-indexed-writer
+        (dtype-proto/set-constant! (indexed-writer/make-indexed-writer
                                     (dimensions->index-reader dimensions)
                                     buffer
                                     {})
@@ -286,7 +266,7 @@
   (write-indexes! [item indexes values options]
     (if (simple-dimensions? dimensions)
       (dtype-proto/write-indexes! buffer indexes values options)
-      (dtype-proto/write-indexes! buffer (reader/make-indexed-reader
+      (dtype-proto/write-indexes! buffer (indexed-reader/make-indexed-reader
                                           indexes
                                           (dimensions->index-reader dimensions)
                                           {:datatype :int32})
@@ -308,7 +288,7 @@
     (let [data-writer (dtype-proto/->writer buffer options)]
       (if (simple-dimensions? dimensions)
         data-writer
-        (writer/make-indexed-writer (dimensions->index-reader dimensions)
+        (indexed-writer/make-indexed-writer (dimensions->index-reader dimensions)
                                     data-writer
                                     options))))
 
@@ -347,12 +327,8 @@
         (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
               data-reader (dtype-proto/->reader buffer options)
               indexes (dimensions->index-reader dimensions)
-              item-shape (mp/get-shape item)]
+              item-shape (dtype-proto/shape item)]
           (case (casting/safe-flatten datatype)
-            :int8 (make-tensor-reader :int8 datatype item-shape
-                                      indexes data-reader sparse-data)
-            :int16 (make-tensor-reader :int16 datatype item-shape
-                                       indexes data-reader sparse-data)
             :int32 (make-tensor-reader :int32 datatype item-shape
                                        indexes data-reader sparse-data)
             :int64 (make-tensor-reader :int64 datatype item-shape
@@ -688,19 +664,6 @@
 
 
 
-(defn ->core-matrix
-  [tensor]
-  (let [retval (m/new-array :vectorz (dtype-base/shape tensor))
-        double-data (mp/as-double-array retval)]
-    (dtype-base/copy! double-data tensor)
-    retval))
-
-
-(defn ->core-matrix-vector
-  [tensor]
-  (m/as-vector (->core-matrix tensor)))
-
-
 (defn ->jvm
   "Conversion to storage that is efficient for the jvm.
   Base storage is either jvm-array or persistent-vector."
@@ -741,18 +704,18 @@
       (first base-data))))
 
 
-(defn tensor->string
-  ^String [tens & {:keys [print-datatype]
-                   :or {print-datatype :float64}}]
-  (format "#tech.v2.tensor<%s>%s\n%s"
-          (name (dtype/get-datatype tens))
-          (dtype/shape tens)
-          (corem-pp/pm (->jvm tens))))
+;; (defn tensor->string
+;;   ^String [tens & {:keys [print-datatype]
+;;                    :or {print-datatype :float64}}]
+;;   (format "#tech.v2.tensor<%s>%s\n%s"
+;;           (name (dtype/get-datatype tens))
+;;           (dtype/shape tens)
+;;           (corem-pp/pm (->jvm tens))))
 
 
-(defmethod print-method Tensor
-  [tens w]
-  (.write ^Writer w (tensor->string tens)))
+;; (defmethod print-method Tensor
+;;   [tens w]
+;;   (.write ^Writer w (tensor->string tens)))
 
 
 (defmethod dtype-proto/copy! [:tensor :dense]

@@ -10,8 +10,9 @@
             [tech.v2.datatype.binary-search :as dtype-search]
             [tech.v2.datatype.argsort :as argsort]
             [tech.v2.datatype.reader :as reader]
-            [tech.v2.datatype.nio-access :as nio-access]
-            [clojure.core.matrix.protocols :as mp]))
+            [tech.v2.datatype.readers.range :as range-reader]
+            [tech.v2.datatype.readers.const :as const-reader]
+            [tech.v2.datatype.nio-access :as nio-access]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -187,8 +188,8 @@
                          indexes
                          data
                          buffer-datatype]
-  mp/PElementCount
-  (element-count [item] b-elem-count)
+  dtype-proto/PCountable
+  (ecount [item] b-elem-count)
   dtype-proto/PDatatype
   (get-datatype [item] buffer-datatype)
 
@@ -315,8 +316,8 @@
             (dtype-base/remove-range! indexes start-pos length)
             (dtype-base/remove-range! data start-pos length))
           (dtype-proto/write-indexes! item
-                                      (reader/reader-range :int32 offset (+ length offset))
-                                      (reader/make-const-reader value item-dtype length)
+                                      (range-reader/reader-range :int32 offset (+ length offset))
+                                      (const-reader/make-const-reader value item-dtype length)
                                       {:unchecked? true
                                        :indexes-in-order? true}))))
     item)
@@ -345,7 +346,7 @@
 (defn copy-dense->sparse
   [src dst options]
   (let [n-elems (dtype-base/ecount src)]
-    (dtype-proto/write-indexes! dst (reader/reader-range :int32 0 n-elems) src
+    (dtype-proto/write-indexes! dst (range-reader/reader-range :int32 0 n-elems) src
                                 (assoc options :indexes-in-order? true))
     dst))
 

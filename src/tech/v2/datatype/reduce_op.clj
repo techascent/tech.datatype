@@ -65,14 +65,8 @@
            (.finalize reduce-op# accum# item-count#))))))
 
 
-(defmacro make-iterable-reduce-table
-  []
-  `(->> [~@(for [dtype casting/base-host-datatypes]
-             [dtype `(make-iterable-reduce-fn ~dtype)])]
-        (into {})))
-
-
-(def iterable-reduce-table (make-iterable-reduce-table))
+(def iterable-reduce-table (casting/make-base-datatype-table
+                            make-iterable-reduce-fn))
 
 
 (defmulti iterable-reduce-map
@@ -128,14 +122,8 @@
            (.finalize reduce-op# sum# n-elems#))))))
 
 
-(defmacro make-dot-product-table
-  []
-  `(->> [~@(for [dtype casting/base-host-datatypes]
-             [dtype `(make-dot-product-op ~dtype)])]
-        (into {})))
-
-
-(def dot-product-table (make-dot-product-table))
+(def dot-product-table (casting/make-base-datatype-table
+                        make-dot-product-op))
 
 
 (defn default-dot-product

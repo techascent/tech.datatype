@@ -14,9 +14,8 @@
                                               datatype->list-read-fn]]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.mutable :as mutable]
-            [clojure.core.matrix.protocols :as mp]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [tech.parallel :as parallel])
+            [tech.v2.datatype.mutable.iterable-to-list :as iterable-to-list]
+            [tech.parallel.for :as parallel-for])
   (:import [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
            [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
            [it.unimi.dsi.fastutil.ints IntList IntArrayList]
@@ -121,10 +120,10 @@
                         (make-list datatype# (base/shape->ecount shape#)))}
 
 
-     mp/PElementCount
-     {:element-count (fn [item#]
-                       (-> (datatype->list-cast-fn ~datatype item#)
-                           (.size)))}
+     dtype-proto/PCountable
+     {:ecount (fn [item#]
+                (-> (datatype->list-cast-fn ~datatype item#)
+                    (.size)))}
 
      dtype-proto/PToList
      {:convertible-to-fastutil-list? (fn [item#] true)
@@ -364,9 +363,10 @@
                 (let [item-reader# (typecast/datatype->reader
                                     ~datatype values# (:unchecked? options#))
                       n-values# (.lsize item-reader#)]
-                  (c-for [iter-idx# (long 0) (< iter-idx# n-values#) (inc iter-idx#)]
-                         (.add list-item# (+ idx# iter-idx#)
-                               (.read item-reader# iter-idx#)))))))))}))
+                  (parallel-for/serial-for
+                   iter-idx# n-values#
+                   (.add list-item# (+ idx# iter-idx#)
+                         (.read item-reader# iter-idx#)))))))))}))
 
 
 (extend-list ByteList :int8)
@@ -400,10 +400,10 @@
                         :backing-store
                         dtype-proto/->list-backing-store)
                     (let [list-data (make-list (casting/host-flatten datatype) 0)]
-                      (mutable/iterable->list elem-count-or-seq
-                                              list-data
-                                              {:unchecked? (:unchecked? options)
-                                               :datatype datatype})))]
+                      (iterable-to-list/iterable->list elem-count-or-seq
+                                                       list-data
+                                                       {:unchecked? (:unchecked? options)
+                                                        :datatype datatype})))]
     (if host-datatype?
       typed-buf
       (typed-buffer/set-datatype typed-buf datatype))))

@@ -16,10 +16,7 @@
   Base datatypes are:
   :int8 :uint8 :int16 :uint16 :int32 :uint32 :int64 :uint64
   :float32 :float64 :boolean :string :object"
-  (:require [clojure.core.matrix.macros :refer [c-for]]
-            [clojure.core.matrix.protocols :as mp]
-            [clojure.core.matrix :as m]
-            [tech.jna :as jna]
+  (:require [tech.jna :as jna]
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :as typecast]
@@ -29,16 +26,9 @@
             [tech.v2.datatype.typed-buffer :as dtype-tbuf]
             [tech.v2.datatype.jna :as dtype-jna]
             [tech.v2.datatype.list :as dtype-list]
-            [tech.v2.datatype.binary-search :as dtype-search]
-            [tech.v2.datatype.argsort :as dtype-sort]
             [tech.v2.datatype.iterator :as dtype-iter]
             [tech.v2.datatype.reader :as dtype-reader]
-            [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.binary-op :as binary-op]
-            [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.writer :as dtype-writer]
-            [tech.v2.datatype.comparator :as dtype-comp]
-            [tech.v2.datatype.boolean-op :as dtype-bool]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer])
   (:import [tech.v2.datatype MutableRemove ObjectMutable]
@@ -371,40 +361,6 @@ Calls clojure.core.matrix/ecount."
                                    (or datatype (get-datatype src-item))))))
 
 
-(defn const-iterable
-  [value & {:keys [datatype]}]
-  (dtype-iter/make-const-iterable value (or datatype (get-datatype value))))
-
-
-(defn iterable-mask
-  "Filter out one iterable from boolean values of another."
-  ([{:keys [datatype unchecked?]
-     :or {datatype (get-datatype values)} :as options}
-    mask-iter values]
-   (dtype-iter/iterable-mask (assoc options :datatype datatype)
-                             mask-iter values))
-  ([mask-iter values]
-   (iterable-mask {} mask-iter values)))
-
-
-(defn iterable-remove
-  ([{:keys [datatype unchecked?]
-      :or {datatype (get-datatype values)} :as options}
-    mask-iter values]
-   (unary-op/iterable-remove (assoc options :datatype datatype)
-                             mask-iter values))
-  ([mask-iter values]
-   (iterable-remove {} mask-iter values)))
-
-
-(defn iterable-concat
-  "Concatenate a list of iterables into one iterable."
-  [{:keys [datatype unchecked?] :as options} & args]
-  (dtype-iter/iterable-concat options args))
-
-
-
-
 (defn reader?
   [item]
   (dtype-proto/convertible-to-reader? item))
@@ -419,40 +375,12 @@ Calls clojure.core.matrix/ecount."
                                (or datatype (get-datatype src-item)))))
 
 
-(defn const-reader
-  "Make a reader that returns a constant value."
-  [value & {:keys [datatype num-elems]}]
-  (dtype-reader/make-const-reader value
-                                  (or datatype (get-datatype value))
-                                  num-elems))
-
-
-(defn indexed-reader
-  "Make a new reader that indexes into the values of another reader.
-  Indexes must be convertible to an int32 reader."
-  [indexes values & {:keys [datatype unchecked?]
-                     :or {datatype (get-datatype values)}
-                     :as options}]
-  (dtype-reader/make-indexed-reader indexes
-                                    values
-                                    (assoc options :datatype datatype)))
-
-
 (defn ->sparse
   "Return an object that implements the sparse protocols."
   [item]
   (when (= :sparse (buffer-type item))
     (sparse-proto/->sparse item)))
 
-
-(defn iterable-indexed-iterable
-  "Make an iterable that indexes into values.  Values must be readable
-  while indexes need only be int32 iterable."
-  [indexes values & {:keys [datatype unchecked?]
-                     :or {datatype (get-datatype values)}
-                     :as options}]
-  (dtype-reader/make-iterable-indexed-iterable
-   indexes values (assoc options :datatype datatype)))
 
 
 (defn ->writer

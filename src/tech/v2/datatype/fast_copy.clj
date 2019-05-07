@@ -3,14 +3,10 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.jna :as jna]
             [tech.v2.datatype.casting :as casting]
-            [clojure.core.matrix.protocols :as mp]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.parallel :as parallel]
+            [tech.parallel.for :as parallel-for]
             [tech.v2.datatype.nio-access :refer [buf-put buf-get
-                                              datatype->list-read-fn]]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [tech.v2.datatype.protocols.impl
-             :refer [safe-get-datatype]])
+                                              datatype->list-read-fn]])
   (:import  [com.sun.jna Pointer]
             [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
             [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
@@ -28,8 +24,7 @@
              LongReader LongWriter
              FloatReader FloatWriter
              DoubleReader DoubleWriter
-             BooleanReader BooleanWriter
-             ]
+             BooleanReader BooleanWriter]
             [tech.v2.datatype.protocols PToReader]))
 
 
@@ -53,25 +48,25 @@
            dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
            n-elems# (.lsize dst-writer#)]
 
-       (parallel/parallel-for
+       (parallel-for/parallel-for
         idx# n-elems#
         (.write dst-writer# idx# (.read src-reader# idx#))))
-    ;;Go the *much* slower iterator pathway
-    (let [src-iter# (typecast/datatype->iter ~datatype ~src ~unchecked?)
-          dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)]
-      (->> (range (.lsize dst-writer#))
-           (map (fn [idx#]
-                  [idx# (typecast/datatype->iter-next-fn ~datatype src-iter#)]))
-           ;;Attempt to get at least little bit of parallelism.  Given iterators
-           ;;implicitly make every item dependent upon the one before we can't
-           ;;really do much here aside from potentially
-           (pmap #(dst-writer# (first %) (second %)))
-           dorun))))
+     ;;Go the *much* slower iterator pathway
+     (let [src-iter# (typecast/datatype->iter ~datatype ~src ~unchecked?)
+           dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)]
+       (->> (range (.lsize dst-writer#))
+            (map (fn [idx#]
+                   [idx# (typecast/datatype->iter-next-fn ~datatype src-iter#)]))
+            ;;Attempt to get at least little bit of parallelism.  Given iterators
+            ;;implicitly make every item dependent upon the one before we can't
+            ;;really do much here aside from potentially
+            (pmap #(dst-writer# (first %) (second %)))
+            dorun))))
 
 
 (defn parallel-slow-copy!
   [dst src & [unchecked?]]
-  (case (safe-get-datatype dst)
+  (case (dtype-proto/get-datatype dst)
     :int8 (parallel-slow-copy :int8 dst src unchecked?)
     :uint8 (parallel-slow-copy :uint8 dst src unchecked?)
     :int16 (parallel-slow-copy :int16 dst src unchecked?)
@@ -87,47 +82,20 @@
   dst)
 
 
-(defmacro serial-slow-copy
-  [datatype dst src unchecked?]
-  `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
-         dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
-         n-elems# (int (mp/element-count ~dst))]
-     (c-for [idx# (int 0) (< idx# n-elems#) (unchecked-inc idx#)]
-            (.write dst-writer# idx# (.read src-reader# idx#)))))
-
-
-(defn serial-slow-copy!
-  [dst src & [unchecked?]]
-  (case (safe-get-datatype dst)
-    :int8 (serial-slow-copy :int8 dst src unchecked?)
-    :uint8 (serial-slow-copy :uint8 dst src unchecked?)
-    :int16 (serial-slow-copy :int16 dst src unchecked?)
-    :uint16 (serial-slow-copy :uint16 dst src unchecked?)
-    :int32 (serial-slow-copy :int32 dst src unchecked?)
-    :uint32 (serial-slow-copy :uint32 dst src unchecked?)
-    :int64 (serial-slow-copy :int64 dst src unchecked?)
-    :uint64 (serial-slow-copy :uint64 dst src unchecked?)
-    :float32 (serial-slow-copy :float32 dst src unchecked?)
-    :float64 (serial-slow-copy :float64 dst src unchecked?)
-    :boolean (serial-slow-copy :boolean dst src unchecked?)
-    (serial-slow-copy :object dst src unchecked?))
-  dst)
-
-
 (defmacro impl-nio-write
   [datatype dst src unchecked?]
   `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
          dst-buf# (typecast/datatype->buffer-cast-fn ~datatype ~dst)
          dst-pos# (.position dst-buf#)
-         n-elems# (int (mp/element-count ~dst))]
-     (parallel/parallel-for
+         n-elems# (int (dtype-proto/ecount ~dst))]
+     (parallel-for/parallel-for
       idx# n-elems#
       (buf-put dst-buf# idx# dst-pos# (.read src-reader# idx#)))))
 
 
 (defn parallel-nio-write!
   [dst src & [unchecked?]]
-  (case (safe-get-datatype dst)
+  (case (dtype-proto/get-datatype dst)
     :int8 (impl-nio-write :int8 dst src unchecked?)
     :int16 (impl-nio-write :int16 dst src unchecked?)
     :int32 (impl-nio-write :int32 dst src unchecked?)
@@ -140,15 +108,15 @@
   [datatype dst src unchecked?]
   `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
          dst-buf# (typecast/datatype->list-cast-fn ~datatype ~dst)
-         n-elems# (int (mp/element-count ~dst))]
-     (parallel/parallel-for
+         n-elems# (int (dtype-proto/ecount ~dst))]
+     (parallel-for/parallel-for
       idx# n-elems#
       (.set dst-buf# idx# (.read src-reader# idx#)))))
 
 
 (defn parallel-list-write!
   [dst src & [unchecked?]]
-  (case (safe-get-datatype dst)
+  (case (dtype-proto/get-datatype dst)
     :int8 (impl-list-write :int8 dst src unchecked?)
     :int16 (impl-list-write :int16 dst src unchecked?)
     :int32 (impl-list-write :int32 dst src unchecked?)
@@ -161,15 +129,15 @@
 
 (defn parallel-write!
   [item src & [unchecked?]]
-  (let [item-dtype (cond-> (safe-get-datatype item)
+  (let [item-dtype (cond-> (dtype-proto/get-datatype item)
                      unchecked?
                      casting/datatype->host-datatype)
         item-buf (typecast/as-nio-buffer item)
         item-list (typecast/as-list item)]
     (cond
-      (and item-buf (= item-dtype (safe-get-datatype item-buf)))
+      (and item-buf (= item-dtype (dtype-proto/get-datatype item-buf)))
       (parallel-nio-write! item src unchecked?)
-      (and item-list (= item-dtype (safe-get-datatype item-list)))
+      (and item-list (= item-dtype (dtype-proto/get-datatype item-list)))
       (parallel-list-write! item src unchecked?)
       :else
       (parallel-slow-copy! item src unchecked?))))
@@ -180,15 +148,15 @@
   `(let [src-buf# (typecast/datatype->buffer-cast-fn ~datatype ~src)
          dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
          src-pos# (.position src-buf#)
-         n-elems# (int (mp/element-count ~src))]
-     (parallel/parallel-for
+         n-elems# (int (dtype-proto/ecount ~src))]
+     (parallel-for/parallel-for
       idx# n-elems#
       (.write dst-writer# idx# (buf-get src-buf# idx# src-pos#)))))
 
 
 (defn parallel-nio-read!
   [dst src & [unchecked?]]
-  (case (safe-get-datatype src)
+  (case (dtype-proto/get-datatype src)
     :int8 (impl-nio-read :int8 dst src unchecked?)
     :int16 (impl-nio-read :int16 dst src unchecked?)
     :int32 (impl-nio-read :int32 dst src unchecked?)
@@ -201,15 +169,15 @@
   [datatype dst src unchecked?]
   `(let [dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
          src-buf# (typecast/datatype->list-cast-fn ~datatype ~src)
-         n-elems# (int (mp/element-count ~src))]
-     (parallel/parallel-for
+         n-elems# (int (dtype-proto/ecount ~src))]
+     (parallel-for/parallel-for
       idx# n-elems#
       (.write dst-writer# idx# (datatype->list-read-fn ~datatype src-buf# idx#)))))
 
 
 (defn parallel-list-read!
   [dst src & [unchecked?]]
-  (case (safe-get-datatype src)
+  (case (dtype-proto/get-datatype src)
     :int8 (impl-list-read :int8 dst src unchecked?)
     :int16 (impl-list-read :int16 dst src unchecked?)
     :int32 (impl-list-read :int32 dst src unchecked?)
@@ -222,13 +190,13 @@
 
 (defn parallel-read!
   [item src & [unchecked?]]
-  (let [src-dtype (safe-get-datatype src)
+  (let [src-dtype (dtype-proto/get-datatype src)
         src-buf (typecast/as-nio-buffer src)
         src-list (typecast/as-list src)]
     (cond
-      (and src-buf (= src-dtype (safe-get-datatype src-buf)))
+      (and src-buf (= src-dtype (dtype-proto/get-datatype src-buf)))
       (parallel-nio-read! item src unchecked?)
-      (and src-list (= src-dtype (safe-get-datatype src-list)))
+      (and src-list (= src-dtype (dtype-proto/get-datatype src-list)))
       (parallel-list-read! item src unchecked?)
       :else
       (parallel-slow-copy! item src unchecked?))))
@@ -250,9 +218,9 @@
                          (or dst-buf dst-list))
             (throw (ex-info "convertible to list or nio"
                             {})))
-        src-dtype (safe-get-datatype (or src-buf src-list))
-        dst-dtype (safe-get-datatype (or dst-buf dst-list))
-        n-elems (long (mp/element-count dst))]
+        src-dtype (dtype-proto/get-datatype (or src-buf src-list))
+        dst-dtype (dtype-proto/get-datatype (or dst-buf dst-list))
+        n-elems (long (dtype-proto/ecount dst))]
     (when-not (= src-dtype dst-dtype)
       (throw (ex-info "Fast copy called inappropriately; datatypes do not match"
                       {:src-datatype src-dtype

@@ -7,12 +7,9 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.shape :as dtype-shape]
             [tech.v2.datatype.io :as dtype-io]
-            [tech.v2.datatype.protocols.impl
-             :refer [safe-get-datatype]]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [clojure.core.matrix :as m]
-            [clojure.core.matrix.protocols :as mp])
+            [tech.parallel.for :as parallel-for])
   (:import [tech.v2.datatype ObjectReader ObjectWriter
             ByteReader ShortReader IntReader LongReader
             FloatReader DoubleReader BooleanReader
@@ -74,21 +71,17 @@
 (defn ecount
   "Type hinted ecount."
   ^long [item]
-  (if item
-    (m/ecount item)
-    0))
+  (dtype-shape/ecount item))
 
 
 (defn shape
   [item]
-  (if (nil? item)
-    nil
-    (or (m/shape item) [(ecount item)])))
+  (dtype-shape/shape item))
 
 
 (defn get-datatype
   [item]
-  (safe-get-datatype item))
+  (dtype-proto/get-datatype item))
 
 
 (defn make-container
@@ -207,8 +200,9 @@
         [ary-target target-offset]
         (if (number? (.get raw-data 0))
           (do
-            (c-for [idx 0 (< idx num-elems) (inc idx)]
-                   (set-value! ary-target (+ idx target-offset) (.get raw-data idx)))
+            (parallel-for/parallel-for
+             idx num-elems
+             (set-value! ary-target (+ idx target-offset) (.get raw-data idx)))
             [ary-target (+ target-offset num-elems)])
           (copy-raw-seq->item! raw-data ary-target target-offset options)))))
 
@@ -280,8 +274,9 @@
           item-dtype (dtype-proto/get-datatype item)
           value (casting/cast value item-dtype)
           ^ObjectWriter writer (dtype-proto/->writer item {:datatype :object})]
-      (c-for [idx (int 0) (< idx n-elems) (inc idx)]
-             (.write writer idx value))))
+      (parallel-for/parallel-for
+       idx n-elems
+       (.write writer idx value))))
 
 
   dtype-proto/PWriteIndexes

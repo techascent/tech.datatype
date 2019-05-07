@@ -1,9 +1,7 @@
 (ns tech.v2.datatype.typecast
   (:require [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.protocols.impl :as dtype-proto-impl]
-            [tech.jna :as jna]
             [tech.v2.datatype.casting :as casting]
-            [clojure.core.matrix.protocols :as mp])
+            [tech.jna :as jna])
   (:import [tech.v2.datatype
             ObjectWriter ObjectReader ObjectMutable ObjectReaderIter ObjectIter
             ByteWriter ByteReader ByteMutable ByteReaderIter ByteIter
@@ -25,7 +23,6 @@
            [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
            [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
            [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]))
-
 
 
 (set! *warn-on-reflection* true)
@@ -444,24 +441,21 @@
     `(as-object-array ~buf)))
 
 
-(defn ensure-ptr-like
-  "JNA is extremely flexible in what it can take as an argument.  Anything convertible
-  to a nio buffer, be it direct or array backend is fine."
-  [item]
-  (cond
-    (and (satisfies? jna/PToPtr item)
-         (jna/->ptr-backing-store item))
-    (jna/->ptr-backing-store item)
-    :else
-    (if-let [retval (dtype-proto/->buffer-backing-store item)]
-      retval
-      (throw (ex-info "Object is not convertible to a pointer" {:item item})))))
-
 
 (defn as-ptr
   ^Pointer [item]
   (jna/as-ptr item))
 
+
+(defn ensure-ptr-like
+  "JNA is extremely flexible in what it can take as an argument.  Anything convertible
+  to a nio buffer, be it direct or array backend is fine."
+  [item]
+  (if-let [dst-ptr (when (jna/as-ptr item))]
+    dst-ptr
+    (if-let [nio-buf (dtype-proto/as-nio-buffer item)]
+      nio-buf
+      (throw (ex-info "Object is not convertible to a pointer" {:item item})))))
 
 (defn as-array
   [item]
@@ -612,7 +606,7 @@
 (defn wrap-array-with-list
   [src-data & [datatype]]
   (let [datatype (or datatype
-                     (dtype-proto-impl/safe-get-datatype src-data))]
+                     (dtype-proto/get-datatype src-data))]
     (case datatype
       :int8 (ByteArrayList/wrap ^bytes src-data)
       :int16 (ShortArrayList/wrap ^shorts src-data)
@@ -639,3 +633,11 @@
     :float64 'DoubleMutable
     :boolean 'BooleanMutable
     :object 'ObjectMutable))
+
+
+(defmacro extend-host-numeric-datatypes
+  [dtype-macro]
+  `(->> [~@(map (fn [dtype]
+                  [dtype `(~dtype-macro ~dtype)])
+                casting/host-numeric-types)]
+        (into {})))

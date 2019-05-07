@@ -290,7 +290,9 @@
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
   (case dtype
-    :uint8 :int16
+    :int8 :int32
+    :int16 :int32
+    :uint8 :int32
     :uint16 :int32
     :uint32 :int64
     :uint64 :int64
@@ -343,3 +345,47 @@
     `false
     :else
     `(datatype->unchecked-cast-fn :unknown ~datatype 0)))
+
+
+;;Everything goes to these and these go to everything.
+(def base-marshal-types
+  #{:int32 :int64 :float32 :float64 :boolean :object})
+
+
+(defmacro make-base-datatype-table
+  [inner-macro]
+  `(->> [~@(for [dtype base-marshal-types]
+             [dtype `(~inner-macro ~dtype)])]
+        (into {})))
+
+
+(defmacro make-base-no-boolean-datatype-table
+  [inner-macro]
+  `(->> [~@(for [dtype (->> base-marshal-types
+                            (remove #(= :boolean %)))]
+             [dtype `(~inner-macro ~dtype)])]
+        (into {})))
+
+
+(def marshal-source-table
+  {:int32 base-marshal-types
+   :int64 base-marshal-types
+   :float32 base-marshal-types
+   :float64 base-marshal-types
+   :boolean base-marshal-types
+   :object base-marshal-types})
+
+
+(def marshal-table
+  (->> marshal-source-table
+       (mapcat (fn [[src-dtype dst-dtype-seq]]
+                 (map vector (repeat src-dtype) dst-dtype-seq)))
+       vec))
+
+
+(defmacro make-marshalling-item-table
+  [marshal-macro]
+  `(->> [~@(for [[src-dtype dst-dtype] marshal-table]
+             [[src-dtype dst-dtype]
+              `(~marshal-macro ~src-dtype ~dst-dtype)])]
+        (into {})))

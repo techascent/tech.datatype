@@ -1,10 +1,10 @@
 (ns tech.v2.datatype.array
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as base]
-            [clojure.core.matrix.protocols :as mp]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :refer :all :as typecast]
             [tech.v2.datatype.typed-buffer :as typed-buffer]
+            [tech.v2.datatype.shape :as dtype-shape]
             [tech.jna :as jna])
   (:import [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]

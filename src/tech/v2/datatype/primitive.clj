@@ -1,9 +1,7 @@
 (ns tech.v2.datatype.primitive
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.array :as dtype-ary]
-            [clojure.core.matrix.protocols :as mp]
-            [tech.v2.datatype.reader :as reader]
-            [clojure.core.matrix.macros :refer [c-for]])
+            [tech.v2.datatype.reader :as reader])
   (:import [tech.v2.datatype ObjectReader]))
 
 
@@ -18,7 +16,7 @@
      {:->reader (fn [item# options#]
                   (-> (dtype-ary/make-array-of-type ~datatype [item#] true)
                       (dtype-proto/->reader options#)))}
-     mp/PElementCount
+     dtype-proto/PCountable
      {:element-count (fn [item#] 1)}))
 
 

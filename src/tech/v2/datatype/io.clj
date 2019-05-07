@@ -9,8 +9,7 @@
             [tech.v2.datatype.fast-copy :as fast-copy]
             [tech.v2.datatype.typecast
              :refer [datatype->reader
-                     datatype->writer
-                     reader->iterator]
+                     datatype->writer]
              :as typecast]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]

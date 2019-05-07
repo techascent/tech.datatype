@@ -44,15 +44,9 @@
 
 (defn datatype->writer-type
   [datatype]
-  (case datatype
-    :int8 'tech.v2.datatype.ByteWriter
-    :uint8 'tech.v2.datatype.ShortWriter
-    :int16 'tech.v2.datatype.ShortWriter
-    :uint16 'tech.v2.datatype.IntWriter
+  (case (casting/safe-flatten datatype)
     :int32 'tech.v2.datatype.IntWriter
-    :uint32 'tech.v2.datatype.LongWriter
     :int64 'tech.v2.datatype.LongWriter
-    :uint64 'tech.v2.datatype.LongWriter
     :float32 'tech.v2.datatype.FloatWriter
     :float64 'tech.v2.datatype.DoubleWriter
     :boolean 'tech.v2.datatype.BooleanWriter
@@ -67,14 +61,8 @@
      (dtype-proto/->writer ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
 
 
-(defn ->int8-writer ^ByteWriter [item unchecked?] (implement-writer-cast :int8))
-(defn ->uint8-writer ^ShortWriter [item unchecked?] (implement-writer-cast :uint8))
-(defn ->int16-writer ^ShortWriter [item unchecked?] (implement-writer-cast :int16))
-(defn ->uint16-writer ^IntWriter [item unchecked?] (implement-writer-cast :uint16))
 (defn ->int32-writer ^IntWriter [item unchecked?] (implement-writer-cast :int32))
-(defn ->uint32-writer ^LongWriter [item unchecked?] (implement-writer-cast :uint32))
 (defn ->int64-writer ^LongWriter [item unchecked?] (implement-writer-cast :int64))
-(defn ->uint64-writer ^LongWriter [item unchecked?] (implement-writer-cast :uint64))
 (defn ->float32-writer ^FloatWriter [item unchecked?] (implement-writer-cast :float32))
 (defn ->float64-writer ^DoubleWriter [item unchecked?] (implement-writer-cast :float64))
 (defn ->boolean-writer ^BooleanWriter [item unchecked?] (implement-writer-cast :boolean))
@@ -83,15 +71,9 @@
 
 (defmacro datatype->writer
   [datatype writer & [unchecked?]]
-  (case datatype
-    :int8 `(->int8-writer ~writer ~unchecked?)
-    :uint8 `(->uint8-writer ~writer ~unchecked?)
-    :int16 `(->int16-writer ~writer ~unchecked?)
-    :uint16 `(->uint16-writer ~writer ~unchecked?)
+  (case (casting/safe-flatten datatype)
     :int32 `(->int32-writer ~writer ~unchecked?)
-    :uint32 `(->uint32-writer ~writer ~unchecked?)
     :int64 `(->int64-writer ~writer ~unchecked?)
-    :uint64 `(->uint64-writer ~writer ~unchecked?)
     :float32 `(->float32-writer ~writer ~unchecked?)
     :float64 `(->float64-writer ~writer ~unchecked?)
     :boolean `(->boolean-writer ~writer ~unchecked?)
@@ -113,15 +95,9 @@
 
 (defn datatype->reader-type
   [datatype]
-  (case datatype
-    :int8 'tech.v2.datatype.ByteReader
-    :uint8 'tech.v2.datatype.ShortReader
-    :int16 'tech.v2.datatype.ShortReader
-    :uint16 'tech.v2.datatype.IntReader
+  (case (casting/safe-flatten datatype)
     :int32 'tech.v2.datatype.IntReader
-    :uint32 'tech.v2.datatype.LongReader
     :int64 'tech.v2.datatype.LongReader
-    :uint64 'tech.v2.datatype.LongReader
     :float32 'tech.v2.datatype.FloatReader
     :float64 'tech.v2.datatype.DoubleReader
     :boolean 'tech.v2.datatype.BooleanReader
@@ -135,14 +111,8 @@
      (dtype-proto/->reader ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
 
 
-(defn ->int8-reader ^ByteReader [item unchecked?] (implement-reader-cast :int8))
-(defn ->uint8-reader ^ShortReader [item unchecked?] (implement-reader-cast :uint8))
-(defn ->int16-reader ^ShortReader [item unchecked?] (implement-reader-cast :int16))
-(defn ->uint16-reader ^IntReader [item unchecked?] (implement-reader-cast :uint16))
 (defn ->int32-reader ^IntReader [item unchecked?] (implement-reader-cast :int32))
-(defn ->uint32-reader ^LongReader [item unchecked?] (implement-reader-cast :uint32))
 (defn ->int64-reader ^LongReader [item unchecked?] (implement-reader-cast :int64))
-(defn ->uint64-reader ^LongReader [item unchecked?] (implement-reader-cast :uint64))
 (defn ->float32-reader ^FloatReader [item unchecked?] (implement-reader-cast :float32))
 (defn ->float64-reader ^DoubleReader [item unchecked?] (implement-reader-cast :float64))
 (defn ->boolean-reader ^BooleanReader [item unchecked?] (implement-reader-cast :boolean))
@@ -151,15 +121,9 @@
 
 (defmacro datatype->reader
   [datatype reader & [unchecked?]]
-  (case datatype
-    :int8 `(->int8-reader ~reader ~unchecked?)
-    :uint8 `(->uint8-reader ~reader ~unchecked?)
-    :int16 `(->int16-reader ~reader ~unchecked?)
-    :uint16 `(->uint16-reader ~reader ~unchecked?)
+  (case (casting/safe-flatten datatype)
     :int32 `(->int32-reader ~reader ~unchecked?)
-    :uint32 `(->uint32-reader ~reader ~unchecked?)
     :int64 `(->int64-reader ~reader ~unchecked?)
-    :uint64 `(->uint64-reader ~reader ~unchecked?)
     :float32 `(->float32-reader ~reader ~unchecked?)
     :float64 `(->float64-reader ~reader ~unchecked?)
     :boolean `(->boolean-reader ~reader ~unchecked?)
@@ -168,15 +132,9 @@
 
 (defn datatype->iter-type
   [datatype]
-  (case datatype
-    :int8 'tech.v2.datatype.ByteIter
-    :uint8 'tech.v2.datatype.ShortIter
-    :int16 'tech.v2.datatype.ShortIter
-    :uint16 'tech.v2.datatype.IntIter
+  (case (casting/safe-flatten datatype)
     :int32 'tech.v2.datatype.IntIter
-    :uint32 'tech.v2.datatype.LongIter
     :int64 'tech.v2.datatype.LongIter
-    :uint64 'tech.v2.datatype.LongIter
     :float32 'tech.v2.datatype.FloatIter
     :float64 'tech.v2.datatype.DoubleIter
     :boolean 'tech.v2.datatype.BooleanIter
@@ -192,10 +150,6 @@
                              ~'item {:datatype~datatype :unchecked? ~'unchecked?})))))
 
 
-(defn ->int8-iter ^ByteIter [item unchecked?] (implement-iter-cast :int8))
-(defn ->uint8-iter ^ShortIter [item unchecked?] (implement-iter-cast :uint8))
-(defn ->int16-iter ^ShortIter [item unchecked?] (implement-iter-cast :int16))
-(defn ->uint16-iter ^IntIter [item unchecked?] (implement-iter-cast :uint16))
 (defn ->int32-iter ^IntIter [item unchecked?] (implement-iter-cast :int32))
 (defn ->uint32-iter ^LongIter [item unchecked?] (implement-iter-cast :uint32))
 (defn ->int64-iter ^LongIter [item unchecked?] (implement-iter-cast :int64))
@@ -222,15 +176,9 @@
 
 (defmacro datatype->iter
   [datatype reader & [unchecked?]]
-  (case datatype
-    :int8 `(->int8-iter ~reader ~unchecked?)
-    :uint8 `(->uint8-iter ~reader ~unchecked?)
-    :int16 `(->int16-iter ~reader ~unchecked?)
-    :uint16 `(->uint16-iter ~reader ~unchecked?)
+  (case (casting/safe-flatten datatype)
     :int32 `(->int32-iter ~reader ~unchecked?)
-    :uint32 `(->uint32-iter ~reader ~unchecked?)
     :int64 `(->int64-iter ~reader ~unchecked?)
-    :uint64 `(->uint64-iter ~reader ~unchecked?)
     :float32 `(->float32-iter ~reader ~unchecked?)
     :float64 `(->float64-iter ~reader ~unchecked?)
     :boolean `(->boolean-iter ~reader ~unchecked?)
@@ -241,15 +189,9 @@
   "Much faster if you are dealing with persistent vectors or a pure sequence as it
   doesn't require creating a wrapper iterator or hitting protocols."
   [datatype reader & [unchecked?]]
-  (case datatype
-    :int8 `(->int8-iter ~reader ~unchecked?)
-    :uint8 `(->uint8-iter ~reader ~unchecked?)
-    :int16 `(->int16-iter ~reader ~unchecked?)
-    :uint16 `(->uint16-iter ~reader ~unchecked?)
+  (case (casting/safe-flatten datatype)
     :int32 `(->int32-iter ~reader ~unchecked?)
-    :uint32 `(->uint32-iter ~reader ~unchecked?)
     :int64 `(->int64-iter ~reader ~unchecked?)
-    :uint64 `(->uint64-iter ~reader ~unchecked?)
     :float32 `(->float32-iter ~reader ~unchecked?)
     :float64 `(->float64-iter ~reader ~unchecked?)
     :boolean `(->boolean-iter ~reader ~unchecked?)
@@ -257,10 +199,6 @@
 
 
 
-(defn ->int8-fast-iter ^ByteIter [item] item)
-(defn ->uint8-fast-iter ^ShortIter [item] item)
-(defn ->int16-fast-iter ^ShortIter [item] item)
-(defn ->uint16-fast-iter ^IntIter [item] item)
 (defn ->int32-fast-iter ^IntIter [item] item)
 (defn ->uint32-fast-iter ^LongIter [item] item)
 (defn ->int64-fast-iter ^LongIter [item] item)
@@ -273,45 +211,20 @@
 
 (defmacro datatype->fast-iter
   [datatype reader]
-  (case datatype
-    :int8 `(->int8-fast-iter ~reader)
-    :uint8 `(->uint8-fast-iter ~reader)
-    :int16 `(->int16-fast-iter ~reader)
-    :uint16 `(->uint16-fast-iter ~reader)
+  (case (casting/safe-flatten datatype)
     :int32 `(->int32-fast-iter ~reader)
-    :uint32 `(->uint32-fast-iter ~reader)
     :int64 `(->int64-fast-iter ~reader)
-    :uint64 `(->uint64-fast-iter ~reader)
     :float32 `(->float32-fast-iter ~reader)
     :float64 `(->float64-fast-iter ~reader)
     :boolean `(->boolean-fast-iter ~reader)
     :object `(->object-fast-iter ~reader)))
 
 
-(defn reader->iterator
-  [reader-item]
-  (cond
-    (instance? ByteReader reader-item) (ByteReaderIter. reader-item)
-    (instance? ShortReader reader-item) (ShortReaderIter. reader-item)
-    (instance? IntReader reader-item) (IntReaderIter. reader-item)
-    (instance? LongReader reader-item) (LongReaderIter. reader-item)
-    (instance? FloatReader reader-item) (FloatReaderIter. reader-item)
-    (instance? DoubleReader reader-item) (DoubleReaderIter. reader-item)
-    (instance? BooleanReader reader-item) (BooleanReaderIter. reader-item)
-    (instance? ObjectReader reader-item) (ObjectReaderIter. reader-item)))
-
-
 (defn datatype->iter-next-fn-name
   [datatype]
-  (case datatype
-    :int8 'nextByte
-    :uint8 'nextShort
-    :int16 'nextShort
-    :uint16 'nextInt
+  (case (casting/safe-flatten datatype)
     :int32 'nextInt
-    :uint32 'nextLong
     :int64 'nextLong
-    :uint64 'nextLong
     :float32 'nextFloat
     :float64 'nextDouble
     :boolean 'nextBoolean
@@ -319,15 +232,9 @@
 
 (defmacro datatype->iter-next-fn
   [datatype reader-iter]
-  (case datatype
-    :int8 `(.nextByte ~reader-iter)
-    :uint8 `(.nextShort ~reader-iter)
-    :int16 `(.nextShort ~reader-iter)
-    :uint16 `(.nextInt ~reader-iter)
+  (case (casting/safe-flatten datatype)
     :int32 `(.nextInt ~reader-iter)
-    :uint32 `(.nextLong ~reader-iter)
     :int64 `(.nextLong ~reader-iter)
-    :uint64 `(.nextLong ~reader-iter)
     :float32 `(.nextFloat ~reader-iter)
     :float64 `(.nextDouble ~reader-iter)
     :boolean `(.nextBoolean ~reader-iter)
@@ -336,15 +243,9 @@
 
 (defn datatype->mutable-type
   [datatype]
-  (case datatype
-    :int8 'ByteMutable
-    :uint8 'ShortMutable
-    :int16 'ShortMutable
-    :uint16 'IntMutable
+  (case (casting/safe-flatten datatype)
     :int32 'IntMutable
-    :uint32 'LongMutable
     :int64 'LongMutable
-    :uint64 'LongMutable
     :float32 'FloatMutable
     :float64 'DoubleMutable
     :boolean 'BooleanMutable
@@ -358,22 +259,11 @@
      (dtype-proto/->mutable ~'item {:datatype~datatype :unchecked? ~'unchecked?})))
 
 
-(defn ->int8-mutable
-  ^ByteMutable [item unchecked?] (implement-mutable-cast :int8))
-(defn ->uint8-mutable
-  ^ShortMutable [item unchecked?] (implement-mutable-cast :uint8))
-(defn ->int16-mutable
-  ^ShortMutable [item unchecked?] (implement-mutable-cast :int16))
-(defn ->uint16-mutable
-  ^IntMutable [item unchecked?] (implement-mutable-cast :uint16))
+
 (defn ->int32-mutable
   ^IntMutable [item unchecked?] (implement-mutable-cast :int32))
-(defn ->uint32-mutable
-  ^LongMutable [item unchecked?] (implement-mutable-cast :uint32))
 (defn ->int64-mutable
   ^LongMutable [item unchecked?] (implement-mutable-cast :int64))
-(defn ->uint64-mutable
-  ^LongMutable [item unchecked?] (implement-mutable-cast :uint64))
 (defn ->float32-mutable
   ^FloatMutable [item unchecked?] (implement-mutable-cast :float32))
 (defn ->float64-mutable
@@ -386,15 +276,9 @@
 
 (defmacro datatype->mutable
   [datatype mutable & [unchecked?]]
-  (case datatype
-    :int8 `(->int8-mutable ~mutable ~unchecked?)
-    :uint8 `(->uint8-mutable ~mutable ~unchecked?)
-    :int16 `(->int16-mutable ~mutable ~unchecked?)
-    :uint16 `(->uint16-mutable ~mutable ~unchecked?)
+  (case (casting/safe-flatten datatype)
     :int32 `(->int32-mutable ~mutable ~unchecked?)
-    :uint32 `(->uint32-mutable ~mutable ~unchecked?)
     :int64 `(->int64-mutable ~mutable ~unchecked?)
-    :uint64 `(->uint64-mutable ~mutable ~unchecked?)
     :float32 `(->float32-mutable ~mutable ~unchecked?)
     :float64 `(->float64-mutable ~mutable ~unchecked?)
     :boolean `(->boolean-mutable ~mutable ~unchecked?)
@@ -524,24 +408,6 @@
     :object 'ObjectList))
 
 
-(defn make-interface-buffer-type
-  [dtype elem-count-or-seq & [options]]
-  ((case dtype
-     :int8 (partial dtype-proto/make-container :nio-buffer :int8)
-     :uint8 (partial dtype-proto/make-container :typed-buffer :uint8)
-     :int16 (partial dtype-proto/make-container :nio-buffer :int16)
-     :uint16 (partial dtype-proto/make-container :typed-buffer :uint16)
-     :int32 (partial dtype-proto/make-container :nio-buffer :int32)
-     :uint32 (partial dtype-proto/make-container :typed-buffer :uint32)
-     :int64 (partial dtype-proto/make-container :nio-buffer :int64)
-     :uint64 (partial dtype-proto/make-container :typed-buffer :uint64)
-     :float32 (partial dtype-proto/make-container :nio-buffer :float32)
-     :float64 (partial dtype-proto/make-container :nio-buffer :float64)
-     :boolean (partial dtype-proto/make-container :list :boolean)
-     :object (partial dtype-proto/make-container :list :object))
-   elem-count-or-seq options))
-
-
 (defn byte-list-cast ^ByteList [item] item)
 (defn short-list-cast ^ShortList [item] item)
 (defn int-list-cast ^IntList [item] item)
@@ -620,15 +486,9 @@
 
 (defn datatype->mutable-type
   [datatype]
-  (case datatype
-    :int8 'ByteMutable
-    :uint8 'ShortMutable
-    :int16 'ShortMutable
-    :uint16 'IntMutable
+  (case (casting/safe-flatten datatype)
     :int32 'IntMutable
-    :uint32 'LongMutable
     :int64 'LongMutable
-    :uint64 'LongMutable
     :float32 'FloatMutable
     :float64 'DoubleMutable
     :boolean 'BooleanMutable

@@ -282,9 +282,9 @@
     (if (= (casting/safe-flatten dst-dtype) (casting/safe-flatten src-dtype))
       dst-writer
       (let [writer-fn (get marshalling-writer-table
-                           [(casting/safe-flatten dst-dtype)
-                            (casting/flatten-datatype src-dtype)])
-            dst-writer (writer-fn dst-writer options)]
+                           [(casting/safe-flatten src-dtype)
+                            (casting/safe-flatten dst-dtype)])
+            dst-writer (writer-fn dst-writer src-dtype options)]
         (if (and (= :object (casting/flatten-datatype src-dtype))
                  (not= :object src-dtype))
           (make-object-wrapper dst-writer src-dtype)

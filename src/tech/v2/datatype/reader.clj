@@ -105,9 +105,6 @@
            (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
                (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
                                         ~reader-datatype)))
-         (iterator [reader#] (reader->iterator reader#))
-         (invoke [reader# arg#]
-           (.read reader# (int arg#)))
          dtype-proto/PToBackingStore
          (->backing-store-seq [item#]
            (dtype-proto/->backing-store-seq ~buffer))
@@ -303,9 +300,9 @@
       src-reader
       (let [src-reader (let [reader-fn (get marshalling-reader-table
                                             [src-dtype dest-dtype])]
-                         (reader-fn src-reader real-dest-dtype
+                         (reader-fn src-reader dest-dtype
                                     {:unchecked? (:unchecked? options)}))
-            src-dtype (dtype-proto/get-datatype src-reader)]
+            src-dtype (casting/safe-flatten (dtype-proto/get-datatype src-reader))]
         (if (not= src-dtype dest-dtype)
           (make-object-wrapper src-reader dest-dtype {:unchecked? true})
           src-reader)))))

@@ -2,7 +2,9 @@
   "Taken from clojure.core.matrix pprint"
   (:require [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype :as dtype]
-            [tech.v2.tensor.impl :as tens-impl])
+            [tech.v2.datatype.functional :as dtype-fn]
+            [tech.v2.tensor.impl :as tens-impl]
+            [tech.v2.datatype.reduce-op :as reduce-op])
   (:import [java.lang StringBuilder]))
 
 
@@ -27,11 +29,13 @@
 
 (defn lazy-range-seq
   [shape]
-  (when (first shape)
-    (mapcat (fn [item-idx]
-              (apply concat [item-idx]
-                     (lazy-range-seq (rest shape))))
-            (range (first shape)))))
+  (mapcat (fn [item-idx]
+            (if (seq (rest shape))
+              (map (partial concat [item-idx])
+                   (lazy-range-seq (rest shape)))
+              [[item-idx]]))
+       (range (first shape))))
+
 
 (defn- column-lengths
   "Finds the longest string length of each column in an array of Strings."
@@ -45,26 +49,15 @@
         m (tens-impl/transpose m transpose-args)
         trans-shape (dtype/shape m)
         ;;Column seq
-        columns (->> (range (count (drop-last trans-shape)))
-                     (mapcat (fn [shape-idx]
-                               )))]
+        columns (->> (lazy-range-seq (drop-last trans-shape))
+                     (map #(apply tens-impl/select m (concat %
+                                                             [:all]))))]
     (mapv
-     (fn [s] (mp/element-reduce s
-                                 (fn [acc ^String e] (max acc (.length e)))
-                                 0))
-     ss)))
+     (fn [col]
+       (apply max (->> (dtype/->reader col)
+                       (map #(.length ^String %)))))
+     columns)))
 
-(defn- format-array
-  "Formats an array according to the given formatter function"
-  ([m formatter]
-    (let [m (mp/ensure-type m String)]
-      (cond
-        (mp/is-scalar? m) (formatter m)
-        :else (mp/element-map
-                (if (= Object (mp/element-type m))
-                  m
-                  (mp/convert-to-nested-vectors m))
-                formatter)))))
 
 (defn- append-elem
   "Appends an element, right-padding up to a given column length."
@@ -77,47 +70,51 @@
 
 (defn- append-row
   "Appends a row of data."
-  [^StringBuilder sb row ^IPersistentVector clens] ;; the first element doesn't have a leading ws.
-  (let [cc (.count clens)]
+  [^StringBuilder sb row clens] ;; the first element doesn't have a leading ws.
+  (let [clens (typecast/datatype->reader :int32 clens)
+        row (typecast/datatype->reader :object sb)
+        cc (dtype/ecount clens)]
     (.append sb \[)
     (dotimes [i cc]
       (when (> i 0) (.append sb \space))
-      (append-elem sb (mp/get-1d row i) (.nth clens i)))
+      (append-elem sb (.read row i) (.read clens i)))
     (.append sb \])))
 
-(defn- rprint
-  "Recursively joins each element with a leading
-   line break and whitespace. If there are no
-   elements left in the matrix it ends with a
-   closing bracket."
-  [^StringBuilder sb a pre clens]
-  (let [dims (long (mp/dimensionality a))
-        sc (long (mp/dimension-count a 0))
-        pre2 (str pre " ")]
-    (.append sb \[)
-    (dotimes [i sc]
-      (let [s (mp/get-major-slice a i)]
-        (when (> i 0)
-          (.append sb NL)
-          (.append sb pre2))
-        (if (== 2 dims)
-          (append-row sb s clens)
-          (rprint sb s pre2 clens))))
-    (.append sb \])))
+;; (defn- rprint
+;;   "Recursively joins each element with a leading
+;;    line break and whitespace. If there are no
+;;    elements left in the matrix it ends with a
+;;    closing bracket."
+;;   [^StringBuilder sb a pre clens]
+;;   (let [dims (long (mp/dimensionality a))
+;;         sc (long (mp/dimension-count a 0))
+;;         pre2 (str pre " ")]
+;;     (.append sb \[)
+;;     (dotimes [i sc]
+;;       (let [s (mp/get-major-slice a i)]
+;;         (when (> i 0)
+;;           (.append sb NL)
+;;           (.append sb pre2))
+;;         (if (== 2 dims)
+;;           (append-row sb s clens)
+;;           (rprint sb s pre2 clens))))
+;;     (.append sb \])))
 
-(defn pm
-  "Pretty-prints an array. Returns a String containing the pretty-printed representation."
-  ([a]
-    (pm a nil))
-  ([a {:keys [prefix formatter]}]
-    (let [formatter (or formatter default-formatter)
-          m (format-array a formatter)
-          prefix (or prefix "")
-          sb (StringBuilder.)]
-      (cond
-        (mp/is-scalar? m) (.append sb (str prefix m))
-        (== 1 (mp/dimensionality m))
-        (append-row sb m (column-lengths m))
-        :else
-        (let [clens (column-lengths m)] (rprint sb m prefix clens)))
-      (.toString sb))))
+;; (defn pm
+;;   "Pretty-prints an array. Returns a String containing the pretty-printed representation."
+;;   ([a]
+;;     (pm a nil))
+;;   ([tens {:keys [prefix formatter]}]
+;;    (if (tens-impl/tensor? tens)
+;;      (let [formatter (or formatter default-formatter)
+;;            n-dims (count (dtype/shape tens))
+;;            tens (-> (dtype-fn/unary-reader-map :object formatter tens)
+;;                     (tens-impl/tensor-force))
+;;            prefix (or prefix "")
+;;            sb (StringBuilder.)]
+;;        (cond
+;;          (== 1 n-dims)
+;;          (append-row sb tens (column-lengths tens))
+;;          :else
+;;          (let [clens (column-lengths tens)] (rprint sb m prefix clens)))
+;;        (.toString sb)))))

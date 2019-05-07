@@ -90,7 +90,11 @@
          n-elems# (int (dtype-proto/ecount ~dst))]
      (parallel-for/parallel-for
       idx# n-elems#
-      (buf-put dst-buf# idx# dst-pos# (.read src-reader# idx#)))))
+      (buf-put dst-buf# idx# dst-pos#
+               (casting/datatype->cast-fn
+                ~(casting/safe-flatten datatype)
+                ~datatype
+                (.read src-reader# idx#))))))
 
 
 (defn parallel-nio-write!
@@ -111,7 +115,10 @@
          n-elems# (int (dtype-proto/ecount ~dst))]
      (parallel-for/parallel-for
       idx# n-elems#
-      (.set dst-buf# idx# (.read src-reader# idx#)))))
+      (.set dst-buf# idx# (casting/datatype->cast-fn
+                           ~(casting/safe-flatten datatype)
+                           ~datatype
+                           (.read src-reader# idx#))))))
 
 
 (defn parallel-list-write!

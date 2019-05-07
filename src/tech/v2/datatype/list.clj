@@ -340,8 +340,7 @@
      {:insert-block!
       (fn [list-item# idx# values# options#]
         (let [list-item# (datatype->list-cast-fn ~datatype list-item#)
-              ary-data# (when (satisfies? dtype-proto/PToArray values#)
-                          (dtype-proto/->sub-array values#))
+              ary-data# (dtype-proto/->sub-array values#)
               idx# (int idx#)]
           ;;first, try array as they are most general
           (if (and ary-data#
@@ -366,7 +365,10 @@
                   (parallel-for/serial-for
                    iter-idx# n-values#
                    (.add list-item# (+ idx# iter-idx#)
-                         (.read item-reader# iter-idx#)))))))))}))
+                         (casting/datatype->cast-fn
+                          ~(casting/safe-flatten datatype)
+                          ~datatype
+                          (.read item-reader# iter-idx#))))))))))}))
 
 
 (extend-list ByteList :int8)

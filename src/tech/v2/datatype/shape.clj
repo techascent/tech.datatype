@@ -28,11 +28,7 @@
   (ecount [item]
     (if @corem-ecount
       (@corem-ecount item)
-      (if-let [item-shape (seq (dtype-proto/shape item))]
-        (apply * 1 item-shape)
-        (if (.isArray ^Class (type item))
-          (alength ^"[Ljava.lang.Object;" item)
-          0))))
+      (count item)))
   dtype-proto/PShape
   (shape [item]
     (if @corem-shape

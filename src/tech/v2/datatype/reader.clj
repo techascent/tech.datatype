@@ -210,7 +210,7 @@
   (let [list-buffer (dtype-proto/->list-backing-store item)
         buffer-dtype (dtype-proto/get-datatype list-buffer)
         access-map {:reader-datatype reader-datatype
-                    :intermediate-datatype intermediate-datatype
+                    :intermediate-datatype (casting/flatten-datatype intermediate-datatype)
                     :buffer-datatype buffer-dtype}
         list-reader-fn (get list-reader-table access-map)]
     (when-not list-reader-fn

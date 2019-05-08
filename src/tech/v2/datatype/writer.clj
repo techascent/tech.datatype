@@ -203,7 +203,7 @@
   [item writer-datatype intermediate-datatype & [unchecked?]]
   (let [nio-list (dtype-proto/->list-backing-store item)
         buffer-dtype (dtype-proto/get-datatype nio-list)
-        access-map {:intermediate-datatype intermediate-datatype
+        access-map {:intermediate-datatype (casting/flatten-datatype intermediate-datatype)
                     :reader-datatype writer-datatype
                     :buffer-datatype buffer-dtype}
         no-translate-writer (get list-writer-table access-map)]
@@ -286,9 +286,11 @@
 
 (defn make-marshalling-writer
   [dst-writer options]
-  (let [dst-dtype (dtype-proto/get-datatype dst-writer)
-        src-dtype (or (:datatype options)
-                      (dtype-proto/get-datatype dst-writer))]
+  (let [dst-dtype (casting/safe-flatten
+                   (dtype-proto/get-datatype dst-writer))
+        src-dtype (casting/safe-flatten
+                   (or (:datatype options)
+                       (dtype-proto/get-datatype dst-writer)))]
     (if (= dst-dtype src-dtype)
       dst-writer
       (let [writer-fn (get marshalling-writer-table

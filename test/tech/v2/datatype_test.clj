@@ -217,3 +217,22 @@
          (type (dtype/->array-copy
                 (-> (dtype/make-container :list :float64 10)
                     (dtype/sub-buffer 2 2)))))))
+
+
+(deftest nested-array-things-have-appropriate-shape
+  (is (= [5 5]
+         (->> (repeatedly 5 #(double-array 5))
+              (into-array)
+              dtype/shape)))
+  (is (= 25
+         (->> (repeatedly 5 #(double-array 5))
+              (into-array)
+              dtype/ecount)))
+  (is (= [5 5]
+         (->> (repeatedly 5 #(range 5))
+              (into-array)
+              dtype/shape)))
+  (is (= 25
+         (->> (repeatedly 5 #(range 5))
+              (into-array)
+              dtype/ecount))))

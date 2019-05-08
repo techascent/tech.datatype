@@ -12,12 +12,12 @@
        ~cls
      dtype-proto/PDatatype
      {:get-datatype (fn [item#] ~datatype)}
+     dtype-proto/PCountable
+     {:ecount (fn [item#] 1)}
      dtype-proto/PToReader
      {:->reader (fn [item# options#]
                   (-> (dtype-ary/make-array-of-type ~datatype [item#] true)
-                      (dtype-proto/->reader options#)))}
-     dtype-proto/PCountable
-     {:element-count (fn [item#] 1)}))
+                      (dtype-proto/->reader options#)))}))
 
 
 (implement-scalar-primitive Byte :int8)

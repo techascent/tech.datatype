@@ -26,17 +26,26 @@
 (extend-type Object
   dtype-proto/PCountable
   (ecount [item]
-    (if @corem-ecount
+    (cond
+      @corem-ecount
       (@corem-ecount item)
+      (.isArray ^Class (type item))
+      (apply * (dtype-proto/shape item))
+      :else
       (count item)))
   dtype-proto/PShape
   (shape [item]
-    (if @corem-shape
+    (cond
+      @corem-shape
       (@corem-shape item)
-      (let [elem-count (dtype-proto/ecount item)]
-        (if-not (= 0 (long elem-count))
-          [elem-count]
-          nil)))))
+      (.isArray ^Class (type item))
+      (let [n-elems (count item)]
+        (concat [n-elems]
+                (when (> n-elems 0)
+                  (let [first-elem (first item)]
+                    (dtype-proto/shape first-elem)))))
+      :else
+      nil)))
 
 
 (extend-type List

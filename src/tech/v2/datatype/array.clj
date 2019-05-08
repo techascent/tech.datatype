@@ -51,8 +51,6 @@
                                                target-offset# options#))}
      dtype-proto/PPrototype
      {:from-prototype (fn [src-ary# datatype# shape#]
-                        (when-not (= 1 (count shape#))
-                          (throw (ex-info "arrays are 1 dimensional" {})))
                         (make-array-of-type datatype# (base/shape->ecount shape#)))}
 
      dtype-proto/PToNioBuffer

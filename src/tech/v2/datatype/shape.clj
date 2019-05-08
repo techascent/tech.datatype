@@ -23,10 +23,24 @@
                      (catch Throwable e nil))))
 
 
+(defn scalar?
+  [item]
+  (or (number? item)
+      (string? item)
+      (and
+       (not (.isArray ^Class (type item)))
+       (not (dtype-proto/convertible-to-iterable? item)))))
+
+
+(declare shape)
+
+
 (extend-type Object
   dtype-proto/PCountable
   (ecount [item]
     (cond
+      (scalar? item)
+      0
       @corem-ecount
       (@corem-ecount item)
       (.isArray ^Class (type item))
@@ -36,16 +50,17 @@
   dtype-proto/PShape
   (shape [item]
     (cond
-      @corem-shape
-      (@corem-shape item)
+      (scalar? item)
+      nil
       (.isArray ^Class (type item))
       (let [n-elems (count item)]
-        (concat [n-elems]
-                (when (> n-elems 0)
-                  (let [first-elem (first item)]
-                    (dtype-proto/shape first-elem)))))
+        (-> (concat [n-elems]
+                    (when (> n-elems 0)
+                      (let [first-elem (first item)]
+                        (shape first-elem))))
+            vec))
       :else
-      nil)))
+      [(dtype-proto/ecount item)])))
 
 
 (extend-type List

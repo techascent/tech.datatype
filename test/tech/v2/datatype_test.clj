@@ -242,4 +242,8 @@
 (deftest base-math-sanity
   (is (= 0.0 (-> (dfn/- (range 10) (range 10))
                  (dfn/pow 2)
+                 (dfn/+))))
+
+  (is (= 0.0 (-> (dfn/- (into-array (range 10)) (range 10))
+                 (dfn/pow 2)
                  (dfn/+)))))

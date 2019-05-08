@@ -1,7 +1,8 @@
 (ns tech.v2.datatype.protocols
   (:require [tech.v2.datatype.casting :as casting])
   (:import [tech.v2.datatype Datatype Countable
-            ObjectIter IteratorObjectIter]))
+            ObjectIter IteratorObjectIter
+            ObjectReader ObjectWriter]))
 
 
 (set! *warn-on-reflection* true)
@@ -253,21 +254,44 @@
 (extend-type Object
   PToWriter
   (convertible-to-writer? [item]
-    (base-type-convertible? item))
+    (or (base-type-convertible? item)
+        (.isArray ^Class (type item))))
   (->writer [item options]
-    (-> (as-base-type item)
-        (->writer (assoc options
-                         :datatype (get-datatype item)))
-        (->writer options)))
+    (cond
+      (base-type-convertible? item)
+      (-> (as-base-type item)
+          (->writer (assoc options
+                           :datatype (get-datatype item)))
+          (->writer options))
+      (.isArray ^Class (type item))
+      (let [^"[Ljava.lang.Object;" obj-ary item
+            n-elems (alength obj-ary)]
+        (reify
+          ObjectWriter
+          (lsize [item] n-elems)
+          (write [item idx value] (aset obj-ary idx value))))))
 
   PToReader
   (convertible-to-reader? [item]
-    (base-type-convertible? item))
+    (or (base-type-convertible? item)
+        (.isArray ^Class (type item))))
   (->reader [item options]
-    (-> (as-base-type item)
-        (->reader (assoc options
-                         :datatype (get-datatype item)))
-        (->reader options)))
+    (cond
+      (base-type-convertible? item)
+      (-> (as-base-type item)
+          (->reader (assoc options
+                           :datatype (get-datatype item)))
+          (->reader options))
+      (.isArray ^Class (type item))
+      (let [^"[Ljava.lang.Object;" obj-ary item
+            n-elems (alength obj-ary)]
+        (reify
+          ObjectReader
+          (lsize [item] n-elems)
+          (read [item idx] (aget obj-ary idx))))
+      :else
+      nil
+      ))
 
   PToIterable
   (convertible-to-iterable? [item]

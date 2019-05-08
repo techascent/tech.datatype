@@ -5,7 +5,8 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.primitive]
             [tech.v2.datatype.list]
-            [tech.parallel.for :as parallel-for])
+            [tech.parallel.for :as parallel-for]
+            [tech.v2.datatype.functional :as dfn])
   (:import [java.nio FloatBuffer]))
 
 
@@ -236,3 +237,9 @@
          (->> (repeatedly 5 #(range 5))
               (into-array)
               dtype/ecount))))
+
+
+(deftest base-math-sanity
+  (is (= 0.0 (-> (dfn/- (range 10) (range 10))
+                 (dfn/pow 2)
+                 (dfn/+)))))

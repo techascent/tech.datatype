@@ -312,7 +312,10 @@
                            {})))
          (-> (case (casting/safe-flatten datatype#)
                :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
-               (make-binary-op ~opname :float64 (unchecked-double ~op-code)))
+               :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
+               :object (make-binary-op ~opname :object (let [~'x (double ~'x)
+                                                             ~'y (double ~'y)]
+                                                         ~op-code)))
              (dtype-proto/->binary-op options#))))
      dtype-proto/POperator
      (op-name [item#] ~opname)
@@ -471,6 +474,7 @@
 
 (defn binary->unary
   [{:keys [datatype unchecked? left-associate?]} bin-op constant-value]
+  (println "datatype" datatype)
   (let [datatype (or datatype (dtype-base/get-datatype constant-value))
         create-fn (get binary->unary-table (casting/safe-flatten datatype))]
     (create-fn bin-op datatype constant-value left-associate?)))

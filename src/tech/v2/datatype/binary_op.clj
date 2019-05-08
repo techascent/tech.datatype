@@ -138,8 +138,8 @@
 
 
 
-(def marshalling-binary-op-table (casting/make-marshalling-item-table
-                                  make-marshalling-binary-op-impl))
+;; (def marshalling-binary-op-table (casting/make-marshalling-item-table
+;;                                   make-marshalling-binary-op-impl))
 
 
 (defmacro extend-binary-op
@@ -155,10 +155,12 @@
           (if (= (casting/safe-flatten datatype#)
                  ~datatype)
             item#
-            (let [marshal-fn# (get marshalling-binary-op-table
-                                   [~datatype (casting/safe-flatten
-                                               datatype#)])]
-              (marshal-fn# item# datatype# unchecked?#)))))}))
+            (throw (ex-info "Binary ops cannot marshal." {}))
+            ;; (let [marshal-fn# (get marshalling-binary-op-table
+            ;;                        [~datatype (casting/safe-flatten
+            ;;                                    datatype#)])]
+            ;;   (marshal-fn# item# datatype# unchecked?#))
+            )))}))
 
 
 (extend-binary-op :int8)

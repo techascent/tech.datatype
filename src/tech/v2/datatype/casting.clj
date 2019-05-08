@@ -290,8 +290,6 @@
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
   (case dtype
-    :int8 :int32
-    :int16 :int32
     :uint8 :int32
     :uint16 :int32
     :uint32 :int64
@@ -368,7 +366,7 @@
 
 ;;Everything goes to these and these go to everything.
 (def base-marshal-types
-  #{:int32 :int64 :float32 :float64 :boolean :object})
+  #{:int8 :int16 :int32 :int64 :float32 :float64 :boolean :object})
 
 
 (defmacro make-base-datatype-table
@@ -387,7 +385,9 @@
 
 
 (def marshal-source-table
-  {:int32 base-marshal-types
+  {:int8 base-marshal-types
+   :int16 base-marshal-types
+   :int32 base-marshal-types
    :int64 base-marshal-types
    :float32 base-marshal-types
    :float64 base-marshal-types

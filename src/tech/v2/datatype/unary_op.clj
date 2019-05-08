@@ -146,8 +146,8 @@
 
 
 
-(def marshalling-unary-op-table (casting/make-marshalling-item-table
-                                 make-marshalling-unary-op-impl))
+;; (def marshalling-unary-op-table (casting/make-marshalling-item-table
+;;                                  make-marshalling-unary-op-impl))
 
 
 (defmacro extend-unary-op
@@ -163,10 +163,12 @@
                       (if (= (casting/safe-flatten un-dtype#)
                              ~datatype)
                         item#
-                        (let [marshal-fn# (get marshalling-unary-op-table
-                                               [~datatype (casting/safe-flatten
-                                                           un-dtype#)])]
-                          (marshal-fn# item# un-dtype# unchecked?#)))))}))
+                        (throw (ex-info "Unary operators cannot marshal" {}))
+                        ;; (let [marshal-fn# (get marshalling-unary-op-table
+                        ;;                        [~datatype (casting/safe-flatten
+                        ;;                                    un-dtype#)])]
+                        ;;   (marshal-fn# item# un-dtype# unchecked?#))
+                        )))}))
 
 
 (extend-unary-op :int8)

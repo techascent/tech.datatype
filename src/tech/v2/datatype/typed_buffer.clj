@@ -91,9 +91,15 @@
                                   false)
           direct-writer (cond
                           (dtype-proto/as-nio-buffer backing-store)
-                          (writer/make-buffer-writer item src-writer-unchecked?)
+                          (writer/make-buffer-writer item
+                                                     (casting/safe-flatten datatype)
+                                                     datatype
+                                                     src-writer-unchecked?)
                           (dtype-proto/as-list backing-store)
-                          (writer/make-list-writer item src-writer-unchecked?)
+                          (writer/make-list-writer item
+                                                   (casting/safe-flatten datatype)
+                                                   datatype
+                                                   src-writer-unchecked?)
                           :else
                           (dtype-proto/->writer backing-store {:datatype datatype}))]
       (cond-> direct-writer
@@ -109,9 +115,15 @@
           src-unchecked? true
           direct-reader (cond
                           (dtype-proto/as-nio-buffer backing-store)
-                          (reader/make-buffer-reader item src-unchecked?)
+                          (reader/make-buffer-reader item
+                                                     (casting/safe-flatten datatype)
+                                                     datatype
+                                                     src-unchecked?)
                           (dtype-proto/as-list backing-store)
-                          (reader/make-list-reader item src-unchecked?)
+                          (reader/make-list-reader item
+                                                   (casting/safe-flatten datatype)
+                                                   datatype
+                                                   src-unchecked?)
                           :else
                           (dtype-proto/->reader backing-store
                                                 {:datatype datatype
@@ -139,7 +151,10 @@
                            false)
           direct-mutable (cond
                            (dtype-proto/convertible-to-fastutil-list? backing-store)
-                           (mutable/make-list-mutable item src-unchecked?)
+                           (mutable/make-list-mutable item
+                                                      (casting/safe-flatten datatype)
+                                                      datatype
+                                                      src-unchecked?)
                            :else
                            (dtype-proto/->mutable backing-store
                                                   {:datatype datatype

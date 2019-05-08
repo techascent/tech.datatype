@@ -80,21 +80,22 @@
 
 (defmacro make-list-mutable-table
   []
-  `(->> [~@(for [intermediate-datatype casting/base-datatypes]
-             (let [buffer-datatype (casting/datatype->host-datatype intermediate-datatype)
-                   mutable-datatype (casting/safe-flatten intermediate-datatype)]
-               [[buffer-datatype intermediate-datatype]
-                `(fn [buffer# unchecked?#]
-                   (let [buffer# (typecast/datatype->list-cast-fn
-                                  ~buffer-datatype buffer#)]
-                     (make-mutable
-                      ~(typecast/datatype->mutable-type mutable-datatype)
-                      ~(typecast/datatype->list-type buffer-datatype)
-                      buffer#
-                      ~mutable-datatype
-                      ~intermediate-datatype
-                      ~buffer-datatype
-                      unchecked?#)))]))]
+  `(->> [~@(for [{:keys [intermediate-datatype
+                         buffer-datatype
+                         reader-datatype]
+                  :as access-map} casting/buffer-access-table]
+             [access-map
+              `(fn [buffer# unchecked?#]
+                 (let [buffer# (typecast/datatype->list-cast-fn
+                                ~buffer-datatype buffer#)]
+                   (make-mutable
+                    ~(typecast/datatype->mutable-type reader-datatype)
+                    ~(typecast/datatype->list-type buffer-datatype)
+                    buffer#
+                    ~reader-datatype
+                    ~intermediate-datatype
+                    ~buffer-datatype
+                    unchecked?#)))])]
         (into {})))
 
 
@@ -102,16 +103,20 @@
 
 
 (defn make-list-mutable
-  [item & [unchecked?]]
-  (let [item-dtype  (dtype-proto/get-datatype item)
-        list-data (dtype-proto/as-list item)
-        list-dtype (dtype-proto/get-datatype list-data)
-        mut-fn (get list-mutable-table [list-dtype item-dtype])]
+  [item
+   mutable-datatype
+   intermediate-datatype
+   & [unchecked?]]
+  (let [list-buffer (dtype-proto/->list-backing-store item)
+        buffer-dtype (dtype-proto/get-datatype list-buffer)
+        access-map {:reader-datatype mutable-datatype
+                    :intermediate-datatype intermediate-datatype
+                    :buffer-datatype buffer-dtype}
+        mut-fn (get list-mutable-table access-map)]
     (when-not mut-fn
       (throw (ex-info "Failed to find mutable operator for list type:"
-                      {:list-datatype list-dtype
-                       :item-datatype item-dtype})))
-    (mut-fn list-data unchecked?)))
+                      access-map)))
+    (mut-fn list-buffer unchecked?)))
 
 
 (defmacro reify-marshalling-mutable
@@ -155,16 +160,16 @@
   `(clojure.core/extend
        ~(typecast/datatype->mutable-type datatype)
      dtype-proto/PToMutable
-     {:convertible-to-mutable? (fn [item#] true)
+     {:convertible-to-mutable? (constantly true)
       :->mutable
       (fn [item# options#]
         (let [mut-dtype# (or (:datatype options#) (dtype-proto/get-datatype item#))]
           (if (= mut-dtype# (dtype-proto/get-datatype item#))
             item#
             (if-let [mutable-fn# (get marshalling-mutable-table
-                                      [~datatype (casting/safe-flatten mut-dtype#)])]
+                                      [(casting/safe-flatten mut-dtype#) ~datatype])]
               (do
-                (mutable-fn# item# (:unchecked? options#)))
+                (mutable-fn# item# mut-dtype# (:unchecked? options#)))
               (throw (ex-info (format "Failed to find marshalling mutable: %s %s"
                                       ~datatype mut-dtype#)
                               {:src-datatype ~datatype

@@ -44,11 +44,12 @@
    writer-datatype
    intermediate-datatype
    buffer-datatype
-   unchecked?]
+   unchecked?
+   src-item]
   `(if ~unchecked?
      (reify
        ~writer-type
-       (lsize [writer#] (dtype-shape/ecount ~buffer))
+       (lsize [writer#] (dtype-shape/ecount ~src-item))
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
           (unchecked-full-cast value# ~writer-datatype
@@ -56,37 +57,37 @@
                                ~buffer-datatype)))
        dtype-proto/PToNioBuffer
        (convertible-to-nio-buffer? [writer#]
-         (dtype-proto/nio-convertible? ~buffer))
+         (dtype-proto/nio-convertible? ~src-item))
        (->buffer-backing-store [writer#]
-         (dtype-proto/as-nio-buffer ~buffer))
+         (dtype-proto/as-nio-buffer ~src-item))
        dtype-proto/PToList
        (convertible-to-fastutil-list? [writer#]
-         (dtype-proto/list-convertible? ~buffer))
+         (dtype-proto/list-convertible? ~src-item))
        (->list-backing-store [writer#]
-         (dtype-proto/as-list ~buffer))
+         (dtype-proto/as-list ~src-item))
        jna/PToPtr
        (is-jna-ptr-convertible? [writer#]
-         (jna/ptr-convertible? ~buffer))
+         (jna/ptr-convertible? ~src-item))
        (->ptr-backing-store [writer#]
-         (jna/as-ptr ~buffer))
+         (jna/as-ptr ~src-item))
        dtype-proto/PToArray
        (->sub-array [reader#]
-         (dtype-proto/->sub-array ~buffer))
+         (dtype-proto/->sub-array ~src-item))
        (->array-copy [reader#]
-         (dtype-proto/->array-copy ~buffer))
+         (dtype-proto/->array-copy ~src-item))
 
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
-         (-> (dtype-proto/sub-buffer ~buffer offset# length#)
+         (-> (dtype-proto/sub-buffer ~src-item offset# length#)
              (dtype-proto/->writer {:datatype ~intermediate-datatype
                                     :unchecked? ~unchecked?})))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
-         (dtype-proto/set-constant! ~buffer offset#
+         (dtype-proto/set-constant! ~src-item offset#
                                     (casting/cast value# ~intermediate-datatype)
                                     elem-count#)))
      (reify ~writer-type
-       (lsize [writer#] (dtype-shape/ecount ~buffer))
+       (lsize [writer#] (dtype-shape/ecount ~src-item))
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
                              (checked-full-write-cast value# ~writer-datatype
@@ -94,34 +95,34 @@
                                                       ~buffer-datatype)))
        dtype-proto/PToNioBuffer
        (convertible-to-nio-buffer? [writer#]
-         (dtype-proto/nio-convertible? ~buffer))
+         (dtype-proto/nio-convertible? ~src-item))
        (->buffer-backing-store [writer#]
-         (dtype-proto/as-nio-buffer ~buffer))
+         (dtype-proto/as-nio-buffer ~src-item))
        dtype-proto/PToList
        (convertible-to-fastutil-list? [writer#]
-         (dtype-proto/list-convertible? ~buffer))
+         (dtype-proto/list-convertible? ~src-item))
        (->list-backing-store [writer#]
-         (dtype-proto/as-list ~buffer))
+         (dtype-proto/as-list ~src-item))
        jna/PToPtr
        (is-jna-ptr-convertible? [writer#]
-         (jna/ptr-convertible? ~buffer))
+         (jna/ptr-convertible? ~src-item))
        (->ptr-backing-store [writer#]
-         (jna/as-ptr ~buffer))
+         (jna/as-ptr ~src-item))
 
        dtype-proto/PToArray
        (->sub-array [reader#]
-         (dtype-proto/->sub-array ~buffer))
+         (dtype-proto/->sub-array ~src-item))
        (->array-copy [reader#]
-         (dtype-proto/->array-copy ~buffer))
+         (dtype-proto/->array-copy ~src-item))
 
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
-         (-> (dtype-proto/sub-buffer ~buffer offset# length#)
+         (-> (dtype-proto/sub-buffer ~src-item offset# length#)
              (dtype-proto/->writer {:datatype ~intermediate-datatype
                                     :unchecked? ~unchecked?})))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
-         (dtype-proto/set-constant! ~buffer offset#
+         (dtype-proto/set-constant! ~src-item offset#
                                     (casting/cast value# ~intermediate-datatype)
                                     elem-count#)))))
 
@@ -137,7 +138,7 @@
                                     :intermediate-datatype)))]
              (let [writer-datatype reader-datatype]
                [access-map
-                `(fn [buffer# unchecked?#]
+                `(fn [src-item# buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->buffer-cast-fn
                                   ~buffer-datatype buffer#)
                          buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
@@ -148,7 +149,8 @@
                       ~writer-datatype
                       ~intermediate-datatype
                       ~buffer-datatype
-                      unchecked?#)))]))]
+                      unchecked?#
+                      src-item#)))]))]
         (into {})))
 
 
@@ -167,7 +169,7 @@
     (when-not no-translate-writer
       (throw (ex-info "Failed to find writer for buffer and datatype combination"
                       access-map)))
-    (no-translate-writer nio-buffer unchecked?)))
+    (no-translate-writer item nio-buffer unchecked?)))
 
 
 (defmacro make-list-writer-table
@@ -178,7 +180,7 @@
                   :as access-map} casting/buffer-access-table]
              (let [writer-datatype reader-datatype]
                [access-map
-                `(fn [buffer# unchecked?#]
+                `(fn [src-item# buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->list-cast-fn
                                   ~buffer-datatype
                                   buffer#)]
@@ -189,7 +191,8 @@
                       ~writer-datatype
                       ~intermediate-datatype
                       ~buffer-datatype
-                      unchecked?#)))]))]
+                      unchecked?#
+                      src-item#)))]))]
         (into {})))
 
 
@@ -207,7 +210,7 @@
     (when-not no-translate-writer
       (throw (ex-info "Failed to find writer for buffer and datatype combination"
                       access-map)))
-    (no-translate-writer nio-list unchecked?)))
+    (no-translate-writer item nio-list unchecked?)))
 
 
 

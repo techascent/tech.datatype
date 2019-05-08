@@ -190,8 +190,8 @@
            (.op item# (casting/datatype->cast-fn :unknown ~dst-dtype arg#)))))))
 
 
-(def marshalling-boolean-unary-table (casting/make-marshalling-item-table
-                                      make-marshalling-boolean-unary))
+;; (def marshalling-boolean-unary-table (casting/make-marshalling-item-table
+;;                                       make-marshalling-boolean-unary))
 
 
 (defmacro make-marshalling-boolean-binary
@@ -212,8 +212,8 @@
                 (casting/datatype->cast-fn :unknown ~dst-dtype y#)))))))
 
 
-(def marshalling-boolean-binary-table (casting/make-marshalling-item-table
-                                       make-marshalling-boolean-binary))
+;; (def marshalling-boolean-binary-table (casting/make-marshalling-item-table
+;;                                        make-marshalling-boolean-binary))
 
 
 (defmacro extend-unary-op-types
@@ -229,9 +229,11 @@
                  unchecked?# :unchecked?} options#]
             (if (= dtype# (dtype-base/get-datatype item#))
               item#
-              (let [cast-fn# (get marshalling-boolean-unary-table
-                                  [~datatype (casting/safe-flatten dtype#)])]
-                (cast-fn# item# dtype# unchecked?#)))))}
+              (throw (ex-info "boolean ops cannot marshal" {}))
+              ;; (let [cast-fn# (get marshalling-boolean-unary-table
+              ;;                     [~datatype (casting/safe-flatten dtype#)])]
+              ;;   (cast-fn# item# dtype# unchecked?#))
+              )))}
        {:convertible-to-unary-op? (constantly true)
         :->unary-op
         (fn [item# options#]
@@ -274,8 +276,8 @@
                                                  :unchecked? unchecked?#}))))})))
 
 
-;; (extend-unary-op-types :int8)
-;; (extend-unary-op-types :int16)
+(extend-unary-op-types :int8)
+(extend-unary-op-types :int16)
 (extend-unary-op-types :int32)
 (extend-unary-op-types :int64)
 (extend-unary-op-types :float32)
@@ -297,9 +299,11 @@
                  unchecked?# :unchecked?} options#]
             (if (= dtype# (dtype-base/get-datatype item#))
               item#
-              (let [cast-fn# (get marshalling-boolean-binary-table
-                                  [~datatype (casting/safe-flatten dtype#)])]
-                (cast-fn# item# dtype# unchecked?#)))))}
+              (throw (ex-info "binary boolean ops cannot marshal" {}))
+              ;; (let [cast-fn# (get marshalling-boolean-binary-table
+              ;;                     [~datatype (casting/safe-flatten dtype#)])]
+              ;;   (cast-fn# item# dtype# unchecked?#))
+              )))}
        dtype-proto/PToBinaryOp
        {:->binary-op
         (fn [item# options#]
@@ -354,13 +358,15 @@
   (->binary-boolean-op [item dtype unchecked?]
     (if (= :boolean dtype)
       item
-      (let [cast-fn (get marshalling-boolean-binary-table
-                         [:boolean (casting/safe-flatten dtype)])]
-        (cast-fn item dtype unchecked?)))))
+      (throw (ex-info "Boolean operators cannot marshal" {}))
+      ;; (let [cast-fn (get marshalling-boolean-binary-table
+      ;;                    [:boolean (casting/safe-flatten dtype)])]
+      ;;   (cast-fn item dtype unchecked?))
+      )))
 
 
-;; (extend-binary-op-types :int8)
-;; (extend-binary-op-types :int16)
+(extend-binary-op-types :int8)
+(extend-binary-op-types :int16)
 (extend-binary-op-types :int32)
 (extend-binary-op-types :int64)
 (extend-binary-op-types :float32)

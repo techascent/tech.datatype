@@ -280,7 +280,7 @@
   [datatype]
   `(if (instance? ~(resolve (datatype->mutable-type datatype)) ~'item)
      ~'item
-     (dtype-proto/->mutable ~'item {:datatype~datatype :unchecked? ~'unchecked?})))
+     (dtype-proto/->mutable ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
 
 
 (defn ->int8-mutable
@@ -303,7 +303,7 @@
 
 (defmacro datatype->mutable
   [datatype mutable & [unchecked?]]
-  (case (casting/safe-flatten datatype)
+  (case datatype
     :int8 `(->int8-mutable ~mutable ~unchecked?)
     :int16 `(->int16-mutable ~mutable ~unchecked?)
     :int32 `(->int32-mutable ~mutable ~unchecked?)
@@ -515,13 +515,15 @@
 
 (defn datatype->mutable-type
   [datatype]
-  (case (casting/safe-flatten datatype)
-    :int32 'IntMutable
-    :int64 'LongMutable
-    :float32 'FloatMutable
-    :float64 'DoubleMutable
-    :boolean 'BooleanMutable
-    :object 'ObjectMutable))
+  (case datatype
+    :int8 'tech.v2.datatype.ByteMutable
+    :int16 'tech.v2.datatype.ShortMutable
+    :int32 'tech.v2.datatype.IntMutable
+    :int64 'tech.v2.datatype.LongMutable
+    :float32 'tech.v2.datatype.FloatMutable
+    :float64 'tech.v2.datatype.DoubleMutable
+    :boolean 'tech.v2.datatype.BooleanMutable
+    :object 'tech.v2.datatype.ObjectMutable))
 
 
 (defmacro extend-host-numeric-datatypes

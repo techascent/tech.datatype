@@ -46,96 +46,97 @@
 
 
 (defmacro make-buffer-reader-impl
-  [reader-type buffer-type buffer buffer-pos
-   reader-datatype
-   intermediate-datatype
-   buffer-datatype
-   unchecked?]
-  `(let [n-elems# (int (ecount ~buffer))]
-     (if ~unchecked?
+  [reader-datatype intermediate-datatype buffer-datatype buffer-type
+   unchecked? src-item buffer buffer-pos]
+  `(let [src-item# ~src-item
+         buffer# ~buffer
+         buffer-pos# ~buffer-pos
+         n-elems# (ecount src-item#)
+         unchecked?# ~unchecked?]
+     (if unchecked?#
        (reify
-         ~reader-type
+         ~(typecast/datatype->reader-type reader-datatype)
+         (getDatatype [reader#] ~intermediate-datatype)
          (lsize [reader#] n-elems#)
          (read [reader# idx#]
-           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
+           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype buffer# idx# buffer-pos#)
                (unchecked-full-cast ~buffer-datatype ~intermediate-datatype
                                     ~reader-datatype)))
-
          dtype-proto/PToBackingStore
-         (->backing-store-seq [item#]
-           (dtype-proto/->backing-store-seq ~buffer))
+         (->backing-store-seq [reader#]
+           (dtype-proto/->backing-store-seq src-item#))
          dtype-proto/PToNioBuffer
          (convertible-to-nio-buffer? [reader#]
-           (dtype-proto/nio-convertible? ~buffer))
+           (dtype-proto/nio-convertible? src-item#))
          (->buffer-backing-store [reader#]
-           (dtype-proto/as-nio-buffer ~buffer))
+           (dtype-proto/as-nio-buffer src-item#))
          dtype-proto/PToList
          (convertible-to-fastutil-list? [reader#]
-           (dtype-proto/list-convertible? ~buffer))
+           (dtype-proto/list-convertible? src-item#))
          (->list-backing-store [reader#]
-           (dtype-proto/as-list ~buffer))
+           (dtype-proto/as-list src-item#))
          jna/PToPtr
          (is-jna-ptr-convertible? [reader#]
-           (jna/ptr-convertible? ~buffer))
+           (jna/ptr-convertible? src-item#))
          (->ptr-backing-store [reader#]
-           (jna/as-ptr ~buffer))
+           (jna/as-ptr src-item#))
 
          dtype-proto/PToArray
          (->sub-array [reader#]
-           (dtype-proto/->sub-array ~buffer))
+           (dtype-proto/->sub-array src-item#))
          (->array-copy [reader#]
-           (dtype-proto/->array-copy ~buffer))
+           (dtype-proto/->array-copy src-item#))
 
          dtype-proto/PBuffer
          (sub-buffer [buffer# offset# length#]
-           (-> (dtype-proto/sub-buffer ~buffer offset# length#)
+           (-> (dtype-proto/sub-buffer src-item# offset# length#)
                (dtype-proto/->reader {:datatype ~intermediate-datatype
-                                      :unchecked? ~unchecked?})))
+                                      :unchecked? unchecked?#})))
          dtype-proto/PSetConstant
          (set-constant! [item# offset# value# elem-count#]
-           (dtype-proto/set-constant! ~buffer offset#
+           (dtype-proto/set-constant! src-item# offset#
                                       (casting/cast value# ~intermediate-datatype)
                                       elem-count#)))
        (reify
-         ~reader-type
+         ~(typecast/datatype->reader-type reader-datatype)
          (lsize [reader#] n-elems#)
          (read [reader# idx#]
-           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype ~buffer idx# ~buffer-pos)
+           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype buffer# idx# buffer-pos#)
                (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
                                         ~reader-datatype)))
          dtype-proto/PToBackingStore
-         (->backing-store-seq [item#]
-           (dtype-proto/->backing-store-seq ~buffer))
+         (->backing-store-seq [reader#]
+           (dtype-proto/->backing-store-seq src-item#))
          dtype-proto/PToNioBuffer
          (convertible-to-nio-buffer? [reader#]
-           (dtype-proto/nio-convertible? ~buffer))
+           (dtype-proto/nio-convertible? src-item#))
          (->buffer-backing-store [reader#]
-           (dtype-proto/as-nio-buffer ~buffer))
+           (dtype-proto/as-nio-buffer src-item#))
          dtype-proto/PToList
          (convertible-to-fastutil-list? [reader#]
-           (dtype-proto/list-convertible? ~buffer))
+           (dtype-proto/list-convertible? src-item#))
          (->list-backing-store [reader#]
-           (dtype-proto/as-list ~buffer))
+           (dtype-proto/as-list src-item#))
          jna/PToPtr
          (is-jna-ptr-convertible? [reader#]
-           (jna/ptr-convertible? ~buffer))
+           (jna/ptr-convertible? src-item#))
          (->ptr-backing-store [reader#]
-           (jna/as-ptr ~buffer))
+           (jna/as-ptr src-item#))
 
          dtype-proto/PToArray
          (->sub-array [reader#]
-           (dtype-proto/->sub-array ~buffer))
+           (dtype-proto/->sub-array src-item#))
          (->array-copy [reader#]
-           (dtype-proto/->array-copy ~buffer))
+           (dtype-proto/->array-copy src-item#))
 
          dtype-proto/PBuffer
-         (sub-buffer [buffer# offset# length#]
-           (-> (dtype-proto/sub-buffer ~buffer offset# length#)
+         (sub-buffer [reader# offset# length#]
+           (-> (dtype-proto/sub-buffer src-item# offset# length#)
                (dtype-proto/->reader {:datatype ~intermediate-datatype
-                                      :unchecked? ~unchecked?})))
+                                      :unchecked? unchecked?#})))
          dtype-proto/PSetConstant
-         (set-constant! [item# offset# value# elem-count#]
-           (dtype-proto/set-constant! ~buffer offset#
+         (set-constant! [reader# offset# value# elem-count#]
+           (dtype-proto/set-constant! src-item# offset#
                                       (casting/cast value# ~intermediate-datatype)
                                       elem-count#))))))
 
@@ -148,19 +149,15 @@
                   :as access-map}
                  (->> casting/buffer-access-table
                       (filter (comp casting/numeric-types :intermediate-datatype)))]
-             [access-map
-              `(fn [buffer# unchecked?#]
-                 (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
-                                                                  buffer#)
-                       buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
-                   (make-buffer-reader-impl
-                    ~(typecast/datatype->reader-type reader-datatype)
-                    ~(typecast/datatype->buffer-type buffer-datatype)
-                    buffer# buffer-pos#
-                    ~reader-datatype
-                    ~intermediate-datatype
-                    ~buffer-datatype
-                    unchecked?#)))])]
+             [access-map `(fn [src-item# buffer# unchecked?#]
+                            (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
+                                                                             buffer#)
+                                  buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
+                              (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
+                                                       ~buffer-datatype
+                                                       ~(typecast/datatype->buffer-type buffer-datatype)
+                                                       unchecked?# src-item#
+                                                       buffer# buffer-pos#)))])]
         (into {})))
 
 
@@ -181,7 +178,7 @@
     (when-not buffer-reader-fn
       (throw (ex-info "Failed to find nio reader creation function for buffer datatype"
                       access-map)))
-    (buffer-reader-fn nio-buffer unchecked?)))
+    (buffer-reader-fn item nio-buffer unchecked?)))
 
 
 (defmacro make-list-reader-table
@@ -190,18 +187,15 @@
                          buffer-datatype
                          reader-datatype]
                   :as access-map} casting/buffer-access-table]
-             [access-map
-              `(fn [buffer# unchecked?#]
-                 (let [buffer# (typecast/datatype->list-cast-fn
-                                ~buffer-datatype buffer#)]
-                   (make-buffer-reader-impl
-                    ~(typecast/datatype->reader-type reader-datatype)
-                    ~(typecast/datatype->list-type buffer-datatype)
-                    buffer# 0
-                    ~reader-datatype
-                    ~intermediate-datatype
-                    ~buffer-datatype
-                    unchecked?#)))])]
+             [access-map `(fn [src-item# buffer# unchecked?#]
+                            (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype
+                                                                           buffer#)
+                                  buffer-pos# 0]
+                              (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
+                                                       ~buffer-datatype
+                                                       ~(typecast/datatype->list-type buffer-datatype)
+                                                       unchecked?# src-item#
+                                                       buffer# buffer-pos#)))])]
         (into {})))
 
 
@@ -209,18 +203,20 @@
 
 
 (defn make-list-reader
-  [item & [unchecked?]]
+  [item
+   reader-datatype
+   intermediate-datatype
+   & [unchecked?]]
   (let [list-buffer (dtype-proto/->list-backing-store item)
-        item-dtype (casting/flatten-datatype (dtype-proto/get-datatype item))
         buffer-dtype (dtype-proto/get-datatype list-buffer)
-        list-reader-fn (or (get list-reader-table
-                                  [buffer-dtype (casting/flatten-datatype item-dtype)])
-                           (get buffer-reader-table [buffer-dtype buffer-dtype]))]
+        access-map {:reader-datatype reader-datatype
+                    :intermediate-datatype intermediate-datatype
+                    :buffer-datatype buffer-dtype}
+        list-reader-fn (get list-reader-table access-map)]
     (when-not list-reader-fn
       (throw (ex-info "Failed to find reader creation function for buffer datatype"
-                      {:buffer-datatype buffer-dtype
-                       :item-datatype item-dtype})))
-    (list-reader-fn list-buffer unchecked?)))
+                      access-map)))
+    (list-reader-fn item list-buffer unchecked?)))
 
 
 (defmacro make-derived-reader
@@ -298,9 +294,11 @@
 
 (defn make-marshalling-reader
   [src-reader options]
-  (let [src-dtype (dtype-proto/get-datatype src-reader)
-        dest-dtype (or (:datatype options)
-                       (dtype-proto/get-datatype src-reader))]
+  (let [src-dtype (casting/safe-flatten
+                   (dtype-proto/get-datatype src-reader))
+        dest-dtype (casting/safe-flatten
+                    (or (:datatype options)
+                        (dtype-proto/get-datatype src-reader)))]
     (if (= src-dtype dest-dtype)
       src-reader
       (let [retval-reader

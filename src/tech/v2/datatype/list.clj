@@ -208,7 +208,10 @@
      :->writer
      (fn [item options]
        (let [unchecked? (:unchecked? options)]
-         (-> (writer/make-list-writer item unchecked?)
+         (-> (writer/make-list-writer item
+                                      (dtype-proto/get-datatype item)
+                                      (dtype-proto/get-datatype item)
+                                      unchecked?)
              (dtype-proto/->writer options))))}
 
     dtype-proto/PToReader
@@ -216,7 +219,10 @@
      :->reader
      (fn [item options]
        (let [unchecked? (:unchecked? options)]
-         (-> (reader/make-list-reader item unchecked?)
+         (-> (reader/make-list-reader item
+                                      (dtype-proto/get-datatype item)
+                                      (dtype-proto/get-datatype item)
+                                      unchecked?)
              (dtype-proto/->reader options))))}
 
     dtype-proto/PToIterable
@@ -227,7 +233,10 @@
     {:convertible-to-mutable? (constantly true)
      :->mutable
      (fn [list-item options]
-       (-> (mutable/make-list-mutable list-item true)
+       (-> (mutable/make-list-mutable list-item
+                                      (dtype-proto/get-datatype list-item)
+                                      (dtype-proto/get-datatype list-item)
+                                      true)
            (dtype-proto/->mutable options)))}))
 
 
@@ -308,7 +317,10 @@
       :->writer
       (fn [item# options#]
         (let [unchecked?# (:unchecked? options#)]
-          (-> (writer/make-list-writer item# unchecked?#)
+          (-> (writer/make-list-writer item#
+                                       (casting/safe-flatten ~datatype)
+                                       ~datatype
+                                       true)
               (dtype-proto/->writer options#))))}
 
      dtype-proto/PToReader
@@ -316,7 +328,10 @@
       :->reader
       (fn [item# options#]
         (let [unchecked?# (:unchecked? options#)]
-          (-> (reader/make-list-reader item#)
+          (-> (reader/make-list-reader item#
+                                       (casting/safe-flatten ~datatype)
+                                       ~datatype
+                                       true)
               (dtype-proto/->reader options#))))}
 
      dtype-proto/PToIterable
@@ -327,7 +342,10 @@
      {:convertible-to-mutable? (constantly true)
       :->mutable
       (fn [list-item# options#]
-        (-> (mutable/make-list-mutable list-item# true)
+        (-> (mutable/make-list-mutable list-item#
+                                       (casting/safe-flatten ~datatype)
+                                       ~datatype
+                                       true)
             (dtype-proto/->mutable options#)))}
 
      dtype-proto/PRemoveRange

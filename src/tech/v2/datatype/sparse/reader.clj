@@ -1,6 +1,7 @@
 (ns tech.v2.datatype.sparse.reader
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :as typecast]
@@ -8,9 +9,7 @@
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.binary-search :as dtype-search]
             [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.argtypes :as argtypes]
-            [tech.v2.datatype.protocols.impl
-             :refer [safe-get-datatype]]))
+            [tech.v2.datatype.argtypes :as argtypes]))
 
 
 (declare ->reader const-sparse-reader make-sparse-reader)
@@ -30,7 +29,7 @@
   [index-seq & [data-reader]]
   (merge {:indexes (->reader (map :global-index index-seq) :int32)}
          (when data-reader
-           {:data (reader/make-indexed-reader
+           {:data (indexed-reader/make-indexed-reader
                    (->reader (map :data-index index-seq) :int32)
                    (->reader data-reader)
                    {})})))
@@ -40,7 +39,7 @@
   [index-seq & [data-reader]]
   (merge {:indexes (map :global-index index-seq)}
          (when data-reader
-           {:data (reader/make-iterable-indexed-iterable
+           {:data (indexed-reader/make-iterable-indexed-iterable
                    (map :data-index index-seq)
                    (iterator/->iterable data-reader))})))
 
@@ -139,7 +138,7 @@
 
 (defn ->reader
   [item & [datatype]]
-  (let [dtype (or datatype (safe-get-datatype item))]
+  (let [dtype (or datatype (dtype-proto/get-datatype item))]
     (case (argtypes/arg->arg-type item)
       :scalar
       (const-sparse-reader item dtype)
@@ -157,7 +156,7 @@
   [index-reader data-reader n-elems & {:keys [datatype
                                               sparse-value]}]
   (let [datatype (casting/safe-flatten
-                  (or datatype (safe-get-datatype data-reader)))
+                  (or datatype (dtype-proto/get-datatype data-reader)))
         create-fn (get indexed-reader-table datatype)
         sparse-value (or sparse-value (make-sparse-value datatype))]
 

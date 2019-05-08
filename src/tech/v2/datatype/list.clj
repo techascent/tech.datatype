@@ -14,9 +14,8 @@
                                               datatype->list-read-fn]]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.mutable :as mutable]
-            [clojure.core.matrix.protocols :as mp]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [tech.parallel :as parallel])
+            [tech.v2.datatype.mutable.iterable-to-list :as iterable-to-list]
+            [tech.parallel.for :as parallel-for])
   (:import [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
            [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
            [it.unimi.dsi.fastutil.ints IntList IntArrayList]
@@ -121,10 +120,10 @@
                         (make-list datatype# (base/shape->ecount shape#)))}
 
 
-     mp/PElementCount
-     {:element-count (fn [item#]
-                       (-> (datatype->list-cast-fn ~datatype item#)
-                           (.size)))}
+     dtype-proto/PCountable
+     {:ecount (fn [item#]
+                (-> (datatype->list-cast-fn ~datatype item#)
+                    (.size)))}
 
      dtype-proto/PToList
      {:convertible-to-fastutil-list? (fn [item#] true)
@@ -209,7 +208,10 @@
      :->writer
      (fn [item options]
        (let [unchecked? (:unchecked? options)]
-         (-> (writer/make-list-writer item unchecked?)
+         (-> (writer/make-list-writer item
+                                      (dtype-proto/get-datatype item)
+                                      (dtype-proto/get-datatype item)
+                                      unchecked?)
              (dtype-proto/->writer options))))}
 
     dtype-proto/PToReader
@@ -217,7 +219,10 @@
      :->reader
      (fn [item options]
        (let [unchecked? (:unchecked? options)]
-         (-> (reader/make-list-reader item unchecked?)
+         (-> (reader/make-list-reader item
+                                      (dtype-proto/get-datatype item)
+                                      (dtype-proto/get-datatype item)
+                                      unchecked?)
              (dtype-proto/->reader options))))}
 
     dtype-proto/PToIterable
@@ -228,7 +233,10 @@
     {:convertible-to-mutable? (constantly true)
      :->mutable
      (fn [list-item options]
-       (-> (mutable/make-list-mutable list-item true)
+       (-> (mutable/make-list-mutable list-item
+                                      (dtype-proto/get-datatype list-item)
+                                      (dtype-proto/get-datatype list-item)
+                                      true)
            (dtype-proto/->mutable options)))}))
 
 
@@ -309,7 +317,10 @@
       :->writer
       (fn [item# options#]
         (let [unchecked?# (:unchecked? options#)]
-          (-> (writer/make-list-writer item# unchecked?#)
+          (-> (writer/make-list-writer item#
+                                       (casting/safe-flatten ~datatype)
+                                       ~datatype
+                                       true)
               (dtype-proto/->writer options#))))}
 
      dtype-proto/PToReader
@@ -317,7 +328,10 @@
       :->reader
       (fn [item# options#]
         (let [unchecked?# (:unchecked? options#)]
-          (-> (reader/make-list-reader item#)
+          (-> (reader/make-list-reader item#
+                                       (casting/safe-flatten ~datatype)
+                                       ~datatype
+                                       true)
               (dtype-proto/->reader options#))))}
 
      dtype-proto/PToIterable
@@ -328,7 +342,10 @@
      {:convertible-to-mutable? (constantly true)
       :->mutable
       (fn [list-item# options#]
-        (-> (mutable/make-list-mutable list-item# true)
+        (-> (mutable/make-list-mutable list-item#
+                                       (casting/safe-flatten ~datatype)
+                                       ~datatype
+                                       true)
             (dtype-proto/->mutable options#)))}
 
      dtype-proto/PRemoveRange
@@ -341,8 +358,7 @@
      {:insert-block!
       (fn [list-item# idx# values# options#]
         (let [list-item# (datatype->list-cast-fn ~datatype list-item#)
-              ary-data# (when (satisfies? dtype-proto/PToArray values#)
-                          (dtype-proto/->sub-array values#))
+              ary-data# (dtype-proto/->sub-array values#)
               idx# (int idx#)]
           ;;first, try array as they are most general
           (if (and ary-data#
@@ -364,9 +380,13 @@
                 (let [item-reader# (typecast/datatype->reader
                                     ~datatype values# (:unchecked? options#))
                       n-values# (.lsize item-reader#)]
-                  (c-for [iter-idx# (long 0) (< iter-idx# n-values#) (inc iter-idx#)]
-                         (.add list-item# (+ idx# iter-idx#)
-                               (.read item-reader# iter-idx#)))))))))}))
+                  (parallel-for/serial-for
+                   iter-idx# n-values#
+                   (.add list-item# (+ idx# iter-idx#)
+                         (casting/datatype->cast-fn
+                          ~(casting/safe-flatten datatype)
+                          ~datatype
+                          (.read item-reader# iter-idx#))))))))))}))
 
 
 (extend-list ByteList :int8)
@@ -400,10 +420,10 @@
                         :backing-store
                         dtype-proto/->list-backing-store)
                     (let [list-data (make-list (casting/host-flatten datatype) 0)]
-                      (mutable/iterable->list elem-count-or-seq
-                                              list-data
-                                              {:unchecked? (:unchecked? options)
-                                               :datatype datatype})))]
+                      (iterable-to-list/iterable->list elem-count-or-seq
+                                                       list-data
+                                                       {:unchecked? (:unchecked? options)
+                                                        :datatype datatype})))]
     (if host-datatype?
       typed-buf
       (typed-buffer/set-datatype typed-buf datatype))))

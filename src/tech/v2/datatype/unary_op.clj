@@ -103,7 +103,7 @@
 
 
 (defmacro make-marshalling-unary-op-impl
-  [dst-datatype src-datatype]
+  [src-datatype dst-datatype]
   (let [host-datatype (casting/safe-flatten dst-datatype)
         src-host-datatype (casting/safe-flatten src-datatype)]
     `(fn [un-op# datatype# unchecked?#]
@@ -145,16 +145,9 @@
              (op-name [item#] op-name#)))))))
 
 
-(defmacro make-marshalling-unary-table
-  []
-  `(->> [~@(for [src-dtype casting/base-host-datatypes
-                 dst-dtype casting/base-host-datatypes]
-             [[src-dtype dst-dtype] `(make-marshalling-unary-op-impl
-                                      ~dst-dtype ~src-dtype)])]
-        (into {})))
 
-
-(def marshalling-unary-op-table (make-marshalling-unary-table))
+;; (def marshalling-unary-op-table (casting/make-marshalling-item-table
+;;                                  make-marshalling-unary-op-impl))
 
 
 (defmacro extend-unary-op
@@ -170,10 +163,12 @@
                       (if (= (casting/safe-flatten un-dtype#)
                              ~datatype)
                         item#
-                        (let [marshal-fn# (get marshalling-unary-op-table
-                                               [~datatype (casting/safe-flatten
-                                                           un-dtype#)])]
-                          (marshal-fn# item# un-dtype# unchecked?#)))))}))
+                        (throw (ex-info "Unary operators cannot marshal" {}))
+                        ;; (let [marshal-fn# (get marshalling-unary-op-table
+                        ;;                        [~datatype (casting/safe-flatten
+                        ;;                                    un-dtype#)])]
+                        ;;   (marshal-fn# item# un-dtype# unchecked?#))
+                        )))}))
 
 
 (extend-unary-op :int8)
@@ -206,37 +201,31 @@
 
 
 (defmacro make-unary-op-iterator
-  [dtype item unary-op unchecked?]
-  `(let [src-iter# (typecast/datatype->iter ~dtype ~item ~unchecked?)
-         un-op# (datatype->unary-op ~dtype ~unary-op ~unchecked?)]
-     (reify ~(typecast/datatype->iter-type dtype)
-       (getDatatype [item#] ~dtype)
-       (hasNext [item#] (.hasNext src-iter#))
-       (~(typecast/datatype->iter-next-fn-name dtype)
-        [item#]
-        (let [data-val# (typecast/datatype->iter-next-fn
-                         ~dtype src-iter#)]
-          (.op un-op# data-val#)))
-       (current [item#]
-         (->> (.current src-iter#)
-              (.op un-op#))))))
+  [dtype]
+  `(fn [item# un-op# unchecked?#]
+     (reify
+       dtype-proto/PDatatype
+       (get-datatype [iter-item#] ~dtype)
+       Iterable
+       (iterator [iter-item#]
+         (let [src-iter# (typecast/datatype->iter ~dtype item# unchecked?#)
+               un-op# (datatype->unary-op ~dtype un-op# unchecked?#)]
+           (reify ~(typecast/datatype->iter-type dtype)
+             (getDatatype [item#] ~dtype)
+             (hasNext [item#] (.hasNext src-iter#))
+             (~(typecast/datatype->iter-next-fn-name dtype)
+              [item#]
+              (let [data-val# (typecast/datatype->iter-next-fn
+                               ~dtype src-iter#)]
+                (.op un-op# data-val#)))
+             (current [item#]
+               (->> (.current src-iter#)
+                    (.op un-op#)))))))))
 
 
-(defmacro make-unary-op-iter-table
-  []
-  `(->> [~@(for [dtype casting/base-datatypes]
-             (let [host-dtype (casting/datatype->safe-host-type dtype)]
-               [dtype
-                `(fn [item# un-op# unchecked?#]
-                   (reify
-                     dtype-proto/PDatatype
-                     (get-datatype [iter-item#] ~dtype)
-                     Iterable
-                     (iterator [iter-item#]
-                       (make-unary-op-iterator ~dtype item# un-op# unchecked?#))))]))]
-        (into {})))
 
-(def unary-op-iter-table (make-unary-op-iter-table))
+(def unary-op-iter-table (casting/make-base-datatype-table
+                          make-unary-op-iterator))
 
 
 (defn unary-iterable-map
@@ -247,7 +236,7 @@
       ;;For object iteration map is probably faster
       (if (= datatype :object)
         (map (datatype->unary-op :object un-op true) item)
-        (if-let [iter-fn (get unary-op-iter-table (casting/flatten-datatype datatype))]
+        (if-let [iter-fn (get unary-op-iter-table (casting/safe-flatten datatype))]
           (iter-fn item un-op unchecked?)
           (throw (ex-info (format "Cannot unary map datatype %s" datatype) {})))))))
 
@@ -262,40 +251,29 @@
    `(unary-iterable :object ~op-code ~item)))
 
 
-(defn iterable-remove
-  [options filter-iter values]
-  (iterator/iterable-mask
-   options
-   (unary-iterable :boolean (not x) filter-iter)
-   values))
-
-
 (declare unary-reader-map)
 
 
 (defmacro make-unary-op-reader-table
-  []
-  `(->> [~@(for [dtype casting/base-datatypes]
-             (let [host-dtype (casting/datatype->safe-host-type dtype)]
-               [dtype
-                `(fn [item# un-op# unchecked?#]
-                   (let [un-op# (datatype->unary-op ~dtype un-op# true)
-                         src-reader# (typecast/datatype->reader ~dtype item#
-                                                                unchecked?#)
-                         src-dtype# (dtype-base/get-datatype src-reader#)
-                         constructor# #(unary-reader-map
-                                        (select-keys %2 [:unchecked?])
-                                        un-op#
-                                        %1)]
-                     (reader/make-derived-reader ~dtype src-dtype# unchecked?#
-                                                 src-reader#
-                                                 (->> (.read src-reader# ~'idx)
-                                                      (.op un-op#))
-                                                 constructor#)))]))]
-        (into {})))
+  [dtype]
+  `(fn [item# un-op# unchecked?#]
+     (let [un-op# (datatype->unary-op ~dtype un-op# true)
+           src-reader# (typecast/datatype->reader ~dtype item#
+                                                  unchecked?#)
+           src-dtype# (dtype-base/get-datatype src-reader#)
+           constructor# #(unary-reader-map
+                          (select-keys %2 [:unchecked?])
+                          un-op#
+                          %1)]
+       (reader/make-derived-reader ~dtype src-dtype# unchecked?#
+                                   src-reader#
+                                   (->> (.read src-reader# ~'idx)
+                                        (.op un-op#))
+                                   constructor#))))
 
 
-(def unary-op-reader-table (make-unary-op-reader-table))
+(def unary-op-reader-table (casting/make-base-datatype-table
+                            make-unary-op-reader-table))
 
 
 (defmulti unary-reader-map
@@ -345,8 +323,6 @@
                        (casting/numeric-type? datatype#))
            (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
          (case (casting/safe-flatten datatype#)
-           :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
-           :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
            :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
            :int64 (make-unary-op ~opname :int64 ~op-code)
            :float32 (make-unary-op ~opname :float32 ~op-code)
@@ -370,8 +346,6 @@
          (when-not (casting/numeric-type? datatype#)
            (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
          (case (casting/safe-flatten datatype#)
-           :int8 (make-unary-op ~opname :int8 (unchecked-byte ~op-code))
-           :int16 (make-unary-op ~opname :int16 (unchecked-short ~op-code))
            :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
            :int64 (make-unary-op ~opname :int64 ~op-code)
            :float32 (make-unary-op ~opname :float32 ~op-code)
@@ -427,8 +401,6 @@
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#]
          (case (casting/safe-flatten datatype#)
-           :int8 (make-unary-op ~opname :int8 ~op-code)
-           :int16 (make-unary-op ~opname :int16 ~op-code)
            :int32 (make-unary-op ~opname :int32 ~op-code)
            :int64 (make-unary-op ~opname :int64 ~op-code)
            :float32 (make-unary-op ~opname :float32 ~op-code)

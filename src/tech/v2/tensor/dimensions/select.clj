@@ -2,7 +2,6 @@
   "Selecting subsets from a larger set of dimensions leads to its own algebra."
   (:require [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.tensor.utils :refer [when-not-error]]
-            [clojure.core.matrix :as m]
             [tech.v2.datatype :as dtype]))
 
 (set! *unchecked-math* :warn-on-boxed)

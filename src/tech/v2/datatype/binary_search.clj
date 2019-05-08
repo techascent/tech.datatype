@@ -41,13 +41,8 @@
                  [false (unchecked-inc low#)]))))))))
 
 
-(defmacro make-binary-search-table
-  []
-  `(->> [~@(for [dtype casting/host-numeric-types]
-             [dtype `(make-binary-search ~dtype)])]
-        (into {})))
-
-(def binary-search-table (make-binary-search-table))
+(def binary-search-table (casting/make-base-no-boolean-datatype-table
+                          make-binary-search))
 
 
 (defn binary-search
@@ -57,7 +52,7 @@
   [values target {:keys [datatype
                          comparator]}]
   (let [datatype (or datatype (dtype-base/get-datatype target))]
-    (if-let [value-fn (get binary-search-table (casting/datatype->safe-host-type
+    (if-let [value-fn (get binary-search-table (casting/safe-flatten
                                                 datatype))]
       (value-fn values target comparator)
       (throw (ex-info (format "No search mechanism found for datatype %s" datatype)

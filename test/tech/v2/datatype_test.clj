@@ -5,8 +5,7 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.primitive]
             [tech.v2.datatype.list]
-            [clojure.core.matrix :as m]
-            [clojure.core.matrix.macros :refer [c-for]])
+            [tech.parallel.for :as parallel-for])
   (:import [java.nio FloatBuffer]))
 
 
@@ -39,8 +38,8 @@
     ;;copy starting at position 2 of ary into position 4 of buf 4 elements
     (dtype/copy! ary 2 buf 4 4)
     (dtype/copy! buf 0 retval 0 10)
-    (is (m/equals [0 0 0 0 2 3 4 5 0 0]
-                  (mapv int (dtype/->vector retval)))
+    (is (= [0 0 0 0 2 3 4 5 0 0]
+           (mapv int (dtype/->vector retval)))
         (pr-str {:src-fn src-fn :dest-fn dest-fn
                  :src-dtype src-dtype :dst-dtype dst-dtype}))
     (is (= 10 (dtype/ecount buf)))))
@@ -114,8 +113,9 @@
           src-data (float-array (range num-items))
           dst-data (float-array num-items)
           array-copy (fn []
-                       (c-for [idx (int 0) (< idx num-items) (inc idx)]
-                              (aset dst-data idx (aget src-data idx))))
+                       (parallel-for/parallel-for
+                        idx num-items
+                        (aset dst-data idx (aget src-data idx))))
           src-buf (FloatBuffer/wrap src-data)
           dst-buf (FloatBuffer/wrap dst-data)
           buffer-copy (fn []
@@ -125,8 +125,9 @@
                               ;; src-buf (FloatBuffer/wrap src-data)
                               ;; dst-buf (FloatBuffer/wrap dst-data)
                               ]
-                          (c-for [idx (int 0) (< idx num-items) (inc idx)]
-                                 (.put dst-buf idx (.get src-buf idx)))))
+                          (parallel-for/parallel-for
+                           idx num-items
+                           (.put dst-buf idx (.get src-buf idx)))))
 
           dtype-copy (fn []
                        (dtype/copy! src-buf 0 dst-buf 0 num-items))

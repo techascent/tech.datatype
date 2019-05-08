@@ -6,7 +6,7 @@
             [tech.v2.datatype.jna :as dtype-jna]
             [tech.jna :as jna]
             [tech.v2.datatype.typed-buffer :as typed-buffer]
-            [clojure.core.matrix.macros :refer [c-for]]))
+            [tech.parallel.for :as parallel-for]))
 
 
 (set! *warn-on-reflection* true)
@@ -30,8 +30,9 @@
           src-data (float-array (range num-items))
           dst-data (float-array num-items)
           array-copy (fn []
-                       (c-for [idx (int 0) (< idx num-items) (inc idx)]
-                              (aset dst-data idx (aget src-data idx))))
+                       (parallel-for/parallel-for
+                        idx num-items
+                        (aset dst-data idx (aget src-data idx))))
 
           src-ptr (dtype-jna/make-typed-pointer :float32 src-data)
           dst-ptr (dtype-jna/make-typed-pointer :float32 num-items)

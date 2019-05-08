@@ -7,7 +7,8 @@
             [tech.v2.datatype.unary-op :as dtype-unary]
             [tech.v2.datatype.binary-op :as dtype-binary]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.argtypes :as argtypes])
+            [tech.v2.datatype.argtypes :as argtypes]
+            [tech.v2.datatype.iterable.masked :as masked-iterable])
   (:import [tech.v2.datatype
             BooleanOp$ByteBinary
             BooleanOp$ShortBinary
@@ -188,16 +189,9 @@
          (invoke [item# arg#]
            (.op item# (casting/datatype->cast-fn :unknown ~dst-dtype arg#)))))))
 
-(defmacro make-marshalling-boolean-unary-table
-  []
-  `(->> [~@(for [src-dtype casting/base-host-datatypes
-                 dst-dtype casting/base-host-datatypes]
-             [[src-dtype dst-dtype]
-              `(make-marshalling-boolean-unary ~src-dtype ~dst-dtype)])]
-        (into {})))
 
-
-(def marshalling-boolean-unary-table (make-marshalling-boolean-unary-table))
+;; (def marshalling-boolean-unary-table (casting/make-marshalling-item-table
+;;                                       make-marshalling-boolean-unary))
 
 
 (defmacro make-marshalling-boolean-binary
@@ -218,16 +212,8 @@
                 (casting/datatype->cast-fn :unknown ~dst-dtype y#)))))))
 
 
-(defmacro make-marshalling-boolean-binary-table
-  []
-  `(->> [~@(for [src-dtype casting/base-host-datatypes
-                 dst-dtype casting/base-host-datatypes]
-             [[src-dtype dst-dtype]
-              `(make-marshalling-boolean-binary ~src-dtype ~dst-dtype)])]
-        (into {})))
-
-
-(def marshalling-boolean-binary-table (make-marshalling-boolean-binary-table))
+;; (def marshalling-boolean-binary-table (casting/make-marshalling-item-table
+;;                                        make-marshalling-boolean-binary))
 
 
 (defmacro extend-unary-op-types
@@ -243,9 +229,11 @@
                  unchecked?# :unchecked?} options#]
             (if (= dtype# (dtype-base/get-datatype item#))
               item#
-              (let [cast-fn# (get marshalling-boolean-unary-table
-                                  [~datatype (casting/safe-flatten dtype#)])]
-                (cast-fn# item# dtype# unchecked?#)))))}
+              (throw (ex-info "boolean ops cannot marshal" {}))
+              ;; (let [cast-fn# (get marshalling-boolean-unary-table
+              ;;                     [~datatype (casting/safe-flatten dtype#)])]
+              ;;   (cast-fn# item# dtype# unchecked?#))
+              )))}
        {:convertible-to-unary-op? (constantly true)
         :->unary-op
         (fn [item# options#]
@@ -311,9 +299,11 @@
                  unchecked?# :unchecked?} options#]
             (if (= dtype# (dtype-base/get-datatype item#))
               item#
-              (let [cast-fn# (get marshalling-boolean-binary-table
-                                  [~datatype (casting/safe-flatten dtype#)])]
-                (cast-fn# item# dtype# unchecked?#)))))}
+              (throw (ex-info "binary boolean ops cannot marshal" {}))
+              ;; (let [cast-fn# (get marshalling-boolean-binary-table
+              ;;                     [~datatype (casting/safe-flatten dtype#)])]
+              ;;   (cast-fn# item# dtype# unchecked?#))
+              )))}
        dtype-proto/PToBinaryOp
        {:->binary-op
         (fn [item# options#]
@@ -368,9 +358,11 @@
   (->binary-boolean-op [item dtype unchecked?]
     (if (= :boolean dtype)
       item
-      (let [cast-fn (get marshalling-boolean-binary-table
-                         [:boolean (casting/safe-flatten dtype)])]
-        (cast-fn item dtype unchecked?)))))
+      (throw (ex-info "Boolean operators cannot marshal" {}))
+      ;; (let [cast-fn (get marshalling-boolean-binary-table
+      ;;                    [:boolean (casting/safe-flatten dtype)])]
+      ;;   (cast-fn item dtype unchecked?))
+      )))
 
 
 (extend-binary-op-types :int8)
@@ -407,14 +399,8 @@
                    (.op bool-op# (.current src-iter#)))))))))))
 
 
-(defmacro make-boolean-unary-iterable-table
-  []
-  `(->> [~@(for [dtype casting/base-host-datatypes]
-             [dtype `(make-boolean-unary-iterable ~dtype)])]
-        (into {})))
-
-
-(def boolean-unary-iterable-table (make-boolean-unary-iterable-table))
+(def boolean-unary-iterable-table (casting/make-base-datatype-table
+                                   make-boolean-unary-iterable))
 
 
 (defn boolean-unary-iterable-map
@@ -442,14 +428,14 @@
   (let [bool-iterable (boolean-unary-iterable-map
                        options bool-unary-filter-op
                        filter-seq)]
-    (iterator/iterable-mask options bool-iterable filter-seq)))
+    (masked-iterable/iterable-mask options bool-iterable filter-seq)))
 
 
 (defn unary-argfilter
   "Returns a (potentially infinite) sequence of indexes that pass the filter."
   [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
   (let [bool-iterable (boolean-unary-iterable-map options bool-unary-filter-op filter-seq)]
-    (iterator/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
+    (masked-iterable/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
 
 
 (defn argfind
@@ -487,14 +473,8 @@
                         (.current rhs-iter#)))))))))))
 
 
-(defmacro make-boolean-binary-iterable-table
-  []
-  `(->> [~@(for [dtype casting/base-host-datatypes]
-             [dtype `(make-boolean-binary-iterable ~dtype)])]
-        (into {})))
-
-
-(def boolean-binary-iterable-table (make-boolean-binary-iterable-table))
+(def boolean-binary-iterable-table (casting/make-base-datatype-table
+                                    make-boolean-binary-iterable))
 
 
 (defn boolean-binary-iterable-map
@@ -522,7 +502,7 @@
   (let [bool-iterable (boolean-binary-iterable-map options
                                                bool-binary-filter-op
                                                lhs-seq rhs-seq)]
-    (iterator/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
+    (masked-iterable/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
 
 
 (declare boolean-unary-reader)
@@ -545,14 +525,7 @@
                                      create-fn#)))))
 
 
-(defmacro make-boolean-unary-reader-table
-  []
-  `(->> [~@(for [dtype casting/base-host-datatypes]
-             [dtype `(make-boolean-unary-reader ~dtype)])]
-        (into {})))
-
-
-(def boolean-unary-reader-table (make-boolean-unary-reader-table))
+(def boolean-unary-reader-table (casting/make-base-datatype-table make-boolean-unary-reader))
 
 
 (defmulti boolean-unary-reader-map
@@ -602,14 +575,9 @@
                   (.read rhs-reader# idx#))))))))
 
 
-(defmacro make-boolean-binary-reader-table
-  []
-  `(->> [~@(for [dtype casting/base-host-datatypes]
-             [dtype `(make-boolean-binary-reader ~dtype)])]
-        (into {})))
 
-
-(def boolean-binary-reader-table (make-boolean-binary-reader-table))
+(def boolean-binary-reader-table (casting/make-base-datatype-table
+                                  make-boolean-binary-reader))
 
 
 

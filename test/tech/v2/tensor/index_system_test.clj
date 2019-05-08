@@ -3,6 +3,7 @@
             [tech.v2.tensor.dimensions :as dims]
             [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.readers.const :as const-reader]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.functional :as dtype-fn]
             [clojure.pprint :as pp]
@@ -94,7 +95,7 @@
          (str "forward, backward" explain-str))))
   ([shape strides max-shape]
    (base-index-system-test shape strides
-                           (reader/make-const-reader
+                           (const-reader/make-const-reader
                             0 :int32 (dtype/ecount shape))
                            max-shape)))
 

@@ -4,14 +4,11 @@
             [tech.v2.datatype.io :as dtype-io]
             [tech.v2.datatype.base :as base]
             [tech.jna :as jna]
-            [tech.parallel :as parallel]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.mutable :as mutable]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.jna :as jna]
-            [clojure.core.matrix.macros :refer [c-for]]
-            [clojure.core.matrix.protocols :as mp])
+            [tech.jna :as jna])
   (:import [com.sun.jna Pointer]
            [tech.v2.datatype.protocols PDatatype]))
 
@@ -94,9 +91,15 @@
                                   false)
           direct-writer (cond
                           (dtype-proto/as-nio-buffer backing-store)
-                          (writer/make-buffer-writer item src-writer-unchecked?)
+                          (writer/make-buffer-writer item
+                                                     (casting/safe-flatten datatype)
+                                                     datatype
+                                                     src-writer-unchecked?)
                           (dtype-proto/as-list backing-store)
-                          (writer/make-list-writer item src-writer-unchecked?)
+                          (writer/make-list-writer item
+                                                   (casting/safe-flatten datatype)
+                                                   datatype
+                                                   src-writer-unchecked?)
                           :else
                           (dtype-proto/->writer backing-store {:datatype datatype}))]
       (cond-> direct-writer
@@ -112,9 +115,15 @@
           src-unchecked? true
           direct-reader (cond
                           (dtype-proto/as-nio-buffer backing-store)
-                          (reader/make-buffer-reader item src-unchecked?)
+                          (reader/make-buffer-reader item
+                                                     (casting/safe-flatten datatype)
+                                                     datatype
+                                                     src-unchecked?)
                           (dtype-proto/as-list backing-store)
-                          (reader/make-list-reader item src-unchecked?)
+                          (reader/make-list-reader item
+                                                   (casting/safe-flatten datatype)
+                                                   datatype
+                                                   src-unchecked?)
                           :else
                           (dtype-proto/->reader backing-store
                                                 {:datatype datatype
@@ -142,7 +151,10 @@
                            false)
           direct-mutable (cond
                            (dtype-proto/convertible-to-fastutil-list? backing-store)
-                           (mutable/make-list-mutable item src-unchecked?)
+                           (mutable/make-list-mutable item
+                                                      (casting/safe-flatten datatype)
+                                                      datatype
+                                                      src-unchecked?)
                            :else
                            (dtype-proto/->mutable backing-store
                                                   {:datatype datatype
@@ -173,8 +185,8 @@
   (->ptr-backing-store [item]
     (jna/as-ptr backing-store))
 
-  mp/PElementCount
-  (element-count [item] (mp/element-count backing-store)))
+  dtype-proto/PCountable
+  (ecount [item] (dtype-proto/ecount backing-store)))
 
 
 (defn typed-buffer?

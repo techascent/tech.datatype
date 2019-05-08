@@ -5,8 +5,7 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
             [tech.jna :as jna]
-            [tech.resource :as resource]
-            [clojure.core.matrix.protocols :as mp])
+            [tech.resource :as resource])
   (:import [com.sun.jna Pointer Native Function NativeLibrary]
            [com.sun.jna.ptr PointerByReference]
            [java.nio ByteBuffer Buffer]))

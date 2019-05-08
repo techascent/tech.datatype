@@ -5,20 +5,16 @@
                      datatype->host-type]
              :as casting]
             [tech.jna :as jna]
-            [tech.parallel :as parallel]
             [clojure.set :as c-set]
-            [clojure.core.matrix.macros :refer [c-for]]
             [tech.v2.datatype.fast-copy :as fast-copy]
             [tech.v2.datatype.typecast
              :refer [datatype->reader
-                     datatype->writer
-                     reader->iterator]
+                     datatype->writer]
              :as typecast]
-            [clojure.core.matrix.protocols :as mp]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
-            [tech.v2.datatype.protocols.impl
-             :refer [safe-get-datatype]])
+            [tech.v2.datatype.writers.indexed :as indexed-writer]
+            [tech.v2.datatype.readers.indexed :as indexed-reader])
 
   (:import [tech.v2.datatype
             ObjectReader ObjectWriter ObjectMutable
@@ -39,8 +35,8 @@
 
 (defn dense-copy!
   [dst src unchecked?]
-  (let [dst-dtype (safe-get-datatype dst)
-        src-dtype (safe-get-datatype src)
+  (let [dst-dtype (dtype-proto/get-datatype dst)
+        src-dtype (dtype-proto/get-datatype src)
         src-buf (or (typecast/as-nio-buffer src)
                     (typecast/as-list src))
         dst-nio (typecast/as-nio-buffer dst)
@@ -49,8 +45,8 @@
         src-list (typecast/as-list src)
         src-reader? (dtype-proto/convertible-to-reader? src)
         dst-buf (or dst-nio dst-list)
-        src-buf-dtype (when src-buf (safe-get-datatype src-buf))
-        dst-buf-dtype (when dst-buf (safe-get-datatype dst-buf))
+        src-buf-dtype (when src-buf (dtype-proto/get-datatype src-buf))
+        dst-buf-dtype (when dst-buf (dtype-proto/get-datatype dst-buf))
         fast-path? (and src-buf
                         dst-buf
                         (or (and (numeric-type? dst-dtype)
@@ -97,11 +93,11 @@
 
 (defn write-indexes!
   [item indexes values options]
-  (let [datatype (or (:datatype options) (safe-get-datatype item))]
+  (let [datatype (or (:datatype options) (dtype-proto/get-datatype item))]
     ;;We use parallel reader because values is likely to be a raw buffer and thus
     ;;we can get direct buffer access to it.  We know that we cannot get a raw buffer
     ;;from an indexed writer.
-    (fast-copy/parallel-read! (writer/make-indexed-writer
+    (fast-copy/parallel-read! (indexed-writer/make-indexed-writer
                                indexes item (assoc options :datatype datatype))
                               values (:unchecked? options))
     item))
@@ -109,8 +105,8 @@
 
 (defn read-indexes!
   [item indexes values options]
-  (let [datatype (or (:datatype options) (safe-get-datatype item))]
-    (fast-copy/parallel-write! values (reader/make-indexed-reader
+  (let [datatype (or (:datatype options) (dtype-proto/get-datatype item))]
+    (fast-copy/parallel-write! values (indexed-reader/make-indexed-reader
                                        indexes values (assoc options :datatype datatype))
                                true)
     values))

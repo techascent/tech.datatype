@@ -7,8 +7,7 @@
   Shape vectors may have an index buffer in them at a specific dimension instead of a
   number.  This means that that dimension should be indexed indirectly.  If a shape has
   any index buffers then it is considered an indirect shape."
-  (:require [clojure.core.matrix :as m]
-            [tech.v2.datatype :as dtype]
+  (:require [tech.v2.datatype :as dtype]
             [tech.v2.tensor.dimensions.select :as dims-select]
             [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.datatype.functional :as dtype-fn]
@@ -19,6 +18,8 @@
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.readers.const :as const-reader]
+            [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.argsort :as argsort]
             [tech.v2.tensor.utils
@@ -429,8 +430,8 @@ to be reversed for the most efficient implementation."
             rev-max-shape (int-array (utils/reversev max-shape))
             reverse-offsets (if-let [item-offsets (:offsets dims)]
                               (utils/reversev item-offsets)
-                              (reader/make-const-reader 0 :int32
-                                                        (count reverse-shape)))]
+                              (const-reader/make-const-reader 0 :int32
+                                                              (count reverse-shape)))]
         ;;General case when direct shape
         (if direct?
           (let [rev-shape (int-array reverse-shape)
@@ -580,9 +581,9 @@ to be reversed for the most efficient implementation."
         max-shape (:max-shape dims)
         broadcasting? (not= shape max-shape)
         n-shape (count shape)
-        offsets (or offsets (reader/make-const-reader 0 :int32 n-shape))
+        offsets (or offsets (const-reader/make-const-reader 0 :int32 n-shape))
         shape-mins (if dims-direct?
-                     (reader/make-const-reader 0 :int32 n-shape)
+                     (const-reader/make-const-reader 0 :int32 n-shape)
                      (mapv (fn [shape-entry]
                              (cond
                                (number? shape-entry)
@@ -596,12 +597,12 @@ to be reversed for the most efficient implementation."
         (if strides-increasing?
           [shape strides offsets shape-mins nil]
           (let [index-ary (argsort/argsort strides {:datatype :int32 :reverse? true})]
-            [(reader/make-indexed-reader index-ary shape {:datatype :object})
-             (reader/make-indexed-reader index-ary strides {:datatype :int32})
-             (reader/make-indexed-reader index-ary offsets {:datatype :int32})
+            [(indexed-reader/make-indexed-reader index-ary shape {:datatype :object})
+             (indexed-reader/make-indexed-reader index-ary strides {:datatype :int32})
+             (indexed-reader/make-indexed-reader index-ary offsets {:datatype :int32})
              (if dims-direct?
                shape-mins
-               (reader/make-indexed-reader index-ary shape-mins {:datatype :int32}))
+               (indexed-reader/make-indexed-reader index-ary shape-mins {:datatype :int32}))
              ;;In order to invert an arbitrary transposition, argsort it
              (argsort/argsort index-ary {:datatype :int32})]))
         shape-obj-reader shape
@@ -679,7 +680,7 @@ to be reversed for the most efficient implementation."
                     local-shape (if transpose-vec
                                   (typecast/datatype->reader
                                    :int32
-                                   (reader/make-indexed-reader
+                                   (indexed-reader/make-indexed-reader
                                     transpose-vec local-shape {:datatype :int32
                                                                :unchecked? true}))
                                   local-shape)

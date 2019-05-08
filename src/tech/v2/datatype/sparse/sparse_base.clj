@@ -1,5 +1,6 @@
 (ns tech.v2.datatype.sparse.sparse-base
   (:require [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.sparse.reader
              :refer [make-sparse-value
                      make-sparse-reader]]
@@ -8,6 +9,7 @@
             [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.iterator :as iterator]
+            [tech.v2.datatype.iterable.masked :as masked-iterable]
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
@@ -18,8 +20,7 @@
             [tech.v2.datatype.argsort :as argsort]
             [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.functional.impl :as impl]
-            [tech.v2.datatype.functional :as functional]
-            [clojure.core.matrix.protocols :as mp]))
+            [tech.v2.datatype.functional :as functional]))
 
 
 
@@ -52,9 +53,9 @@
         ;;cache the filter, we will need ecount anyway
         filter-iter (->> (sparse-filter-fn data-seq sparse-value)
                          (dtype-base/make-container :list :boolean))
-        indexes (->> (iterator/iterable-mask {:datatype :int32} filter-iter (range))
+        indexes (->> (masked-iterable/iterable-mask {:datatype :int32} filter-iter (range))
                      (dtype-base/make-container :list :int32))
-        data (->> (iterator/iterable-mask {:datatype datatype} filter-iter data-seq)
+        data (->> (masked-iterable/iterable-mask {:datatype datatype} filter-iter data-seq)
                   (dtype-base/make-container :list datatype))]
     (make-sparse-reader indexes data (dtype-base/ecount filter-iter)
                         :datatype datatype
@@ -86,13 +87,12 @@
                      (dtype-base/get-datatype sparse-item))
         sparse-item (sparse-proto/->sparse sparse-item)]
     (make-sparse-reader (sparse-proto/index-reader sparse-item)
-                        (impl/apply-unary-boolean-op {} un-op
+                        (impl/apply-unary-boolean-op {:datatype datatype}
+                                                     un-op
                                                      (sparse-proto/data-reader
                                                       sparse-item))
                         (dtype-base/ecount sparse-item)
-                        :sparse-value
-                        ((dtype-proto/->unary-boolean-op un-op {:datatype datatype})
-                         (sparse-proto/sparse-value sparse-item))
+                        :sparse-value (un-op (sparse-proto/sparse-value sparse-item))
                         :datatype :boolean)))
 
 
@@ -227,8 +227,8 @@
         [new-indexes new-values]
         (if-not indexes-in-order?
           (let [ordered-indexes (argsort/argsort new-indexes {:datatype :int32})]
-            [(reader/make-indexed-reader ordered-indexes new-indexes {})
-             (reader/make-indexed-reader ordered-indexes new-data {})])
+            [(indexed-reader/make-indexed-reader ordered-indexes new-indexes {})
+             (indexed-reader/make-indexed-reader ordered-indexes new-data {})])
           [new-indexes new-data])
         new-indexes (unary-op/unary-reader
                      :int32
@@ -259,7 +259,7 @@
   [sparse-item dense-item & {:keys [datatype sparse-value] :as options}]
   (let [sparse-indexes (sparse-proto/index-reader sparse-item)]
     (make-sparse-reader sparse-indexes
-                        (reader/make-indexed-reader
+                        (indexed-reader/make-indexed-reader
                          sparse-indexes
                          dense-item
                          {})

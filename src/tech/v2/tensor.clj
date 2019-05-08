@@ -4,12 +4,13 @@
             [tech.v2.tensor.impl :as impl]
             [tech.v2.tensor.dimensions :as dims]
             [tech.v2.tensor.dimensions.shape :as shape]
+            ;;Ensure printing things works.
+            [tech.v2.tensor.pprint]
             [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.functional.impl :as func-impl]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.binary-op :as binary-op]))
-
 
 
 (func-impl/export-symbols tech.v2.tensor.impl
@@ -28,8 +29,6 @@
                           tensor-buffer-type
                           mutable?
                           matrix-matrix-dispatch
-                          ->core-matrix
-                          ->core-matrix-vector
                           ->jvm)
 
 
@@ -54,7 +53,6 @@
   (let [[n-rows n-cols] (dtype/shape tens)]
     (->> (range n-cols)
          (map #(select tens :all %)))))
-
 
 
 (defn matrix-multiply

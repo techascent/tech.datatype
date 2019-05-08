@@ -6,6 +6,7 @@
             [tech.v2.datatype.functional.impl :as impl]
             [tech.v2.datatype.argsort :as argsort]
             [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.binary-search :as binary-search]
             [tech.v2.datatype.protocols :as dtype-proto]
@@ -44,7 +45,7 @@
                      binary-reader-map
                      make-binary-op
                      make-numeric-binary-op
-                     make-long-binary-op
+                     make-int-long-binary-op
                      make-float-double-binary-op
                      binary-iterable
                      binary-reader)
@@ -102,7 +103,7 @@
 
 (defn indexed-reader
   [indexes data & {:keys [datatype unchecked?] :as options}]
-  (reader/make-indexed-reader indexes data options))
+  (indexed-reader/make-indexed-reader indexes data options))
 
 
 

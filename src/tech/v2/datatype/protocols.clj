@@ -1,8 +1,8 @@
 (ns tech.v2.datatype.protocols
-  (:require [clojure.core.matrix.protocols :as mp]
-            [tech.v2.datatype.casting :as casting])
+  (:require [tech.v2.datatype.casting :as casting])
   (:import [tech.v2.datatype Datatype Countable
             ObjectIter IteratorObjectIter]))
+
 
 (set! *warn-on-reflection* true)
 
@@ -13,15 +13,19 @@
   PDatatype
   (get-datatype [item] (.getDatatype item)))
 
-
 (extend-type Object
   PDatatype
   (get-datatype [item] :object))
 
+(defprotocol PCountable
+  (ecount [item]))
 
 (extend-type Countable
-  mp/PElementCount
-  (element-count [item] (.lsize item)))
+  PCountable
+  (ecount [item] (.lsize item)))
+
+(defprotocol PShape
+  (shape [item]))
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."
@@ -122,7 +126,7 @@
     (when-let [ary-data (->sub-array item)]
       (let [{:keys [java-array offset length]} ary-data]
         (when (and (= (int offset) 0)
-                   (= (int (mp/element-count java-array))
+                   (= (int (ecount java-array))
                       (int length)))
           java-array)))))
 
@@ -284,9 +288,11 @@
   (->sub-array [item] nil)
   (->array-copy [item]
     (let [retval
-          (make-container :java-array (get-datatype item) (mp/element-count item) {})]
+          (make-container :java-array (get-datatype item) (ecount item) {})]
       (first (copy-raw->item! item retval 0 {}))))
 
+  POperator
+  (op-name [item] :unnamed)
 
   PToUnaryOp
   (convertible-to-unary-op? [item] false)

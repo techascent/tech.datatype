@@ -24,6 +24,7 @@
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.readers.range :as reader-range]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.array]
@@ -480,7 +481,7 @@
                  (.read value-reader# ~'next))
               ~'accum
               ~'next)
-            (reader/reader-range :int32 0 n-elems#)))))
+            (reader-range/reader-range :int32 0 n-elems#)))))
     `(fn [values#]
        (let [value-reader# (typecast/datatype->reader ~datatype values#)
              n-elems# (.size value-reader#)]
@@ -491,7 +492,7 @@
                (.read value-reader# ~'next))
             ~'accum
             ~'next)
-          (reader/reader-range :int32 0 n-elems#))))))
+          (reader-range/reader-range :int32 0 n-elems#))))))
 
 
 (defmacro make-no-boolean-macro-table
@@ -578,7 +579,7 @@
                 0)
           ~'accum
           ~'next)
-        (reader/reader-range :int32 0 n-elems#)))))
+        (reader-range/reader-range :int32 0 n-elems#)))))
 
 (def compare-arg-ops (make-no-boolean-macro-table impl-compare-arg-op))
 
@@ -608,7 +609,7 @@
                 0)
           ~'accum
           ~'next)
-        (reader/reader-range :int32 0 n-elems#)))))
+        (reader-range/reader-range :int32 0 n-elems#)))))
 
 (def compare-last-arg-ops (make-no-boolean-macro-table impl-compare-last-arg-op))
 

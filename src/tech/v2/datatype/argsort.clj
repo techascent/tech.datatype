@@ -3,8 +3,7 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.comparator :refer :all]
-            [clojure.core.matrix.protocols :as mp])
+            [tech.v2.datatype.comparator :refer :all])
   (:import [it.unimi.dsi.fastutil.bytes ByteArrays ByteComparator]
            [it.unimi.dsi.fastutil.shorts ShortArrays ShortComparator]
            [it.unimi.dsi.fastutil.ints IntArrays IntComparator]
@@ -30,7 +29,7 @@
   `(fn [values# parallel?# reverse?# comparator#]
      (let [comparator# (or comparator#
                            (default-comparator ~datatype))
-           n-elems# (int (mp/element-count values#))]
+           n-elems# (int (dtype-proto/ecount values#))]
        (if (= n-elems# 0)
          (int-array 0)
          (let [index-array# (int-array (range n-elems#))
@@ -52,15 +51,8 @@
            index-array#)))))
 
 
-(defmacro make-argsort-table
-  []
-  `(->> [~@(for [dtype (concat casting/host-numeric-types
-                               [:object])]
-             [dtype `(make-argsort ~dtype)])]
-        (into {})))
-
-
-(def argsort-table (make-argsort-table))
+(def argsort-table (casting/make-base-no-boolean-datatype-table
+                    make-argsort))
 
 
 (defn argsort
@@ -70,7 +62,5 @@
                   reverse?]
            :or {parallel? true}}]
   (let [datatype (or datatype (dtype-base/get-datatype values))
-        sort-fn (get argsort-table (-> datatype
-                                       casting/flatten-datatype
-                                       casting/datatype->safe-host-type))]
+        sort-fn (get argsort-table (casting/safe-flatten datatype))]
     (sort-fn values parallel? reverse? typed-comparator)))

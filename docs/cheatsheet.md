@@ -60,8 +60,6 @@ user> (dtype/as-nio-buffer (dtype/make-container :typed-buffer :uint8 5))
 user> (type (:java-array *1))
 [B
 
-(dtype/set-value! (dtype/make-container :typed-buffer :uint8 5) 2 138)
-nil
 user> (dtype/set-value! (dtype/make-container :typed-buffer :uint8 5) 2 138)
 {:datatype :uint8, :backing-store [0, 0, -118, 0, 0]}
 user> (dtype/set-value! (dtype/make-container :typed-buffer :int8 5) 2 120)
@@ -69,6 +67,7 @@ user> (dtype/set-value! (dtype/make-container :typed-buffer :int8 5) 2 120)
 user> (dtype/get-value (dtype/make-container :typed-buffer :int8 5) 2)
 0
 user> (dtype/get-value (dtype/make-container :typed-buffer :int8 (range 10)) 2)
+2
 ```
 
 ## Copy
@@ -156,15 +155,15 @@ nil
 user> (def test-data (dtype-fn/+ (range 10 0 -1) 5))
 #'user/test-data
 user> test-data
-(15.0 14.0 13.0 12.0 11.0 10.0 9.0 8.0 7.0 6.0)
+(15 14 13 12 11 10 9 8 7 6)
 user> (dtype-fn/argsort test-data)
 [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
 
 ;; Make sequence a vector to allow indexing
 user> (dtype-fn/indexed-reader *1 (vec test-data))
-[6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0]
+[6 7 8 9 10 11 12 13 14 15]
 
-;; Inline declare a fully typed function to perform a thing producing 
+;; Inline declare a fully typed function to perform a thing producing
 ;; a new reader.
 
 user> (dtype-fn/unary-reader :float32 (* x 3) *1)
@@ -176,7 +175,7 @@ user> (dtype-fn/binary-reader :float32 (+ x y) *1 *1)
 
 ;; Readers all support creating a reader of another type from
 ;; the current reader:
-user> (dtype/->reader-of-type *1 :int32)
+user> (dtype/->reader *1 :int32)
 [36 42 48 54 60 66 72 78 84 90]
 
 
@@ -212,11 +211,11 @@ user> (->> (ns-publics 'tech.v2.datatype.statistics)
 user> (dtype-fn/variance *3)
 9.166666666666666
 user> (dtype-fn/fixed-rolling-window 3 dtype-fn/min test-data)
-(14.0 13.0 12.0 11.0 10.0 9.0 8.0 7.0 6.0 6.0)
+(14 13 12 11 10 9 8 7 6 6)
 user> (dtype-fn/fixed-rolling-window 3 dtype-fn/max test-data)
-(15.0 15.0 14.0 13.0 12.0 11.0 10.0 9.0 8.0 7.0)
+(15 15 14 13 12 11 10 9 8 7)
 user> (dtype-fn/fixed-rolling-window 3 #(apply + %) test-data)
-(44.0 42.0 39.0 36.0 33.0 30.0 27.0 24.0 21.0 19.0)
+(44 42 39 36 33 30 27 24 21 19)
 ```
 
 
@@ -255,9 +254,9 @@ user> (def added-tens (dtype-fn/+ (tens/reshape (vec (range 9)) [3 3]) 2))
 ;; above expression when necessary.
 user> (println added-tens)
 #tech.v2.tensor<object>[3 3]
-[[2.000 3.000  4.000]
- [5.000 6.000  7.000]
- [8.000 9.000 10.000]]
+[[2 3  4]
+ [5 6  7]
+ [8 9 10]]
 nil
 
 ;; Because it is pure lazy reader, you can't write to this tensor.

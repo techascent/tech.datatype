@@ -355,14 +355,16 @@
 (extend-type BinaryOperators$BooleanBinary
   dtype-proto/PToBinaryBooleanOp
   (convertible-to-binary-boolean-op? [item] true)
-  (->binary-boolean-op [item dtype unchecked?]
-    (if (= :boolean dtype)
-      item
-      (throw (ex-info "Boolean operators cannot marshal" {}))
-      ;; (let [cast-fn (get marshalling-boolean-binary-table
-      ;;                    [:boolean (casting/safe-flatten dtype)])]
-      ;;   (cast-fn item dtype unchecked?))
-      )))
+  (->binary-boolean-op [item options]
+    (let [datatype (or (:datatype options)
+                       (dtype-proto/get-datatype item))]
+      (if (= :boolean datatype)
+        item
+        (throw (ex-info "Boolean operators cannot marshal" {}))
+        ;; (let [cast-fn (get marshalling-boolean-binary-table
+        ;;                    [:boolean (casting/safe-flatten dtype)])]
+        ;;   (cast-fn item dtype unchecked?))
+        ))))
 
 
 (extend-binary-op-types :int8)

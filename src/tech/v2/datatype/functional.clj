@@ -195,5 +195,5 @@
 
 (defn equals
   [lhs rhs & [error-bar]]
-  (< (distance lhs rhs)
-     error-bar))
+  (clojure.core/< (double (distance lhs rhs))
+                  (double (clojure.core/or error-bar 0.001))))

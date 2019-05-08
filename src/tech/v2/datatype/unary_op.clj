@@ -327,12 +327,14 @@
            :int64 (make-unary-op ~opname :int64 ~op-code)
            :float32 (make-unary-op ~opname :float32 ~op-code)
            :float64 (make-unary-op ~opname :float64 ~op-code)
-           :object (-> (make-unary-op ~opname :float64 ~op-code)
-                       (dtype-proto/->unary-op {:datatype :object})))))
+           :object (make-unary-op ~opname :object ~op-code))))
      dtype-proto/PDatatype
      (get-datatype [item#] :float64)
      dtype-proto/POperator
-     (op-name [item#] ~opname)))
+     (op-name [item#] ~opname)
+     IFn
+     (invoke [item# ~'x]
+       ~op-code)))
 
 
 (defmacro make-numeric-object-unary-op
@@ -381,7 +383,9 @@
                            :float64)
                retval# (case op-dtype#
                          :float32 (make-unary-op ~opname :float32 ~op-code)
-                         :float64 (make-unary-op ~opname :float64 ~op-code))]
+                         :float64 (make-unary-op ~opname :float64 ~op-code)
+                         :object (make-unary-op ~opname :object (let [~'x (double ~'x)]
+                                                                  ~op-code)))]
            (if-not (= op-dtype# datatype#)
              (dtype-proto/->unary-op retval# options#)
              retval#))))

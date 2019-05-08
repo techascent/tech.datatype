@@ -45,7 +45,7 @@
                      binary-reader-map
                      make-binary-op
                      make-numeric-binary-op
-                     make-long-binary-op
+                     make-int-long-binary-op
                      make-float-double-binary-op
                      binary-iterable
                      binary-reader)

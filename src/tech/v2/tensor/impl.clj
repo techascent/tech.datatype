@@ -329,6 +329,10 @@
               indexes (dimensions->index-reader dimensions)
               item-shape (dtype-proto/shape item)]
           (case (casting/safe-flatten datatype)
+            :int8 (make-tensor-reader :int8 datatype item-shape
+                                       indexes data-reader sparse-data)
+            :int16 (make-tensor-reader :int16 datatype item-shape
+                                       indexes data-reader sparse-data)
             :int32 (make-tensor-reader :int32 datatype item-shape
                                        indexes data-reader sparse-data)
             :int64 (make-tensor-reader :int64 datatype item-shape

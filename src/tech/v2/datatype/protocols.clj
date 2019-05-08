@@ -291,6 +291,8 @@
           (make-container :java-array (get-datatype item) (ecount item) {})]
       (first (copy-raw->item! item retval 0 {}))))
 
+  POperator
+  (op-name [item] :unnamed)
 
   PToUnaryOp
   (convertible-to-unary-op? [item] false)

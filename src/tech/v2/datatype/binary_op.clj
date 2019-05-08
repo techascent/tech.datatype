@@ -333,15 +333,15 @@
      (->binary-op [item# options#]
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#
-             bin-dtype# (if (casting/numeric-type? datatype#)
-                          datatype#
-                          :float64)]
-         (-> (case (casting/safe-flatten bin-dtype#)
+             datatype# (or datatype# :float64)]
+         (-> (case (casting/safe-flatten datatype#)
+               :int8 (make-binary-op ~opname :int8 (unchecked-int ~op-code))
+               :int16 (make-binary-op ~opname :int16 (unchecked-long ~op-code))
                :int32 (make-binary-op ~opname :int32 (unchecked-int ~op-code))
                :int64 (make-binary-op ~opname :int64 (unchecked-long ~op-code))
                :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
-               :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code)))
-             (dtype-proto/->binary-op options#))))
+               :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
+               :object (make-binary-op ~opname :object ~op-code)))))
      dtype-proto/POperator
      (op-name [item#] ~opname)
      dtype-proto/PDatatype
@@ -361,16 +361,15 @@
      (->binary-op [item# options#]
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#
-             bin-dtype# (if (casting/numeric-type? datatype#)
-                          datatype#
-                          :float64)]
-         (-> (case (casting/safe-flatten bin-dtype#)
-               :int32 (make-binary-op ~opname :int32 (unchecked-int ~op-code))
-               :int64 (make-binary-op ~opname :int64 (unchecked-long ~op-code))
-               :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
-               :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
-               :object (make-binary-op ~opname :object ~op-code))
-             (dtype-proto/->binary-op options#))))
+             datatype# (or datatype# :float64)]
+         (case (casting/safe-flatten datatype#)
+           :int8 (make-binary-op ~opname :int8 (unchecked-byte ~op-code))
+           :int16 (make-binary-op ~opname :int16 (unchecked-short ~op-code))
+           :int32 (make-binary-op ~opname :int32 (unchecked-int ~op-code))
+           :int64 (make-binary-op ~opname :int64 (unchecked-long ~op-code))
+           :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
+           :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
+           :object (make-binary-op ~opname :object ~op-code))))
      dtype-proto/POperator
      (op-name [item#] ~opname)
      dtype-proto/PDatatype
@@ -380,9 +379,30 @@
        ~op-code)))
 
 
-(defmacro make-long-binary-op
+(defmacro make-int-long-binary-op
   [opname op-code]
-  `(make-binary-op ~opname :int64 ~op-code))
+  `(reify
+     dtype-proto/POperator
+     (op-name [item#] ~opname)
+     dtype-proto/PDatatype
+     (get-datatype [item#] :int64)
+     IFn
+     (invoke [item# x# y#]
+       (let [~'x (long x#)
+             ~'y (long y#)]
+         ~op-code))
+     dtype-proto/PToBinaryOp
+     (convertible-to-binary-op? [item#] true)
+     (->binary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#
+             datatype# (or datatype# :int64)]
+         (-> (case (casting/safe-flatten datatype#)
+               :int8 (make-binary-op ~opname :int8 (byte ~op-code))
+               :int16 (make-binary-op ~opname :int16 (short ~op-code))
+               :int32 (make-binary-op ~opname :int32 (int ~op-code))
+               :int64 (make-binary-op ~opname :int64 (unchecked-long ~op-code))
+               :object (make-binary-op ~opname :object ~op-code)))))))
 
 
 (set! *unchecked-math* false)
@@ -393,22 +413,22 @@
         (make-numeric-object-binary-op :- (- x y))
         (make-numeric-object-binary-op :/ (/ x y))
         (make-numeric-object-binary-op :* (* x y))
-        (make-long-binary-op :rem (Math/floorMod x y))
-        (make-long-binary-op :quot (Math/floorDiv x y))
+        (make-int-long-binary-op :rem (rem x y))
+        (make-int-long-binary-op :quot (quot x y))
         (make-float-double-binary-op :pow (Math/pow x y))
         (make-numeric-object-binary-op :max (if (> x y) x y))
         (make-numeric-object-binary-op :min (if (> x y) y x))
-        (make-long-binary-op :bit-and (bit-and x y))
-        (make-long-binary-op :bit-and-not (bit-and-not x y))
-        (make-long-binary-op :bit-or (bit-or x y))
-        (make-long-binary-op :bit-xor (bit-xor x y))
-        (make-long-binary-op :bit-clear (bit-clear x y))
-        (make-long-binary-op :bit-flip (bit-flip x y))
-        (make-long-binary-op :bit-test (bit-test x y))
-        (make-long-binary-op :bit-set (bit-set x y))
-        (make-long-binary-op :bit-shift-left (bit-shift-left x y))
-        (make-long-binary-op :bit-shift-right (bit-shift-right x y))
-        (make-long-binary-op :unsigned-bit-shift-right (unsigned-bit-shift-right x y))
+        (make-int-long-binary-op :bit-and (bit-and x y))
+        (make-int-long-binary-op :bit-and-not (bit-and-not x y))
+        (make-int-long-binary-op :bit-or (bit-or x y))
+        (make-int-long-binary-op :bit-xor (bit-xor x y))
+        (make-int-long-binary-op :bit-clear (bit-clear x y))
+        (make-int-long-binary-op :bit-flip (bit-flip x y))
+        (make-int-long-binary-op :bit-test (bit-test x y))
+        (make-int-long-binary-op :bit-set (bit-set x y))
+        (make-int-long-binary-op :bit-shift-left (bit-shift-left x y))
+        (make-int-long-binary-op :bit-shift-right (bit-shift-right x y))
+        (make-int-long-binary-op :unsigned-bit-shift-right (unsigned-bit-shift-right x y))
         (make-float-double-binary-op :atan2 (Math/atan2 x y))
         (make-float-double-binary-op :hypot (Math/hypot x y))
         (make-float-double-binary-op :ieee-remainder (Math/IEEEremainder x y))]

@@ -87,13 +87,12 @@
                      (dtype-base/get-datatype sparse-item))
         sparse-item (sparse-proto/->sparse sparse-item)]
     (make-sparse-reader (sparse-proto/index-reader sparse-item)
-                        (impl/apply-unary-boolean-op {} un-op
+                        (impl/apply-unary-boolean-op {:datatype datatype}
+                                                     un-op
                                                      (sparse-proto/data-reader
                                                       sparse-item))
                         (dtype-base/ecount sparse-item)
-                        :sparse-value
-                        ((dtype-proto/->unary-boolean-op un-op {:datatype datatype})
-                         (sparse-proto/sparse-value sparse-item))
+                        :sparse-value (un-op (sparse-proto/sparse-value sparse-item))
                         :datatype :boolean)))
 
 

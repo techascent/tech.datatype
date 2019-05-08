@@ -119,8 +119,10 @@
                (sub-buffer (dtype-proto/->reader src {})
                            src-offset elem-count)
                src)
-         dest (sub-buffer (dtype-proto/->writer dest {})
-                          dest-offset elem-count)]
+         dest (if (requires-sub-buffer dest dest-offset elem-count)
+                (sub-buffer (dtype-proto/->writer dest {})
+                            dest-offset elem-count)
+                dest)]
      (dtype-proto/copy! dest src options))
    dest)
   ([src src-offset dst dst-offset elem-count]

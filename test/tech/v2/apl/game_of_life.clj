@@ -10,6 +10,7 @@
   [lhs rhs]
   (let [membership-set (set (dtype/->vector rhs))]
     (dtype-fn/boolean-unary-reader
+     :object
      (contains? membership-set x)
      lhs)))
 

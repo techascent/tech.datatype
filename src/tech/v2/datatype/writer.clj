@@ -306,7 +306,6 @@
             retval-writer))))))
 
 
-
 (defmacro extend-writer-type
   [writer-type datatype]
   `(clojure.core/extend

@@ -150,7 +150,10 @@
       (fn [item# options#]
         (let [{writer-datatype# :datatype
                unchecked?# :unchecked?} options#]
-          (-> (writer/make-buffer-writer item# unchecked?#)
+          (-> (writer/make-buffer-writer item#
+                                         ~(casting/safe-flatten datatype)
+                                         ~datatype
+                                         unchecked?#)
               (dtype-proto/->writer options#))))}
 
 
@@ -160,7 +163,10 @@
       (fn [item# options#]
         (let [{reader-datatype# :datatype
                unchecked?# :unchecked?} options#]
-          (-> (reader/make-buffer-reader item# unchecked?#)
+          (-> (reader/make-buffer-reader item#
+                                         ~(casting/safe-flatten datatype)
+                                         ~datatype
+                                         unchecked?#)
               (dtype-proto/->reader options#))))}
 
 

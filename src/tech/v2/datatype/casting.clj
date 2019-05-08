@@ -347,6 +347,25 @@
     `(datatype->unchecked-cast-fn :unknown ~datatype 0)))
 
 
+(def buffer-access-table
+  "Buffers may create readers or writers from this table alone."
+  (->> base-datatypes
+       (mapcat (fn [dtype]
+                 (if (signed-int-types dtype)
+                   [[dtype dtype]
+                    [dtype (safe-flatten dtype)]]
+                   [[dtype (safe-flatten dtype)]])))
+       (group-by first)
+       (mapcat (fn [[k v-set]]
+                 (map (fn [reader-datatype]
+                        {:intermediate-datatype k
+                         :buffer-datatype (host-flatten k)
+                         :reader-datatype reader-datatype})
+                      (->> v-set
+                           (map second)
+                           distinct))))))
+
+
 ;;Everything goes to these and these go to everything.
 (def base-marshal-types
   #{:int32 :int64 :float32 :float64 :boolean :object})

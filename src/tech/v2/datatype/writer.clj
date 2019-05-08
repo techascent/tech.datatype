@@ -48,7 +48,6 @@
   `(if ~unchecked?
      (reify
        ~writer-type
-       (getDatatype [writer#] ~intermediate-datatype)
        (lsize [writer#] (dtype-shape/ecount ~buffer))
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
@@ -87,7 +86,6 @@
                                     (casting/cast value# ~intermediate-datatype)
                                     elem-count#)))
      (reify ~writer-type
-       (getDatatype [writer#] ~intermediate-datatype)
        (lsize [writer#] (dtype-shape/ecount ~buffer))
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
@@ -130,10 +128,15 @@
 
 (defmacro make-buffer-writer-table
   []
-  `(->> [~@(for [intermediate-datatype casting/numeric-types]
-             (let [buffer-datatype (casting/datatype->host-datatype intermediate-datatype)
-                   writer-datatype (casting/safe-flatten intermediate-datatype)]
-               [[buffer-datatype intermediate-datatype]
+  `(->> [~@(for [{:keys [intermediate-datatype
+                         reader-datatype
+                         buffer-datatype]
+                  :as access-map}
+                 (->> casting/buffer-access-table
+                      (filter (comp casting/numeric-type?
+                                    :intermediate-datatype)))]
+             (let [writer-datatype reader-datatype]
+               [access-map
                 `(fn [buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->buffer-cast-fn
                                   ~buffer-datatype buffer#)
@@ -154,24 +157,27 @@
 
 
 (defn make-buffer-writer
-  [item unchecked?]
+  [item writer-datatype intermediate-datatype & [unchecked?]]
   (let [nio-buffer (dtype-proto/->buffer-backing-store item)
-        item-dtype (dtype-proto/get-datatype item)
         buffer-dtype (dtype-proto/get-datatype nio-buffer)
-        no-translate-writer (get buffer-writer-table [buffer-dtype item-dtype])]
+        access-map {:intermediate-datatype intermediate-datatype
+                    :reader-datatype writer-datatype
+                    :buffer-datatype buffer-dtype}
+        no-translate-writer (get buffer-writer-table access-map)]
     (when-not no-translate-writer
       (throw (ex-info "Failed to find writer for buffer and datatype combination"
-                      {:buffer-datatype buffer-dtype
-                       :item-datatype item-dtype})))
+                      access-map)))
     (no-translate-writer nio-buffer unchecked?)))
 
 
 (defmacro make-list-writer-table
   []
-  `(->> [~@(for [intermediate-datatype casting/base-datatypes]
-             (let [buffer-datatype (casting/datatype->host-datatype intermediate-datatype)
-                   writer-datatype (casting/safe-flatten intermediate-datatype)]
-               [[buffer-datatype intermediate-datatype]
+  `(->> [~@(for [{:keys [intermediate-datatype
+                         reader-datatype
+                         buffer-datatype]
+                  :as access-map} casting/buffer-access-table]
+             (let [writer-datatype reader-datatype]
+               [access-map
                 `(fn [buffer# unchecked?#]
                    (let [buffer# (typecast/datatype->list-cast-fn
                                   ~buffer-datatype
@@ -191,15 +197,16 @@
 
 
 (defn make-list-writer
-  [item unchecked?]
+  [item writer-datatype intermediate-datatype & [unchecked?]]
   (let [nio-list (dtype-proto/->list-backing-store item)
-        item-dtype (casting/flatten-datatype (dtype-proto/get-datatype item))
-        list-dtype (dtype-proto/get-datatype nio-list)
-        no-translate-writer (get list-writer-table [list-dtype item-dtype])]
+        buffer-dtype (dtype-proto/get-datatype nio-list)
+        access-map {:intermediate-datatype intermediate-datatype
+                    :reader-datatype writer-datatype
+                    :buffer-datatype buffer-dtype}
+        no-translate-writer (get list-writer-table access-map)]
     (when-not no-translate-writer
       (throw (ex-info "Failed to find writer for buffer and datatype combination"
-                      {:buffer-datatype list-dtype
-                       :item-datatype item-dtype})))
+                      access-map)))
     (no-translate-writer nio-list unchecked?)))
 
 
@@ -279,16 +286,19 @@
   (let [dst-dtype (dtype-proto/get-datatype dst-writer)
         src-dtype (or (:datatype options)
                       (dtype-proto/get-datatype dst-writer))]
-    (if (= (casting/safe-flatten dst-dtype) (casting/safe-flatten src-dtype))
+    (if (= dst-dtype src-dtype)
       dst-writer
       (let [writer-fn (get marshalling-writer-table
-                           [(casting/safe-flatten src-dtype)
-                            (casting/safe-flatten dst-dtype)])
-            dst-writer (writer-fn dst-writer src-dtype options)]
-        (if (and (= :object (casting/flatten-datatype src-dtype))
-                 (not= :object src-dtype))
-          (make-object-wrapper dst-writer src-dtype)
-          dst-writer)))))
+                           [src-dtype dst-dtype])]
+        (when-not writer-fn
+          (throw (ex-info (format "Failed to create marshalling writer %s->%s"
+                                  src-dtype dst-dtype)
+                          {})))
+        (let [retval-writer (writer-fn dst-writer src-dtype options)
+              retval-dtype (dtype-proto/get-datatype retval-writer)]
+          (if-not (= retval-dtype src-dtype)
+            (make-object-wrapper retval-writer src-dtype)
+            retval-writer))))))
 
 
 

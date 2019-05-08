@@ -42,26 +42,27 @@
 
 (defmacro parallel-slow-copy
   [datatype dst src unchecked?]
-  `(if (or (instance? PToReader ~src)
-           (dtype-proto/convertible-to-reader? ~src))
-     (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
-           dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
-           n-elems# (.lsize dst-writer#)]
+  (let [datatype (casting/safe-flatten datatype)]
+    `(if (or (instance? PToReader ~src)
+             (dtype-proto/convertible-to-reader? ~src))
+       (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
+             dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
+             n-elems# (.lsize dst-writer#)]
 
-       (parallel-for/parallel-for
-        idx# n-elems#
-        (.write dst-writer# idx# (.read src-reader# idx#))))
-     ;;Go the *much* slower iterator pathway
-     (let [src-iter# (typecast/datatype->iter ~datatype ~src ~unchecked?)
-           dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)]
-       (->> (range (.lsize dst-writer#))
-            (map (fn [idx#]
-                   [idx# (typecast/datatype->iter-next-fn ~datatype src-iter#)]))
-            ;;Attempt to get at least little bit of parallelism.  Given iterators
-            ;;implicitly make every item dependent upon the one before we can't
-            ;;really do much here aside from potentially
-            (pmap #(dst-writer# (first %) (second %)))
-            dorun))))
+         (parallel-for/parallel-for
+          idx# n-elems#
+          (.write dst-writer# idx# (.read src-reader# idx#))))
+       ;;Go the *much* slower iterator pathway
+       (let [src-iter# (typecast/datatype->iter ~datatype ~src ~unchecked?)
+             dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)]
+         (->> (range (.lsize dst-writer#))
+              (map (fn [idx#]
+                     [idx# (typecast/datatype->iter-next-fn ~datatype src-iter#)]))
+              ;;Attempt to get at least little bit of parallelism.  Given iterators
+              ;;implicitly make every item dependent upon the one before we can't
+              ;;really do much here aside from potentially
+              (pmap #(dst-writer# (first %) (second %)))
+              dorun)))))
 
 
 (defn parallel-slow-copy!
@@ -84,7 +85,8 @@
 
 (defmacro impl-nio-write
   [datatype dst src unchecked?]
-  `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
+  `(let [src-reader# (typecast/datatype->reader ~(casting/safe-flatten datatype)
+                                                ~src ~unchecked?)
          dst-buf# (typecast/datatype->buffer-cast-fn ~datatype ~dst)
          dst-pos# (.position dst-buf#)
          n-elems# (int (dtype-proto/ecount ~dst))]
@@ -110,7 +112,8 @@
 
 (defmacro impl-list-write
   [datatype dst src unchecked?]
-  `(let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
+  `(let [src-reader# (typecast/datatype->reader ~(casting/safe-flatten datatype)
+                                                ~src ~unchecked?)
          dst-buf# (typecast/datatype->list-cast-fn ~datatype ~dst)
          n-elems# (int (dtype-proto/ecount ~dst))]
      (parallel-for/parallel-for
@@ -153,7 +156,8 @@
 (defmacro impl-nio-read
   [datatype dst src unchecked?]
   `(let [src-buf# (typecast/datatype->buffer-cast-fn ~datatype ~src)
-         dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
+         dst-writer# (typecast/datatype->writer ~(casting/safe-flatten datatype)
+                                                ~dst ~unchecked?)
          src-pos# (.position src-buf#)
          n-elems# (int (dtype-proto/ecount ~src))]
      (parallel-for/parallel-for
@@ -174,7 +178,8 @@
 
 (defmacro impl-list-read
   [datatype dst src unchecked?]
-  `(let [dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
+  `(let [dst-writer# (typecast/datatype->writer ~(casting/safe-flatten datatype)
+                                                ~dst ~unchecked?)
          src-buf# (typecast/datatype->list-cast-fn ~datatype ~src)
          n-elems# (int (dtype-proto/ecount ~src))]
      (parallel-for/parallel-for

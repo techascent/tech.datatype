@@ -1,7 +1,7 @@
 {:paths ["src"]
  :deps {org.clojure/clojure {:mvn/version "1.10.1-beta2"}
         techascent/tech.jna {:mvn/version "3.9"}
-        techascent/tech.parallel {:mvn/version "1.5"}
+        techascent/tech.parallel {:mvn/version "1.6"}
         it.unimi.dsi/fastutil {:mvn/version  "8.2.1"}
         kixi/stats {:mvn/version "0.5.0"}
         org.apache.commons/commons-math3 {:mvn/version "3.6.1"}}}

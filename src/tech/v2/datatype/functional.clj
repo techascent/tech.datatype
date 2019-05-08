@@ -30,40 +30,20 @@
 
 
 (impl/export-symbols tech.v2.datatype.unary-op
-                     make-unary-op
-                     make-numeric-unary-op
-                     make-float-double-unary-op
-                     make-all-datatype-unary-op
                      unary-iterable-map
-                     unary-reader-map
-                     unary-iterable
-                     unary-reader)
+                     unary-reader-map)
 
 
 (impl/export-symbols tech.v2.datatype.binary-op
                      binary-iterable-map
-                     binary-reader-map
-                     make-binary-op
-                     make-numeric-binary-op
-                     make-int-long-binary-op
-                     make-float-double-binary-op
-                     binary-iterable
-                     binary-reader)
+                     binary-reader-map)
 
 
 (impl/export-symbols tech.v2.datatype.boolean-op
                      boolean-unary-iterable-map
                      boolean-unary-reader-map
                      boolean-binary-iterable-map
-                     boolean-binary-reader-map
-                     make-boolean-binary-op
-                     make-boolean-unary-op
-                     make-numeric-binary-boolean-op
-                     make-all-datatype-binary-boolean-op
-                     boolean-unary-iterable
-                     boolean-unary-reader
-                     boolean-binary-iterable
-                     boolean-binary-reader)
+                     boolean-binary-reader-map)
 
 
 (impl/export-symbols tech.v2.datatype.functional.impl

@@ -3,13 +3,16 @@
   (:require [tech.v2.tensor :as tens]
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.functional :as dtype-fn]
+            [tech.v2.datatype.boolean-op :as bool-op]
+            [tech.v2.datatype.binary-op :as binary-op]
+            [tech.v2.datatype.unary-op :as unary-op]
             [clojure.test :refer :all]))
 
 
 (defn membership
   [lhs rhs]
   (let [membership-set (set (dtype/->vector rhs))]
-    (dtype-fn/boolean-unary-reader
+    (bool-op/boolean-unary-reader
      :object
      (contains? membership-set x)
      lhs)))
@@ -86,7 +89,7 @@
 (defn game-of-life-operator
   [original new-matrix]
   ;;We do a typed reader here so that everything happens in byte space with no boxing.
-  (-> (dtype-fn/binary-reader
+  (-> (binary-op/binary-reader
        :int8
        ;;Clojure conservatively interprets all integers as longs so we have to specify
        ;;that we want a byte.
@@ -139,7 +142,7 @@
 (defn mat->pic-mat
   [R]
   (->> R
-       (dtype-fn/unary-reader
+       (unary-op/unary-reader
         (if (= 0 (int x))
           (char 0x02DA)
           (char 0x2021)))))

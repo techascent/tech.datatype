@@ -3,6 +3,7 @@
   (:require [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.functional :as dtype-fn]
+            [tech.v2.datatype.unary-op :as unary]
             [tech.v2.tensor.impl :as tens-impl]
             [tech.v2.datatype.reduce-op :as reduce-op])
   (:import [java.lang StringBuilder]
@@ -98,7 +99,7 @@
      (if (number? tens)
        (formatter tens)
        (let [n-dims (count (dtype/shape tens))
-             tens (-> (dtype-fn/unary-reader :object (formatter x) tens)
+             tens (-> (unary/unary-reader :object (formatter x) tens)
                       (tens-impl/tensor-force))
              prefix (or prefix "")
              sb (StringBuilder.)]

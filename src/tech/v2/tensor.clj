@@ -32,10 +32,6 @@
                           ->jvm)
 
 
-(func-impl/export-symbols tech.v2.tensor.typecast
-                          datatype->tensor-reader)
-
-
 (defn dimensions-dense?
   [tensor]
   (dims/dense? (:dimensions tensor)))

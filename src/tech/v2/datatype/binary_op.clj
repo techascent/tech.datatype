@@ -474,7 +474,6 @@
 
 (defn binary->unary
   [{:keys [datatype unchecked? left-associate?]} bin-op constant-value]
-  (println "datatype" datatype)
   (let [datatype (or datatype (dtype-base/get-datatype constant-value))
         create-fn (get binary->unary-table (casting/safe-flatten datatype))]
     (create-fn bin-op datatype constant-value left-associate?)))

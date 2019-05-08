@@ -182,3 +182,18 @@
    (reduce-op/dot-product nil lhs rhs
                           (:* binary/builtin-binary-ops)
                           (:+ binary/builtin-binary-ops))))
+
+(defn distance-squared
+  [lhs rhs]
+  (magnitude-squared (- lhs rhs)))
+
+
+(defn distance
+  [lhs rhs]
+  (magnitude (- lhs rhs)))
+
+
+(defn equals
+  [lhs rhs & [error-bar]]
+  (< (distance lhs rhs)
+     error-bar))

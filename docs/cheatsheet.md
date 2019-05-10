@@ -142,9 +142,19 @@ user>
 A small sample of what is available.  Basic elementwise operations along
 with some statistics and a fixed rolling windowing facility.
 
-* If the arguments contain an iterable, an iterable is returned.
-* If the arguments contain a reader, a reader is returned.
-* Else a scalar is returned.
+
+### Container Coersion Rules
+
+Rules are applied in order.
+
+
+1. If the arguments contain an iterable, an iterable is returned.
+1. If the arguments contain a reader, a reader is returned.
+1. Else a scalar is returned.
+
+
+### Other Details
+
 * All arguments are casted to the widest datatype present.
 * Readers implement List and RandomAccess so they look like persistent vectors in the repl.
 

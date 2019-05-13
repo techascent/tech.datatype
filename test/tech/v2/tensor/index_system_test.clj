@@ -54,10 +54,10 @@
                                           global-address max-strides)]
                         [global-address
                          local-address
-                         (.tensorRead ^tech.v2.tensor.IntTensorReader forward
+                         (.tensorRead ^tech.v2.tensor.LongTensorReader forward
                                       (typecast/datatype->iter :int32 global-shape))
                          (when (= 2 (count shape))
-                           (.read2d ^tech.v2.tensor.IntTensorReader forward
+                           (.read2d ^tech.v2.tensor.LongTensorReader forward
                                     (first global-shape)
                                     (second global-shape)))]))))
 

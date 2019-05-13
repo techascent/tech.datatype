@@ -28,7 +28,8 @@
   (:import [tech.v2.datatype
             IndexingSystem$Forward
             IndexingSystem$Backward
-            IntReader]
+            IntReader
+            LongReader]
            [java.util List]
            [it.unimi.dsi.fastutil.ints IntArrayList]
            [clojure.lang IDeref]))
@@ -252,47 +253,35 @@
   rev-shape: reverse shape.
   rev-strides: reverse strides.
   arg: >= 0."
-  [rev-shape rev-strides rev-offsets rev-max-shape arg]
-  (long (let [num-items (count rev-shape)]
-          (loop [idx (long 0)
-                 arg (long arg)
-                 offset (long 0)]
-            (if (< idx num-items)
-              (let [next-max (long (rev-max-shape idx))
-                    next-stride (long (rev-strides idx))
-                    next-dim-entry (rev-shape idx)
-                    next-dim (shape/shape-entry->count next-dim-entry)
-                    next-offset (long (rev-offsets idx))
-                    shape-idx (rem (+ arg next-offset) next-dim)]
-                (recur (inc idx)
-                       (quot arg next-max)
-                       (+ offset (* next-stride
-                                    (long (cond
-                                            (number? next-dim-entry)
-                                            shape-idx
-                                            (shape/classified-sequence?
-                                             next-dim-entry)
-                                            (shape/classified-sequence->elem-idx
-                                             next-dim-entry
-                                             shape-idx)
-                                            :else
-                                            (long (dtype/get-value
-                                                   next-dim-entry
-                                                   shape-idx))))))))
-              offset)))))
+  [rev-shape ^longs rev-strides ^longs rev-offsets ^longs rev-max-shape arg]
+  (let [num-items (count rev-shape)]
+    (-> (loop [idx (long 0)
+               arg (long arg)
+               offset (long 0)]
+          (if (< idx num-items)
+            (let [next-max (aget rev-max-shape idx)
+                  next-stride (aget rev-strides idx)
+                  ^LongReader next-dim-entry (rev-shape idx)
+                  next-dim (.lsize next-dim-entry)
+                  next-offset (aget rev-offsets idx)
+                  shape-idx (rem (+ arg next-offset) next-dim)]
+              (recur (inc idx)
+                     (quot arg next-max)
+                     (+ offset (* next-stride
+                                  (.read next-dim-entry shape-idx)))))
+            offset)))))
 
 
-(defmacro ^:private impl-int-reader
+(defmacro ^:private impl-idx-reader
   [n-elems opcode tenscode2d tenscode]
   `(reify
      IndexingSystem$Forward
-     (getDatatype [item#] :int32)
      (lsize [item#] ~n-elems)
      (read [item# ~'idx] ~opcode)
      (applyTo [item# arglist#] (.tensorRead
-                                ^tech.v2.tensor.IntTensorReader item#
+                                ^tech.v2.tensor.LongTensorReader item#
                                 (typecast/datatype->iter :int32 arglist#)))
-     tech.v2.tensor.IntTensorReader
+     tech.v2.tensor.LongTensorReader
      (read2d [~'reader ~'row ~'col] ~tenscode2d)
      (tensorRead [~'reader ~'indexes] ~tenscode)))
 
@@ -376,7 +365,7 @@ to be reversed for the most efficient implementation."
            (not broadcast?)
            dense?
            increasing?)
-      (impl-int-reader n-elems idx
+      (impl-idx-reader n-elems idx
                        (+ (* (int row) stride-0)
                           (* (int col) stride-1))
                        (dense-integer-dot-product indexes stride-reader))
@@ -393,7 +382,7 @@ to be reversed for the most efficient implementation."
                          (ffirst)))
             broadcast-amt (long (apply * 1 (drop (+ 1 ec-idx) max-shape)))]
         (if (= n-dims 2)
-          (impl-int-reader n-elems
+          (impl-idx-reader n-elems
                            (rem (quot idx broadcast-amt)
                                 local-ec)
                            (+ (* (rem row shape-0) stride-0)
@@ -413,7 +402,7 @@ to be reversed for the most efficient implementation."
            increasing?
            (= min-shape
               (take-last (count min-shape) max-shape)))
-      (impl-int-reader n-elems
+      (impl-idx-reader n-elems
                        (rem idx local-ec)
                        (+ (* (rem row shape-0) stride-0)
                           (* (rem col shape-1) stride-1))
@@ -454,7 +443,7 @@ to be reversed for the most efficient implementation."
                      access-increasing?)
               ;;Common cases with offsetting
               (if (= 2 n-dims)
-                (impl-int-reader
+                (impl-idx-reader
                  n-elems
                  (let [first-elem (rem (unchecked-add idx offset-0) shape-0)
                        next-elem (rem (unchecked-add (quot idx shape-0) offset-1)
@@ -465,14 +454,14 @@ to be reversed for the most efficient implementation."
                  (+ (* (rem (unchecked-add col offset-0) shape-0) stride-0)
                     (* (rem (unchecked-add row offset-1) shape-1) stride-1))
                  (.read2d reader (.nextInt indexes) (.nextInt indexes)))
-                (impl-int-reader
+                (impl-idx-reader
                  n-elems
                  (let [first-elem (rem (+ idx offset-0) shape-0)]
                    (* first-elem stride-0))
                  (* (rem (unchecked-add col offset-0) shape-0) stride-0)
                  (.read2d reader 0 (int (.nextInt indexes)))))
               ;;Broadcasting with offsets but direct shape general case.
-              (impl-int-reader
+              (impl-idx-reader
                n-elems
                (let [arg idx]
                  (loop [idx (long 0)
@@ -524,8 +513,33 @@ to be reversed for the most efficient implementation."
                 max-stride-0 (int (first max-strides))
                 max-stride-1 (int (if (>= 2 n-dims)
                                     (second max-strides)
-                                    0))]
-            (impl-int-reader
+                                    0))
+                reverse-shape
+                ;;map into a vec guaranteed to be LongReaders
+                (->> reverse-shape
+                     (mapv #(let [n-dims (shape/shape-entry->count %)]
+                              (cond
+                                (number? %)
+                                (reify LongReader
+                                  (lsize [item] n-dims)
+                                  (read [item shape-idx] shape-idx))
+                                (shape/classified-sequence? %)
+                                (reify LongReader
+                                  (lsize [item] n-dims)
+                                  (read [item shape-idx]
+                                    (unchecked-long
+                                     (shape/classified-sequence->elem-idx
+                                      %
+                                      shape-idx))))
+                                :else
+                                (dtype/->reader % :int64)))))
+                reverse-strides (dtype/make-container :java-array :int64
+                                                      reverse-strides)
+                reverse-offsets (dtype/make-container :java-array :int64
+                                                      reverse-offsets)
+                reverse-max-shape (dtype/make-container :java-array :int64
+                                                        reverse-max-shape)]
+            (impl-idx-reader
              n-elems
              (elem-idx->addr reverse-shape
                              reverse-strides
@@ -776,7 +790,7 @@ to be reversed for the most efficient implementation."
 
 
 (defn ->global->local
-  ^IntReader [dims]
+  ^IndexingSystem$Forward [dims]
   @(:global->local dims))
 
 

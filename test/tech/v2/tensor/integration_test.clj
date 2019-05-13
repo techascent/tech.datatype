@@ -1,5 +1,7 @@
 (ns tech.v2.tensor.integration-test
   (:require [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.unary-op :as unary-op]
+            [tech.v2.datatype.functional :as dfn]
             [tech.v2.tensor :as tens]
             [clojure.test :refer :all]))
 
@@ -36,3 +38,43 @@
             [0 1 2 3 4]
             [0 1 2 3 4]]
            (tens/->jvm tensor)))))
+
+
+(deftest modify-time-test
+  (let [source-image (tens/new-tensor [512 288 3] :datatype :uint8)
+        ;; Reader composition is lazy so the expression below reads from
+        ;; the test image (ecount image) times.  It writes to the destination
+        ;; once and the byte value is completely transformed from the src image
+        ;; to the dest while in cache.  Virtual table lookups happen multiple
+        ;; times per byte value.  ;; It is important to realize that under the
+        ;; covers the image is stored as bytes.  These are read in a datatype-aware
+        ;; way and converted to their appropriate unsigned values automatically
+        ;; and when writter they are checked to ensure they are within range.
+        ;; There are 2N checks for correct datatype in this pathway; everything else
+        ;; is read/operated on as a short integer.
+        reader-composition  #(-> source-image
+                                 (tens/select :all :all [2 1 0])
+                                 (dfn/+ 50)
+                                 ;;Clamp top end to 0-255
+                                 (dfn/min 255)
+                                 (dtype/copy! (dtype/from-prototype source-image)))
+
+        inline-fn #(as-> source-image dest-image
+                     (tens/select dest-image :all :all [2 1 0])
+                     (unary-op/unary-reader
+                      :int16 (-> (+ x 50)
+                                 (min 255)
+                                 unchecked-short)
+                      dest-image)
+                     (dtype/copy! dest-image
+                                  ;;Note from-prototype fails for reader chains.
+                                  ;;So you have to copy or use an actual image.
+                                  (dtype/from-prototype source-image)))]
+    ;;warmup a little.
+    (reader-composition)
+    (inline-fn)
+    (clojure.pprint/pprint
+     {:reader-composition (with-out-str (time (dotimes [iter 10]
+                                                (reader-composition))))
+      :inline-fn (with-out-str (time (dotimes [iter 10]
+                                       (inline-fn))))})))

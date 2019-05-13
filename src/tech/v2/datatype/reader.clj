@@ -301,6 +301,7 @@
                         (dtype-proto/get-datatype src-reader)))]
     (if (= src-dtype dest-dtype)
       src-reader
+
       (let [retval-reader
             (let [reader-fn (get marshalling-reader-table
                                  [src-dtype dest-dtype])]

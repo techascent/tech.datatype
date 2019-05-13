@@ -4,7 +4,7 @@ package tech.v2.datatype;
 public class IndexingSystem
 {
   //Forward is an IntReader.
-  public interface Forward extends IntReader
+  public interface Forward extends LongReader
   {
   }
   public interface Backward

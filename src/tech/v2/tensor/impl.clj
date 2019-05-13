@@ -22,7 +22,8 @@
               [tech.v2.tensor.protocols :as tens-proto]
               [tech.v2.libs.blas :as blas]
               [tech.jna :as jna])
-    (:import [tech.v2.datatype IntReader
+    (:import [tech.v2.datatype
+              IndexingSystem$Forward
               IndexingSystem$Backward]
              [java.io Writer]))
 
@@ -52,7 +53,7 @@
 
 (defn- dimensions->index-reader
   [dimensions]
-  ^IntReader (dims/->global->local dimensions))
+  ^IndexingSystem$Forward (dims/->global->local dimensions))
 
 
 (defn- dimensions->index-inverter
@@ -101,7 +102,7 @@
 
 (defmacro make-tensor-reader
   [reader-datatype datatype item-shape indexer reader sparse-reader]
-  `(let [^tech.v2.tensor.IntTensorReader indexer# ~indexer
+  `(let [^tech.v2.tensor.LongTensorReader indexer# ~indexer
          data# (typecast/datatype->reader ~reader-datatype ~reader)
          shape# ~item-shape
          n-elems# (long (apply * 1 shape#))
@@ -184,6 +185,9 @@
          (dims/ecount dimensions))))))
 
 
+(declare construct-tensor)
+
+
 (defrecord Tensor [buffer dimensions buffer-type]
   dtype-proto/PDatatype
   (get-datatype [item] (dtype-base/get-datatype buffer))
@@ -195,6 +199,13 @@
 
   dtype-proto/PShape
   (shape [m] (dims/shape dimensions))
+
+
+  dtype-proto/PPrototype
+  (from-prototype [m datatype shape]
+    (construct-tensor
+     (dtype-proto/from-prototype buffer datatype shape)
+     dimensions))
 
 
   dtype-proto/PToNioBuffer

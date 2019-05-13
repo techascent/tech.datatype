@@ -532,13 +532,19 @@ to be reversed for the most efficient implementation."
                                       %
                                       shape-idx))))
                                 :else
-                                (dtype/->reader % :int64)))))]
+                                (dtype/->reader % :int64)))))
+                reverse-strides (dtype/make-container :java-array :int64
+                                                      reverse-strides)
+                reverse-offsets (dtype/make-container :java-array :int64
+                                                      reverse-offsets)
+                reverse-max-shape (dtype/make-container :java-array :int64
+                                                        reverse-max-shape)]
             (impl-idx-reader
              n-elems
              (elem-idx->addr reverse-shape
-                             (dtype/make-container :java-array :int64 reverse-strides)
-                             (dtype/make-container :java-array :int64 reverse-offsets)
-                             (dtype/make-container :java-array :int64 reverse-max-shape)
+                             reverse-strides
+                             reverse-offsets
+                             reverse-max-shape
                              idx)
              (.read reader
                     (+ (* row max-stride-0)

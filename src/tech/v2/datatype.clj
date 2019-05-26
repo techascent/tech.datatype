@@ -330,6 +330,12 @@ Calls clojure.core.matrix/ecount."
   (dtype-proto/->sub-array src-item))
 
 
+(defn as-buffer-descriptor
+  [src-item]
+  (when (dtype-proto/convertible-to-buffer-desc? src-item)
+    (dtype-proto/->buffer-descriptor src-item)))
+
+
 (defn ->list-backing-store
   "Convert to a list that stores data for the object.  This may have a different
   datatype than the object."

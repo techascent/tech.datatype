@@ -71,6 +71,13 @@
               (:shape dimensions)))))
 
 
+(defn dims-suitable-for-desc?
+  [dimensions]
+  (and (dims/direct? dimensions)
+       (every? #(= 0 %) (:offsets dimensions))
+       (= (:max-shape dimensions))))
+
+
 (defn- simple-vector-dimensions?
   [dimensions]
   (and (simple-dimensions? dimensions)
@@ -232,6 +239,19 @@
       (jna/as-ptr buffer)))
 
 
+  dtype-proto/PToBufferDesc
+  (convertible-to-buffer-desc? [item]
+    (and (jna/ptr-convertible? buffer)
+         (dims-suitable-for-desc? dimensions)))
+  (->buffer-descriptor [item]
+    {:ptr (jna/as-ptr buffer)
+     :datatype (dtype/get-datatype buffer)
+     :shape (dtype/shape item)
+     :strides (mapv (partial * (casting/numeric-byte-width
+                                (dtype/get-datatype buffer)))
+                    (:strides dimensions))})
+
+
   dtype-proto/PToArray
   (->sub-array [item]
     (when (and (simple-dimensions? dimensions)
@@ -332,7 +352,8 @@
   (->tensor-reader [item options]
     (let [{:keys [datatype unchecked?]} options]
       (if (and (simple-dimensions? dimensions)
-               (instance? (resolve (tens-typecast/datatype->tensor-reader-type datatype))
+               (instance? (resolve (tens-typecast/datatype->tensor-reader-type
+                                    datatype))
                           buffer))
         buffer
         (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
@@ -448,8 +469,9 @@
                   container-type]}]
   (let [datatype (or datatype (dtype/get-datatype tens))
         container-type (default-container-type (or container-type
-                                                (dtype/container-type tens)))
-        new-buffer (if (satisfies? dtype-proto/PPrototype (tensor->buffer tens))
+                                                   (dtype/container-type tens)))
+        new-buffer (if (and (satisfies? dtype-proto/PPrototype (tensor->buffer tens))
+                            (= container-type (dtype/container-type tens)))
                      (dtype/from-prototype (tensor->buffer tens)
                                            :datatype datatype
                                            :shape (dtype/shape
@@ -568,6 +590,17 @@
     (assoc tens :dimensions
            (dims/dimensions shape :strides strides :offsets offsets
                             :max-shape bcast-shape))))
+
+
+(defn ensure-buffer-descriptor
+  "Get a buffer descriptor from the tensor.  This may copy the data.  If you want to
+  ensure sharing, use the protocol ->buffer-descriptor function."
+  [tens]
+  (let [tens (ensure-tensor tens)]
+    (if (dtype-proto/convertible-to-buffer-desc? tens)
+      (dtype-proto/->buffer-descriptor tens)
+      (-> (clone tens :container-type :native-buffer)
+          dtype-proto/->buffer-descriptor))))
 
 
 (defmethod unary-op/unary-reader-map :tensor

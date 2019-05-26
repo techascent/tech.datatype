@@ -185,6 +185,19 @@
   (->ptr-backing-store [item]
     (jna/as-ptr backing-store))
 
+  dtype-proto/PToBufferDesc
+  (convertible-to-buffer-desc? [item]
+    (when (= (casting/numeric-byte-width datatype)
+             (casting/numeric-byte-width (dtype-proto/get-datatype
+                                          backing-store)))
+      (dtype-proto/convertible-to-buffer-desc? backing-store)))
+  (->buffer-descriptor [item]
+    (when (= (casting/numeric-byte-width datatype)
+             (casting/numeric-byte-width (dtype-proto/get-datatype
+                                          backing-store)))
+      (-> (dtype-proto/->buffer-descriptor backing-store)
+          (assoc :datatype datatype))))
+
   dtype-proto/PCountable
   (ecount [item] (dtype-proto/ecount backing-store)))
 

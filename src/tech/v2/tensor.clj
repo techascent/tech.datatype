@@ -24,6 +24,7 @@
                           rotate
                           tensor?
                           ensure-tensor
+                          ensure-buffer-descriptor
                           tensor-force
                           tensor-container-type
                           tensor-buffer-type

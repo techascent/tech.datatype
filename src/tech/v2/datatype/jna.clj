@@ -48,14 +48,24 @@
       :float64 (.asDoubleBuffer buffer))))
 
 
-(defn unsafe-address->typed-pointer
-  [^long address ^long byte-len datatype]
-  (let [nio-buf (pointer->nio-buffer (make-jna-pointer address)
+(defn unsafe-ptr->typed-pointer
+  "This is fairly unsafe.  The byte-len and datatype must match
+  the actual pointer data.  But the GC can link the data to the
+  resultant buffer."
+  [^Pointer data ^long byte-len datatype]
+  (let [nio-buf (pointer->nio-buffer data
                                      (casting/datatype->host-datatype datatype)
                                      byte-len)]
     (if (= datatype (casting/datatype->host-datatype datatype))
       nio-buf
       (typed-buf/->TypedBuffer datatype nio-buf))))
+
+
+(defn unsafe-address->typed-pointer
+  "This is really unsafe.  The GC won't be able to link Whatever produced the address
+  to the produced pointer."
+  [^long address ^long byte-len datatype]
+  (unsafe-ptr->typed-pointer (make-jna-pointer address) byte-len datatype))
 
 
 (defn unsafe-free-ptr

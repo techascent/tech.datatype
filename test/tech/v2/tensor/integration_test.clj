@@ -78,3 +78,13 @@
                                                 (reader-composition))))
       :inline-fn (with-out-str (time (dotimes [iter 10]
                                        (inline-fn))))})))
+
+
+(deftest buffer-descriptor
+  ;; Test that we can get buffer descriptors from tensors.  We should also be able
+  ;; to get buffer descriptors from nio buffers if they are direct mapped.
+  (let [test-tensor (tens/->tensor (->> (range 9)
+                                        (partition 3)))]
+    (is (not (dtype/as-buffer-descriptor test-tensor)))
+    (is (-> (tens/ensure-buffer-descriptor test-tensor)
+            :ptr))))

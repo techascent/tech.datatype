@@ -22,6 +22,7 @@
             [tech.v2.datatype.writer :as writer]
             [tech.jna :as jna]
             [tech.v2.datatype.array]
+            [tech.resource :as resource]
             [tech.parallel.for :as parallel-for])
   (:import [com.sun.jna Pointer Native]
            [java.nio Buffer ByteBuffer ShortBuffer
@@ -184,9 +185,24 @@
       (fn [item#]
         (let [item# (datatype->buffer-cast-fn ~datatype item#)]
           (when (.isDirect item#)
-            (let [ptr-addr# (Pointer/nativeValue (Native/getDirectBufferPointer item#))]
-              (Pointer. (+ ptr-addr# (* (.position item#)
-                                        (casting/numeric-byte-width ~datatype))))))))}))
+            (let [ptr-addr# (Pointer/nativeValue (Native/getDirectBufferPointer item#))
+                  retval#
+                  (Pointer. (+ ptr-addr#
+                               (* (.position item#)
+                                  (casting/numeric-byte-width ~datatype))))
+                  resource-map# {:item item#}]
+              ;;The resource system is used to make sure the gc can track the linkage
+              ;;between the offset pointer and the source buffer.
+              (resource/track retval# #(get resource-map# :item) [:gc])))))}
+     dtype-proto/PToBufferDesc
+     {:convertible-to-buffer-desc? (fn [item#] (jna/is-jna-ptr-convertible? item#))
+      :->buffer-descriptor
+      (fn [item#]
+        (when-let [buf-ptr# (jna/->ptr-backing-store item#)]
+          {:ptr buf-ptr#
+           :datatype ~datatype
+           :shape [(base/ecount item#)]
+           :strides [(casting/numeric-byte-width ~datatype)]}))}))
 
 
 (implement-buffer-type ByteBuffer :int8)

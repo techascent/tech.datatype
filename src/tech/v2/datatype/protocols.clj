@@ -153,6 +153,19 @@
   (when (list-convertible? item)
     (->list-backing-store item)))
 
+
+(defprotocol PToBufferDesc
+  "Conversion to a buffer descriptor for consuming by an external C library."
+  (convertible-to-buffer-desc? [item])
+  (->buffer-descriptor [item]
+    "Buffer descriptors are maps such that:
+{:ptr com.sun.jna.Pointer that keeps reference back to original buffer.
+ :datatype datatype of data that ptr points to.
+ :shape -  vector of integers.
+ :stride - vector of byte lengths for each dimension.
+}
+Note that this makes no mention of indianness; buffers are in the format of the host."))
+
 ;; Various other type conversions.  These happen quite a lot and we have found that
 ;; avoiding 'satisfies' is wise.  In all of these cases, options may contain at least
 ;; :datatype and :unchecked?

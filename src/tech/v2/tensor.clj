@@ -25,6 +25,7 @@
                           tensor?
                           ensure-tensor
                           ensure-buffer-descriptor
+                          buffer-descriptor->tensor
                           tensor-force
                           tensor-container-type
                           tensor-buffer-type

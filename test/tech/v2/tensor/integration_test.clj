@@ -87,4 +87,11 @@
                                         (partition 3)))]
     (is (not (dtype/as-buffer-descriptor test-tensor)))
     (is (-> (tens/ensure-buffer-descriptor test-tensor)
-            :ptr))))
+            :ptr))
+    (let [new-tens (tens/buffer-descriptor->tensor
+                    (tens/ensure-buffer-descriptor test-tensor))]
+      (is (dfn/equals test-tensor new-tens))
+      (let [trans-tens (tens/transpose new-tens [1 0])
+            trans-desc (dtype/as-buffer-descriptor trans-tens)]
+        (is (= {:datatype :float64, :shape [3 3], :strides [8 24]}
+               (dissoc trans-desc :ptr)))))))

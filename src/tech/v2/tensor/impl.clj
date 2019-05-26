@@ -18,6 +18,7 @@
               [tech.v2.datatype.typecast :as typecast]
               [tech.v2.datatype :as dtype]
               [tech.v2.datatype.functional :as dtype-fn]
+              [tech.v2.datatype.jna :as dtype-jna]
               [tech.v2.tensor.typecast :as tens-typecast]
               [tech.v2.tensor.protocols :as tens-proto]
               [tech.v2.libs.blas :as blas]
@@ -25,6 +26,7 @@
     (:import [tech.v2.datatype
               IndexingSystem$Forward
               IndexingSystem$Backward]
+             [com.sun.jna Pointer]
              [java.io Writer]))
 
 
@@ -601,6 +603,30 @@
       (dtype-proto/->buffer-descriptor tens)
       (-> (clone tens :container-type :native-buffer)
           dtype-proto/->buffer-descriptor))))
+
+
+(defn buffer-descriptor->tensor
+  "Given a buffer descriptor, produce a tensor"
+  [{:keys [ptr datatype shape strides] :as buffer-desc}]
+  (when (or (not ptr)
+            (= 0 (Pointer/nativeValue ptr)))
+    (throw (ex-info "Cannot create tensor from nil pointer."
+                    {:ptr ptr})))
+  (let [dtype-size (casting/numeric-byte-width datatype)]
+    (when-not (every? #(= 0 (rem (long %)
+                                 dtype-size))
+                      strides)
+      (throw (ex-info "Strides are not commensurate with datatype size." {})))
+    (let [max-stride-idx (dtype-fn/argmax strides)
+          buffer-len (* (long (dtype/get-value shape max-stride-idx))
+                        (long (dtype/get-value strides max-stride-idx)))
+          ;;Move strides into elem-count instead of byte-count
+          strides (mapv #(quot (long %) dtype-size)
+                        strides)]
+      (-> (dtype-jna/unsafe-ptr->typed-pointer
+           ptr buffer-len datatype)
+          (construct-tensor (dims/dimensions
+                             shape :strides strides))))))
 
 
 (defmethod unary-op/unary-reader-map :tensor

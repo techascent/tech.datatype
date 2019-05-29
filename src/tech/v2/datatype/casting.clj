@@ -155,7 +155,7 @@
 (def int64-cast #(long (->number %)))
 (def float32-cast #(float (->number %)))
 (def float64-cast #(double (->number %)))
-(def boolean-cast #(boolean (bool->number %)))
+(def boolean-cast #(datatype->boolean :unknown %))
 
 ;;Numeric casts
 (defmacro datatype->unchecked-cast-fn

@@ -49,8 +49,8 @@
                (if (= sparse-value# value#)
                  (when found?#
                    (do
-                     (.remove index-mutable# insert-pos#)
-                     (.remove data-mutable# insert-pos#)))
+                     (.mremove index-mutable# insert-pos#)
+                     (.mremove data-mutable# insert-pos#)))
                  (if found?#
                    (.write (typecast/datatype->writer ~datatype data# unchecked?#)
                            insert-pos# value#)

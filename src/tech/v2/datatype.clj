@@ -286,7 +286,7 @@ Calls clojure.core.matrix/ecount."
 (defn remove!
   [item idx]
   (let [mut-item ^MutableRemove (dtype-proto/->mutable item {})]
-    (.remove mut-item (int idx))
+    (.mremove mut-item (int idx))
     item))
 
 

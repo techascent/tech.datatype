@@ -61,7 +61,7 @@
                           `(identity ~'value)
                           `(unchecked-full-cast
                             ~'value ~mutable-dtype ~intermediate-dtype ~buffer-dtype))))
-       (remove [mut-item# idx#]
+       (mremove [mut-item# idx#]
          (datatype->single-remove-fn ~buffer-dtype ~buffer idx#)))
      (reify ~mutable-cls
        (getDatatype [mut-item#] ~intermediate-dtype)
@@ -74,7 +74,7 @@
                           `(identity ~'value)
                           `(checked-full-write-cast
                             ~'value ~mutable-dtype ~intermediate-dtype ~buffer-dtype))))
-       (remove [mut-item# idx#]
+       (mremove [mut-item# idx#]
          (datatype->single-remove-fn ~buffer-dtype ~buffer idx#)))))
 
 
@@ -136,8 +136,8 @@
              (.append buffer#
                       (casting/datatype->unchecked-cast-fn
                        ~src-dtype ~dst-dtype value#)))
-           (remove [item# idx#]
-             (.remove buffer# idx#)))
+           (mremove [item# idx#]
+             (.mremove buffer# idx#)))
          (reify ~(typecast/datatype->mutable-type src-dtype)
            (getDatatype [item#] datatype#)
            (lsize [mut-item#] (.lsize buffer#))
@@ -148,11 +148,12 @@
            (append [mut-item# value#]
              (.append buffer#
                       (casting/datatype->cast-fn ~src-dtype ~dst-dtype value#)))
-           (remove [item# idx#]
-             (.remove buffer# idx#)))))))
+           (mremove [item# idx#]
+             (.mremove buffer# idx#)))))))
 
 
-(def marshalling-mutable-table (casting/make-marshalling-item-table reify-marshalling-mutable))
+(def marshalling-mutable-table (casting/make-marshalling-item-table
+                                reify-marshalling-mutable))
 
 
 (defmacro extend-mutable

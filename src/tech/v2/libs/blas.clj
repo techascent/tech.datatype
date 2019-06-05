@@ -1,6 +1,7 @@
 (ns tech.v2.libs.blas
   (:require [tech.jna :as jna]
-            [tech.v2.datatype.typecast :refer [ensure-ptr-like]]))
+            [tech.v2.datatype.typecast :refer [ensure-ptr-like]]
+            [clojure.tools.logging :as log]))
 
 
 (def ^:dynamic *system-blas-lib-name* "blas")
@@ -11,7 +12,7 @@
   (try
     (jna/load-library *system-blas-lib-name*)
     (catch Throwable e
-      (println "Failed to load native blas:" (.getMessage e))
+      (log/warnf "Failed to load native blas: %s" (.getMessage e))
       nil)))
 
 (defn has-blas?

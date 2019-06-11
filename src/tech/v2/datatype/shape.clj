@@ -11,18 +11,6 @@
 (set! *warn-on-reflection* true)
 
 
-(def corem-ecount (future
-                    (try
-                      (parallel-require/require-resolve 'tech.v2.datatype.corem/corem-ecount)
-                      (catch Throwable e nil))))
-
-
-(def corem-shape (future
-                   (try
-                     (parallel-require/require-resolve 'tech.v2.datatype.corem/corem-shape)
-                     (catch Throwable e nil))))
-
-
 (defn scalar?
   [item]
   (or (number? item)
@@ -41,8 +29,6 @@
     (cond
       (scalar? item)
       0
-      @corem-ecount
-      (@corem-ecount item)
       (.isArray ^Class (type item))
       (apply * (dtype-proto/shape item))
       :else

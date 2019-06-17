@@ -1,5 +1,5 @@
 {:paths ["src"]
- :deps {org.clojure/clojure              {:mvn/version "1.10.1-beta2"}
+ :deps {org.clojure/clojure              {:mvn/version "1.10.1"}
         techascent/tech.jna              {:mvn/version "3.18"}
         techascent/tech.parallel         {:mvn/version "1.7"}
         it.unimi.dsi/fastutil            {:mvn/version "8.2.1"}

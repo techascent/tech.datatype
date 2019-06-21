@@ -6,7 +6,8 @@
             [tech.v2.datatype.primitive]
             [tech.v2.datatype.list]
             [tech.parallel.for :as parallel-for]
-            [tech.v2.datatype.functional :as dfn])
+            [tech.v2.datatype.functional :as dfn]
+            [tech.v2.datatype.boolean-op :as boolean-op])
   (:import [java.nio FloatBuffer]))
 
 
@@ -247,3 +248,27 @@
   (is (= 0.0 (-> (dfn/- (into-array (range 10)) (range 10))
                  (dfn/pow 2)
                  (dfn/+)))))
+
+
+(deftest nan-insanity
+  (let [test-floats (float-array [0 ##NaN 2 4 ##NaN])
+        nan-floats (float-array (repeat 5 ##NaN))]
+    (is (= [1 4]
+           (-> (dfn/argfilter #(= 0 (Float/compare % Float/NaN)) test-floats)
+               vec)))
+    (is (= [1 4]
+           (->> test-floats
+                (dfn/argfilter (boolean-op/make-boolean-unary-op
+                                :float32
+                                (= 0 (Float/compare x Float/NaN))))
+               vec)))
+    (is (= [false true false false true]
+           (dfn/nan? test-floats)))
+
+    (is (= [false true false false true]
+           (dfn/eq test-floats Float/NaN)))
+
+    (is (= [1 4]
+           (->> (dfn/eq test-floats nan-floats)
+                (dfn/argfilter identity)
+                vec)))))

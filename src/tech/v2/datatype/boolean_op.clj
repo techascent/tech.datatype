@@ -60,6 +60,49 @@
        (invoke [item# arg#]
          (.op item# (casting/datatype->cast-fn :unknown ~datatype arg#))))))
 
+(extend-type Object
+  dtype-proto/PToUnaryBooleanOp
+  (convertible-to-unary-boolean-op? [item] (instance? clojure.lang.IFn item))
+  (->unary-boolean-op [item options]
+    (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
+      (case dtype
+        :int8 (make-boolean-unary-op :int8 (casting/datatype->cast-fn
+                                            :unknown
+                                            :boolean
+                                            (item x)))
+        :int16 (make-boolean-unary-op :int16 (casting/datatype->cast-fn
+                                              :unknown
+                                              :boolean
+                                              (item x)))
+        :int32 (make-boolean-unary-op :int32 (casting/datatype->cast-fn
+                                              :unkown
+                                              :boolean
+                                              (item x)))
+        :int64 (make-boolean-unary-op :int64 (casting/datatype->cast-fn
+                                              :unkown
+                                              :boolean
+                                              (item x)))
+        :float32 (make-boolean-unary-op :float32 (casting/datatype->cast-fn
+                                                  :unknown
+                                                  :boolean
+                                                  (item x)))
+        :float64 (make-boolean-unary-op :float64 (casting/datatype->cast-fn
+                                                  :unknown
+                                                  :boolean
+                                                  (item x)))
+        :boolean (make-boolean-unary-op :boolean (casting/datatype->cast-fn
+                                                  :unknown
+                                                  :boolean
+                                                  (item
+                                                   (casting/datatype->cast-fn
+                                                    :unkown
+                                                    :boolean
+                                                    (item x)))))
+        :object (make-boolean-unary-op :object (casting/datatype->cast-fn
+                                                :unkown
+                                                :boolean
+                                                (item x)))))))
+
 
 (defmacro implement-unary-typecast
   [datatype]
@@ -133,15 +176,62 @@
               (casting/datatype->cast-fn :unknown ~datatype y#))))))
 
 
+(extend-type Object
+  dtype-proto/PToBinaryBooleanOp
+  (convertible-to-binary-boolean-op? [item] (instance? clojure.lang.IFn item))
+  (->unary-boolean-op [item options]
+    (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
+      (case dtype
+        :int8 (make-boolean-binary-op :int8 (casting/datatype->cast-fn
+                                            :unknown
+                                            :boolean
+                                            (item x y)))
+        :int16 (make-boolean-binary-op :int16 (casting/datatype->cast-fn
+                                              :unknown
+                                              :boolean
+                                              (item x y)))
+        :int32 (make-boolean-binary-op :int32 (casting/datatype->cast-fn
+                                              :unkown
+                                              :boolean
+                                              (item x y)))
+        :int64 (make-boolean-binary-op :int64 (casting/datatype->cast-fn
+                                              :unkown
+                                              :boolean
+                                              (item x y)))
+        :float32 (make-boolean-binary-op :float32 (casting/datatype->cast-fn
+                                                  :unknown
+                                                  :boolean
+                                                  (item x y)))
+        :float64 (make-boolean-binary-op :float64 (casting/datatype->cast-fn
+                                                  :unknown
+                                                  :boolean
+                                                  (item x y)))
+        :boolean (make-boolean-binary-op :boolean (casting/datatype->cast-fn
+                                                  :unknown
+                                                  :boolean
+                                                  (item
+                                                   (casting/datatype->cast-fn
+                                                    :unkown
+                                                    :boolean
+                                                    (item x y)))))
+        :object (make-boolean-binary-op :object (casting/datatype->cast-fn
+                                                :unkown
+                                                :boolean
+                                                (item x y)))))))
+
+
 (defmacro implement-binary-typecast
   [datatype]
   (let [expected-type (resolve (datatype->boolean-binary-type datatype))]
     `(if (instance? ~expected-type ~'item)
        ~'item
        (if (dtype-proto/convertible-to-binary-boolean-op? ~'item)
-         (dtype-proto/->binary-boolean-op ~'item {:datatype ~datatype :unchecked? ~'unchecked?})
-         (-> (dtype-proto/->binary-op ~'item {:datatype ~datatype :unchecked? ~'unchecked?})
-             (dtype-proto/->binary-boolean-op {:datatype ~datatype :unchecked? ~'unchecked?}))))))
+         (dtype-proto/->binary-boolean-op ~'item {:datatype ~datatype
+                                                  :unchecked? ~'unchecked?})
+         (-> (dtype-proto/->binary-op ~'item {:datatype ~datatype
+                                              :unchecked? ~'unchecked?})
+             (dtype-proto/->binary-boolean-op {:datatype ~datatype
+                                               :unchecked? ~'unchecked?}))))))
 
 
 (defn int8->boolean-binary
@@ -267,7 +357,7 @@
                     (let [retval# (.op item# arg#)]
                       (casting/datatype->cast-fn ~datatype :boolean retval#)))
                   dtype-proto/PDatatype
-                  (get-datatype [item#] (dtype-base/get-datatype item#))
+                  (get-datatype [_#] (dtype-base/get-datatype item#))
                   IFn
                   (invoke [bool-item# arg#]
                     (.op bool-item# (casting/datatype->cast-fn
@@ -280,6 +370,7 @@
 (extend-unary-op-types :int16)
 (extend-unary-op-types :int32)
 (extend-unary-op-types :int64)
+
 (extend-unary-op-types :float32)
 (extend-unary-op-types :float64)
 (extend-unary-op-types :boolean)
@@ -657,7 +748,26 @@
 
 
 (def builtin-boolean-unary-ops
-  {:not (make-boolean-unary-op :boolean (not x))})
+  {:not (make-boolean-unary-op :boolean (not x))
+   :nan? (reify
+           dtype-proto/PToBinaryBooleanOp
+           (convertible-to-binary-boolean-op? [_] true)
+           (->binary-boolean-op [item options]
+             (let [{datatype :datatype
+                    unchecked? :unchecked?} options
+                   host-dtype (casting/safe-flatten datatype)]
+         (-> (case host-dtype
+               :int8 (make-boolean-binary-op :int8 false)
+               :int16 (make-boolean-binary-op :int16 false)
+               :int32 (make-boolean-binary-op :int32 false)
+               :int64 (make-boolean-binary-op :int64 false)
+               :float32 (make-boolean-binary-op :float32 (Float/isNaN x))
+               :float64 (make-boolean-binary-op :float64 (Double/isNaN x))
+               :object (make-boolean-binary-op :object (Double/isNaN (double x))))
+             (dtype-proto/->binary-boolean-op options))))
+           IFn
+           (invoke [item x]
+             (Double/isNaN (double x))))})
 
 
 (set! *unchecked-math* false)
@@ -666,7 +776,31 @@
 (def builtin-boolean-binary-ops
   {:and (make-boolean-binary-op :boolean (boolean (and x y)))
    :or (make-boolean-binary-op :boolean (boolean (or x y)))
-   :eq (make-all-datatype-binary-boolean-op (= x y))
+   :eq (reify
+         dtype-proto/PToBinaryBooleanOp
+         (convertible-to-binary-boolean-op? [item] true)
+         (->binary-boolean-op [item options]
+           (let [{datatype :datatype
+                  unchecked? :unchecked?} options
+                 host-dtype (casting/safe-flatten datatype)]
+             (case host-dtype
+               :int8 (make-boolean-binary-op :int8 (= x y))
+               :int16 (make-boolean-binary-op :int16 (= x y))
+               :int32 (make-boolean-binary-op :int32 (= x y))
+               :int64 (make-boolean-binary-op :int64 (= x y))
+               :float32 (make-boolean-binary-op :float32 (= 0 (Float/compare x y)))
+               :float64 (make-boolean-binary-op :float64 (= 0 (Double/compare x y)))
+               :boolean (make-boolean-binary-op :boolean (= x y))
+               :object (make-boolean-binary-op
+                        :object
+                        (if (and (number? x) (number? y))
+                          (= 0 (Double/compare (double x) (double y)))
+                          (= x y))))))
+         IFn
+         (invoke [item x y]
+           (if (and (number? x) (number? y))
+             (= 0 (Double/compare (double x) (double y)))
+             (= x y))))
    :not-eq (make-all-datatype-binary-boolean-op (not= x y))
    :> (make-numeric-binary-boolean-op (> x y))
    :>= (make-numeric-binary-boolean-op (>= x y))

@@ -200,6 +200,25 @@
    `(make-unary-op :unamed ~datatype ~body)))
 
 
+(extend-type Object
+  dtype-proto/PToUnaryOp
+  (convertible-to-unary-op? [item] (instance? clojure.lang.IFn item))
+  (->unary-op [item options]
+    (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
+      (case dtype
+        :int8 (make-unary-op :int8 (byte (item x)))
+        :int16 (make-unary-op :int16 (short (item x)))
+        :int32 (make-unary-op :int32 (int (item x)))
+        :int64 (make-unary-op :int64 (long (item x)))
+        :float32 (make-unary-op :float32 (float (item x)))
+        :float64 (make-unary-op :float64 (double (item x)))
+        :boolean (make-unary-op :boolean (casting/datatype->cast-fn
+                                                   :unkown
+                                                   :boolean
+                                                   (item x)))
+        :object (make-unary-op :object (item x))))))
+
+
 (defmacro make-unary-op-iterator
   [dtype]
   `(fn [item# un-op# unchecked?#]

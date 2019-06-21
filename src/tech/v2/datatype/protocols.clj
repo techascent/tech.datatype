@@ -332,7 +332,7 @@ Note that this makes no mention of indianness; buffers are in the format of the 
   (op-name [item] :unnamed)
 
   PToUnaryOp
-  (convertible-to-unary-op? [item] false)
+  (convertible-to-unary-op? [item] (fn? item))
 
   PToUnaryBooleanOp
   (convertible-to-unary-boolean-op? [item] false)

@@ -192,6 +192,25 @@
    `(make-binary-op :unnamed ~datatype ~body)))
 
 
+(extend-type Object
+  dtype-proto/PToUnaryOp
+  (convertible-to-unary-op? [item] (instance? clojure.lang.IFn item))
+  (->unary-op [item options]
+    (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
+      (case dtype
+        :int8 (make-binary-op :int8 (byte (item x y)))
+        :int16 (make-binary-op :int16 (short (item x y)))
+        :int32 (make-binary-op :int32 (int (item x y)))
+        :int64 (make-binary-op :int64 (long (item x y)))
+        :float32 (make-binary-op :float32 (float (item x y)))
+        :float64 (make-binary-op :float64 (double (item x y)))
+        :boolean (make-binary-op :boolean (casting/datatype->cast-fn
+                                                   :unkown
+                                                   :boolean
+                                                   (item x y)))
+        :object (make-binary-op :object (item x y))))))
+
+
 (defmacro make-binary-op-iterator
   [dtype]
   `(fn [lhs# rhs# bin-op# unchecked?#]

@@ -29,9 +29,11 @@
             [tech.v2.datatype.iterator :as dtype-iter]
             [tech.v2.datatype.reader :as dtype-reader]
             [tech.v2.datatype.writer :as dtype-writer]
+            [tech.v2.datatype.unary-op :as unary-op]
+            [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer])
-  (:import [tech.v2.datatype MutableRemove ObjectMutable]
+  (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
            [java.util Iterator List RandomAccess])
   (:refer-clojure :exclude [cast]))
 
@@ -379,6 +381,39 @@ Calls clojure.core.matrix/ecount."
                         (assoc options
                                :datatype
                                (or datatype (get-datatype src-item)))))
+
+
+(defn object-reader
+  "Create an object reader from an elem count and a function from index to object."
+  [n-elems idx->item-fn]
+  (let [n-elems (long n-elems)]
+    (reify
+      ObjectReader
+      (lsize [_] (long n-elems))
+      (read [_ elem-idx]
+        (idx->item-fn elem-idx)))))
+
+
+(defn reader-map
+  "Map a function over several readers returning a new reader."
+  [map-fn reader & readers]
+  (let [args (map #(->reader % :object) (concat [reader] readers))
+        n-elems (->> args
+                     (map ecount)
+                     (apply min)
+                     long)
+        n-readers (count args)]
+    (case n-readers
+      1 (let [^ObjectReader reader (first args)]
+          (object-reader n-elems #(map-fn (.read reader %))))
+      2 (let [^ObjectReader reader1 (first args)
+              ^ObjectReader reader2 (second args)]
+          (object-reader n-elems
+                         #(map-fn (.read reader1 %)
+                                  (.read reader2 %))))
+      (object-reader n-elems
+                     #(apply map-fn (map (fn [^ObjectReader reader]
+                                           (.read reader %))))))))
 
 
 (defn ->sparse

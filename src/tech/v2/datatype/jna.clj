@@ -38,7 +38,8 @@
 
 (defn pointer->nio-buffer
   [^Pointer ptr datatype byte-len]
-  (let [buffer (.getByteBuffer ptr 0 byte-len)]
+  (let [buffer (.getByteBuffer ptr 0 byte-len)
+        gc-map (:ptr ptr)]
     (case datatype
       :int8 buffer
       :int16 (.asShortBuffer buffer)
@@ -75,7 +76,7 @@
 
 (defn make-typed-pointer
   "Make a typed pointer.  Aside from the usual option :unchecked?, there is a new option
-  :untracked? which means to explicitly avoid using the resource or gc tracking system
+  :untracked? which means to explicitly avoid using the gc tracking system
   to track this pointer."
   [datatype elem-count-or-seq & [options]]
   (let [n-elems (if (number? elem-count-or-seq)
@@ -90,9 +91,9 @@
         (dtype-proto/set-constant! retval 0 0 n-elems)))
     ;;This will be freed if either the resource context is released *or* the return
     ;;value goes out of scope.  In For some use-cases, the returned item should be
-    ;;untracked and the callers will assume resposibility for freeing the data.
+    ;;untracked and the callers will assume responsibility for freeing the data.
     (when-not (:untracked? options)
-      (resource/track retval #(Native/free data) [:stack :gc]))
+      (resource/track retval #(Native/free data) [:gc]))
 
     retval))
 

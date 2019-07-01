@@ -735,9 +735,6 @@
   (default-tensor-binary-boolean-reader-map options bin-op lhs rhs))
 
 
-
-
-
 (defn ->jvm
   "Conversion to storage that is efficient for the jvm.
   Base storage is either jvm-array or persistent-vector."
@@ -776,20 +773,6 @@
                    base-data)
            vec)
       (first base-data))))
-
-
-;; (defn tensor->string
-;;   ^String [tens & {:keys [print-datatype]
-;;                    :or {print-datatype :float64}}]
-;;   (format "#tech.v2.tensor<%s>%s\n%s"
-;;           (name (dtype/get-datatype tens))
-;;           (dtype/shape tens)
-;;           (corem-pp/pm (->jvm tens))))
-
-
-;; (defmethod print-method Tensor
-;;   [tens w]
-;;   (.write ^Writer w (tensor->string tens)))
 
 
 (defmethod dtype-proto/copy! [:tensor :dense]

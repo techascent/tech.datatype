@@ -31,19 +31,35 @@
 
 
 
-(defn ->int8-reader ^ByteTensorReader [item unchecked?] (implement-reader-cast :int8))
-(defn ->int16-reader ^ShortTensorReader [item unchecked?] (implement-reader-cast :int16))
-(defn ->int32-reader ^IntTensorReader [item unchecked?] (implement-reader-cast :int32))
-(defn ->int64-reader ^LongTensorReader [item unchecked?] (implement-reader-cast :int64))
-(defn ->float32-reader ^FloatTensorReader [item unchecked?] (implement-reader-cast :float32))
-(defn ->float64-reader ^DoubleTensorReader [item unchecked?] (implement-reader-cast :float64))
-(defn ->boolean-reader ^BooleanTensorReader [item unchecked?] (implement-reader-cast :boolean))
-(defn ->object-reader ^ObjectTensorReader [item unchecked?] (implement-reader-cast :object))
+(defn ->int8-reader
+  ^ByteTensorReader [item & [unchecked?]]
+  (implement-reader-cast :int8))
+(defn ->int16-reader
+  ^ShortTensorReader [item & [unchecked?]]
+  (implement-reader-cast :int16))
+(defn ->int32-reader
+  ^IntTensorReader [item & [unchecked?]]
+  (implement-reader-cast :int32))
+(defn ->int64-reader
+  ^LongTensorReader [item & [unchecked?]]
+  (implement-reader-cast :int64))
+(defn ->float32-reader
+  ^FloatTensorReader [item & [unchecked?]]
+  (implement-reader-cast :float32))
+(defn ->float64-reader
+  ^DoubleTensorReader [item & [unchecked?]]
+  (implement-reader-cast :float64))
+(defn ->boolean-reader
+  ^BooleanTensorReader [item & [unchecked?]]
+  (implement-reader-cast :boolean))
+(defn ->object-reader
+  ^ObjectTensorReader [item & [unchecked?]]
+  (implement-reader-cast :object))
 
 
 (defmacro datatype->tensor-reader
   "Convert an item into a know tensor reader type."
-  [item datatype & [unchecked?]]
+  [datatype item & [unchecked?]]
   (case (casting/safe-flatten datatype)
     :int8 `(->int8-reader ~item ~unchecked?)
     :int16 `(->int16-reader ~item ~unchecked?)

@@ -2,6 +2,7 @@
 
 
 (defprotocol PTensor
+  (is-tensor? [item])
   (dimensions [item])
   (buffer [item]))
 
@@ -28,5 +29,7 @@
 
 
 (extend-type Object
+  PTensor
+  (is-tensor? [item] false)
   PToTensorReader
   (convertible-to-tensor-reader? [item] false))

@@ -5,6 +5,7 @@
             [tech.v2.tensor.impl :as impl]
             [tech.v2.tensor.dimensions :as dims]
             [tech.v2.tensor.dimensions.shape :as shape]
+            [tech.v2.tensor.protocols :as tens-proto]
             ;;Ensure printing things works.
             [tech.v2.tensor.pprint]
             [tech.v2.datatype.functional :as dtype-fn]
@@ -34,10 +35,19 @@
                           matrix-matrix-dispatch
                           ->jvm)
 
+(defn tensor->dimensions
+  [tens]
+  (tens-proto/dimensions tens))
+
+
+(defn tensor->buffer
+  [tens]
+  (tens-proto/buffer tens))
+
 
 (defn dimensions-dense?
   [tensor]
-  (dims/dense? (:dimensions tensor)))
+  (dims/dense? (tensor->dimensions tensor)))
 
 
 (defn rows

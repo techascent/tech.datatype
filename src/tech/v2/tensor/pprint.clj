@@ -7,7 +7,6 @@
             [tech.v2.tensor.impl :as tens-impl]
             [tech.v2.datatype.reduce-op :as reduce-op])
   (:import [java.lang StringBuilder]
-           [tech.v2.tensor.impl Tensor]
            [java.io Writer]))
 
 
@@ -118,6 +117,6 @@
           (base-tensor->string tens)))
 
 
-(defmethod print-method Tensor
+(defmethod print-method :tech.v2.tensor
   [tens w]
   (.write ^Writer w (tensor->string tens)))

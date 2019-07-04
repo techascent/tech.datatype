@@ -110,13 +110,15 @@
 
 
 (defmacro make-tensor-reader
-  [reader-datatype datatype item-shape indexer reader sparse-reader]
+  [reader-datatype datatype item-shape indexer reader sparse-reader
+   base-tensor]
   `(let [^tech.v2.tensor.LongTensorReader indexer# ~indexer
          data# (typecast/datatype->reader ~reader-datatype ~reader)
          shape# ~item-shape
          n-elems# (long (apply * 1 shape#))
          n-dims# (count shape#)
-         strides# (dims/extend-strides shape#)]
+         strides# (dims/extend-strides shape#)
+         base-tensor# ~base-tensor]
      (reify
        ~(tens-typecast/datatype->tensor-reader-type reader-datatype)
        (getDatatype [item#] ~datatype)
@@ -133,6 +135,72 @@
        dtype-proto/PShape
        (shape [m] shape#)
 
+       tens-proto/PTensor
+       (is-tensor? [item#] true)
+       (dimensions [item] (tens-proto/dimensions base-tensor#))
+       (buffer [item] (tens-proto/buffer base-tensor#))
+
+       dtype-proto/PPrototype
+       (from-prototype [m# datatype# shape#]
+         (dtype-proto/from-prototype base-tensor# datatype# shape#))
+
+       dtype-proto/PToNioBuffer
+       (convertible-to-nio-buffer? [item#]
+         (dtype-proto/convertible-to-nio-buffer?  base-tensor#))
+       (->buffer-backing-store [item#]
+         (dtype-proto/->buffer-backing-store base-tensor#))
+
+       dtype-proto/PToList
+       (convertible-to-fastutil-list? [item#]
+         (dtype-proto/convertible-to-fastutil-list? base-tensor#))
+       (->list-backing-store [item#]
+         (dtype-proto/->list-backing-store base-tensor#))
+
+       jna/PToPtr
+       (is-jna-ptr-convertible? [item#]
+         (jna/is-jna-ptr-convertible? base-tensor#))
+       (->ptr-backing-store [item#]
+         (jna/->ptr-backing-store base-tensor#))
+
+
+       dtype-proto/PToBufferDesc
+       (convertible-to-buffer-desc? [item#]
+         (dtype-proto/convertible-to-buffer-desc? base-tensor#))
+       (->buffer-descriptor [item#]
+         (dtype-proto/->buffer-descriptor base-tensor#))
+
+
+       dtype-proto/PBuffer
+       (sub-buffer [item# offset# length#]
+         (dtype-proto/sub-buffer base-tensor# offset# length#))
+
+       dtype-proto/PSetConstant
+       (set-constant! [item# offset# value# elem-count#]
+         (dtype-proto/set-constant! base-tensor# offset# value# elem-count#))
+
+       dtype-proto/PWriteIndexes
+       (write-indexes! [item# indexes# values# options#]
+         (dtype-proto/write-indexes! base-tensor# indexes# values# options#))
+
+
+       dtype-proto/PToWriter
+       (convertible-to-writer? [item#]
+         (dtype-proto/convertible-to-writer? base-tensor#))
+       (->writer [item# options#]
+         (dtype-proto/->writer base-tensor# options#))
+
+
+       dtype-proto/PBufferType
+       (buffer-type [item#]
+         (dtype-proto/buffer-type base-tensor#))
+
+       Object
+       (toString [item]
+         ;;Can't think of a better way of doing this.
+         ;;pprint requires the tensor methods *but* tostring requires
+         ;;pprint...
+         (with-out-str (println base-tensor#)))
+
        sparse-proto/PSparse
        (index-seq [item#]
          (sparse-reader->index-seq ~sparse-reader shape# strides#))
@@ -141,13 +209,10 @@
        (readers [item#] (sparse-proto/readers ~sparse-reader))
        (iterables [item] (sparse-proto/iterables ~sparse-reader))
 
+
        sparse-proto/PToSparse
        (convertible-to-sparse? [item#] (not (nil? ~sparse-reader)))
-       (->sparse [item#] item#)
-       dtype-proto/PBufferType
-       (buffer-type [item#] (if ~sparse-reader
-                              :sparse
-                              :dense)))))
+       (->sparse [item#] item#))))
 
 
 (defn- make-tensor-base-sparse-reader
@@ -194,215 +259,234 @@
          (dims/ecount dimensions))))))
 
 
-(declare construct-tensor)
-
-
-(defrecord Tensor [buffer dimensions buffer-type]
-  dtype-proto/PDatatype
-  (get-datatype [item] (dtype-base/get-datatype buffer))
-
-
-  dtype-proto/PCountable
-  (ecount [item] (dims/ecount dimensions))
-
-
-  dtype-proto/PShape
-  (shape [m] (dims/shape dimensions))
-
-
-  dtype-proto/PPrototype
-  (from-prototype [m datatype shape]
-    (construct-tensor
-     (dtype-proto/from-prototype buffer datatype shape)
-     dimensions))
-
-
-  dtype-proto/PToNioBuffer
-  (convertible-to-nio-buffer? [item]
-    (dtype-proto/nio-convertible? buffer))
-  (->buffer-backing-store [item]
-    (when (simple-dimensions? dimensions)
-      (typecast/as-nio-buffer buffer)))
-
-
-  dtype-proto/PToList
-  (convertible-to-fastutil-list? [item]
-    (dtype-proto/list-convertible? buffer))
-  (->list-backing-store [item]
-    (when (simple-dimensions? dimensions)
-      (typecast/as-list buffer)))
-
-
-  jna/PToPtr
-  (is-jna-ptr-convertible? [item]
-    (jna/ptr-convertible? buffer))
-  (->ptr-backing-store [item]
-    (when (simple-dimensions? dimensions)
-      (jna/as-ptr buffer)))
-
-
-  dtype-proto/PToBufferDesc
-  (convertible-to-buffer-desc? [item]
-    (and (jna/ptr-convertible? buffer)
-         (dims-suitable-for-desc? dimensions)))
-  (->buffer-descriptor [item]
-    {:ptr (jna/as-ptr buffer)
-     :datatype (dtype/get-datatype buffer)
-     :shape (dtype/shape item)
-     :strides (mapv (partial * (casting/numeric-byte-width
-                                (dtype/get-datatype buffer)))
-                    (:strides dimensions))})
-
-
-  dtype-proto/PToArray
-  (->sub-array [item]
-    (when (and (simple-dimensions? dimensions)
-               (satisfies? dtype-proto/PToArray buffer))
-      (dtype-proto/->sub-array buffer)))
-
-  (->array-copy [item]
-    (if (and (simple-dimensions? dimensions)
-             (satisfies? dtype-proto/PToArray buffer))
-      (dtype-proto/->array-copy buffer)
-      (dtype-proto/->array-copy (dtype-proto/->writer item {}))))
-
-
-  dtype-proto/PBuffer
-  (sub-buffer [item offset length]
-    (if (simple-dimensions? dimensions)
-      (dtype-proto/sub-buffer buffer offset length)
-      (throw (ex-info "Cannot sub-buffer tensors with complex addressing" {}))))
-
-
-  dtype-proto/PSetConstant
-  (set-constant! [item offset value elem-count]
-    (if (simple-dimensions? dimensions)
-      (dtype-proto/set-constant! buffer offset value elem-count)
-      (if (= :sparse (dtype/buffer-type buffer))
-        (dtype-proto/write-indexes! buffer
-                                    (-> (dimensions->index-reader dimensions)
-                                        (dtype-base/sub-buffer offset elem-count))
-                                    (sparse-reader/const-sparse-reader
-                                     value
-                                     (dtype-base/get-datatype item)
-                                     elem-count)
-                                    {:indexes-in-order?
-                                     (dims/access-increasing? dimensions)})
-        (dtype-proto/set-constant! (indexed-writer/make-indexed-writer
-                                    (dimensions->index-reader dimensions)
-                                    buffer
-                                    {})
-                                   offset value elem-count))))
-
-
-  dtype-proto/PWriteIndexes
-  (write-indexes! [item indexes values options]
-    (if (simple-dimensions? dimensions)
-      (dtype-proto/write-indexes! buffer indexes values options)
-      (dtype-proto/write-indexes! buffer (indexed-reader/make-indexed-reader
-                                          indexes
-                                          (dimensions->index-reader dimensions)
-                                          {:datatype :int32})
-                                  values options)))
-
-
-  dtype-proto/PToReader
-  (convertible-to-reader? [item] (dtype-proto/convertible-to-reader? buffer))
-  (->reader [item options]
-    (let [data-reader (dtype-proto/->reader buffer options)]
-      (if (simple-dimensions? dimensions)
-        data-reader
-        (tens-proto/->tensor-reader item options))))
-
-
-  dtype-proto/PToWriter
-  (convertible-to-writer? [item] (dtype-proto/convertible-to-writer? buffer))
-  (->writer [item options]
-    (let [data-writer (dtype-proto/->writer buffer options)]
-      (if (simple-dimensions? dimensions)
-        data-writer
-        (indexed-writer/make-indexed-writer (dimensions->index-reader dimensions)
-                                    data-writer
-                                    options))))
-
-
-  dtype-proto/PBufferType
-  (buffer-type [item]
-    (or buffer-type (dtype-proto/buffer-type buffer)))
-
-
-  ;;Tensors implement only a small subset of the sparse protocols
-  ;;For the full set, calling sparse-proto/as-sparse is your only option.
-  sparse-proto/PSparse
-  (index-seq [item]
-    (sparse-reader->index-seq (sparse-proto/as-sparse item) (dtype/shape item)))
-  (sparse-value [item]
-    (when-let [sparse-data (sparse-proto/as-sparse buffer)]
-      (sparse-proto/sparse-value buffer)))
-
-
-  sparse-proto/PToSparse
-  (convertible-to-sparse? [item]
-    (sparse-proto/sparse-convertible? buffer))
-  (->sparse [item]
-    (if (simple-dimensions? dimensions)
-      (sparse-proto/as-sparse buffer)
-      (make-tensor-base-sparse-reader buffer dimensions)))
-
-  tens-proto/PToTensorReader
-  (convertible-to-tensor-reader? [item] (dtype-proto/convertible-to-reader? buffer))
-  (->tensor-reader [item options]
-    (let [{:keys [datatype unchecked?]} options]
-      (if (and (simple-dimensions? dimensions)
-               (instance? (resolve (tens-typecast/datatype->tensor-reader-type
-                                    datatype))
-                          buffer))
-        buffer
-        (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
-              data-reader (dtype-proto/->reader buffer options)
-              indexes (dimensions->index-reader dimensions)
-              item-shape (dtype-proto/shape item)]
-          (case (casting/safe-flatten datatype)
-            :int8 (make-tensor-reader :int8 datatype item-shape
-                                       indexes data-reader sparse-data)
-            :int16 (make-tensor-reader :int16 datatype item-shape
-                                       indexes data-reader sparse-data)
-            :int32 (make-tensor-reader :int32 datatype item-shape
-                                       indexes data-reader sparse-data)
-            :int64 (make-tensor-reader :int64 datatype item-shape
-                                       indexes data-reader sparse-data)
-            :float32 (make-tensor-reader :float32 datatype item-shape
-                                         indexes data-reader sparse-data)
-            :float64 (make-tensor-reader :float64 datatype item-shape
-                                         indexes data-reader sparse-data)
-            :boolean (make-tensor-reader :boolean datatype item-shape
-                                         indexes data-reader sparse-data)
-            :object (make-tensor-reader :object datatype item-shape
-                                        indexes data-reader sparse-data)))))))
-
 
 (defn construct-tensor
-  [buffer dims & [buffer-type]]
-  (->Tensor buffer dims (or buffer-type
-                            :tensor)))
+  [buffer dimensions & [buffer-type]]
+  (let [buffer-type (or buffer-type :tensor)]
+    (->
+     ;;Mother of all reify calls so we can override object methods also
+     (reify
+       dtype-proto/PDatatype
+       (get-datatype [item] (dtype-base/get-datatype buffer))
+
+
+       dtype-proto/PCountable
+       (ecount [item] (dims/ecount dimensions))
+
+
+       dtype-proto/PShape
+       (shape [m] (dims/shape dimensions))
+
+
+       dtype-proto/PPrototype
+       (from-prototype [m datatype shape]
+         (construct-tensor
+          (dtype-proto/from-prototype buffer datatype shape)
+          dimensions))
+
+
+       dtype-proto/PToNioBuffer
+       (convertible-to-nio-buffer? [item]
+         (dtype-proto/nio-convertible? buffer))
+       (->buffer-backing-store [item]
+         (when (simple-dimensions? dimensions)
+           (typecast/as-nio-buffer buffer)))
+
+
+       dtype-proto/PToList
+       (convertible-to-fastutil-list? [item]
+         (dtype-proto/list-convertible? buffer))
+       (->list-backing-store [item]
+         (when (simple-dimensions? dimensions)
+           (typecast/as-list buffer)))
+
+
+       jna/PToPtr
+       (is-jna-ptr-convertible? [item]
+         (jna/ptr-convertible? buffer))
+       (->ptr-backing-store [item]
+         (when (simple-dimensions? dimensions)
+           (jna/as-ptr buffer)))
+
+
+       dtype-proto/PToBufferDesc
+       (convertible-to-buffer-desc? [item]
+         (and (jna/ptr-convertible? buffer)
+              (dims-suitable-for-desc? dimensions)))
+       (->buffer-descriptor [item]
+         {:ptr (jna/as-ptr buffer)
+          :datatype (dtype/get-datatype buffer)
+          :shape (dtype/shape item)
+          :strides (mapv (partial * (casting/numeric-byte-width
+                                     (dtype/get-datatype buffer)))
+                         (:strides dimensions))})
+
+
+       dtype-proto/PToArray
+       (->sub-array [item]
+         (when (and (simple-dimensions? dimensions)
+                    (satisfies? dtype-proto/PToArray buffer))
+           (dtype-proto/->sub-array buffer)))
+
+       (->array-copy [item]
+         (if (and (simple-dimensions? dimensions)
+                  (satisfies? dtype-proto/PToArray buffer))
+           (dtype-proto/->array-copy buffer)
+           (dtype-proto/->array-copy (dtype-proto/->writer item {}))))
+
+
+       dtype-proto/PBuffer
+       (sub-buffer [item offset length]
+         (if (simple-dimensions? dimensions)
+           (dtype-proto/sub-buffer buffer offset length)
+           (throw (ex-info "Cannot sub-buffer tensors with complex addressing" {}))))
+
+
+       dtype-proto/PSetConstant
+       (set-constant! [item offset value elem-count]
+         (if (simple-dimensions? dimensions)
+           (dtype-proto/set-constant! buffer offset value elem-count)
+           (if (= :sparse (dtype/buffer-type buffer))
+             (dtype-proto/write-indexes! buffer
+                                         (-> (dimensions->index-reader dimensions)
+                                             (dtype-base/sub-buffer offset elem-count))
+                                         (sparse-reader/const-sparse-reader
+                                          value
+                                          (dtype-base/get-datatype item)
+                                          elem-count)
+                                         {:indexes-in-order?
+                                          (dims/access-increasing? dimensions)})
+             (dtype-proto/set-constant! (indexed-writer/make-indexed-writer
+                                         (dimensions->index-reader dimensions)
+                                         buffer
+                                         {})
+                                        offset value elem-count))))
+
+
+       dtype-proto/PWriteIndexes
+       (write-indexes! [item indexes values options]
+         (if (simple-dimensions? dimensions)
+           (dtype-proto/write-indexes! buffer indexes values options)
+           (dtype-proto/write-indexes! buffer (indexed-reader/make-indexed-reader
+                                               indexes
+                                               (dimensions->index-reader dimensions)
+                                               {:datatype :int32})
+                                       values options)))
+
+
+       dtype-proto/PToReader
+       (convertible-to-reader? [item] (dtype-proto/convertible-to-reader? buffer))
+       (->reader [item options]
+         (let [data-reader (dtype-proto/->reader buffer options)]
+           (if (simple-dimensions? dimensions)
+             data-reader
+             (tens-proto/->tensor-reader item options))))
+
+
+       dtype-proto/PToWriter
+       (convertible-to-writer? [item] (dtype-proto/convertible-to-writer? buffer))
+       (->writer [item options]
+         (let [data-writer (dtype-proto/->writer buffer options)]
+           (if (simple-dimensions? dimensions)
+             data-writer
+             (indexed-writer/make-indexed-writer (dimensions->index-reader dimensions)
+                                                 data-writer
+                                                 options))))
+
+
+       dtype-proto/PBufferType
+       (buffer-type [item]
+         (or buffer-type (dtype-proto/buffer-type buffer)))
+
+
+       ;;Tensors implement only a small subset of the sparse protocols
+       ;;For the full set, calling sparse-proto/as-sparse is your only option.
+       sparse-proto/PSparse
+       (index-seq [item]
+         (sparse-reader->index-seq (sparse-proto/as-sparse item) (dtype/shape item)))
+       (sparse-value [item]
+         (when-let [sparse-data (sparse-proto/as-sparse buffer)]
+           (sparse-proto/sparse-value buffer)))
+
+
+       sparse-proto/PToSparse
+       (convertible-to-sparse? [item]
+         (sparse-proto/sparse-convertible? buffer))
+       (->sparse [item]
+         (if (simple-dimensions? dimensions)
+           (sparse-proto/as-sparse buffer)
+           (make-tensor-base-sparse-reader buffer dimensions)))
+
+       tens-proto/PTensor
+       (is-tensor? [item] true)
+       (dimensions [item] dimensions)
+       (buffer [item] buffer)
+
+       tens-proto/PToTensorReader
+       (convertible-to-tensor-reader? [item]
+         (dtype-proto/convertible-to-reader? buffer))
+       (->tensor-reader [item options]
+         (let [{:keys [datatype unchecked?]} options]
+           (if (and (simple-dimensions? dimensions)
+                    (instance? (resolve (tens-typecast/datatype->tensor-reader-type
+                                         datatype))
+                               buffer))
+             buffer
+             (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
+                   data-reader (dtype-proto/->reader buffer options)
+                   indexes (dimensions->index-reader dimensions)
+                   item-shape (dtype-proto/shape item)]
+               (case (casting/safe-flatten datatype)
+                 :int8 (make-tensor-reader :int8 datatype item-shape
+                                           indexes data-reader sparse-data
+                                           item)
+                 :int16 (make-tensor-reader :int16 datatype item-shape
+                                            indexes data-reader sparse-data
+                                            item)
+                 :int32 (make-tensor-reader :int32 datatype item-shape
+                                            indexes data-reader sparse-data
+                                            item)
+                 :int64 (make-tensor-reader :int64 datatype item-shape
+                                            indexes data-reader sparse-data
+                                            item)
+                 :float32 (make-tensor-reader :float32 datatype item-shape
+                                              indexes data-reader sparse-data
+                                              item)
+                 :float64 (make-tensor-reader :float64 datatype item-shape
+                                              indexes data-reader sparse-data
+                                              item)
+                 :boolean (make-tensor-reader :boolean datatype item-shape
+                                              indexes data-reader sparse-data
+                                              item)
+                 :object (make-tensor-reader :object datatype item-shape
+                                             indexes data-reader sparse-data
+                                             item))))))
+       Object
+       (toString [item]
+         ;;Can't think of a better way of doing this.
+         ;;pprint requires the tensor methods *but* tostring requires
+         ;;pprint...
+         (with-out-str (println item)))
+       );;end reify
+     (with-meta {:type :tech.v2.tensor}))))
 
 
 (defn tensor?
   [item]
-  (instance? Tensor item))
+  (tens-proto/is-tensor? item))
 
 
 (defn tensor-buffer-type
   [tens]
   (if (tensor? tens)
-    (dtype/buffer-type (:buffer tens))
+    (dtype/buffer-type (tens-proto/buffer tens))
     (dtype/buffer-type tens)))
 
 
 (defn tensor-container-type
   [tens]
   (if (tensor? tens)
-    (dtype/container-type (:buffer tens))
+    (dtype/container-type (tens-proto/buffer tens))
     (dtype/container-type tens)))
 
 
@@ -417,12 +501,12 @@
 
 (defn tensor->buffer
   [tens]
-  (:buffer tens))
+  (tens-proto/buffer tens))
 
 
 (defn tensor->dimensions
   [tens]
-  (:dimensions tens))
+  (tens-proto/dimensions tens))
 
 
 (defn mutable?
@@ -434,9 +518,10 @@
 (defn tensor->base-buffer-type
   [tens]
   (if (tensor? tens)
-    (assoc tens :buffer-type
-           (dtype/buffer-type
-            (tensor->buffer tens)))
+    (construct-tensor (tens-proto/buffer tens)
+                      (tens-proto/dimensions tens)
+                      (dtype/buffer-type
+                       (tensor->buffer tens)))
     tens))
 
 (defn ->tensor
@@ -491,29 +576,29 @@
   "Ensure any delayed operations happen for this and reads from this tensor
   happen reasonably fast.  For sparse this probably means cloning."
   [tens]
-  (let [buffer-type (dtype/buffer-type (:buffer tens))
+  (let [buffer-type (dtype/buffer-type (tens-proto/buffer tens))
         new-tens (if (= :sparse buffer-type)
                    (construct-tensor
                     (sparse-proto/as-sparse tens)
                     (dims/dimensions (dtype/shape tens)))
                    ;;force a potentially deep reader chain.
-                   (if (or (not (simple-dimensions? (:dimensions tens)))
+                   (if (or (not (simple-dimensions? (tens-proto/dimensions tens)))
                            ;;In the case of a reader chain, we will no longer
                            ;;be able to get the buffer back from the tensor.
                            (not (dtype-proto/as-nio-buffer tens)))
                      (clone tens)
                      tens))]
     ;;force actual creation of dimension transforms
-    (dims/->global->local (:dimensions new-tens))
+    (dims/->global->local (tens-proto/dimensions new-tens))
     ;;Sparse always needs the inverse transform
     (when (= :sparse buffer-type)
-      (dims/->local->global (:dimensions new-tens)))
+      (dims/->local->global (tens-proto/dimensions new-tens)))
     new-tens))
 
 
 (defn broadcast?
   [tens]
-  (let [dimensions (:dimensions tens)]
+  (let [dimensions (tens-proto/dimensions tens)]
     (not= (shape/shape->count-vec (:shape dimensions))
           (:max-shape dimensions))))
 
@@ -529,15 +614,15 @@
 (defn rotate
   [tens rotate-vec]
   (let [tens (broadcast-error tens)]
-    (assoc tens :dimensions
-           (dims/rotate (tensor->dimensions tens)
-                        (mapv #(* -1 (long %)) rotate-vec)))))
+    (construct-tensor (tens-proto/buffer tens)
+                      (dims/rotate (tensor->dimensions tens)
+                                   (mapv #(* -1 (long %)) rotate-vec)))))
 
 
 (defn reshape
   [tens new-shape]
   (let [tens (broadcast-error tens)
-        new-dims (dims/in-place-reshape (:dimensions tens)
+        new-dims (dims/in-place-reshape (tens-proto/dimensions tens)
                                         new-shape)]
     (construct-tensor
      (dtype/sub-buffer (tensor->buffer tens)
@@ -548,7 +633,9 @@
 (defn transpose
   [tens transpose-vec]
   (let [tens (broadcast-error tens)]
-    (update tens :dimensions dims/transpose transpose-vec)))
+    (construct-tensor (tens-proto/buffer tens)
+                      (dims/transpose (tens-proto/dimensions tens)
+                                      transpose-vec))))
 
 
 (defn select
@@ -557,10 +644,10 @@
         {new-dims :dims
          buf-offset :elem-offset
          buf-len :buffer-length}
-        (apply dims/select (:dimensions tens) args)]
+        (apply dims/select (tens-proto/dimensions tens) args)]
     (construct-tensor (-> (tensor->buffer tens)
-                               (dtype/sub-buffer buf-offset buf-len))
-                           new-dims)))
+                          (dtype/sub-buffer buf-offset buf-len))
+                      new-dims)))
 
 
 (defn broadcast
@@ -572,7 +659,7 @@
         n-bcast-elems (shape/ecount bcast-shape)
         num-tens-shape (count tens-shape)
         {:keys [shape strides offsets max-shape]
-         :as tens-dims} (:dimensions tens)]
+         :as tens-dims} (tens-proto/dimensions tens)]
     (when-not (every? number? bcast-shape)
       (throw (ex-info "Broadcast shapes must only be numbers" {})))
     (when-not (>= n-bcast-elems
@@ -588,10 +675,10 @@
       (throw (ex-info
               (format "Broadcast shape (%s) is not commensurate with tensor shape %s"
                               bcast-shape tens-shape)
-                      {})))
-    (assoc tens :dimensions
-           (dims/dimensions shape :strides strides :offsets offsets
-                            :max-shape bcast-shape))))
+              {})))
+    (construct-tensor (tens-proto/buffer tens)
+                      (dims/dimensions shape :strides strides :offsets offsets
+                                       :max-shape bcast-shape))))
 
 
 (defn ensure-buffer-descriptor
@@ -904,10 +991,11 @@
   "Extern fn calls can take any stride order but they cannot take
   offsets or a reader chain."
   [tens]
-  (let [any-offsets? (not (every? #(= 0 %) (:offsets (:dimensions tens))))
-        nio-access? (dtype-proto/as-nio-buffer (:buffer tens))
+  (let [dimensions (tens-proto/dimensions tens)
+        any-offsets? (not (every? #(= 0 %) (:offsets dimensions)))
+        nio-access? (dtype-proto/as-nio-buffer (tens-proto/buffer tens))
         broadcast? (broadcast? tens)
-        min-stride (apply min (get-in tens [:dimensions :strides]))
+        min-stride (apply min (get dimensions :strides))
         tens-shape (dtype/shape tens)]
     (if (or any-offsets?
             (not nio-access?)
@@ -936,13 +1024,16 @@
             C (new-tensor [(first lhs-shape) (second rhs-shape)]
                           :datatype lhs-dtype
                           :container-type :typed-buffer)
-            lhs-strides (get-in lhs [:dimensions :strides])
-            rhs-strides (get-in rhs [:dimensions :strides])
+            lhs-dims (tens-proto/dimensions lhs)
+            rhs-dims (tens-proto/dimensions rhs)
+            C-dims (tens-proto/dimensions C)
+            lhs-strides (get lhs-dims :strides)
+            rhs-strides (get rhs-dims :strides)
             lhs-min-stride (int (apply min lhs-strides))
             rhs-min-stride (int (apply min rhs-strides))
             lhs-max-stride (int (apply max lhs-strides))
             rhs-max-stride (int (apply max rhs-strides))
-            c-max-stride (int (apply max (get-in C [:dimensions :strides])))
+            c-max-stride (int (apply max (get C-dims :strides)))
             lhs-trans? (= lhs-min-stride (first lhs-strides))
             rhs-trans? (= rhs-min-stride (first rhs-strides))
             gemv? (= 1 (second rhs-shape))]
@@ -952,15 +1043,23 @@
              :float64 blas/cblas_dgemv)
            :row-major lhs-trans?
            (first lhs-shape)  (second lhs-shape)
-           alpha (:buffer lhs) lhs-max-stride (:buffer rhs) rhs-min-stride
-           beta (:buffer C) 1)
+           alpha
+           (tens-proto/buffer lhs) lhs-max-stride
+           (tens-proto/buffer rhs) rhs-min-stride
+           beta (tens-proto/buffer C) 1)
           ((case lhs-dtype
              :float32 blas/cblas_sgemm
              :float64 blas/cblas_dgemm)
            :row-major lhs-trans? rhs-trans?
            (first lhs-shape) (second rhs-shape) (first rhs-shape)
-           alpha (:buffer lhs) lhs-max-stride (:buffer rhs) rhs-max-stride
-           beta (:buffer C) c-max-stride))
+           alpha
+           (tens-proto/buffer lhs)
+           lhs-max-stride
+           (tens-proto/buffer rhs)
+           rhs-max-stride
+           beta
+           (tens-proto/buffer C)
+           c-max-stride))
         C)
       (default-matrix-matrix alpha lhs rhs bin-op reduce-op options))))
 

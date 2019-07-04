@@ -16,7 +16,8 @@
   (or (number? item)
       (string? item)
       (and
-       (not (.isArray ^Class (type item)))
+       (not (when (instance? Class (type item))
+              (.isArray ^Class (type item))))
        (not (dtype-proto/convertible-to-iterable? item)))))
 
 

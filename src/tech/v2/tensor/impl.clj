@@ -259,6 +259,8 @@
          (dims/ecount dimensions))))))
 
 
+(declare slice)
+
 
 (defn construct-tensor
   [buffer dimensions & [buffer-type]]
@@ -461,6 +463,9 @@
                  :object (make-tensor-reader :object datatype item-shape
                                              indexes data-reader sparse-data
                                              item))))))
+       Iterable
+       (iterator [item]
+         (.iterator ^Iterable (slice item 1)))
        Object
        (toString [item]
          ;;Can't think of a better way of doing this.
@@ -679,6 +684,47 @@
     (construct-tensor (tens-proto/buffer tens)
                       (dims/dimensions shape :strides strides :offsets offsets
                                        :max-shape bcast-shape))))
+
+
+(defn- slice-select-args
+  [t-shape slice-dims]
+  (let [n-shape (count t-shape)
+        slice-dims (long slice-dims)
+        all-seq (repeat (- n-shape slice-dims) :all)
+        slice-shape (vec (take slice-dims t-shape))
+        slice-strides (dims/extend-strides slice-shape)
+        n-slices (apply * 1 slice-shape)]
+    (dtype/object-reader
+     n-slices
+     (fn [slice-idx]
+       (let [select-args
+             (->> slice-strides
+                  (reduce (fn [[slice-shape slice-idx] item-stride]
+                            [(conj slice-shape (quot (long slice-idx)
+                                                     (long item-stride)))
+                             (rem (long slice-idx) (long item-stride))])
+                          [[] slice-idx])
+                  first)]
+         (concat select-args all-seq))))))
+
+
+(defn slice
+  "Return a sequence of tensors of reduced dimensionality.  n-dims indicates the number
+  of leading dimensions to remove.  For example, if you have an item of shape [3 4] and
+  1 is one you get a sequence of 3 vectors of length 4.  Returns a :object reader
+  where each index maps to a tensor."
+  [tens slice-dims]
+  (let [t-shape (dtype/shape tens)
+        n-shape (count t-shape)
+        slice-dims (long slice-dims)]
+    (when-not (<= slice-dims n-shape)
+      (throw (ex-info (format "Slice operator n-dims out of range: %s:%s"
+                              slice-dims t-shape)
+                      {})))
+    (if (= slice-dims n-shape)
+      (dtype/->reader tens)
+      (->> (slice-select-args t-shape slice-dims)
+           (unary-op/unary-reader :object (apply select tens x))))))
 
 
 (defn ensure-buffer-descriptor

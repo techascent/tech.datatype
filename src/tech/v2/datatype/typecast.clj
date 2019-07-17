@@ -22,6 +22,7 @@
            [it.unimi.dsi.fastutil.floats FloatList FloatArrayList]
            [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
            [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
+           [it.unimi.dsi.fastutil.chars CharList CharArrayList]
            [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]))
 
 
@@ -335,6 +336,9 @@
 (defn as-boolean-array
   ^"[Z" [obj] obj)
 
+(defn as-char-array
+  ^"[C" [obj] obj)
+
 (defn as-object-array
   ^"[Ljava.lang.Object;"
   [obj] obj)
@@ -406,6 +410,9 @@
 (defn as-boolean-buffer
   ^BooleanList [obj] (dtype-proto/->list-backing-store obj))
 
+(defn as-char-buffer
+  ^CharList [obj] (dtype-proto/->list-backing-store obj))
+
 (defn as-object-buffer
   ^ObjectList [obj] (dtype-proto/->list-backing-store obj))
 
@@ -421,6 +428,7 @@
     :float32 `(as-float-buffer ~buf)
     :float64 `(as-double-buffer ~buf)
     :boolean `(as-boolean-buffer ~buf)
+    :char `(as-char-buffer ~buf)
     :object `(as-object-buffer ~buf)))
 
 
@@ -434,6 +442,7 @@
     :float32 'FloatBuffer
     :float64 'DoubleBuffer
     :boolean 'BooleanList
+    :char 'CharList
     :object 'ObjectList))
 
 
@@ -444,6 +453,7 @@
 (defn float-list-cast ^FloatList [item] item)
 (defn double-list-cast ^DoubleList [item] item)
 (defn boolean-list-cast ^BooleanList [item] item)
+(defn char-list-cast ^CharList [item] item)
 (defn object-list-cast ^ObjectList [item] item)
 
 
@@ -457,6 +467,7 @@
     :float32 `(float-list-cast ~item)
     :float64 `(double-list-cast ~item)
     :boolean `(boolean-list-cast ~item)
+    :char `(char-list-cast ~item)
     :object `(object-list-cast ~item)))
 
 
@@ -470,6 +481,7 @@
     :float32 'FloatList
     :float64 'DoubleList
     :boolean 'BooleanList
+    :char 'CharList
     :object 'ObjectList))
 
 (defn datatype->array-list-type
@@ -482,6 +494,7 @@
     :float32 'FloatArrayList
     :float64 'DoubleArrayList
     :boolean 'BooleanArrayList
+    :char 'CharArrayList
     :object 'ObjectArrayList))
 
 
@@ -495,6 +508,7 @@
     :float32 `(FloatArrayList/wrap ^floats ~src-data)
     :float64 `(DoubleArrayList/wrap ^doubles ~src-data)
     :boolean `(BooleanArrayList/wrap ^booleans ~src-data)
+    :char `(CharArrayList/wrap ^chars ~src-data)
     `(ObjectArrayList/wrap (as-object-array ~src-data))))
 
 
@@ -510,6 +524,7 @@
       :float32 (FloatArrayList/wrap ^floats src-data)
       :float64 (DoubleArrayList/wrap ^doubles src-data)
       :boolean (BooleanArrayList/wrap ^booleans src-data)
+      :char (CharArrayList/wrap ^chars src-data)
       (ObjectArrayList/wrap (as-object-array src-data)))))
 
 

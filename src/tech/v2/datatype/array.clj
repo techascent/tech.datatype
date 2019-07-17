@@ -118,6 +118,66 @@
     (typecast/wrap-array-fastpath :boolean item)))
 
 
+(extend-type (Class/forName "[C")
+  dtype-proto/PDatatype
+  (get-datatype [_] :int32)
+
+  dtype-proto/PToBackingStore
+  (->backing-store-seq [arg] [(dtype-proto/->sub-array arg)])
+
+  dtype-proto/PCopyRawData
+  (copy-raw->item! [raw-data ary-target offset options]
+    (base/raw-dtype-copy! raw-data ary-target offset options))
+
+  dtype-proto/PPrototype
+  (from-prototype [src-ary datatype shape]
+    (make-array-of-type datatype (base/shape->ecount shape)))
+
+  dtype-proto/PBuffer
+  (sub-buffer [buffer offset length]
+    (dtype-proto/sub-buffer (dtype-proto/->list-backing-store buffer) offset length))
+
+  dtype-proto/PToArray
+  (->sub-array [item]
+    {:java-array item
+     :offset 0
+     :length (alength ^booleans item)})
+  (->array-copy [src-ary]
+    (base/copy! src-ary (make-array-of-type
+                         :char
+                         (alength (as-char-array src-ary)))))
+
+  dtype-proto/PToReader
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
+    (let [^chars char-data item
+          n-items (alength char-data)]
+      (-> (reify tech.v2.datatype.IntReader
+            (lsize [item] n-items)
+            (read [item idx]
+              (-> (aget char-data idx)
+                  int)))
+          (dtype-proto/->reader options))))
+
+
+  dtype-proto/PToWriter
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (let [^chars char-data item
+          n-items (alength char-data)]
+      (-> (reify tech.v2.datatype.IntWriter
+            (lsize [item] n-items)
+            (write [item idx value]
+              (aset char-data idx (char value))))
+          (dtype-proto/->writer options))))
+
+
+  dtype-proto/PToList
+  (convertible-to-fastutil-list? [item] true)
+  (->list-backing-store [item]
+    (typecast/wrap-array-fastpath :char item)))
+
+
 (defonce ^:dynamic *array-constructors* (atom {}))
 
 
@@ -157,6 +217,7 @@
 (add-numeric-array-constructor :float32 float-array)
 (add-numeric-array-constructor :float64 double-array)
 (add-numeric-array-constructor :boolean boolean-array)
+(add-numeric-array-constructor :char char-array)
 
 
 (defn make-object-array-of-type

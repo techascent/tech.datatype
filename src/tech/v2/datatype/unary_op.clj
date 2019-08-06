@@ -327,7 +327,28 @@
 
 (defmacro make-double-unary-op
   [opname op-code]
-  `(make-unary-op ~opname :float64 ~op-code))
+  `(reify
+     dtype-proto/PToUnaryOp
+     (convertible-to-unary-op? [item#] true)
+     (->unary-op [item# options#]
+       (let [{datatype# :datatype
+              unchecked?# :unchecked?} options#]
+         (when-not (or (= :object datatype#)
+                       (casting/numeric-type? datatype#))
+           (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
+         (case (casting/safe-flatten datatype#)
+           :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+           :int64 (make-unary-op ~opname :int64 (unchecked-long ~op-code))
+           :float32 (make-unary-op ~opname :float32 (unchecked-float ~op-code))
+           :float64 (make-unary-op ~opname :float64 ~op-code)
+           :object (make-unary-op ~opname :object ~op-code))))
+     dtype-proto/PDatatype
+     (get-datatype [item#] :float64)
+     dtype-proto/POperator
+     (op-name [item#] ~opname)
+     IFn
+     (invoke [item# ~'x]
+       ~op-code)))
 
 
 (defmacro make-numeric-unary-op
@@ -342,7 +363,9 @@
                        (casting/numeric-type? datatype#))
            (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
          (case (casting/safe-flatten datatype#)
-           :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+           :int8 (make-unary-op ~opname :int8 (byte ~op-code))
+           :int16 (make-unary-op ~opname :int16 (short ~op-code))
+           :int32 (make-unary-op ~opname :int32 (int ~op-code))
            :int64 (make-unary-op ~opname :int64 ~op-code)
            :float32 (make-unary-op ~opname :float32 ~op-code)
            :float64 (make-unary-op ~opname :float64 ~op-code)
@@ -367,7 +390,9 @@
          (when-not (casting/numeric-type? datatype#)
            (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
          (case (casting/safe-flatten datatype#)
-           :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+           :int8 (make-unary-op ~opname :int8 (byte ~op-code))
+           :int16 (make-unary-op ~opname :int16 (short ~op-code))
+           :int32 (make-unary-op ~opname :int32 (int ~op-code))
            :int64 (make-unary-op ~opname :int64 ~op-code)
            :float32 (make-unary-op ~opname :float32 ~op-code)
            :float64 (make-unary-op ~opname :float64 ~op-code)
@@ -395,9 +420,11 @@
               unchecked?# :unchecked?} options#]
          (when-not (#{:float64 :float32 :object} (casting/flatten-datatype
                                                   datatype#))
-           (throw (ex-info (format "datatype is not float or double: %s" datatype#) {})))
+           (throw (ex-info (format "datatype is not float or double: %s"
+                                   datatype#) {})))
          (let [op-dtype# (if (or (= datatype# :float32)
-                                 (= datatype# :float64))
+                                 (= datatype# :float64)
+                                 (= datatype# :object))
                            datatype#
                            :float64)
                retval# (case op-dtype#
@@ -424,6 +451,8 @@
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#]
          (case (casting/safe-flatten datatype#)
+           :int8 (make-unary-op ~opname :int8 ~op-code)
+           :int16 (make-unary-op ~opname :int16 ~op-code)
            :int32 (make-unary-op ~opname :int32 ~op-code)
            :int64 (make-unary-op ~opname :int64 ~op-code)
            :float32 (make-unary-op ~opname :float32 ~op-code)
@@ -441,7 +470,7 @@
 (def builtin-unary-ops
   (->> [(make-double-unary-op :floor (Math/floor x))
         (make-double-unary-op :ceil (Math/ceil x))
-        (make-double-unary-op :round (unchecked-double (Math/round x)))
+        (make-double-unary-op :round (unchecked-double (Math/round (double x))))
         (make-double-unary-op :rint (Math/rint x))
         (make-numeric-object-unary-op :- (- x))
         (make-float-double-unary-op :logistic

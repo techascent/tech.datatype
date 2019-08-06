@@ -272,3 +272,22 @@
            (->> (dfn/eq test-floats nan-floats)
                 (dfn/argfilter identity)
                 vec)))))
+
+
+(deftest round-and-friends
+  (is (= [2.0 3.0 4.0 5.0]
+         (vec (dfn/round [2.2 2.8 3.5 4.6]))))
+  (is (= [2.0 2.0 3.0 4.0]
+         (vec (dfn/floor [2.2 2.8 3.5 4.6]))))
+  (is (= [3.0 3.0 4.0 5.0]
+         (vec (dfn/ceil [2.2 2.8 3.5 4.6]))))
+  (is (= [2.2 2.8 3.5 4.6]
+         (vec (dfn/abs [2.2 2.8 3.5 4.6]))))
+  (is (= [1 4 9 16]
+         (vec (dfn/sq (byte-array [1 2 3 4])))))
+  (is (dfn/equals [0.381 0.540 0.675 0.785]
+                  (dfn/atan2 [2 3 4 5] 5)
+                  0.001))
+  (is (thrown? Throwable (dfn/rem (double-array [1 2 3 4] 2))))
+  (is (= [1 0 1 0]
+         (dfn/rem [1 2 3 4] 2))))

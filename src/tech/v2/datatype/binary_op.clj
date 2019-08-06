@@ -419,6 +419,11 @@
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#
              datatype# (or datatype# :int64)]
+         (when-not (#{:int8 :int16 :int32 :int64 :object}
+                    datatype#)
+           (throw (ex-info (format "Operator only supports integer datatypes, %s"
+                                   datatype#)
+                           {})))
          (-> (case (casting/safe-flatten datatype#)
                :int8 (make-binary-op ~opname :int8 (byte ~op-code))
                :int16 (make-binary-op ~opname :int16 (short ~op-code))

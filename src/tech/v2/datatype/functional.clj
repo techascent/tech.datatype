@@ -74,7 +74,10 @@
                      kurtosis-population
                      pearsons-correlation
                      spearmans-correlation
-                     kendalls-correlation)
+                     kendalls-correlation
+                     percentile
+                     quartiles
+                     quartile-outlier-fn)
 
 
 (impl/export-symbols tech.v2.datatype.rolling

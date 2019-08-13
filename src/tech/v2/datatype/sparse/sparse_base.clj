@@ -53,9 +53,11 @@
         ;;cache the filter, we will need ecount anyway
         filter-iter (->> (sparse-filter-fn data-seq sparse-value)
                          (dtype-base/make-container :list :boolean))
-        indexes (->> (masked-iterable/iterable-mask {:datatype :int32} filter-iter (range))
+        indexes (->> (masked-iterable/iterable-mask {:datatype :int32}
+                                                    filter-iter (range))
                      (dtype-base/make-container :list :int32))
-        data (->> (masked-iterable/iterable-mask {:datatype datatype} filter-iter data-seq)
+        data (->> (masked-iterable/iterable-mask {:datatype datatype}
+                                                 filter-iter data-seq)
                   (dtype-base/make-container :list datatype))]
     (make-sparse-reader indexes data (dtype-base/ecount filter-iter)
                         :datatype datatype

@@ -421,10 +421,15 @@
                         (#(.backing-store ^TypedBuffer %))
                         dtype-proto/->list-backing-store)
                     (let [list-data (make-list (casting/host-flatten datatype) 0)]
-                      (iterable-to-list/iterable->list elem-count-or-seq
-                                                       list-data
-                                                       {:unchecked? (:unchecked? options)
-                                                        :datatype datatype})))]
+                      (-> (dtype-proto/->iterable elem-count-or-seq
+                                                  {:datatype
+                                                   (casting/safe-flatten datatype)
+                                                   :unchecked?
+                                                   (:unchecked? options)})
+                          (iterable-to-list/iterable->list
+                           list-data
+                           {:unchecked? true
+                            :datatype datatype}))))]
     (if host-datatype?
       typed-buf
       (typed-buffer/set-datatype typed-buf datatype))))

@@ -5,9 +5,11 @@
             [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.unary-op :as unary]
             [tech.v2.tensor.impl :as tens-impl]
+            [tech.v2.tensor.protocols :as tens-proto]
             [tech.v2.datatype.reduce-op :as reduce-op])
   (:import [java.lang StringBuilder]
-           [java.io Writer]))
+           [java.io Writer]
+           [tech.v2.tensor.impl Tensor]))
 
 
 (set! *warn-on-reflection* true)
@@ -117,6 +119,12 @@
           (base-tensor->string tens)))
 
 
-(defmethod print-method :tech.v2.tensor
+(defmethod print-method Tensor
   [tens w]
   (.write ^Writer w (tensor->string tens)))
+
+
+(extend-type Tensor
+  tens-proto/PTensorPrinter
+  (print-tensor [tensor]
+    (tensor->string tensor)))

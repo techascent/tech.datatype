@@ -7,6 +7,10 @@
   (buffer [item]))
 
 
+(defprotocol PTensorPrinter
+  (print-tensor [item]))
+
+
 (defprotocol PToTensor
   (tensor-convertible? [item])
   (convert-to-tensor [item]))

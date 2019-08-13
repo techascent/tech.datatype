@@ -8,8 +8,10 @@
             [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.mutable :as mutable]
             [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.pprint :as dtype-pprint]
             [tech.jna :as jna])
   (:import [com.sun.jna Pointer]
+           [java.io Writer]
            [tech.v2.datatype.protocols PDatatype]))
 
 
@@ -18,7 +20,7 @@
 
 
 
-(defrecord TypedBuffer [datatype backing-store]
+(deftype TypedBuffer [datatype backing-store]
   dtype-proto/PDatatype
   (get-datatype [item] datatype)
 
@@ -29,7 +31,7 @@
 
   dtype-proto/PPrototype
   (from-prototype [item datatype shape]
-    (->TypedBuffer datatype
+    (TypedBuffer. datatype
                    (dtype-proto/from-prototype backing-store
                                                (casting/datatype->host-type datatype)
                                                shape)))
@@ -63,7 +65,7 @@
 
   dtype-proto/PBuffer
   (sub-buffer [buffer offset length]
-    (->TypedBuffer datatype (dtype-proto/sub-buffer backing-store offset length)))
+    (TypedBuffer. datatype (dtype-proto/sub-buffer backing-store offset length)))
 
 
   dtype-proto/PToArray
@@ -199,7 +201,41 @@
           (assoc :datatype datatype))))
 
   dtype-proto/PCountable
-  (ecount [item] (dtype-proto/ecount backing-store)))
+  (ecount [item] (dtype-proto/ecount backing-store))
+
+  Object
+  (toString [this]
+    (let [n-items (base/ecount this)
+          format-str (if (> n-items 20)
+                       "#tech.v2.datatype.typed-buffer<%s,%s>%s\n[%s...]"
+                       "#tech.v2.datatype.typed-buffer<%s,%s>%s\n[%s]"
+                       )]
+      (format format-str
+              (.getName ^Class (type backing-store))
+              (name datatype)
+              [n-items]
+
+              (as-> this this
+                (dtype-proto/sub-buffer this 0 (min 20 (base/ecount this)))
+                (dtype-proto/->reader this {})
+                (reduce (fn [^StringBuilder builder val]
+                          (.append builder
+                                   (dtype-pprint/format-object val))
+                          (.append builder ", "))
+                        (StringBuilder.)
+                        this)
+                (.toString ^StringBuilder this)))))
+  (hashCode [this]
+    (.hashCode {:datatype datatype
+                :backing-store backing-store}))
+  (equals [this other]
+    (.equals other {:datatype datatype
+                    :backing-store backing-store})))
+
+
+(defmethod print-method TypedBuffer
+  [buf w]
+  (.write ^Writer w (.toString ^Object buf)))
 
 
 (defn typed-buffer?
@@ -225,7 +261,7 @@
     (instance? TypedBuffer item)
     item
     (dtype-proto/base-type-convertible? item)
-    (->TypedBuffer (dtype-proto/get-datatype item)
+    (TypedBuffer. (dtype-proto/get-datatype item)
                    (or (dtype-proto/as-list item)
                        (dtype-proto/as-nio-buffer item)))
     :else
@@ -247,7 +283,7 @@
    (let [host-dtype (casting/datatype->host-datatype datatype)]
      (if (or (:unchecked? options)
              (= host-dtype datatype))
-       (->TypedBuffer datatype
+       (TypedBuffer. datatype
                       (dtype-proto/make-container
                        :java-array host-dtype elem-count-or-seq options))
        (let [n-elems (if (number? elem-count-or-seq)
@@ -255,7 +291,7 @@
                            (base/ecount elem-count-or-seq))
              container (dtype-proto/make-container :java-array host-dtype
                                                    n-elems {})
-             typed-buf (->TypedBuffer datatype container)]
+             typed-buf (TypedBuffer. datatype container)]
          (when-not (number? elem-count-or-seq)
            (dtype-proto/copy-raw->item! elem-count-or-seq
                                         typed-buf 0 options))
@@ -271,8 +307,8 @@
   [item dtype]
   (if (= dtype (dtype-proto/get-datatype item))
     item
-    (assoc (convert-to-typed-buffer item)
-           :datatype dtype)))
+    (let [^TypedBuffer item (convert-to-typed-buffer item)]
+      (TypedBuffer. dtype (.backing-store item)))))
 
 
 (defmethod dtype-proto/make-container :typed-buffer

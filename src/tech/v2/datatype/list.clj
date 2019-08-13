@@ -35,7 +35,8 @@
             LongReader LongWriter LongMutable
             FloatReader FloatWriter FloatMutable
             DoubleReader DoubleWriter DoubleMutable
-            BooleanReader BooleanWriter BooleanMutable]))
+            BooleanReader BooleanWriter BooleanMutable]
+           [tech.v2.datatype.typed_buffer TypedBuffer]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -417,7 +418,7 @@
                     (-> (typed-buffer/make-typed-buffer
                          datatype
                          elem-count-or-seq options)
-                        :backing-store
+                        (#(.backing-store ^TypedBuffer %))
                         dtype-proto/->list-backing-store)
                     (let [list-data (make-list (casting/host-flatten datatype) 0)]
                       (iterable-to-list/iterable->list elem-count-or-seq

@@ -13,7 +13,8 @@
                              output# (or output#
                                          (dtype-proto/make-container
                                           :list ~dtype 0))
-                             mutable# (typecast/datatype->mutable ~dtype output#)]
+                             mutable# (typecast/datatype->mutable ~dtype output#
+                                                                  unchecked?#)]
                          (while (.hasNext iter#)
                            (.append mutable# (typecast/datatype->iter-next-fn
                                               ~dtype iter#)))

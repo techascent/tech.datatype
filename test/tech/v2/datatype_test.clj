@@ -34,17 +34,22 @@
 
 (defn basic-copy
   [src-fn dest-fn src-dtype dst-dtype]
-  (let [ary (dtype/make-container src-fn src-dtype (range 10))
-        buf (dtype/make-container dest-fn dst-dtype 10)
-        retval (dtype/make-jvm-container :float64 10)]
-    ;;copy starting at position 2 of ary into position 4 of buf 4 elements
-    (dtype/copy! ary 2 buf 4 4)
-    (dtype/copy! buf 0 retval 0 10)
-    (is (= [0 0 0 0 2 3 4 5 0 0]
-           (mapv int (dtype/->vector retval)))
-        (pr-str {:src-fn src-fn :dest-fn dest-fn
-                 :src-dtype src-dtype :dst-dtype dst-dtype}))
-    (is (= 10 (dtype/ecount buf)))))
+  (try
+    (let [ary (dtype/make-container src-fn src-dtype (range 10))
+          buf (dtype/make-container dest-fn dst-dtype 10)
+          retval (dtype/make-jvm-container :float64 10)]
+      ;;copy starting at position 2 of ary into position 4 of buf 4 elements
+      (dtype/copy! ary 2 buf 4 4)
+      (dtype/copy! buf 0 retval 0 10)
+      (is (= [0 0 0 0 2 3 4 5 0 0]
+             (mapv int (dtype/->vector retval)))
+          (pr-str {:src-fn src-fn :dest-fn dest-fn
+                   :src-dtype src-dtype :dst-dtype dst-dtype}))
+      (is (= 10 (dtype/ecount buf))))
+    (catch Throwable e
+      (println {:src-fn src-fn :dest-fn dest-fn
+                :src-dtype src-dtype :dst-dtype dst-dtype})
+      (throw e))))
 
 
 (def create-functions [:typed-buffer :native-buffer :list :sparse])
@@ -291,3 +296,9 @@
   (is (thrown? Throwable (dfn/rem (double-array [1 2 3 4] 2))))
   (is (= [1 0 1 0]
          (dfn/rem [1 2 3 4] 2))))
+
+
+(deftest generic-lists
+  (is (= (vec (range 200 255))
+         (-> (dtype/make-container :list :uint8 (range 200 255))
+             dtype/->vector))))

@@ -5,28 +5,18 @@
             [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.unary-op :as unary]
             [tech.v2.tensor.impl :as tens-impl]
-            [tech.v2.datatype.reduce-op :as reduce-op])
+            [tech.v2.tensor.protocols :as tens-proto]
+            [tech.v2.datatype.reduce-op :as reduce-op]
+            [tech.v2.datatype.pprint :as dtype-pprint])
   (:import [java.lang StringBuilder]
-           [java.io Writer]))
+           [java.io Writer]
+           [tech.v2.tensor.impl Tensor]))
 
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* true)
 
 (def ^String NL (System/getProperty "line.separator"))
-
-;; pretty-printing utilities for matrices
-(def ^:dynamic *number-format* "%.3f")
-
-(defn- format-num [x]
-  (if (integer? x)
-    (str x)
-    (format *number-format* (double x))))
-
-(defn- default-formatter [x]
-  (if (number? x)
-    (format-num x)
-    (str x)))
 
 (defn- column-lengths
   "Finds the longest string length of each column in an array of Strings."
@@ -94,7 +84,7 @@
   ([tens]
     (base-tensor->string tens nil))
   ([tens {:keys [prefix formatter]}]
-   (let [formatter (or formatter default-formatter)]
+   (let [formatter (or formatter dtype-pprint/format-object)]
      (if (number? tens)
        (formatter tens)
        (let [n-dims (count (dtype/shape tens))
@@ -117,6 +107,12 @@
           (base-tensor->string tens)))
 
 
-(defmethod print-method :tech.v2.tensor
+(defmethod print-method Tensor
   [tens w]
   (.write ^Writer w (tensor->string tens)))
+
+
+(extend-type Tensor
+  tens-proto/PTensorPrinter
+  (print-tensor [tensor]
+    (tensor->string tensor)))

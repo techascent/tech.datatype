@@ -163,8 +163,9 @@
   "We perform a left-to-right reduction making scalars/readers/etc.  This matches
   clojure semantics.  Note that the results of this could be a reader, iterable or a
   scalar depending on what was passed in.  Also note that the results are lazily
-  calculated so no computation is done in this method aside from building the next thing
-  *unless* the inputs are scalar in which case the operation is evaluated immediately."
+  calculated so no computation is done in this method aside from building the next
+  thing *unless* the inputs are scalar in which case the operation is evaluated
+  immediately."
   [{:keys [datatype unchecked?] :as options}
    bin-op arg1 arg2 & args]
   (let [all-args (concat [arg1 arg2] args)
@@ -371,6 +372,14 @@
                            (group-by :name)))
 
 
+(defn- safe-name
+  [item]
+  (let [item-name (name item)]
+    (if (= item-name "/")
+      "div"
+      item-name)))
+
+
 (defmacro def-builtin-operator
   [op-name op-seq]
   (let [op-types (->> (map :type op-seq)
@@ -386,66 +395,92 @@
                                 :binary :binary
                                 :boolean-binary :binary})
                           set)]
-    `(defn ~op-name-symbol
-       ~(str "Operator " (name op-name) ":" (vec op-types) "." )
-       [& ~'args]
-       (let [~'n-args (count ~'args)]
-         ~(cond
-            (= argnum-types #{:unary :binary})
-            `(when-not (> ~'n-args 0)
-               (throw (ex-info (format "Operator called with too few (%s) arguments."
-                                       ~'n-args)
-                               {})))
-            (= argnum-types #{:unary})
-            `(when-not (= ~'n-args 1)
-               (throw (ex-info (format "Operator takes 1 argument, (%s) given."
-                                       ~'n-args)
-                               {})))
-            (= argnum-types #{:binary})
-            `(when-not (> ~'n-args 0)
-               (throw (ex-info (format "Operator called with too few (%s) arguments"
-                                       ~'n-args)
-                               {})))
-            :else
-            (throw (ex-info "Incorrect op types" {:types argnum-types
-                                                  :op-types op-types})))
-         (let [~'datatype (or *datatype*
-                              (widest-datatype
-                               (map
-                                dtype-base/get-datatype
-                                ~'args)))
-               ~'options {:datatype ~'datatype
-                          :unchecked? *unchecked?*}]
-           (if (= ~'n-args 1)
-             ~(cond
-                (contains? op-types :boolean-unary)
-                `(apply-unary-boolean-op
-                  ~'options
-                  (get boolean-op/builtin-boolean-unary-ops
-                       ~op-name)
-                  (first ~'args))
-                ;;A binary operator applied to 1 arg is a reduction
-                (contains? op-types :binary)
-                `(apply-reduce-op
-                  ~'options
-                  (get binary/builtin-binary-ops
-                       ~op-name)
-                  (first ~'args))
-                :else
-                `(apply-unary-op
-                  ~'options
-                  (get unary/builtin-unary-ops ~op-name)
-                 (first ~'args)))
-             ~(if (contains? op-types :boolean-binary)
-                `(apply apply-binary-boolean-op
+    `(do
+       (defn ~op-name-symbol
+         ~(str "Operator " (name op-name) ":" (vec op-types) "." )
+         [& ~'args]
+         (let [~'n-args (count ~'args)]
+           ~(cond
+              (= argnum-types #{:unary :binary})
+              `(when-not (> ~'n-args 0)
+                 (throw (ex-info (format "Operator called with too few (%s) arguments."
+                                         ~'n-args)
+                                 {})))
+              (= argnum-types #{:unary})
+              `(when-not (= ~'n-args 1)
+                 (throw (ex-info (format "Operator takes 1 argument, (%s) given."
+                                         ~'n-args)
+                                 {})))
+              (= argnum-types #{:binary})
+              `(when-not (> ~'n-args 0)
+                 (throw (ex-info (format "Operator called with too few (%s) arguments"
+                                         ~'n-args)
+                                 {})))
+              :else
+              (throw (ex-info "Incorrect op types" {:types argnum-types
+                                                    :op-types op-types})))
+           (let [~'datatype (or *datatype*
+                                (widest-datatype
+                                 (map
+                                  dtype-base/get-datatype
+                                  ~'args)))
+                 ~'options {:datatype ~'datatype
+                            :unchecked? *unchecked?*}]
+             (if (= ~'n-args 1)
+               ~(cond
+                  (contains? op-types :boolean-unary)
+                  `(apply-unary-boolean-op
+                    ~'options
+                    (get boolean-op/builtin-boolean-unary-ops
+                         ~op-name)
+                    (first ~'args))
+                  :else
+                  (do
+                    `(if-let [un-op# (get unary/builtin-unary-ops ~op-name)]
+                       (apply-unary-op
                         ~'options
-                        (get boolean-op/builtin-boolean-binary-ops
-                             ~op-name)
-                        ~'args)
-                `(apply apply-binary-op
-                        ~'options
-                        (get binary/builtin-binary-ops ~op-name)
-                        ~'args))))))))
+                        un-op#
+                        (first ~'args))
+                       (throw (ex-info
+                               (format "No unary operator defined for operand %s"
+                                       ~op-name)
+                               {})))))
+               ~(if (contains? op-types :boolean-binary)
+                  `(apply apply-binary-boolean-op
+                          ~'options
+                          (get boolean-op/builtin-boolean-binary-ops
+                               ~op-name)
+                          ~'args)
+                  `(apply apply-binary-op
+                          ~'options
+                          (get binary/builtin-binary-ops ~op-name)
+                          ~'args))))))
+       ~(when (contains? argnum-types :binary)
+          (let [op-name-symbol (symbol (str "reduce-" (safe-name op-name)))]
+            `(defn ~op-name-symbol
+               ~(str "Operator reduce-" (name op-name)"." )
+               [& ~'args]
+               (let [~'n-args (count ~'args)]
+                 (when-not (> ~'n-args 0)
+                   (throw (ex-info
+                           (format "Operator called with too few (%s) arguments."
+                                   ~'n-args)
+                           {})))
+                 (let [~'datatype (or *datatype*
+                                      (widest-datatype
+                                       (map
+                                        dtype-base/get-datatype
+                                        ~'args)))
+                       ~'options {:datatype ~'datatype
+                                  :unchecked? *unchecked?*}]
+                   (if (= ~'n-args 1)
+                     (apply-reduce-op
+                      ~'options
+                      (get binary/builtin-binary-ops
+                           ~op-name)
+                      (first ~'args))
+                     (~op-name-symbol
+                      (mapv ~op-name-symbol ~'args)))))))))))
 
 
 (defmacro define-all-builtins

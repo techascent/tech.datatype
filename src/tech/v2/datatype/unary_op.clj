@@ -504,6 +504,7 @@
 
         (make-unary-op :bit-not :int64 (bit-not x))
         (make-numeric-unary-op :/ (/ x))
-        (make-all-datatype-unary-op :identity x)]
+        (make-all-datatype-unary-op :identity x)
+        (make-all-datatype-unary-op :+ x)]
        (map #(vector (dtype-proto/op-name %) %))
        (into {})))

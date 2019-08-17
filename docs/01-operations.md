@@ -324,7 +324,7 @@ user> (def ignored (time (dtype/copy! b c)))
 ```
 
 But as you can see, doing this and getting all the typehinting to work correctly is
-quite tough.  And the code is specific to the container type of 'a' so that if we were
+somewhat fiddly and most likely brittle.  And the code is specific to the container type of 'a' so that if we were
 to externally change the container or the datatype our code would break.  On the other
 hand, we get nearly 8 times faster *if* everything (types, datastructures, etc) line
 up.

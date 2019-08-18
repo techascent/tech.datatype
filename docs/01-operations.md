@@ -355,87 +355,9 @@ interpolation to the specialized degrees-from-north based linear interpolation.
 
 
 ```clojure
-(defn- lerp-tensor-result
-  "slice will return a sequence of vectors of [n-items] length and
-apply + will sum elementwise across them.  Nothing yet is
-realized and no work has been done.  Then we do all the work at
-once with a copy to a known datatype (double-array)"
-  [final-tensor]
-  (let [tens-shape (dtype/shape final-tensor)]
-    (dtype/copy!
-     (apply dfn/+ (dtt/slice final-tensor 1))
-     (double-array (second tens-shape)))))
-
-
-(defn- lerp-latest-realize-records
-  [{:keys [name level data-table] :as variable}
-   records]
-  (let [records (vec records)
-        first-record (first records)
-        partition-key (:partition-key first-record)
-        lat-lon-seq (mapv :lat-lon-tuple records)
-        ;;there are y-weights partition keys and n-items records
-        weights (->
-                 ;;not needing to count makes things go faster
-                 (mapv (comp (partial mapv first) :lerp-info)
-                       records)
-                 ;;this isn't very efficient but will work
-                 (dtt/->tensor)
-                 ;;[n-items y-weights] -> [y-weights n-items]
-                 ;;transpose is in place
-                 (dtt/transpose [1 0]))
-        ;;Creates a value tensor of [y-weights n-items] of the data
-        values (->> partition-key
-                    (map #(last-lookup-lat-lon data-table %
-                                               lat-lon-seq))
-                    ;;The tensor constructor will efficiently copy
-                    ;;the nested sequence of double arrays into the
-                    ;;backing store of the tensor
-                    (dtt/->tensor))]
-    ;;lazy elementwise mul returning [y-weights n-items]
-    (-> (dfn/* weights values)
-        (lerp-tensor-result))))
-
-(defn- clamp-degrees
-  ^double [^double value]
-  (if (or (>= value 360.0)
-          (< value 0))
-    (recur (+ value
-              (if (< value 0)
-                360.0
-                -360.0)))
-    value))
-
-
-(defn- degree-2d-lerp
-  [values weights]
-  (let [[lhs rhs] (dtt/slice values 1)
-        [lhs-weights rhs-weights] (dtt/slice weights 1)
-        ;;Type everything out so we can efficiently produce a new reader
-        lhs (typecast/datatype->reader :float64 lhs)
-        rhs (typecast/datatype->reader :float64 rhs)
-        lhs-weights (typecast/datatype->reader :float64 lhs-weights)
-        rhs-weights (typecast/datatype->reader :float64 rhs-weights)
-        n-elems (dtype/ecount lhs)]
-    (reify
-      DoubleReader
-      (lsize [rdr] n-elems)
-      (read [rdr idx]
-        (let [lhs (.read lhs idx)
-              rhs (.read rhs idx)
-              lhs-w (.read lhs-weights idx)
-              rhs-w (.read rhs-weights idx)
-              [lhs rhs] (if (> (Math/abs (- lhs rhs)) 180.0)
-                          (if (< lhs rhs)
-                            [(+ lhs 360) rhs]
-                            [lhs (+ rhs 360)])
-                          [lhs rhs])]
-          (clamp-degrees (+ (* (double lhs) lhs-w)
-                            (* (double rhs) rhs-w))))))))
-
-
-(defn- degree-lerp-latest-realize-records
-  [{:keys [name level data-table] :as variable}
+(defn- perform-lerp-latest-realize-records
+  [lerp-fn
+   {:keys [name level data-table] :as variable}
    records]
   (let [records (vec records)
         first-record (first records)
@@ -459,17 +381,99 @@ once with a copy to a known datatype (double-array)"
                     ;;the nested sequence of double arrays into the
                     ;;backing store of the tensor
                     (dtt/->tensor))
-        n-weights (long (first (dtype/shape weights)))
+        ;;A couple possible lerp functions here
+        weighted-values (lerp-fn values weights)]
+    (->> (dtt/slice weighted-values)
+         (apply dfn/+)
+         (dtype/make-container :java-array :float64))))
+
+
+(defn lerp-latest
+  "Find 2 closest neighbors of forecast information in time
+  and do a linear interpolation from the lat-lon-time tuple.
+  Out of bound data has clamp-to-edge semantics.
+  Returned data is the variable definition sequence where each variable is
+  annotated with a :values data member that is the result of the lookups and
+  the same length and order as the lat-lon-epoch-seq input argument.
+  It is important to note that the lookup will be much faster if the lat-lon-epoch
+  sequence is sorted by epoch-seconds."
+  [vardef-seq lat-lon-epoch-seq model-varmap]
+  (perform-lookup vardef-seq lat-lon-epoch-seq model-varmap
+                  lerp-latest-partition-key
+                  (partial perform-lerp-latest-realize-records
+                           ;;Straight linear interpolation
+                           dfn/*)))
+
+
+
+(defn- clamp-degrees
+  ^double [^double value]
+  (if (or (>= value 360.0)
+          (< value 0))
+    (recur (+ value
+              (if (< value 0)
+                360.0
+                -360.0)))
+    value))
+
+
+(defn- degree-2d-lerp
+  [values weights]
+  (let [[lhs rhs] (dtt/slice values)
+        [lhs-weights rhs-weights] (dtt/slice weights)
+        ;;Type everything out so we can efficiently produce a new reader
+        lhs (typecast/datatype->reader :float64 lhs)
+        rhs (typecast/datatype->reader :float64 rhs)
+        lhs-weights (typecast/datatype->reader :float64 lhs-weights)
+        rhs-weights (typecast/datatype->reader :float64 rhs-weights)
+        n-elems (dtype/ecount lhs)]
+    (reify
+      DoubleReader
+      (lsize [rdr] n-elems)
+      (read [rdr idx]
+        (let [lhs (.read lhs idx)
+              rhs (.read rhs idx)
+              lhs-w (.read lhs-weights idx)
+              rhs-w (.read rhs-weights idx)
+              [lhs rhs] (if (> (Math/abs (- lhs rhs)) 180.0)
+                          (if (< lhs rhs)
+                            [(+ lhs 360) rhs]
+                            [lhs (+ rhs 360)])
+                          [lhs rhs])]
+          (clamp-degrees (+ (* (double lhs) lhs-w)
+                            (* (double rhs) rhs-w))))))))
+
+
+(defn- degree-lerp-fn
+  [values weights]
+  (let [n-weights (long (first (dtype/shape weights)))
         ;;Exception if more than 2
         weighted-values (case n-weights
                           1 values
                           2 (degree-2d-lerp values weights))]
-    (comment (println
-              "\nvalues:" (dtt/->jvm values)
-              "\nweights:" (dtt/->jvm weights)
-              "\nresult:" (vec weighted-values)))
-    ;;Make weighted values an appropriately shaped tensor
-    (-> (dtt/reshape weighted-values
-                     [1 (dtype/ecount weighted-values)])
-        (lerp-tensor-result))))
+    ;;The rest of the code expects a [n-weights n-items] tenspr
+    (dtt/reshape weighted-values
+                 [1 (dtype/ecount weighted-values)])))
+
+
+
+(defn degree-lerp-latest
+  "Find 2 closest neighbors of forecast information in time
+  and do a sort of linear interpolation from the lat-lon-time tuple.
+
+  Units of type 'degree' have special lerp semantics because if you average
+  10 and 350 you get 180 when you should get 0.
+
+  Out of bound data has clamp-to-edge semantics.
+
+  Returned data is the variable definition sequence where each variable is
+  annotated with a :values data member that is the result of the lookups and
+  the same length and order as the lat-lon-epoch-seq input argument.
+  It is important to note that the lookup will be much faster if the lat-lon-epoch
+  sequence is sorted by epoch-seconds."
+  [vardef-seq lat-lon-epoch-seq model-varmap]
+  (perform-lookup vardef-seq lat-lon-epoch-seq model-varmap
+                  lerp-latest-partition-key
+                  (partial perform-lerp-latest-realize-records
+                           degree-lerp-fn)))
 ```

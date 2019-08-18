@@ -713,18 +713,20 @@
   of leading dimensions to remove.  For example, if you have an item of shape [3 4] and
   1 is one you get a sequence of 3 vectors of length 4.  Returns a :object reader
   where each index maps to a tensor."
-  [tens slice-dims]
-  (let [t-shape (dtype/shape tens)
-        n-shape (count t-shape)
-        slice-dims (long slice-dims)]
-    (when-not (<= slice-dims n-shape)
-      (throw (ex-info (format "Slice operator n-dims out of range: %s:%s"
-                              slice-dims t-shape)
-                      {})))
-    (if (= slice-dims n-shape)
-      (dtype/->reader tens)
-      (->> (slice-select-args t-shape slice-dims)
-           (unary-op/unary-reader :object (apply select tens x))))))
+  ([tens]
+   (slice tens 1))
+  ([tens slice-dims]
+   (let [t-shape (dtype/shape tens)
+         n-shape (count t-shape)
+         slice-dims (long slice-dims)]
+     (when-not (<= slice-dims n-shape)
+       (throw (ex-info (format "Slice operator n-dims out of range: %s:%s"
+                               slice-dims t-shape)
+                       {})))
+     (if (= slice-dims n-shape)
+       (dtype/->reader tens)
+       (->> (slice-select-args t-shape slice-dims)
+            (unary-op/unary-reader :object (apply select tens x)))))))
 
 
 (defn ensure-buffer-descriptor

@@ -107,6 +107,55 @@
   (not (and (= (int off) 0)
             (= (int len) (ecount item)))))
 
+
+(defn ->byte-array
+  ^bytes [item]
+  (let [item (or (dtype-proto/->array item) item)]
+    (if (instance? (Class/forName "[B") item)
+      item
+      (make-container :java-array :int8 item))))
+
+
+(defn ->short-array
+  ^shorts [item]
+  (let [item (or (dtype-proto/->array item) item)]
+    (if (instance? (Class/forName "[S") item)
+      item
+      (make-container :java-array :int16 item))))
+
+
+(defn ->int-array
+  ^ints [item]
+  (let [item (or (dtype-proto/->array item) item)]
+    (if (instance? (Class/forName "[I") item)
+      item
+      (make-container :java-array :int32 item))))
+
+
+(defn ->long-array
+  ^longs [item]
+  (let [item (or (dtype-proto/->array item) item)]
+    (if (instance? (Class/forName "[J") item)
+      item
+      (make-container :java-array :int64 item))))
+
+
+(defn ->float-array
+  ^floats [item]
+  (let [item (or (dtype-proto/->array item) item)]
+    (if (instance? (Class/forName "[F") item)
+      item
+      (make-container :java-array :float32 item))))
+
+
+(defn ->double-array
+  ^doubles [item]
+  (let [item (or (dtype-proto/->array item) item)]
+    (if (instance? (Class/forName "[D") item)
+      item
+      (make-container :java-array :float64 item))))
+
+
 (defn copy!
   "copy elem-count src items to dest items.  Options may contain unchecked in which you
   get unchecked operations."

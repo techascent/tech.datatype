@@ -349,27 +349,27 @@
           arg-result)))))
 
 
-(defonce all-builtins (->> (concat (->> unary/builtin-unary-ops
-                                        (map (fn [[k v]]
-                                               {:name k
-                                                :type :unary
-                                                :operator v})))
-                                   (->> binary/builtin-binary-ops
-                                        (map (fn [[k v]]
-                                               {:name k
-                                                :type :binary
-                                                :operator v})))
-                                   (->> boolean-op/builtin-boolean-unary-ops
-                                        (map (fn [[k v]]
-                                               {:name k
-                                                :type :boolean-unary
-                                                :operator v})))
-                                   (->> boolean-op/builtin-boolean-binary-ops
-                                        (map (fn [[k v]]
-                                               {:name k
-                                                :type :boolean-binary
-                                                :operator v}))))
-                           (group-by :name)))
+(def all-builtins (->> (concat (->> unary/builtin-unary-ops
+                                    (map (fn [[k v]]
+                                           {:name k
+                                            :type :unary
+                                            :operator v})))
+                               (->> binary/builtin-binary-ops
+                                    (map (fn [[k v]]
+                                           {:name k
+                                            :type :binary
+                                            :operator v})))
+                               (->> boolean-op/builtin-boolean-unary-ops
+                                    (map (fn [[k v]]
+                                           {:name k
+                                            :type :boolean-unary
+                                            :operator v})))
+                               (->> boolean-op/builtin-boolean-binary-ops
+                                    (map (fn [[k v]]
+                                           {:name k
+                                            :type :boolean-binary
+                                            :operator v}))))
+                       (group-by :name)))
 
 
 (defn- safe-name

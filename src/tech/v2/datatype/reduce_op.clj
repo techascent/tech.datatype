@@ -44,7 +44,7 @@
   ([datatype update finalize]
    `(make-reduce-op :unnamed ~datatype ~update ~finalize))
   ([datatype update]
-   `(make-reduce-up ~datatype ~update nil)))
+   `(make-reduce-op ~datatype ~update nil)))
 
 
 (defmacro make-iterable-reduce-fn
@@ -98,6 +98,68 @@
    `(iterable-reduce :object ~update-code ~'accum ~values)))
 
 
+(defmacro make-commutative-reader-reduce-fn
+  [datatype]
+  `(fn [reduce-op# iterable# unchecked?#]
+     (let [reduce-op# (binary-op/datatype->binary-op ~datatype reduce-op# unchecked?#)
+           reader# (typecast/datatype->reader ~datatype iterable# unchecked?#)
+           n-elems# (.lsize reader#)
+           n-cpus# (.availableProcessors
+                   (Runtime/getRuntime))
+           n-elems-per-group# (quot n-elems# n-cpus#)
+           n-groups# (+ n-cpus# 1)
+           accum# (casting/datatype->sparse-value ~datatype)]
+       (->> (range n-groups#)
+            (pmap
+             (fn [group-idx#]
+               (let [group-idx# (long group-idx#)
+                     start-idx# (* group-idx# n-elems-per-group#)
+                     end-idx# (min n-elems#
+                                   (+ start-idx# n-elems-per-group#))
+                     n-loop-elems# (- end-idx# start-idx#)]
+                      (loop [accum# accum#
+                             idx# 0]
+                        (if (< idx# n-loop-elems#)
+                          (recur
+                           (.op reduce-op#
+                                accum#
+                                (.read reader#
+                                       (+ idx# start-idx#)))
+                           (inc idx#))
+                          accum#)))))
+            (reduce (fn [accum# next-elem#]
+                      (.op reduce-op# accum# next-elem#)))
+            (#(.finalize reduce-op# % n-elems#))))))
+
+
+(def commutative-reader-reduce-table
+  (casting/make-base-datatype-table
+   make-commutative-reader-reduce-fn))
+
+
+(defn commutative-reader-reduce
+  [{:keys [datatype unchecked?] :as options} reduce-op values]
+  (if (and (dtype-proto/convertible-to-reader? values)
+           (> (dtype-base/ecount values) 200))
+    (let [datatype (or datatype (dtype-base/get-datatype values))
+          reduce-fn (get commutative-reader-reduce-table
+                         (casting/safe-flatten datatype))]
+      (reduce-fn reduce-op values unchecked?))
+    (iterable-reduce-map options reduce-op values)))
+
+
+(defmacro commutative-reduce
+  ([datatype update-code finalize-code values]
+   `(commutative-reader-reduce
+     {:datatype ~datatype}
+     (make-reduce-op ~datatype ~update-code ~finalize-code)
+     ~values))
+  ([datatype update-code values]
+   `(commutative-reduce ~datatype ~update-code ~'accum ~values))
+  ([update-code values]
+   `(commutative-reduce :object ~update-code ~'accum ~values)))
+
+
 (defmacro make-dot-product-op
   [datatype]
   `(fn [lhs# rhs# bin-op# reduce-op# unchecked?#]
@@ -127,10 +189,14 @@
 
 
 (defn default-dot-product
-  [{:keys [datatype unchecked?]} lhs rhs bin-op reduce-op]
-  (let [datatype (or datatype (dtype-base/get-datatype lhs))
-        dot-prod-fn (get dot-product-table (casting/safe-flatten datatype))]
-    (dot-prod-fn lhs rhs bin-op reduce-op unchecked?)))
+  [{:keys [datatype unchecked?] :as options} lhs rhs bin-op reduce-op]
+  (if (and (dtype-proto/convertible-to-reader? lhs)
+           (dtype-proto/convertible-to-reader? rhs))
+    (->> (binary-op/binary-reader-map options bin-op lhs rhs)
+         (commutative-reader-reduce options reduce-op))
+    (let [datatype (or datatype (dtype-proto/get-datatype lhs))
+          dot-prod-fn (get dot-product-table (casting/safe-flatten datatype))]
+      (dot-prod-fn lhs rhs bin-op reduce-op unchecked?))))
 
 
 (defmulti dot-product

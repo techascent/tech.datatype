@@ -749,13 +749,14 @@
 
 (def builtin-boolean-unary-ops
   {:not (make-boolean-unary-op :boolean (not x))
-   :nan? (reify
-           dtype-proto/PToBinaryBooleanOp
-           (convertible-to-binary-boolean-op? [_] true)
-           (->binary-boolean-op [item options]
-             (let [{datatype :datatype
-                    unchecked? :unchecked?} options
-                   host-dtype (casting/safe-flatten datatype)]
+   :nan?
+   (reify
+     dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [_] true)
+     (->binary-boolean-op [item options]
+       (let [{datatype :datatype
+              unchecked? :unchecked?} options
+             host-dtype (casting/safe-flatten datatype)]
          (-> (case host-dtype
                :int8 (make-boolean-binary-op :int8 false)
                :int16 (make-boolean-binary-op :int16 false)
@@ -765,9 +766,96 @@
                :float64 (make-boolean-binary-op :float64 (Double/isNaN x))
                :object (make-boolean-binary-op :object (Double/isNaN (double x))))
              (dtype-proto/->binary-boolean-op options))))
-           IFn
-           (invoke [item x]
-             (Double/isNaN (double x))))})
+     IFn
+     (invoke [item x]
+       (Double/isNaN (double x))))
+   :inf?
+   (reify
+     dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [_] true)
+     (->binary-boolean-op [item options]
+       (let [{datatype :datatype
+              unchecked? :unchecked?} options
+             host-dtype (casting/safe-flatten datatype)]
+         (-> (case host-dtype
+               :int8 (make-boolean-binary-op :int8 false)
+               :int16 (make-boolean-binary-op :int16 false)
+               :int32 (make-boolean-binary-op :int32 false)
+               :int64 (make-boolean-binary-op :int64 false)
+               :float32 (make-boolean-binary-op :float32 (Float/isInfinite x))
+               :float64 (make-boolean-binary-op :float64 (Double/isInfinite x))
+               :object (make-boolean-binary-op :object (Double/isInfinite
+                                                        (double x))))
+             (dtype-proto/->binary-boolean-op options))))
+     IFn
+     (invoke [item x]
+       (Double/isInfinite (double x))))
+
+   :invalid?
+   (reify
+     dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [_] true)
+     (->binary-boolean-op [item options]
+       (let [{datatype :datatype
+              unchecked? :unchecked?} options
+             host-dtype (casting/safe-flatten datatype)]
+         (-> (case host-dtype
+               :int8 (make-boolean-binary-op :int8 false)
+               :int16 (make-boolean-binary-op :int16 false)
+               :int32 (make-boolean-binary-op :int32 false)
+               :int64 (make-boolean-binary-op :int64 false)
+               :float32 (make-boolean-binary-op :float32
+                                                (or (Float/isInfinite x)
+                                                    (Float/isNaN x)))
+               :float64 (make-boolean-binary-op :float64 (or (Double/isInfinite x)
+                                                             (Double/isNaN x)))
+               :object (make-boolean-binary-op :object (or (Double/isInfinite
+                                                            (double x))
+                                                           (Double/isNaN
+                                                            (double x)))))
+             (dtype-proto/->binary-boolean-op options))))
+     IFn
+     (invoke [item x]
+       (or (Double/isInfinite
+            (double x))
+           (Double/isNaN
+            (double x)))))
+
+   :valid?
+   (reify
+     dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [_] true)
+     (->binary-boolean-op [item options]
+       (let [{datatype :datatype
+              unchecked? :unchecked?} options
+             host-dtype (casting/safe-flatten datatype)]
+         (-> (case host-dtype
+               :int8 (make-boolean-binary-op :int8 false)
+               :int16 (make-boolean-binary-op :int16 false)
+               :int32 (make-boolean-binary-op :int32 false)
+               :int64 (make-boolean-binary-op :int64 false)
+               :float32 (make-boolean-binary-op :float32
+                                                (not
+                                                 (or (Float/isInfinite x)
+                                                     (Float/isNaN x))))
+               :float64 (make-boolean-binary-op :float64
+                                                (not
+                                                 (or (Double/isInfinite x)
+                                                     (Double/isNaN x))))
+               :object (make-boolean-binary-op :object
+                                               (not
+                                                (or (Double/isInfinite
+                                                     (double x))
+                                                    (Double/isNaN
+                                                     (double x))))))
+             (dtype-proto/->binary-boolean-op options))))
+     IFn
+     (invoke [item x]
+       (not
+        (or (Double/isInfinite
+             (double x))
+            (Double/isNaN
+             (double x))))))})
 
 
 (set! *unchecked-math* false)

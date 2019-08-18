@@ -1,13 +1,108 @@
 (ns tech.v2.datatype.statistics
-  (:require [tech.v2.datatype.base :as dtype-base]
+  (:require [tech.v2.datatype.base
+             :refer [->double-array]
+             :as dtype-base]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.boolean-op :as boolean-op]
+            [tech.v2.datatype.unary-op :as unary-op]
+            [tech.v2.datatype.reduce-op :as reduce-op]
+            [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.array]
             [kixi.stats.core :as kixi])
+  (:refer-clojure :exclude [min max])
   (:import [org.apache.commons.math3.stat.correlation
             KendallsCorrelation PearsonsCorrelation SpearmansCorrelation]
-           [org.apache.commons.math3.stat.descriptive DescriptiveStatistics]))
+           [org.apache.commons.math3.stat.descriptive DescriptiveStatistics]
+           [org.apache.commons.math3.stat.descriptive.rank Median]))
+
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
+
+
+(defn- desc-stats-sum-of-squares
+  ^double [^DescriptiveStatistics stats]
+  (->> (.getSortedValues stats)
+       (unary-op/unary-reader :float64 (* x x))
+       (reduce-op/iterable-reduce :float64 (+ accum next))))
+
+
+(defn- desc-stats-sum-of-logs
+  ^double [^DescriptiveStatistics stats]
+  (->> (.getSortedValues stats)
+       (unary-op/unary-reader :float64 (Math/log x))
+       (reduce-op/commutative-reduce :float64 (+ accum next))))
+
+
+(defn- desc-stats-product
+  ^double [^DescriptiveStatistics stats]
+  (->> (.getSortedValues stats)
+       (reduce-op/commutative-reduce :float64 (* accum next))))
+
+
+(def supported-stats-map
+  {:mean #(.getMean ^DescriptiveStatistics %)
+   :min #(.getMin ^DescriptiveStatistics %)
+   :max #(.getMax ^DescriptiveStatistics %)
+   :median #(.getPercentile ^DescriptiveStatistics % 50.0)
+   :variance #(.getVariance ^DescriptiveStatistics %)
+   :skew #(.getSkewness ^DescriptiveStatistics %)
+   :kurtosis #(.getKurtosis ^DescriptiveStatistics %)
+   :geometric-mean #(.getGeometricMean ^DescriptiveStatistics %)
+   :sum-of-squares desc-stats-sum-of-squares
+   :sum-of-logs desc-stats-sum-of-logs
+   :quadratic-mean #(.getQuadraticMean ^DescriptiveStatistics %)
+   :standard-deviation #(.getStandardDeviation ^DescriptiveStatistics %)
+   :variance-population #(.getPopulationVariance ^DescriptiveStatistics %)
+   :sum #(.getSum ^DescriptiveStatistics %)
+   :product desc-stats-product
+   :quartile-1 #(.getPercentile ^DescriptiveStatistics % 25.0)
+   :quartile-3 #(.getPercentile ^DescriptiveStatistics % 75.0)
+   :ecount #(.getN ^DescriptiveStatistics %)
+   })
+
+
+(defn supported-descriptive-stats
+  []
+  (keys supported-stats-map))
+
+
+(defn descriptive-stats
+  "Generate descriptive statistics for a particular item."
+  [item & [stats-set]]
+  (let [stats-set (set (or stats-set [:mean :min :max :ecount :standard-deviation
+                                      :median]))
+        stats-desc (DescriptiveStatistics. (->double-array item))]
+    (->> stats-set
+         (map (fn [stats-key]
+                (if-let [supported-stat (get supported-stats-map stats-key)]
+                  [stats-key (supported-stat stats-desc)]
+                  (throw (ex-info (format "Unsupported statistic: %s"
+                                          stats-key) {})))))
+         (into {}))))
+
+
+(defn percentile
+  "Get the nth percentile.  Percent ranges from 0-100."
+  [item percent]
+  (-> (DescriptiveStatistics. (->double-array item))
+      (.getPercentile (double percent))))
+
+
+(defmacro define-supported-stats-oneoffs
+  []
+  `(do
+     ~@(->> (supported-descriptive-stats)
+            (map (fn [stat-name]
+                   `(defn ~(symbol (name stat-name))
+                      ~(format "Supported stat %s" (name stat-name))
+                      [~'item]
+                      (-> (descriptive-stats ~'item [~stat-name])
+                          ~stat-name)))))))
+
+
+(define-supported-stats-oneoffs)
 
 
 (defn- kixi-apply
@@ -15,47 +110,9 @@
   (transduce identity kixi-fn (or (dtype-proto/as-reader item)
                                   (dtype-proto/as-iterable item))))
 
-(defn- ->double-array
-  ^doubles [item]
-  (if (instance? (Class/forName "[D") item)
-    item
-    (dtype-base/make-container :java-array :float64 item)))
-
-
-
-(defn mean
-  [item]
-  (kixi-apply kixi/mean item))
-
-
-(defn median
-  [item]
-  (kixi-apply kixi/median item))
-
-
-(defn geometric-mean
-  [item]
-  (kixi-apply kixi/geometric-mean item))
-
-
 (defn harmonic-mean
   [item]
   (kixi-apply kixi/harmonic-mean item))
-
-
-(defn variance
-  [item]
-  (kixi-apply kixi/variance item))
-
-
-(defn variance-population
-  [item]
-  (kixi-apply kixi/variance-p item))
-
-
-(defn standard-deviation
-  [item]
-  (kixi-apply kixi/standard-deviation item))
 
 
 (defn standard-deviation-population
@@ -70,7 +127,7 @@
 
 (defn skewness
   [item]
-  (kixi-apply kixi/skewness item))
+  (skew item))
 
 
 (defn skewness-population
@@ -88,36 +145,22 @@
   (kixi-apply kixi/kurtosis-p item))
 
 
-(defn- ->doubles
-  ^"[D" [item]
-  (if (instance? (Class/forName "[D") item)
-    item
-    (dtype-proto/make-container :java-array :float64 item {})))
-
-
 (defn pearsons-correlation
   [lhs rhs]
   (-> (PearsonsCorrelation.)
-      (.correlation (->doubles lhs) (->doubles rhs))))
+      (.correlation (->double-array lhs) (->double-array rhs))))
 
 
 (defn spearmans-correlation
   [lhs rhs]
   (-> (SpearmansCorrelation.)
-      (.correlation (->doubles lhs) (->doubles rhs))))
+      (.correlation (->double-array lhs) (->double-array rhs))))
 
 
 (defn kendalls-correlation
   [lhs rhs]
   (-> (KendallsCorrelation.)
-      (.correlation (->doubles lhs) (->doubles rhs))))
-
-
-(defn percentile
-  "Get the nth percentile.  Percent ranges from 0-100."
-  [item percent]
-  (-> (DescriptiveStatistics. (->double-array item))
-      (.getPercentile (double percent))))
+      (.correlation (->double-array lhs) (->double-array rhs))))
 
 
 (defn quartiles

@@ -59,25 +59,36 @@
 
 
 (impl/export-symbols tech.v2.datatype.statistics
-                     mean
-                     median
+                     supported-descriptive-stats
+                     descriptive-stats
                      geometric-mean
                      harmonic-mean
-                     variance
+                     kendalls-correlation
+                     kurtosis
+                     kurtosis-population
+                     mean
+                     median
+                     pearsons-correlation
+                     percentile
                      variance-population
+                     product
+                     quadratic-mean
+                     quartile-1
+                     quartile-3
+                     quartile-outlier-fn
+                     quartiles
+                     skew
+                     skewness
+                     skewness-population
+                     spearmans-correlation
                      standard-deviation
                      standard-deviation-population
                      standard-error
-                     skewness
-                     skewness-population
-                     kurtosis
-                     kurtosis-population
-                     pearsons-correlation
-                     spearmans-correlation
-                     kendalls-correlation
-                     percentile
-                     quartiles
-                     quartile-outlier-fn)
+                     sum
+                     sum-of-logs
+                     sum-of-squares
+                     variance
+                     variance-population)
 
 
 (impl/export-symbols tech.v2.datatype.rolling

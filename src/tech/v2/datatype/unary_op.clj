@@ -305,7 +305,8 @@
   (let [datatype (or datatype (dtype-base/get-datatype item))]
     (if (= (dtype-proto/op-name un-op) :identity)
       item
-      (if-let [reader-fn (get unary-op-reader-table (casting/flatten-datatype datatype))]
+      (if-let [reader-fn (get unary-op-reader-table
+                              (casting/flatten-datatype datatype))]
         (reader-fn item un-op unchecked?)
         (throw (ex-info (format "Cannot unary map datatype %s" datatype) {}))))))
 

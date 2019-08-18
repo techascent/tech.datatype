@@ -205,9 +205,40 @@ Calls clojure.core.matrix/ecount."
 
 
 (defn ->array
-  "Returns nil of item does not share a backing store with an array."
+  "Returns nil of item does not share a backing store with an array or if
+  item has been non-trivially sub-buffered."
   [item]
   (dtype-proto/->array item))
+
+
+(defn ->byte-array
+  ^bytes [item]
+  (base/->byte-array item))
+
+
+(defn ->short-array
+  ^shorts [item]
+  (base/->short-array item))
+
+
+(defn ->int-array
+  ^ints [item]
+  (base/->int-array item))
+
+
+(defn ->long-array
+  ^longs [item]
+  (base/->long-array item))
+
+
+(defn ->float-array
+  ^floats [item]
+  (base/->float-array item))
+
+
+(defn ->double-array
+  ^doubles [item]
+  (base/->double-array item))
 
 
 (defn ->sub-array

@@ -23,6 +23,7 @@
            [it.unimi.dsi.fastutil.floats FloatList FloatArrayList]
            [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
            [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
+           [it.unimi.dsi.fastutil.chars CharList CharArrayList]
            [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]
            [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
@@ -54,6 +55,7 @@
 (defn double-array-list-cast ^DoubleArrayList [item] item)
 (defn boolean-array-list-cast ^BooleanArrayList [item] item)
 (defn object-array-list-cast ^ObjectArrayList [item] item)
+(defn char-array-list-cast ^CharArrayList [item] item)
 
 
 (defmacro datatype->array-list-cast-fn
@@ -77,6 +79,7 @@
 (defn double-list-cast ^DoubleList [item] item)
 (defn boolean-list-cast ^BooleanList [item] item)
 (defn object-list-cast ^ObjectList [item] item)
+(defn char-list-cast ^CharList [item] item)
 (defn as-object-array ^"[Ljava.lang.Object;" [item] item)
 
 
@@ -139,6 +142,7 @@
 (extend-list-type DoubleList :float64)
 (extend-list-type BooleanList :boolean)
 (extend-list-type ObjectList :object)
+(extend-list-type CharList :int32)
 
 
 (defmacro extend-numeric-list
@@ -376,7 +380,8 @@
               (if (and list-values#
                        (= ~datatype (casting/flatten-datatype
                                      (dtype-proto/get-datatype list-values#))))
-                (.addAll list-item# idx# (datatype->list-cast-fn ~datatype list-values#))
+                (.addAll list-item# idx# (datatype->list-cast-fn ~datatype
+                                                                 list-values#))
                 ;;fallback to element by element
                 (let [item-reader# (typecast/datatype->reader
                                     ~datatype values# (:unchecked? options#))
@@ -398,6 +403,35 @@
 (extend-list DoubleList :float64)
 (extend-list BooleanList :boolean)
 (extend-list ObjectList :object)
+
+
+(extend-type CharList
+  dtype-proto/PToReader
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
+    (let [^CharList item item
+          n-elems (long (.size item))]
+      (->
+       (reify IntReader
+         (lsize [rdr] n-elems)
+         (read [rdr idx]
+           (->
+            (.get item idx)
+            int)))
+       (dtype-proto/->reader options))))
+
+
+  dtype-proto/PToWriter
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (let [^CharList item item
+          n-elems (long (.size item))]
+      (->
+       (reify IntWriter
+         (lsize [writer] n-elems)
+         (write [writer idx value]
+           (.set item idx (char value))))
+       (dtype-proto/->writer options)))))
 
 
 (defn make-list

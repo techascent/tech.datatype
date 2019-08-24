@@ -214,17 +214,8 @@
               (.getName ^Class (type backing-store))
               (name datatype)
               [n-items]
-
-              (as-> this this
-                (dtype-proto/sub-buffer this 0 (min 20 (base/ecount this)))
-                (dtype-proto/->reader this {})
-                (reduce (fn [^StringBuilder builder val]
-                          (.append builder
-                                   (dtype-pprint/format-object val))
-                          (.append builder ", "))
-                        (StringBuilder.)
-                        this)
-                (.toString ^StringBuilder this)))))
+              (-> (dtype-proto/sub-buffer this 0 (min 20 (base/ecount this)))
+                  (dtype-pprint/print-reader-data)))))
   (hashCode [this]
     (.hashCode {:datatype datatype
                 :backing-store backing-store}))

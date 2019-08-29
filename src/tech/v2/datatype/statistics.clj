@@ -185,7 +185,6 @@
         q3 (double q3)
         iqr (- q3 q1)
         range-mult (double (or range-mult 1.5))]
-    (boolean-op/make-boolean-unary-op
-     :float64
+    (boolean-op/make-float-double-boolean-unary-op
      (or (< x (- q1 (* range-mult iqr)))
          (> x (+ q3 (* range-mult iqr)))))))

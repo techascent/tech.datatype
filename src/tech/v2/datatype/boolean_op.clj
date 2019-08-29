@@ -747,6 +747,55 @@
        ~opcode)))
 
 
+(defmacro make-float-double-boolean-unary-op
+  ([opcode opname]
+   `(reify
+      dtype-proto/PToUnaryBooleanOp
+      (convertible-to-unary-boolean-op? [item#] true)
+      (->unary-boolean-op [item# options#]
+        (let [dtype# (or (:datatype options#)
+                         :float64)]
+          (case (casting/safe-flatten dtype#)
+            :int8 (make-boolean-unary-op
+                   :int8
+                   (let [~'x (double ~'x)]
+                     ~opcode))
+            :int16 (make-boolean-unary-op
+                    :int16
+                    (let [~'x (double ~'x)]
+                      ~opcode))
+            :int32 (make-boolean-unary-op
+                    :int32
+                    (let [~'x (double ~'x)]
+                      ~opcode))
+            :int64 (make-boolean-unary-op
+                    :int64
+                    (let [~'x (double ~'x)]
+                      ~opcode))
+            :float32 (make-boolean-unary-op
+                      :float32
+                      ~opcode)
+            :float64 (make-boolean-unary-op
+                      :float64
+                      ~opcode)
+            :object (make-boolean-unary-op
+                     :object
+                     (let [~'x (double ~'x)]
+                       ~opcode)))))
+      IFn
+      (invoke [item# op#]
+        (let [~'x (double op#)]
+          ~opcode))
+      (applyTo [item# arglist#]
+        (when-not (= 1 (count arglist#))
+          (throw (ex-info (format "Cannot apply unary operator to more than one argument: %s"
+                                  arglist#)
+                          {})))
+        (.invoke item# (first arglist#)))))
+  ([opcode]
+   `(make-float-double-boolean-unary-op ~opcode :unnamed)))
+
+
 (def builtin-boolean-unary-ops
   {:not (make-boolean-unary-op :boolean (not x))
    :nan?

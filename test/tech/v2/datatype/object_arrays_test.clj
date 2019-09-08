@@ -70,6 +70,16 @@
            (vec test-iterable)))))
 
 
+(deftest new-string-container
+  (is (= ["a_str" "b_str" "c_str"]
+         (->> (dtype/make-array-of-type :string ["a" "b" "c"])
+              (unary-op/unary-reader
+               :string
+               (.concat x "_str"))
+              (dtype/make-container :java-array :string)
+              vec))))
+
+
 (deftest object-array-test
   (let [test-ary (dtype/make-array-of-type Object 5)]
     (is (= [nil nil nil nil nil]

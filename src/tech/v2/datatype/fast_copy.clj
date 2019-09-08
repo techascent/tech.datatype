@@ -48,7 +48,6 @@
        (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
              dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
              n-elems# (.lsize dst-writer#)]
-
          (parallel-for/parallel-for
           idx# n-elems#
           (.write dst-writer# idx# (.read src-reader# idx#))))

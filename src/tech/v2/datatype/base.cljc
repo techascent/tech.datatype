@@ -247,7 +247,8 @@
 (defn copy-raw-seq->item!
   [raw-data-seq ary-target target-offset options]
   (reduce (fn [[ary-target target-offset] new-raw-data]
-            (dtype-proto/copy-raw->item! new-raw-data ary-target target-offset options))
+            (dtype-proto/copy-raw->item! new-raw-data ary-target
+                                         target-offset options))
           [ary-target target-offset]
           raw-data-seq))
 
@@ -347,6 +348,13 @@
 
 
 (extend-type Object
+  dtype-proto/PToArray
+  (->sub-array [item] nil)
+  (->array-copy [item]
+    (let [retval
+          (make-container :java-array (get-datatype item) (ecount item) {})]
+      (copy! item retval)))
+
   dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target target-offset options]
     (copy-raw-seq->item! (seq raw-data) ary-target target-offset options))

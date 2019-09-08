@@ -321,13 +321,6 @@ Note that this makes no mention of indianness; buffers are in the format of the 
                          :datatype (get-datatype item)))
         (->mutable options)))
 
-  PToArray
-  (->sub-array [item] nil)
-  (->array-copy [item]
-    (let [retval
-          (make-container :java-array (get-datatype item) (ecount item) {})]
-      (first (copy-raw->item! item retval 0 {}))))
-
   POperator
   (op-name [item] :unnamed)
 

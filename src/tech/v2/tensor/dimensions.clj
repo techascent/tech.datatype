@@ -280,7 +280,7 @@
      (read [item# ~'idx] ~opcode)
      (applyTo [item# arglist#] (.tensorRead
                                 ^tech.v2.tensor.LongTensorReader item#
-                                (typecast/datatype->iter :int32 arglist#)))
+                                (dtype/->iterable arglist# :int64)))
      tech.v2.tensor.LongTensorReader
      (read2d [~'reader ~'row ~'col] ~tenscode2d)
      (tensorRead [~'reader ~'indexes] ~tenscode)))
@@ -453,13 +453,15 @@ to be reversed for the most efficient implementation."
                  ;;We reversed them, so the indexes may be seem odd.
                  (+ (* (rem (unchecked-add col offset-0) shape-0) stride-0)
                     (* (rem (unchecked-add row offset-1) shape-1) stride-1))
-                 (.read2d reader (.nextInt indexes) (.nextInt indexes)))
+                 (let [iter (typecast/datatype->iter :int64 indexes)]
+                   (.read2d reader (.nextLong iter) (.nextLong iter))))
                 (impl-idx-reader
                  n-elems
                  (let [first-elem (rem (+ idx offset-0) shape-0)]
                    (* first-elem stride-0))
                  (* (rem (unchecked-add col offset-0) shape-0) stride-0)
-                 (.read2d reader 0 (int (.nextInt indexes)))))
+                 (.read2d reader 0 (-> (typecast/datatype->iter :int64 indexes)
+                                       (.nextLong)))))
               ;;Broadcasting with offsets but direct shape general case.
               (impl-idx-reader
                n-elems

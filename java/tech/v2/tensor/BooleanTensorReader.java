@@ -7,8 +7,8 @@ import clojure.lang.RT;
 
 public interface BooleanTensorReader extends BooleanReader
 {
-  boolean read2d(int row, int col);
-  boolean tensorRead(IntIter dims);
+  boolean read2d(long row, long col);
+  boolean tensorRead(Iterable dims);
   default Object invoke(Object row, Object col) {
     return read2d(RT.intCast(row), RT.intCast(col));
   }

@@ -187,15 +187,16 @@
   placed into the local namespace as 'x'.
   (make-unary-op :plus10 :int32 (+ arg 10))"
   ([opname datatype body]
-   `(reify
-      ~(datatype->unary-op-type datatype)
-      (getDatatype [item#] ~datatype)
-      (op [item# ~'x]
-        ~body)
-      (invoke [item# arg#]
-        (.op item# (casting/datatype->cast-fn :unknown ~datatype arg#)))
-      dtype-proto/POperator
-      (op-name [item#] ~opname)))
+   (let [base-datatype (casting/safe-flatten datatype)]
+     `(reify
+        ~(datatype->unary-op-type base-datatype)
+        (getDatatype [item#] ~datatype)
+        (op [item# ~'x]
+          ~body)
+        (invoke [item# arg#]
+          (.op item# (casting/datatype->cast-fn :unknown ~base-datatype arg#)))
+        dtype-proto/POperator
+        (op-name [item#] ~opname))))
   ([datatype body]
    `(make-unary-op :unamed ~datatype ~body)))
 
@@ -222,24 +223,28 @@
 (defmacro make-unary-op-iterator
   [dtype]
   `(fn [item# un-op# unchecked?#]
-     (reify
-       dtype-proto/PDatatype
-       (get-datatype [iter-item#] ~dtype)
-       Iterable
-       (iterator [iter-item#]
-         (let [src-iter# (typecast/datatype->iter ~dtype item# unchecked?#)
-               un-op# (datatype->unary-op ~dtype un-op# unchecked?#)]
-           (reify ~(typecast/datatype->iter-type dtype)
-             (getDatatype [item#] ~dtype)
-             (hasNext [item#] (.hasNext src-iter#))
-             (~(typecast/datatype->iter-next-fn-name dtype)
-              [item#]
-              (let [data-val# (typecast/datatype->iter-next-fn
-                               ~dtype src-iter#)]
-                (.op un-op# data-val#)))
-             (current [item#]
-               (->> (.current src-iter#)
-                    (.op un-op#)))))))))
+     (let [iterable# (dtype-base/->iterable item#)
+           src-dtype# (dtype-base/get-datatype iterable#)]
+       (reify
+         dtype-proto/PDatatype
+         (get-datatype [iter-item#] src-dtype#)
+         Iterable
+         (iterator [iter-item#]
+           (let [src-iter# (typecast/datatype->iter ~dtype
+                                                    (dtype-base/->iterable item#)
+                                                    unchecked?#)
+                 un-op# (datatype->unary-op ~dtype un-op# unchecked?#)]
+             (reify ~(typecast/datatype->iter-type dtype)
+               (getDatatype [item#] src-dtype#)
+               (hasNext [item#] (.hasNext src-iter#))
+               (~(typecast/datatype->iter-next-fn-name dtype)
+                [item#]
+                (let [data-val# (typecast/datatype->iter-next-fn
+                                 ~dtype src-iter#)]
+                  (.op un-op# data-val#)))
+               (current [item#]
+                 (->> (.current src-iter#)
+                      (.op un-op#))))))))))
 
 
 
@@ -277,7 +282,8 @@
   [dtype]
   `(fn [item# un-op# unchecked?#]
      (let [un-op# (datatype->unary-op ~dtype un-op# true)
-           src-reader# (typecast/datatype->reader ~dtype item#
+           src-reader# (typecast/datatype->reader ~dtype
+                                                  (dtype-base/->reader item#)
                                                   unchecked?#)
            src-dtype# (dtype-base/get-datatype src-reader#)
            constructor# #(unary-reader-map

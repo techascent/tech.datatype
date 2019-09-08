@@ -55,7 +55,7 @@
                         [global-address
                          local-address
                          (.tensorRead ^tech.v2.tensor.LongTensorReader forward
-                                      (typecast/datatype->iter :int32 global-shape))
+                                      (dtype/->iterable global-shape :int64))
                          (when (= 2 (count shape))
                            (.read2d ^tech.v2.tensor.LongTensorReader forward
                                     (first global-shape)

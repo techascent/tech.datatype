@@ -454,7 +454,6 @@ Calls clojure.core.matrix/ecount."
     (sparse-proto/->sparse item)))
 
 
-
 (defn ->writer
   "Create a writer of a specific type."
   [src-item & [datatype options]]
@@ -462,7 +461,6 @@ Calls clojure.core.matrix/ecount."
                         (assoc options
                                :datatype
                                (or datatype (get-datatype src-item)))))
-
 
 
 (defn ->mutable

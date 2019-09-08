@@ -9,6 +9,7 @@
   (:import [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
            [java.lang.reflect Constructor]
+           [tech.v2.datatype ObjectReader ObjectWriter]
            [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
            [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
            [it.unimi.dsi.fastutil.ints IntList IntArrayList]
@@ -307,19 +308,62 @@
 
     dtype-proto/PToReader
     {:convertible-to-reader? (constantly true)
-     :->reader (fn [item options]
-                 (let [datatype (or (:datatype options)
-                                    (dtype-proto/get-datatype item))]
-                   (-> (dtype-proto/as-list item)
-                       (dtype-proto/->reader (assoc options :datatype datatype)))))}
+     :->reader
+     (fn [item options]
+       (let [datatype (or (:datatype options)
+                          (dtype-proto/get-datatype item))
+             unchecked? (:unchecked? options)
+             ^"[Ljava.lang.Object;" item item]
+         (reify
+           ObjectReader
+           (getDatatype [reader] datatype)
+           (lsize [reader] (alength item))
+           (read [reader idx]
+             (aget item idx))
+           dtype-proto/PToList
+           (convertible-to-fastutil-list? [reader] true)
+           (->list-backing-store [reader] (dtype-proto/as-list item))
+           dtype-proto/PToArray
+           (->sub-array [reader] (dtype-proto/->sub-array item))
+           (->array-copy [reader] (dtype-proto/->array-copy item))
+
+           dtype-proto/PBuffer
+           (sub-buffer [reader offset length]
+             (-> (dtype-proto/sub-buffer item offset length)
+                 (dtype-proto/->reader {:datatype datatype
+                                        :unchecked? unchecked?})))
+           dtype-proto/PSetConstant
+           (set-constant! [reader offset value elem-count]
+             (dtype-proto/set-constant! item offset value elem-count)))))}
 
     dtype-proto/PToWriter
     {:convertible-to-writer? (constantly true)
-     :->writer (fn [item options]
-                 (let [datatype (or (:datatype options)
-                                    (dtype-proto/get-datatype item))]
-                   (-> (dtype-proto/as-list item)
-                       (dtype-proto/->writer (assoc options :datatype datatype)))))}
+     :->writer
+     (fn [item options]
+       (let [datatype (or (:datatype options)
+                          (dtype-proto/get-datatype item))
+             unchecked? (:unchecked? options)
+             ^"[Ljava.lang.Object;" item item]
+         (reify
+           ObjectWriter
+           (getDatatype [writer] datatype)
+           (lsize [writer] (alength item))
+           (write [writer idx value]
+             (aset item idx value))
+           dtype-proto/PToList
+           (convertible-to-fastutil-list? [writer] true)
+           (->list-backing-store [writer] (dtype-proto/as-list item))
+           dtype-proto/PToArray
+           (->sub-array [writer] (dtype-proto/->sub-array item))
+           (->array-copy [writer] (dtype-proto/->array-copy item))
+           dtype-proto/PBuffer
+           (sub-buffer [writer offset length]
+             (-> (dtype-proto/sub-buffer item offset length)
+                 (dtype-proto/->writer {:datatype datatype
+                                        :unchecked? unchecked?})))
+           dtype-proto/PSetConstant
+           (set-constant! [writer offset value elem-count]
+             (dtype-proto/set-constant! item offset value elem-count)))))}
 
     dtype-proto/PToArray
     {:->sub-array (fn [item] {:java-array item

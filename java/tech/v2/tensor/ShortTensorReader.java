@@ -7,8 +7,8 @@ import clojure.lang.RT;
 
 public interface ShortTensorReader extends ShortReader
 {
-  short read2d(int row, int col);
-  short tensorRead(IntIter dims);
+  short read2d(long row, long col);
+  short tensorRead(Iterable dims);
   default Object invoke(Object row, Object col) {
     return read2d(RT.intCast(row), RT.intCast(col));
   }

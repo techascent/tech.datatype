@@ -156,6 +156,40 @@
       (make-container :java-array :float64 item))))
 
 
+(defn ->reader
+  "Create a reader of a specific type."
+  [src-item & [datatype options]]
+  (dtype-proto/->reader src-item
+                        (assoc options
+                               :datatype
+                               (or datatype (get-datatype src-item)))))
+
+
+(defn ->writer
+  "Create a writer of a specific type."
+  [src-item & [datatype options]]
+  (dtype-proto/->writer src-item
+                        (assoc options
+                               :datatype
+                               (or datatype (get-datatype src-item)))))
+
+
+(defn ->iterable
+  "Create an object that when .iterator is called it returns an iterator that
+  derives from tech.v2.datatype.{dtype}Iter.  This iterator class adds 'current'
+  to the fastutil typed iterator of the same type.  Current makes implementing
+  a few algorithms far easier as they no longer require local state outside of
+  the iterator."
+  [src-item & [datatype options]]
+  (if (and (not datatype)
+           (instance? Iterable src-item))
+    src-item
+    (dtype-proto/->iterable src-item
+                            (assoc options
+                                   :datatype
+                                   (or datatype (get-datatype src-item))))))
+
+
 (defn copy!
   "copy elem-count src items to dest items.  Options may contain unchecked in which you
   get unchecked operations."

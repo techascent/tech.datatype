@@ -7,8 +7,8 @@ import clojure.lang.RT;
 
 public interface DoubleTensorReader extends DoubleReader
 {
-  double read2d(int row, int col);
-  double tensorRead(IntIter dims);
+  double read2d(long row, long col);
+  double tensorRead(Iterable dims);
   default Object invoke(Object row, Object col) {
     return read2d(RT.intCast(row), RT.intCast(col));
   }

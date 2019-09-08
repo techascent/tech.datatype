@@ -63,14 +63,22 @@
      ~'item
      (dtype-proto/->writer ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
 
-(defn ->int8-writer ^ByteWriter [item unchecked?] (implement-writer-cast :int8))
-(defn ->int16-writer ^ShortWriter [item unchecked?] (implement-writer-cast :int16))
-(defn ->int32-writer ^IntWriter [item unchecked?] (implement-writer-cast :int32))
-(defn ->int64-writer ^LongWriter [item unchecked?] (implement-writer-cast :int64))
-(defn ->float32-writer ^FloatWriter [item unchecked?] (implement-writer-cast :float32))
-(defn ->float64-writer ^DoubleWriter [item unchecked?] (implement-writer-cast :float64))
-(defn ->boolean-writer ^BooleanWriter [item unchecked?] (implement-writer-cast :boolean))
-(defn ->object-writer ^ObjectWriter [item unchecked?] (implement-writer-cast :object))
+(defn ->int8-writer ^ByteWriter [item unchecked?]
+  (implement-writer-cast :int8))
+(defn ->int16-writer ^ShortWriter [item unchecked?]
+  (implement-writer-cast :int16))
+(defn ->int32-writer ^IntWriter [item unchecked?]
+  (implement-writer-cast :int32))
+(defn ->int64-writer ^LongWriter [item unchecked?]
+  (implement-writer-cast :int64))
+(defn ->float32-writer ^FloatWriter [item unchecked?]
+  (implement-writer-cast :float32))
+(defn ->float64-writer ^DoubleWriter [item unchecked?]
+  (implement-writer-cast :float64))
+(defn ->boolean-writer ^BooleanWriter [item unchecked?]
+  (implement-writer-cast :boolean))
+(defn ->object-writer ^ObjectWriter [item unchecked?]
+  (implement-writer-cast :object))
 
 
 (defmacro datatype->writer
@@ -126,12 +134,20 @@
 (defn ->float32-reader ^FloatReader [item unchecked?] (implement-reader-cast :float32))
 (defn ->float64-reader ^DoubleReader [item unchecked?] (implement-reader-cast :float64))
 (defn ->boolean-reader ^BooleanReader [item unchecked?] (implement-reader-cast :boolean))
-(defn ->object-reader ^ObjectReader [item unchecked?] (implement-reader-cast :object))
+
+
+(defn ->object-reader ^ObjectReader
+  [item & [unchecked? datatype]]
+  (let [datatype (or datatype :object)]
+    (assert (= :object (casting/safe-flatten datatype)))
+    (if (instance? ObjectReader item)
+      item
+      (dtype-proto/->reader item {:datatype datatype :unchecked? unchecked?}))))
 
 
 (defmacro datatype->reader
   [datatype reader & [unchecked?]]
-  (case datatype
+  (case (casting/safe-flatten datatype)
     :int8 `(->int8-reader ~reader ~unchecked?)
     :int16 `(->int16-reader ~reader ~unchecked?)
     :int32 `(->int32-reader ~reader ~unchecked?)
@@ -139,7 +155,7 @@
     :float32 `(->float32-reader ~reader ~unchecked?)
     :float64 `(->float64-reader ~reader ~unchecked?)
     :boolean `(->boolean-reader ~reader ~unchecked?)
-    :object `(->object-reader ~reader ~unchecked?)))
+    :object `(->object-reader ~reader ~unchecked? ~datatype)))
 
 
 (defn datatype->iter-type
@@ -161,7 +177,7 @@
      (if (instance? ~(resolve (datatype->iter-type datatype)) ~'item)
        ~'item
        (.iterator ^Iterable (dtype-proto/->iterable
-                             ~'item {:datatype~datatype :unchecked? ~'unchecked?})))))
+                             ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))))
 
 
 (defn ->int8-iter ^ByteIter [item unchecked?] (implement-iter-cast :int8))
@@ -171,7 +187,17 @@
 (defn ->float32-iter ^FloatIter [item unchecked?] (implement-iter-cast :float32))
 (defn ->float64-iter ^DoubleIter [item unchecked?] (implement-iter-cast :float64))
 (defn ->boolean-iter ^BooleanIter [item unchecked?] (implement-iter-cast :boolean))
-(defn ->object-iter ^ObjectIter [item unchecked?] (implement-iter-cast :object))
+
+(defn ->object-iter
+  ^ObjectIter [item & [unchecked? datatype]]
+  (let [datatype (or datatype :object)]
+    (assert (= :object (casting/safe-flatten datatype)))
+    (if (instance? ObjectIter item)
+      item
+      (.iterator
+       ^Iterable (dtype-proto/->iterable item
+                                         {:datatype datatype
+                                          :unchecked? unchecked?})))))
 
 
 (defn ->iterable
@@ -190,7 +216,7 @@
 
 (defmacro datatype->iter
   [datatype reader & [unchecked?]]
-  (case datatype
+  (case (casting/safe-flatten datatype)
     :int8 `(->int8-iter ~reader ~unchecked?)
     :int16 `(->int16-iter ~reader ~unchecked?)
     :int32 `(->int32-iter ~reader ~unchecked?)
@@ -198,7 +224,7 @@
     :float32 `(->float32-iter ~reader ~unchecked?)
     :float64 `(->float64-iter ~reader ~unchecked?)
     :boolean `(->boolean-iter ~reader ~unchecked?)
-    :object `(->object-iter ~reader ~unchecked?)))
+    :object `(->object-iter ~reader ~datatype ~unchecked?)))
 
 
 (defmacro datatype->pure-iter

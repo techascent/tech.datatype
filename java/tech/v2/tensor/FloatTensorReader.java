@@ -7,8 +7,8 @@ import clojure.lang.RT;
 
 public interface FloatTensorReader extends FloatReader
 {
-  float read2d(int row, int col);
-  float tensorRead(IntIter dims);
+  float read2d(long row, long col);
+  float tensorRead(Iterable dims);
   default Object invoke(Object row, Object col) {
     return read2d(RT.intCast(row), RT.intCast(col));
   }

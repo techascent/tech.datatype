@@ -3,7 +3,9 @@
             [tech.v2.datatype.typed-buffer :as typed-buffer]
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.list]
-            [tech.v2.datatype.protocols :as dtype-proto]))
+            [tech.v2.datatype.protocols :as dtype-proto]
+            [tech.v2.datatype.unary-op :as unary-op]
+            [tech.v2.datatype.binary-op :as binary-op]))
 
 
 (deftest boolean-array-test
@@ -35,7 +37,37 @@
       (is (= ["" "" "bye!" "hi" ""]
              (dtype/->vector test-ary)))
       (is (= ["bye!" "hi" ""]
-             (dtype/->vector sub-buf))))))
+             (dtype/->vector sub-buf)))))
+  (let [test-ary (dtype/make-array-of-type :string ["a" "b" "c"])
+        test-rdr (->> test-ary
+                      (unary-op/unary-reader
+                       :string
+                       (.concat x "_str")))
+        test-iter (->> test-ary
+                       (unary-op/unary-iterable
+                        :string
+                        (.concat x "_str")))]
+    (is (= :string (dtype/get-datatype test-rdr)))
+    (is (= ["a_str" "b_str" "c_str"]
+           (vec test-rdr)))
+    (is (= :string (dtype/get-datatype test-iter)))
+    (is (= ["a_str" "b_str" "c_str"]
+           (vec test-iter))))
+  (let [test-ary (dtype/make-array-of-type :string ["a" "b" "c"])
+        test-rdr (binary-op/binary-reader
+                  :string
+                  (str x "_" y)
+                  test-ary test-ary)
+        test-iterable (binary-op/binary-iterable
+                       :string
+                       (str x "_" y)
+                       test-ary test-ary)]
+    (is (= :string (dtype/get-datatype test-rdr)))
+    (is (= :string (dtype/get-datatype test-iterable)))
+    (is (= ["a_a" "b_b" "c_c"]
+           (vec test-rdr)))
+    (is (= ["a_a" "b_b" "c_c"]
+           (vec test-iterable)))))
 
 
 (deftest object-array-test

@@ -178,16 +178,17 @@
   are exposed to the local scope as 'x' and 'y' respectively.
   (make-binary-op :float32 (Math/pow x y))"
   ([opname datatype body]
-   `(reify ~(datatype->binary-op-type datatype)
-      (getDatatype [item#] ~datatype)
-      (op [item# ~'x ~'y]
-        ~body)
-      (invoke [item# x# y#]
-        (.op item#
-             (casting/datatype->cast-fn :unknown ~datatype x#)
-             (casting/datatype->cast-fn :unknown ~datatype y#)))
-      dtype-proto/POperator
-      (op-name [item#] ~opname)))
+   (let [base-datatype (casting/safe-flatten datatype)]
+     `(reify ~(datatype->binary-op-type base-datatype)
+        (getDatatype [item#] ~datatype)
+        (op [item# ~'x ~'y]
+          ~body)
+        (invoke [item# x# y#]
+          (.op item#
+               (casting/datatype->cast-fn :unknown ~base-datatype x#)
+               (casting/datatype->cast-fn :unknown ~base-datatype y#)))
+        dtype-proto/POperator
+        (op-name [item#] ~opname))))
   ([datatype body]
    `(make-binary-op :unnamed ~datatype ~body)))
 
@@ -214,29 +215,36 @@
 (defmacro make-binary-op-iterator
   [dtype]
   `(fn [lhs# rhs# bin-op# unchecked?#]
-     (reify
-       Iterable
-       (iterator [iter-item#]
-         (let [lhs-iter# (typecast/datatype->iter ~dtype lhs# unchecked?#)
-               rhs-iter# (typecast/datatype->iter ~dtype rhs# unchecked?#)
-               bin-op# (datatype->binary-op ~dtype bin-op# true)]
-           (reify ~(typecast/datatype->iter-type dtype)
-             (getDatatype [item#] ~dtype)
-             (hasNext [item#] (and (.hasNext lhs-iter#)
-                                   (.hasNext rhs-iter#)))
-             (~(typecast/datatype->iter-next-fn-name dtype)
-              [item#]
-              (.op bin-op#
-                   (typecast/datatype->iter-next-fn
-                    ~dtype lhs-iter#)
-                   (typecast/datatype->iter-next-fn
-                    ~dtype rhs-iter#)))
-             (current [item#]
-               (.op bin-op#
-                    (.current lhs-iter#)
-                    (.current rhs-iter#))))))
-       dtype-proto/PDatatype
-       (get-datatype [iter-item#] ~dtype))))
+     (let [lhs-iterable# (dtype-base/->iterable lhs#)
+           rhs-iterable# (dtype-base/->iterable rhs#)
+           src-dtype# (dtype-base/get-datatype lhs-iterable#)]
+       (reify
+         dtype-proto/PDatatype
+         (get-datatype [iter-item#] src-dtype#)
+         Iterable
+         (iterator [iter-item#]
+           (let [lhs-iter# (typecast/datatype->iter ~dtype
+                                                    lhs-iterable#
+                                                    unchecked?#)
+                 rhs-iter# (typecast/datatype->iter ~dtype
+                                                    rhs-iterable#
+                                                    unchecked?#)
+                 bin-op# (datatype->binary-op ~dtype bin-op# true)]
+             (reify ~(typecast/datatype->iter-type dtype)
+               (getDatatype [item#] src-dtype#)
+               (hasNext [item#] (and (.hasNext lhs-iter#)
+                                     (.hasNext rhs-iter#)))
+               (~(typecast/datatype->iter-next-fn-name dtype)
+                [item#]
+                (.op bin-op#
+                     (typecast/datatype->iter-next-fn
+                      ~dtype lhs-iter#)
+                     (typecast/datatype->iter-next-fn
+                      ~dtype rhs-iter#)))
+               (current [item#]
+                 (.op bin-op#
+                      (.current lhs-iter#)
+                      (.current rhs-iter#))))))))))
 
 
 (def binary-op-iter-table (casting/make-base-datatype-table
@@ -253,7 +261,7 @@
 (defmacro binary-iterable
   ([datatype opcode lhs rhs]
    `(binary-iterable-map
-     {:datatype datatype}
+     {:datatype ~datatype}
      (make-binary-op ~datatype ~opcode)
      ~lhs ~rhs))
   ([opcode lhs rhs]
@@ -264,12 +272,17 @@
   [dtype]
   `(fn [lhs# rhs# bin-op# unchecked?#]
      (let [bin-op# (datatype->binary-op ~dtype bin-op# true)
-           lhs-reader# (typecast/datatype->reader ~dtype lhs# unchecked?#)
-           rhs-reader# (typecast/datatype->reader ~dtype rhs# unchecked?#)
+           lhs-reader# (typecast/datatype->reader ~dtype
+                                                  (dtype-base/->reader lhs#)
+                                                  unchecked?#)
+           rhs-reader# (typecast/datatype->reader ~dtype
+                                                  (dtype-base/->reader rhs#)
+                                                  unchecked?#)
            n-elems# (min (.lsize lhs-reader#)
-                         (.lsize rhs-reader#))]
+                         (.lsize rhs-reader#))
+           src-dtype# (dtype-proto/get-datatype lhs-reader#)]
        (-> (reify ~(typecast/datatype->reader-type dtype)
-             (getDatatype [item#] ~dtype)
+             (getDatatype [item#] src-dtype#)
              (lsize [item#] n-elems#)
              (read [item# idx#]
                (.op bin-op#

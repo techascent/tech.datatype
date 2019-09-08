@@ -101,7 +101,8 @@
          ~(typecast/datatype->reader-type reader-datatype)
          (lsize [reader#] n-elems#)
          (read [reader# idx#]
-           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype buffer# idx# buffer-pos#)
+           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype
+                                  buffer# idx# buffer-pos#)
                (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
                                         ~reader-datatype)))
          dtype-proto/PToBackingStore

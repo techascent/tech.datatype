@@ -7,8 +7,8 @@ import clojure.lang.RT;
 
 public interface IntTensorReader extends IntReader
 {
-  int read2d(int row, int col);
-  int tensorRead(IntIter dims);
+  int read2d(long row, long col);
+  int tensorRead(Iterable dims);
   default Object invoke(Object row, Object col) {
     return read2d(RT.intCast(row), RT.intCast(col));
   }

@@ -21,7 +21,8 @@
                (boolean (not= nil (aget algo-data# 0))))
              (~(typecast/datatype->iter-next-fn-name datatype)
               [item#]
-              (let [src-iter# (typecast/datatype->fast-iter ~datatype (aget algo-data# 0))
+              (let [src-iter# (typecast/datatype->fast-iter ~datatype
+                                                            (aget algo-data# 0))
                     retval# (typecast/datatype->iter-next-fn ~datatype src-iter#)]
                 (when-not (.hasNext src-iter#)
                   (aset algo-data# 0 (first (aget algo-data# 1)))

@@ -7,6 +7,7 @@
             [tech.v2.datatype.argsort :as argsort]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
+            [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.binary-search :as binary-search]
             [tech.v2.datatype.protocols :as dtype-proto]
@@ -121,11 +122,12 @@
 (defn binary-search
   "Perform a binary search of (convertible to reader) values for target and return a
   tuple of [found? elem-pos-or-insert-pos].  If the element is found, the elem-pos
-  contains the index.  If the element is not found, then it contains the index where the
-  element would be inserted to maintain sort order of the values."
+  contains the index.  If the element is not found, then it contains the index where
+  the element would be inserted to maintain sort order of the values."
   [values target & {:as options}]
   (let [options (impl/default-options options)
-        datatype (clojure.core/or (:datatype options) (dtype-base/get-datatype target))]
+        datatype (clojure.core/or (:datatype options)
+                                  (dtype-base/get-datatype target))]
     (binary-search/binary-search
      (sparse-reader/->reader values datatype)
      target options)))
@@ -135,7 +137,7 @@
   "Returns a (potentially infinite) sequence of indexes that pass the filter."
   [bool-op filter-seq & [second-seq]]
   (if second-seq
-    (let [bool-op (if (satisfies? dtype-proto/PToBinaryBooleanOp bool-op)
+    (let [bool-op (if (dtype-proto/convertible-to-binary-boolean-op? bool-op)
                     bool-op
                     (boolean-op/make-boolean-binary-op
                      :object (casting/datatype->cast-fn :unknown
@@ -143,12 +145,14 @@
                                                         (bool-op x y))))]
       (boolean-op/binary-argfilter (impl/default-options {})
                                    bool-op
-                                   (iterator/->iterable filter-seq)
-                                   (iterator/->iterable second-seq)))
-    (let [bool-op (if (satisfies? dtype-proto/PToUnaryBooleanOp bool-op)
+                                   filter-seq
+                                   second-seq))
+    (let [bool-op (if (dtype-proto/convertible-to-unary-boolean-op? bool-op)
                     bool-op
                     (boolean-op/make-boolean-unary-op
-                     :object (boolean (bool-op x))))]
+                     :object (casting/datatype->cast-fn :unknown
+                                                        :boolean
+                                                        (bool-op x))))]
       (boolean-op/unary-argfilter (impl/default-options {})
                                   bool-op
                                   filter-seq))))
@@ -156,8 +160,8 @@
 
 (defn magnitude-squared
   [item & [options]]
-  (let [un-map (unary-iterable-map options (:sq unary/builtin-unary-ops) item)]
-    (reduce-op/iterable-reduce-map options (:+ binary/builtin-binary-ops) un-map)))
+  (->> (unary-op/unary-map options (:sq unary-op/builtin-unary-ops) item)
+       (reduce-op/commutative-reader-reduce options (:+ binary/builtin-binary-ops))))
 
 
 (defn magnitude

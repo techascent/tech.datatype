@@ -4,6 +4,8 @@
             [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.readers.range :as reader-range]
+            [tech.v2.datatype.readers.concat :as reader-concat]
             [tech.v2.datatype.unary-op :as dtype-unary]
             [tech.v2.datatype.binary-op :as dtype-binary]
             [tech.v2.datatype.base :as dtype-base]
@@ -524,18 +526,6 @@
     (masked-iterable/iterable-mask options bool-iterable filter-seq)))
 
 
-(defn unary-argfilter
-  "Returns a (potentially infinite) sequence of indexes that pass the filter."
-  [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
-  (let [bool-iterable (boolean-unary-iterable-map options bool-unary-filter-op filter-seq)]
-    (masked-iterable/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
-
-
-(defn argfind
-  [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
-  (first (unary-argfilter options bool-unary-filter-op filter-seq)))
-
-
 (defmacro make-boolean-binary-iterable
   [datatype]
   (let [op-dtype (casting/safe-flatten datatype)]
@@ -595,10 +585,11 @@
   (let [bool-iterable (boolean-binary-iterable-map options
                                                bool-binary-filter-op
                                                lhs-seq rhs-seq)]
-    (masked-iterable/iterable-mask (assoc options :datatype :int32) bool-iterable (range))))
+    (masked-iterable/iterable-mask (assoc options :datatype :int32)
+                                   bool-iterable (range))))
 
 
-(declare boolean-unary-reader)
+(declare boolean-unary-reader-map)
 
 
 (defmacro make-boolean-unary-reader
@@ -607,11 +598,10 @@
     `(fn [src-seq# bool-op# unchecked?#]
        (let [bool-op# (datatype->boolean-unary ~op-dtype bool-op# unchecked?#)
              src-reader# (typecast/datatype->reader ~datatype src-seq# unchecked?#)
-             create-fn# #(boolean-unary-reader {:datatype (dtype-base/get-datatype
-                                                           src-seq#)
-                                                :unchecked? %3}
-                                               bool-op#
-                                               %1)]
+             create-fn# #(boolean-unary-reader-map
+                          (select-keys %2 [:unchecked?])
+                          bool-op#
+                          %1)]
          (reader/make-derived-reader :boolean :boolean unchecked?#
                                      src-reader#
                                      (.op bool-op# (.read src-reader# ~'idx))
@@ -644,6 +634,42 @@
         create-fn (get boolean-unary-reader-table (casting/safe-flatten datatype))]
     (create-fn src-data bool-un-op unchecked?)))
 
+
+(defn boolean-unary-map
+  [options bool-un-op item]
+  (if (dtype-proto/convertible-to-reader? item)
+    (boolean-unary-reader-map options bool-un-op item)
+    (boolean-unary-iterable-map options bool-un-op item)))
+
+
+(defn unary-argfilter
+  "Returns a (potentially infinite) sequence of indexes that pass the filter."
+  [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
+  (let [bool-item (boolean-unary-map options bool-unary-filter-op filter-seq)]
+    (if (and (dtype-proto/convertible-to-reader? bool-item)
+             (> (dtype-base/ecount bool-item) 100))
+      (let [n-cpus (.availableProcessors (Runtime/getRuntime))
+            n-elems (dtype-base/ecount bool-item)
+            block-size (inc (quot n-elems n-cpus))]
+        (->> (range n-cpus)
+             (pmap (fn [idx]
+                     (let [start-idx (* (long idx) block-size)
+                           end-elem (min n-elems (+ start-idx block-size))
+                           sub-rdr (dtype-base/sub-buffer bool-item start-idx
+                                                          (- end-elem start-idx))]
+                       (->> (masked-iterable/iterable-mask
+                             (assoc options :datatype :int64)
+                             sub-rdr (reader-range/reader-range
+                                      :int64 start-idx end-elem))
+                            long-array))))
+             (reader-concat/concat-readers {:datatype :int64})))
+      (masked-iterable/iterable-mask (assoc options :datatype :int32)
+                                     bool-item (range)))))
+
+
+(defn argfind
+  [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
+  (first (unary-argfilter options bool-unary-filter-op filter-seq)))
 
 
 (defmacro make-boolean-binary-reader

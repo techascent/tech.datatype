@@ -68,42 +68,22 @@
   (->unary-boolean-op [item options]
     (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
       (case dtype
-        :int8 (make-boolean-unary-op :int8 (casting/datatype->cast-fn
-                                            :unknown
-                                            :boolean
-                                            (item x)))
-        :int16 (make-boolean-unary-op :int16 (casting/datatype->cast-fn
-                                              :unknown
-                                              :boolean
-                                              (item x)))
-        :int32 (make-boolean-unary-op :int32 (casting/datatype->cast-fn
-                                              :unkown
-                                              :boolean
-                                              (item x)))
-        :int64 (make-boolean-unary-op :int64 (casting/datatype->cast-fn
-                                              :unkown
-                                              :boolean
-                                              (item x)))
-        :float32 (make-boolean-unary-op :float32 (casting/datatype->cast-fn
-                                                  :unknown
-                                                  :boolean
-                                                  (item x)))
-        :float64 (make-boolean-unary-op :float64 (casting/datatype->cast-fn
-                                                  :unknown
-                                                  :boolean
-                                                  (item x)))
-        :boolean (make-boolean-unary-op :boolean (casting/datatype->cast-fn
-                                                  :unknown
-                                                  :boolean
-                                                  (item
-                                                   (casting/datatype->cast-fn
-                                                    :unkown
-                                                    :boolean
-                                                    (item x)))))
-        :object (make-boolean-unary-op :object (casting/datatype->cast-fn
-                                                :unkown
-                                                :boolean
-                                                (item x)))))))
+        :int8 (make-boolean-unary-op
+               :int8 (casting/datatype->cast-fn :unknown :boolean (item x)))
+        :int16 (make-boolean-unary-op
+                :int16 (casting/datatype->cast-fn :unknown :boolean (item x)))
+        :int32 (make-boolean-unary-op
+                :int32 (casting/datatype->cast-fn :unknown :boolean (item x)))
+        :int64 (make-boolean-unary-op
+                :int64 (casting/datatype->cast-fn :unkown :boolean (item x)))
+        :float32 (make-boolean-unary-op
+                  :float32 (casting/datatype->cast-fn :unknown :boolean (item x)))
+        :float64 (make-boolean-unary-op
+                  :float64 (casting/datatype->cast-fn :unknown :boolean (item x)))
+        :boolean (make-boolean-unary-op
+                  :boolean (casting/datatype->cast-fn :unknown :boolean (item x)))
+        :object (make-boolean-unary-op
+                 :object (casting/datatype->cast-fn  :unkown :boolean  (item x)))))))
 
 
 (defmacro implement-unary-typecast
@@ -181,45 +161,25 @@
 (extend-type Object
   dtype-proto/PToBinaryBooleanOp
   (convertible-to-binary-boolean-op? [item] (instance? clojure.lang.IFn item))
-  (->unary-boolean-op [item options]
+  (->binary-boolean-op [item options]
     (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
       (case dtype
-        :int8 (make-boolean-binary-op :int8 (casting/datatype->cast-fn
-                                            :unknown
-                                            :boolean
-                                            (item x y)))
-        :int16 (make-boolean-binary-op :int16 (casting/datatype->cast-fn
-                                              :unknown
-                                              :boolean
-                                              (item x y)))
-        :int32 (make-boolean-binary-op :int32 (casting/datatype->cast-fn
-                                              :unkown
-                                              :boolean
-                                              (item x y)))
-        :int64 (make-boolean-binary-op :int64 (casting/datatype->cast-fn
-                                              :unkown
-                                              :boolean
-                                              (item x y)))
-        :float32 (make-boolean-binary-op :float32 (casting/datatype->cast-fn
-                                                  :unknown
-                                                  :boolean
-                                                  (item x y)))
-        :float64 (make-boolean-binary-op :float64 (casting/datatype->cast-fn
-                                                  :unknown
-                                                  :boolean
-                                                  (item x y)))
-        :boolean (make-boolean-binary-op :boolean (casting/datatype->cast-fn
-                                                  :unknown
-                                                  :boolean
-                                                  (item
-                                                   (casting/datatype->cast-fn
-                                                    :unkown
-                                                    :boolean
-                                                    (item x y)))))
-        :object (make-boolean-binary-op :object (casting/datatype->cast-fn
-                                                :unkown
-                                                :boolean
-                                                (item x y)))))))
+        :int8 (make-boolean-binary-op
+               :int8 (casting/datatype->cast-fn :unknown :boolean (item x y)))
+        :int16 (make-boolean-binary-op
+                :int16 (casting/datatype->cast-fn :unknown :boolean (item x y)))
+        :int32 (make-boolean-binary-op
+                :int32 (casting/datatype->cast-fn :unkown :boolean (item x y)))
+        :int64 (make-boolean-binary-op
+                :int64 (casting/datatype->cast-fn :unkown :boolean (item x y)))
+        :float32 (make-boolean-binary-op
+                  :float32 (casting/datatype->cast-fn :unknown :boolean (item x y)))
+        :float64 (make-boolean-binary-op
+                  :float64 (casting/datatype->cast-fn :unknown :boolean (item x y)))
+        :boolean (make-boolean-binary-op
+                  :boolean (casting/datatype->cast-fn :unknown :boolean (item x y)))
+        :object (make-boolean-binary-op
+                 :object (casting/datatype->cast-fn :unkown :boolean (item x y)))))))
 
 
 (defmacro implement-binary-typecast
@@ -579,16 +539,6 @@
    `(boolean-binary-iterable :object ~opcode lhs rhs)))
 
 
-(defn binary-argfilter
-  "Returns a (potentially infinite) sequence of indexes that pass the filter."
-  [{:keys [unchecked? datatype] :as options} bool-binary-filter-op lhs-seq rhs-seq]
-  (let [bool-iterable (boolean-binary-iterable-map options
-                                               bool-binary-filter-op
-                                               lhs-seq rhs-seq)]
-    (masked-iterable/iterable-mask (assoc options :datatype :int32)
-                                   bool-iterable (range))))
-
-
 (declare boolean-unary-reader-map)
 
 
@@ -642,15 +592,14 @@
     (boolean-unary-iterable-map options bool-un-op item)))
 
 
-(defn unary-argfilter
-  "Returns a (potentially infinite) sequence of indexes that pass the filter."
-  [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
-  (let [bool-item (boolean-unary-map options bool-unary-filter-op filter-seq)]
-    (if (and (dtype-proto/convertible-to-reader? bool-item)
-             (> (dtype-base/ecount bool-item) 100))
-      (let [n-cpus (.availableProcessors (Runtime/getRuntime))
-            n-elems (dtype-base/ecount bool-item)
-            block-size (inc (quot n-elems n-cpus))]
+(defn- bool-reader-indexes->long-array
+  [options bool-item]
+  (let [n-cpus (.availableProcessors (Runtime/getRuntime))
+        n-elems (dtype-base/ecount bool-item)
+        block-size (inc (quot n-elems n-cpus))
+        index-datatype (or (:index-datatype options)
+                           :int64)
+        results
         (->> (range n-cpus)
              (pmap (fn [idx]
                      (let [start-idx (* (long idx) block-size)
@@ -658,11 +607,27 @@
                            sub-rdr (dtype-base/sub-buffer bool-item start-idx
                                                           (- end-elem start-idx))]
                        (->> (masked-iterable/iterable-mask
-                             (assoc options :datatype :int64)
+                             (assoc options :datatype index-datatype)
                              sub-rdr (reader-range/reader-range
-                                      :int64 start-idx end-elem))
-                            long-array))))
-             (reader-concat/concat-readers {:datatype :int64})))
+                                      index-datatype start-idx end-elem))
+                            long-array)))))
+        n-results (long (apply + 0 (map dtype-base/ecount results)))]
+    (-> (dtype-proto/copy-raw->item! results
+                                     (dtype-base/make-container
+                                      :java-array
+                                      index-datatype
+                                      n-results) 0
+                                     {})
+        first)))
+
+
+(defn unary-argfilter
+  "Returns a (potentially infinite) sequence of indexes that pass the filter."
+  [{:keys [unchecked? datatype] :as options} bool-unary-filter-op filter-seq]
+  (let [bool-item (boolean-unary-map options bool-unary-filter-op filter-seq)]
+    (if (and (dtype-proto/convertible-to-reader? bool-item)
+             (> (dtype-base/ecount bool-item) 100))
+      (bool-reader-indexes->long-array options bool-item)
       (masked-iterable/iterable-mask (assoc options :datatype :int32)
                                      bool-item (range)))))
 
@@ -713,6 +678,25 @@
   (let [datatype (or datatype (dtype-base/get-datatype lhs-data))
         create-fn (get boolean-binary-reader-table (casting/safe-flatten datatype))]
     (create-fn lhs-data rhs-data bool-binary-op unchecked?)))
+
+
+(defn boolean-binary-map
+  [options bool-binary-op lhs rhs]
+  (if (and (dtype-proto/convertible-to-reader? lhs)
+           (dtype-proto/convertible-to-reader? rhs))
+    (boolean-binary-reader-map options bool-binary-op lhs rhs)
+    (boolean-binary-iterable-map options bool-binary-op lhs rhs)))
+
+
+(defn binary-argfilter
+  "Returns a (potentially infinite) sequence of indexes that pass the filter."
+  [{:keys [unchecked? datatype] :as options} bool-binary-filter-op lhs-seq rhs-seq]
+  (let [bool-item (boolean-binary-map options bool-binary-filter-op lhs-seq rhs-seq)]
+    (if (and (dtype-proto/convertible-to-reader? bool-item)
+             (> (dtype-base/ecount bool-item) 100))
+      (bool-reader-indexes->long-array options bool-item)
+      (masked-iterable/iterable-mask (assoc options :datatype :int64)
+                                     bool-item (range)))))
 
 
 (defmacro boolean-binary-reader

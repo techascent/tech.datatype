@@ -137,25 +137,13 @@
   "Returns a (potentially infinite) sequence of indexes that pass the filter."
   [bool-op filter-seq & [second-seq]]
   (if second-seq
-    (let [bool-op (if (dtype-proto/convertible-to-binary-boolean-op? bool-op)
-                    bool-op
-                    (boolean-op/make-boolean-binary-op
-                     :object (casting/datatype->cast-fn :unknown
-                                                        :boolean
-                                                        (bool-op x y))))]
-      (boolean-op/binary-argfilter (impl/default-options {})
-                                   bool-op
-                                   filter-seq
-                                   second-seq))
-    (let [bool-op (if (dtype-proto/convertible-to-unary-boolean-op? bool-op)
-                    bool-op
-                    (boolean-op/make-boolean-unary-op
-                     :object (casting/datatype->cast-fn :unknown
-                                                        :boolean
-                                                        (bool-op x))))]
-      (boolean-op/unary-argfilter (impl/default-options {})
-                                  bool-op
-                                  filter-seq))))
+    (boolean-op/binary-argfilter (impl/default-options {})
+                                 bool-op
+                                 filter-seq
+                                 second-seq)
+    (boolean-op/unary-argfilter (impl/default-options {})
+                                bool-op
+                                filter-seq)))
 
 
 (defn magnitude-squared

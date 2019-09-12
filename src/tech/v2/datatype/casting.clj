@@ -290,7 +290,7 @@
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
   (case dtype
-    :uint8 :int32
+    :uint8 :int16
     :uint16 :int32
     :uint32 :int64
     :uint64 :int64

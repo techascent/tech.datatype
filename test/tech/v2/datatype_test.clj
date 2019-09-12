@@ -302,3 +302,11 @@
   (is (= (vec (range 200 255))
          (-> (dtype/make-container :list :uint8 (range 200 255))
              dtype/->vector))))
+
+
+(deftest desc-stats-unsigned-types
+  (is (= {:min 0.0
+          :max 255.0}
+         (-> (dtype/make-container :typed-buffer :uint8 (range 256))
+             (dfn/descriptive-stats)
+             (select-keys [:min :max])))))

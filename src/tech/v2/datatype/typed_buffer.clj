@@ -70,7 +70,8 @@
 
   dtype-proto/PToArray
   (->sub-array [item]
-    (dtype-proto/->sub-array backing-store))
+    (when (= datatype (dtype-proto/get-datatype backing-store))
+      (dtype-proto/->sub-array backing-store)))
   (->array-copy [item]
     (if (= datatype (dtype-proto/get-datatype backing-store))
       (dtype-proto/->array-copy backing-store)

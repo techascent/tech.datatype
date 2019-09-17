@@ -38,8 +38,7 @@
 
 (defn pointer->nio-buffer
   [^Pointer ptr datatype byte-len]
-  (let [buffer (.getByteBuffer ptr 0 byte-len)
-        gc-map (:ptr ptr)]
+  (let [buffer (.getByteBuffer ptr 0 byte-len)]
     (case datatype
       :int8 buffer
       :int16 (.asShortBuffer buffer)
@@ -99,5 +98,5 @@
 
 
 (defmethod dtype-proto/make-container :native-buffer
-  [container-type datatype elem-count options]
+  [_ datatype elem-count options]
   (make-typed-pointer datatype elem-count options))

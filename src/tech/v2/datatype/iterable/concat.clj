@@ -1,8 +1,7 @@
 (ns tech.v2.datatype.iterable.concat
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.nio-access :as access]))
+            [tech.v2.datatype.typecast :as typecast]))
 
 
 (defmacro make-concat-iterable-impl
@@ -45,7 +44,7 @@
 
 
 (defn iterable-concat
-  [{:keys [datatype unchecked?]} concat-iters]
+  [{:keys [datatype]} concat-iters]
   (let [datatype (or datatype
                      (when-let [first-arg (first concat-iters)]
                        (dtype-proto/get-datatype first-arg))

@@ -1,9 +1,8 @@
 (ns tech.v2.datatype.fast-copy
-  (:require [tech.v2.datatype.typecast :refer :all]
+  (:require [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.jna :as jna]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.typecast :as typecast]
             [tech.parallel.for :as parallel-for]
             [tech.v2.datatype.nio-access :refer [buf-put buf-get
                                               datatype->list-read-fn]])
@@ -35,8 +34,8 @@
 (jna/def-jna-fn (jna/c-library-name) memcpy
   "Copy bytes from one object to another"
   Pointer
-  [dst ensure-ptr-like]
-  [src ensure-ptr-like]
+  [dst typecast/ensure-ptr-like]
+  [src typecast/ensure-ptr-like]
   [n-bytes int])
 
 
@@ -217,14 +216,14 @@
   "Copy defined when both things are convertible to concrete types, and the types
   of those concrete types exactly match."
   [dst src]
-  (let [dst-ptr (as-ptr dst)
-        dst-ary (as-array dst)
-        src-ptr (as-ptr src)
-        src-ary (as-array src)
-        src-buf (as-nio-buffer src)
-        dst-buf (as-nio-buffer dst)
-        src-list (as-list src)
-        dst-list (as-list dst)
+  (let [dst-ptr (typecast/as-ptr dst)
+        dst-ary (typecast/as-array dst)
+        src-ptr (typecast/as-ptr src)
+        src-ary (typecast/as-array src)
+        src-buf (typecast/as-nio-buffer src)
+        dst-buf (typecast/as-nio-buffer dst)
+        src-list (typecast/as-list src)
+        dst-list (typecast/as-list dst)
         _ (when-not (and (or src-buf src-list)
                          (or dst-buf dst-list))
             (throw (ex-info "convertible to list or nio"
@@ -286,7 +285,7 @@
           :boolean (.getElements ^BooleanList src-list 0
                                  ^booleans java-array array-offset n-elems)
           (.getElements ^ObjectList src-list 0
-                        ^objects java-array array-offset n-elems)))
+                        (typecast/as-object-array java-array) array-offset n-elems)))
       dst-buf
       (parallel-nio-write! dst-buf src true)
       dst-list

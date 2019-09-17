@@ -92,9 +92,12 @@
     `(if (instance? ~expected-type ~'item)
        ~'item
        (if (dtype-proto/convertible-to-unary-boolean-op? ~'item)
-         (dtype-proto/->unary-boolean-op ~'item {:datatype ~datatype :unchecked? ~'unchecked?})
-         (-> (dtype-proto/->unary-op ~'item {:datatype ~datatype :unchecked? ~'unchecked?})
-             (dtype-proto/->unary-boolean-op {:datatype~datatype :unchecked? ~'unchecked?}))))))
+         (dtype-proto/->unary-boolean-op ~'item {:datatype ~datatype
+                                                 :unchecked? ~'unchecked?})
+         (-> (dtype-proto/->unary-op ~'item {:datatype ~datatype
+                                             :unchecked? ~'unchecked?})
+             (dtype-proto/->unary-boolean-op {:datatype ~datatype
+                                              :unchecked? ~'unchecked?}))))))
 
 
 (defn int8->boolean-unary

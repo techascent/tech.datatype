@@ -2,9 +2,8 @@
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.typecast :refer :all :as typecast]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.typed-buffer :as typed-buffer]
-            [tech.v2.datatype.shape :as dtype-shape]
             [tech.jna :as jna])
   (:import [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
@@ -111,7 +110,7 @@
   (->array-copy [src-ary]
     (base/copy! src-ary (make-array-of-type
                          :boolean
-                         (alength (as-boolean-array src-ary)))))
+                         (alength (typecast/as-boolean-array src-ary)))))
 
   dtype-proto/PToList
   (convertible-to-fastutil-list? [item] true)
@@ -146,7 +145,7 @@
   (->array-copy [src-ary]
     (base/copy! src-ary (make-array-of-type
                          :char
-                         (alength (as-char-array src-ary)))))
+                         (alength (typecast/as-char-array src-ary)))))
 
   dtype-proto/PToReader
   (convertible-to-reader? [item] true)
@@ -253,7 +252,7 @@
 
 
 (defmethod dtype-proto/make-container :java-array
-  [container-type datatype elem-count-or-seq options]
+  [_ datatype elem-count-or-seq options]
   (make-array-of-type datatype elem-count-or-seq options))
 
 
@@ -290,19 +289,18 @@
            (typed-buffer/set-datatype (dtype-proto/get-datatype buffer))))}
 
     dtype-proto/PToList
-    {:convertible-to-fastutil-list? (fn [item#] true)
+    {:convertible-to-fastutil-list? (constantly true)
      :->list-backing-store (fn [item#]
                              (ObjectArrayList/wrap item# (base/ecount item#)))}
 
 
     dtype-proto/PCopyRawData
     {:copy-raw->item! (fn [raw-data ary-target offset options]
-                        (base/raw-dtype-copy! raw-data 0 ary-target offset
-                                              (base/ecount raw-data) options))}
+                        (base/raw-dtype-copy! raw-data ary-target offset options))}
 
 
     dtype-proto/PPrototype
-    {:from-prototype (fn [src-ary datatype shape]
+    {:from-prototype (fn [_ datatype shape]
                        (make-array-of-type datatype (base/shape->ecount shape)))}
 
 
@@ -373,7 +371,7 @@
                      (base/copy! src-ary
                                  (make-array-of-type
                                   (base/get-datatype src-ary)
-                                  (alength (as-object-array src-ary)))))}))
+                                  (alength (typecast/as-object-array src-ary)))))}))
 
 
 (extend-object-array-type (Class/forName "[Ljava.lang.Object;"))

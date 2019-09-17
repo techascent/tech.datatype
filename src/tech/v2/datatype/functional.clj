@@ -1,18 +1,13 @@
 (ns tech.v2.datatype.functional
-  (:require [tech.v2.datatype.unary-op :as unary]
-            [tech.v2.datatype.binary-op :as binary]
+  (:require [tech.v2.datatype.unary-op :as unary-op]
+            [tech.v2.datatype.binary-op :as binary-op]
+            [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
-            [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.functional.impl :as impl]
             [tech.v2.datatype.argsort :as argsort]
-            [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
-            [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.binary-search :as binary-search]
-            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.sparse.reader :as sparse-reader]
             [tech.v2.datatype.statistics]
             [tech.v2.datatype.rolling])
@@ -97,7 +92,7 @@
 
 
 (defn indexed-reader
-  [indexes data & {:keys [datatype unchecked?] :as options}]
+  [indexes data & {:as options}]
   (indexed-reader/make-indexed-reader indexes data options))
 
 
@@ -108,10 +103,7 @@
   unless either reverse? is specified or a correctly typed comparator
   is provided.
   Returns an int32 array or indexes."
-  [values & {:keys [parallel?
-                    typed-comparator
-                    datatype
-                    reverse?]
+  [values & {:keys [parallel?]
              :or {parallel? true}
              :as options}]
   (let [options (impl/default-options (assoc options :parallel? parallel?))]
@@ -149,7 +141,7 @@
 (defn magnitude-squared
   [item & [options]]
   (->> (unary-op/unary-map options (:sq unary-op/builtin-unary-ops) item)
-       (reduce-op/commutative-reader-reduce options (:+ binary/builtin-binary-ops))))
+       (reduce-op/commutative-reader-reduce options (:+ binary-op/builtin-binary-ops))))
 
 
 (defn magnitude
@@ -166,8 +158,8 @@
    (reduce-op/dot-product nil lhs rhs bin-op reduce-op))
   ([lhs rhs]
    (reduce-op/dot-product nil lhs rhs
-                          (:* binary/builtin-binary-ops)
-                          (:+ binary/builtin-binary-ops))))
+                          (:* binary-op/builtin-binary-ops)
+                          (:+ binary-op/builtin-binary-ops))))
 
 (defn distance-squared
   [lhs rhs]

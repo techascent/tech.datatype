@@ -6,7 +6,6 @@
   (:require [tech.v2.datatype.base-macros :as base-macros]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.shape :as dtype-shape]
             [tech.v2.datatype.io :as dtype-io]
             [tech.parallel.for :as parallel-for])
@@ -369,7 +368,7 @@
           ^ObjectWriter writer (dtype-proto/->writer item {:datatype :object})]
       (parallel-for/parallel-for
        idx n-elems
-       (.write writer idx value))))
+       (.write writer (+ idx offset) value))))
 
 
   dtype-proto/PWriteIndexes

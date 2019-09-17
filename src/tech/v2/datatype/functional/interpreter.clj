@@ -1,6 +1,5 @@
 (ns tech.v2.datatype.functional.interpreter
-  (:require [tech.v2.datatype.functional.impl :as func-impl]
-            [tech.v2.datatype.functional :as dtype-fn]))
+  (:require [tech.v2.datatype.functional.impl :as func-impl]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -24,7 +23,7 @@
   {:type op-type
    :operand op-fn
   }"
-  [{:keys [symbol-map] :as env} op-kwd]
+  [{:keys [symbol-map]} op-kwd]
   (if-let [item-val (get symbol-map op-kwd)]
     item-val
     (if-let [retval (get @*registered-language-fns* op-kwd)]
@@ -65,7 +64,7 @@
 
 (defn ignore-env-fn
   [target-fn]
-  (fn [env & args]
+  (fn [_ & args]
     (apply target-fn args)))
 
 
@@ -103,7 +102,7 @@
         (swap! registration-atom assoc (symbol (name kwd))
                (ignore-env-fn
                 @public-var))
-        (throw (ex-info (format "Failed to find var: %s" (str kwd))))))
+        (throw (ex-info (format "Failed to find var: %s" (str kwd)) {}))))
     (keys @registration-atom)))
 
 

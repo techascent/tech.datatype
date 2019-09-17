@@ -1,7 +1,6 @@
 (ns tech.v2.datatype.binary-search
   (:require [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.comparator :as dtype-comp]))
 

@@ -2,16 +2,11 @@
   (:require [tech.v2.datatype.base :as base]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.array :as dtype-array]
-            [tech.v2.datatype.nio-buffer :as nio-buffer]
+            [tech.v2.datatype.nio-buffer]
             [tech.v2.datatype.typed-buffer :as typed-buffer]
-            [tech.v2.datatype.reader :refer [make-buffer-reader] :as reader]
-            [tech.v2.datatype.writer :refer [make-buffer-writer] :as writer]
+            [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.nio-access :refer [buf-put buf-get
-                                              datatype->pos-fn
-                                              datatype->read-fn
-                                              datatype->write-fn
-                                              datatype->list-read-fn]]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.mutable :as mutable]
             [tech.v2.datatype.mutable.iterable-to-list :as iterable-to-list]
@@ -443,7 +438,7 @@
 
 
 (defmethod dtype-proto/make-container :list
-  [container-type datatype elem-count-or-seq options]
+  [_ datatype elem-count-or-seq options]
   (let [host-datatype? (= datatype (casting/host-flatten datatype))
         typed-buf (if (or (number? elem-count-or-seq)
                           (instance? RandomAccess elem-count-or-seq)

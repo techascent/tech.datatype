@@ -38,33 +38,33 @@
 
 
 (defmacro impl-binary-op-cast
-  [datatype item]
+  [datatype item unchecked?]
   `(if (instance? ~(resolve (datatype->binary-op-type datatype)) ~item)
      ~item
-     (dtype-proto/->binary-op ~item {:datatype~datatype
-                                     :unchecked? ~'unchecked?})))
+     (dtype-proto/->binary-op ~item {:datatype ~datatype
+                                     :unchecked? ~unchecked?})))
 
 
 (defn int8->binary-op ^BinaryOperators$ByteBinary [item unchecked?]
-  (impl-binary-op-cast :int8 item))
+  (impl-binary-op-cast :int8 item unchecked?))
 (defn int16->binary-op ^BinaryOperators$ShortBinary [item unchecked?]
-  (impl-binary-op-cast :int16 item))
+  (impl-binary-op-cast :int16 item unchecked?))
 (defn int32->binary-op ^BinaryOperators$IntBinary [item unchecked?]
-  (impl-binary-op-cast :int32 item))
+  (impl-binary-op-cast :int32 item unchecked?))
 (defn int64->binary-op ^BinaryOperators$LongBinary [item unchecked?]
-  (impl-binary-op-cast :int64 item))
+  (impl-binary-op-cast :int64 item unchecked?))
 (defn float32->binary-op ^BinaryOperators$FloatBinary [item unchecked?]
-  (impl-binary-op-cast :float32 item))
+  (impl-binary-op-cast :float32 item unchecked?))
 (defn float64->binary-op ^BinaryOperators$DoubleBinary [item unchecked?]
-  (impl-binary-op-cast :float64 item))
+  (impl-binary-op-cast :float64 item unchecked?))
 (defn boolean->binary-op ^BinaryOperators$BooleanBinary [item unchecked?]
-  (impl-binary-op-cast :boolean item))
+  (impl-binary-op-cast :boolean item unchecked?))
 (defn object->binary-op ^BinaryOperators$ObjectBinary [item unchecked?]
-  (impl-binary-op-cast :object item))
+  (impl-binary-op-cast :object item unchecked?))
 
 
 (defmacro datatype->binary-op
-  [datatype item unchecked?]
+  [datatype item & [unchecked?]]
   (let [host-dtype (casting/datatype->safe-host-type datatype)]
     (case host-dtype
       :int8 `(int8->binary-op ~item ~unchecked?)

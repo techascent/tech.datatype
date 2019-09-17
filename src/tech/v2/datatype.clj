@@ -19,18 +19,13 @@
   (:require [tech.jna :as jna]
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.array :as dtype-array]
-            [tech.v2.datatype.nio-buffer :as dtype-nio]
-            [tech.v2.datatype.typed-buffer :as dtype-tbuf]
-            [tech.v2.datatype.jna :as dtype-jna]
-            [tech.v2.datatype.list :as dtype-list]
-            [tech.v2.datatype.iterator :as dtype-iter]
-            [tech.v2.datatype.reader :as dtype-reader]
-            [tech.v2.datatype.writer :as dtype-writer]
-            [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.binary-op :as binary-op]
+            ;;Support for base container types
+            [tech.v2.datatype.array]
+            [tech.v2.datatype.nio-buffer]
+            [tech.v2.datatype.typed-buffer]
+            [tech.v2.datatype.jna]
+            [tech.v2.datatype.list]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
@@ -325,7 +320,8 @@ Calls clojure.core.matrix/ecount."
 
 (defn remove-range!
   [item idx count]
-  (base/remove-range! item idx count))
+  (base/remove-range! item idx count)
+  item)
 
 
 (defn insert-block!
@@ -333,11 +329,6 @@ Calls clojure.core.matrix/ecount."
   (dtype-proto/insert-block! item idx values options)
   item)
 
-
-(defn remove-range!
-  [item start-idx n-elems]
-  (base/remove-range! item start-idx n-elems)
-  item)
 
 
 (defn ->buffer-backing-store

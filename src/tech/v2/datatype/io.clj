@@ -1,21 +1,12 @@
 (ns tech.v2.datatype.io
   (:require [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.casting
-             :refer [numeric-type? integer-type? numeric-byte-width
-                     datatype->host-type]
-             :as casting]
-            [tech.jna :as jna]
-            [clojure.set :as c-set]
+            [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.fast-copy :as fast-copy]
-            [tech.v2.datatype.typecast
-             :refer [datatype->reader
-                     datatype->writer]
-             :as typecast]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.writers.indexed :as indexed-writer]
             [tech.v2.datatype.readers.indexed :as indexed-reader])
-
   (:import [tech.v2.datatype
             ObjectReader ObjectWriter ObjectMutable
             ByteReader ByteWriter ByteMutable
@@ -49,19 +40,19 @@
         dst-buf-dtype (when dst-buf (dtype-proto/get-datatype dst-buf))
         fast-path? (and src-buf
                         dst-buf
-                        (or (and (numeric-type? dst-dtype)
+                        (or (and (casting/numeric-type? dst-dtype)
                                  (= dst-dtype src-dtype)
                                  (= dst-buf-dtype (casting/datatype->host-datatype dst-dtype))
                                  (= src-buf-dtype (casting/datatype->host-datatype src-dtype)))
-                            (and (integer-type? dst-dtype)
-                                 (integer-type? src-dtype)
+                            (and (casting/integer-type? dst-dtype)
+                                 (casting/integer-type? src-dtype)
                                  (= (casting/datatype->host-datatype dst-dtype)
                                     dst-buf-dtype)
                                  (= (casting/datatype->host-datatype src-dtype)
                                     src-buf-dtype)
                                  unchecked?
-                                 (= (numeric-byte-width dst-dtype)
-                                    (numeric-byte-width src-dtype)))))
+                                 (= (casting/numeric-byte-width dst-dtype)
+                                    (casting/numeric-byte-width src-dtype)))))
         dst-type-matches? (or (= dst-buf-dtype dst-dtype)
                               (and unchecked?
                                    (= (casting/datatype->host-datatype dst-dtype)
@@ -86,8 +77,7 @@
         (and src-list src-type-matches?)
         (fast-copy/parallel-list-read! dst src-list unchecked?)
         :else
-        (do
-          (fast-copy/parallel-slow-copy! dst src unchecked?)))))
+        (fast-copy/parallel-slow-copy! dst src unchecked?))))
   dst)
 
 

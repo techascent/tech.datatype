@@ -8,22 +8,16 @@
             [tech.v2.datatype.reduce-op
              :as reduce-op]
             [tech.v2.datatype.boolean-op
-             :refer [boolean-unary-iterable
-                     datatype->boolean-unary
-                     boolean-unary-reader
-                     boolean-binary-iterable
-                     boolean-binary-reader
+             :refer [datatype->boolean-unary
                      datatype->boolean-binary
                      boolean-unary-iterable-map
                      boolean-binary-iterable-map
                      boolean-unary-reader-map
                      boolean-binary-reader-map]
              :as boolean-op]
-            [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.readers.range :as reader-range]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
@@ -181,13 +175,7 @@
                       :scalar)
         datatype (or datatype (widest-datatype
                                (map dtype-base/get-datatype
-                                    (concat [arg1 arg2] args))))
-        n-elems (long (if (= op-arg-type :reader)
-                        (->> all-args
-                             (remove #(= :scalar (argtypes/arg->arg-type %)))
-                             (map dtype-base/ecount)
-                             (apply min))
-                        Integer/MAX_VALUE))]
+                                    (concat [arg1 arg2] args))))]
     (loop [arg1 arg1
            arg2 arg2
            args args]
@@ -294,13 +282,7 @@
                       :reader
                       :else
                       :scalar)
-        datatype (or datatype (dtype-base/get-datatype arg1))
-        n-elems (long (if (= op-arg-type :reader)
-                        (->> all-args
-                             (remove #(= :scalar (argtypes/arg->arg-type %)))
-                             (map dtype-base/ecount)
-                             (apply min))
-                        Integer/MAX_VALUE))]
+        datatype (or datatype (dtype-base/get-datatype arg1))]
     (loop [arg1 arg1
            arg2 arg2
            args args]
@@ -385,10 +367,6 @@
   (let [op-types (->> (map :type op-seq)
                       set)
         op-name-symbol (symbol (name op-name))
-        type-map (->> op-seq
-                      (map (fn [op-item]
-                             [(:type op-item) (:operator op-item)]))
-                      (into {}))
         argnum-types (->> op-types
                           (map {:unary :unary
                                 :boolean-unary :unary
@@ -435,16 +413,15 @@
                          ~op-name)
                     (first ~'args))
                   :else
-                  (do
-                    `(if-let [un-op# (get unary/builtin-unary-ops ~op-name)]
-                       (apply-unary-op
-                        ~'options
-                        un-op#
-                        (first ~'args))
-                       (throw (ex-info
-                               (format "No unary operator defined for operand %s"
-                                       ~op-name)
-                               {})))))
+                  `(if-let [un-op# (get unary/builtin-unary-ops ~op-name)]
+                     (apply-unary-op
+                      ~'options
+                      un-op#
+                      (first ~'args))
+                     (throw (ex-info
+                             (format "No unary operator defined for operand %s"
+                                     ~op-name)
+                             {}))))
                ~(if (contains? op-types :boolean-binary)
                   `(apply apply-binary-boolean-op
                           ~'options

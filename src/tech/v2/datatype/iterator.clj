@@ -3,9 +3,6 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.argtypes :as argtypes]
-            [tech.v2.datatype.nio-access
-             :refer [unchecked-full-cast
-                     checked-full-write-cast]]
             [tech.v2.datatype.iterable.const :as iter-const])
   (:import [tech.v2.datatype ObjectIter ByteIter ShortIter
             IntIter LongIter FloatIter DoubleIter
@@ -16,7 +13,7 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(defmacro make-marshal-iterator
+(defmacro make-marshal-iterator-macro
   [src-dtype dest-dtype]
   `(fn [iterator# datatype# unchecked?#]
      (let [src-iterator# (typecast/datatype->iter ~src-dtype iterator#
@@ -42,7 +39,8 @@
                (casting/datatype->cast-fn ~src-dtype ~dest-dtype temp-val#))))))))
 
 
-(def marshal-iterator-table (casting/make-marshalling-item-table make-marshal-iterator))
+(def marshal-iterator-table (casting/make-marshalling-item-table
+                             make-marshal-iterator-macro))
 
 
 (defn make-marshal-iterator

@@ -1,7 +1,5 @@
 (ns tech.v2.datatype.statistics
-  (:require [tech.v2.datatype.base
-             :refer [->double-array]
-             :as dtype-base]
+  (:require [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.boolean-op :as boolean-op]
@@ -73,7 +71,7 @@
   [item & [stats-set]]
   (let [stats-set (set (or stats-set [:mean :min :max :ecount :standard-deviation
                                       :median]))
-        stats-desc (DescriptiveStatistics. (->double-array item))]
+        stats-desc (DescriptiveStatistics. (dtype-base/->double-array item))]
     (->> stats-set
          (map (fn [stats-key]
                 (if-let [supported-stat (get supported-stats-map stats-key)]
@@ -86,7 +84,7 @@
 (defn percentile
   "Get the nth percentile.  Percent ranges from 0-100."
   [item percent]
-  (-> (DescriptiveStatistics. (->double-array item))
+  (-> (DescriptiveStatistics. (dtype-base/->double-array item))
       (.getPercentile (double percent))))
 
 
@@ -148,25 +146,25 @@
 (defn pearsons-correlation
   [lhs rhs]
   (-> (PearsonsCorrelation.)
-      (.correlation (->double-array lhs) (->double-array rhs))))
+      (.correlation (dtype-base/->double-array lhs) (dtype-base/->double-array rhs))))
 
 
 (defn spearmans-correlation
   [lhs rhs]
   (-> (SpearmansCorrelation.)
-      (.correlation (->double-array lhs) (->double-array rhs))))
+      (.correlation (dtype-base/->double-array lhs) (dtype-base/->double-array rhs))))
 
 
 (defn kendalls-correlation
   [lhs rhs]
   (-> (KendallsCorrelation.)
-      (.correlation (->double-array lhs) (->double-array rhs))))
+      (.correlation (dtype-base/->double-array lhs) (dtype-base/->double-array rhs))))
 
 
 (defn quartiles
   "return [min, 25 50 75 max] of item"
   [item]
-  (let [stats (DescriptiveStatistics. (->double-array item))]
+  (let [stats (DescriptiveStatistics. (dtype-base/->double-array item))]
     [(.getMin stats)
      (.getPercentile stats 25.0)
      (.getPercentile stats 50.0)

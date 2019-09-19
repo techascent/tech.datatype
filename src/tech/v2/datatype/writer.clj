@@ -2,22 +2,13 @@
   (:require [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.nio-access
-             :refer [buf-put buf-get
-                     datatype->pos-fn
-                     datatype->read-fn
-                     datatype->write-fn
+             :refer [datatype->pos-fn
                      unchecked-full-cast
-                     checked-full-read-cast
                      checked-full-write-cast
-                     nio-type? list-type?
-                     cls-type->read-fn
-                     cls-type->write-fn
-                     cls-type->pos-fn]]
+                     cls-type->write-fn]]
             [tech.jna :as jna]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.shape
-             :refer [ecount]
-             :as dtype-shape])
+            [tech.v2.datatype.shape :as dtype-shape])
   (:import [tech.v2.datatype ObjectWriter ByteWriter
             ShortWriter IntWriter LongWriter
             FloatWriter DoubleWriter BooleanWriter]
@@ -241,7 +232,7 @@
 
 
 (defn- make-object-wrapper
-  [writer datatype & [unchecked?]]
+  [writer datatype]
   (let [item-dtype (dtype-proto/get-datatype writer)]
     (when-not (and (= :object (casting/flatten-datatype item-dtype))
                    (= :object (casting/flatten-datatype datatype)))

@@ -1,8 +1,7 @@
 (ns tech.v2.datatype.mutable.iterable-to-list
   (:require [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.mutable :as mutable]))
+            [tech.v2.datatype.typecast :as typecast]))
 
 
 (defmacro make-iter->list-table

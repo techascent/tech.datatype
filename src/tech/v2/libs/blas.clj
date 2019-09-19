@@ -23,7 +23,7 @@
 (defn openblas?
   []
   (boolean
-   (when-let [system-blas (system-blas-lib)]
+   (when (system-blas-lib)
      (jna/find-function "openblas_get_num_threads" *system-blas-lib-name*))))
 
 

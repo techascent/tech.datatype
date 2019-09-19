@@ -1,10 +1,9 @@
 (ns tech.v2.datatype.readers.const
   (:require [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.typecast :as typecast]))
 
 
-(defmacro make-const-reader
+(defmacro make-const-reader-macro
   [datatype]
   `(fn [item# num-elems#]
      (let [num-elems# (int (or num-elems# Integer/MAX_VALUE))
@@ -17,7 +16,7 @@
 
 
 (def const-reader-table (casting/make-base-datatype-table
-                         make-const-reader))
+                         make-const-reader-macro))
 
 
 (defn make-const-reader

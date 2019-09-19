@@ -3,8 +3,6 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.fast-copy :as fast-copy]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.reader :as reader]
-            [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.writers.indexed :as indexed-writer]
             [tech.v2.datatype.readers.indexed :as indexed-reader])
   (:import [tech.v2.datatype

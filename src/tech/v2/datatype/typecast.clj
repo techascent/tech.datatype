@@ -58,27 +58,27 @@
 
 
 (defmacro implement-writer-cast
-  [datatype]
-  `(if (instance? ~(resolve (datatype->writer-type datatype)) ~'item)
-     ~'item
-     (dtype-proto/->writer ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
+  [datatype item unchecked?]
+  `(if (instance? ~(resolve (datatype->writer-type datatype)) ~item)
+     ~item
+     (dtype-proto/->writer ~item {:datatype ~datatype :unchecked? ~unchecked?})))
 
 (defn ->int8-writer ^ByteWriter [item unchecked?]
-  (implement-writer-cast :int8))
+  (implement-writer-cast :int8 item unchecked?))
 (defn ->int16-writer ^ShortWriter [item unchecked?]
-  (implement-writer-cast :int16))
+  (implement-writer-cast :int16 item unchecked?))
 (defn ->int32-writer ^IntWriter [item unchecked?]
-  (implement-writer-cast :int32))
+  (implement-writer-cast :int32 item unchecked?))
 (defn ->int64-writer ^LongWriter [item unchecked?]
-  (implement-writer-cast :int64))
+  (implement-writer-cast :int64 item unchecked?))
 (defn ->float32-writer ^FloatWriter [item unchecked?]
-  (implement-writer-cast :float32))
+  (implement-writer-cast :float32 item unchecked?))
 (defn ->float64-writer ^DoubleWriter [item unchecked?]
-  (implement-writer-cast :float64))
+  (implement-writer-cast :float64 item unchecked?))
 (defn ->boolean-writer ^BooleanWriter [item unchecked?]
-  (implement-writer-cast :boolean))
+  (implement-writer-cast :boolean item unchecked?))
 (defn ->object-writer ^ObjectWriter [item unchecked?]
-  (implement-writer-cast :object))
+  (implement-writer-cast :object item unchecked?))
 
 
 (defmacro datatype->writer
@@ -121,19 +121,26 @@
 
 
 (defmacro implement-reader-cast
-  [datatype]
-  `(if (instance? ~(resolve (datatype->reader-type datatype)) ~'item)
-     ~'item
-     (dtype-proto/->reader ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
+  [datatype item unchecked?]
+  `(if (instance? ~(resolve (datatype->reader-type datatype)) ~item)
+     ~item
+     (dtype-proto/->reader ~item {:datatype ~datatype :unchecked? ~unchecked?})))
 
 
-(defn ->int8-reader ^ByteReader [item unchecked?] (implement-reader-cast :int8))
-(defn ->int16-reader ^ShortReader [item unchecked?] (implement-reader-cast :int16))
-(defn ->int32-reader ^IntReader [item unchecked?] (implement-reader-cast :int32))
-(defn ->int64-reader ^LongReader [item unchecked?] (implement-reader-cast :int64))
-(defn ->float32-reader ^FloatReader [item unchecked?] (implement-reader-cast :float32))
-(defn ->float64-reader ^DoubleReader [item unchecked?] (implement-reader-cast :float64))
-(defn ->boolean-reader ^BooleanReader [item unchecked?] (implement-reader-cast :boolean))
+(defn ->int8-reader ^ByteReader [item unchecked?]
+  (implement-reader-cast :int8 item unchecked?))
+(defn ->int16-reader ^ShortReader [item unchecked?]
+  (implement-reader-cast :int16 item unchecked?))
+(defn ->int32-reader ^IntReader [item unchecked?]
+  (implement-reader-cast :int32 item unchecked?))
+(defn ->int64-reader ^LongReader [item unchecked?]
+  (implement-reader-cast :int64 item unchecked?))
+(defn ->float32-reader ^FloatReader [item unchecked?]
+  (implement-reader-cast :float32 item unchecked?))
+(defn ->float64-reader ^DoubleReader [item unchecked?]
+  (implement-reader-cast :float64 item unchecked?))
+(defn ->boolean-reader ^BooleanReader [item unchecked?]
+  (implement-reader-cast :boolean item unchecked?))
 
 
 (defn ->object-reader ^ObjectReader
@@ -172,21 +179,28 @@
 
 
 (defmacro implement-iter-cast
-  [datatype]
-  `(when ~'item
-     (if (instance? ~(resolve (datatype->iter-type datatype)) ~'item)
-       ~'item
+  [datatype item unchecked?]
+  `(when ~item
+     (if (instance? ~(resolve (datatype->iter-type datatype)) ~item)
+       ~item
        (.iterator ^Iterable (dtype-proto/->iterable
-                             ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))))
+                             ~item {:datatype ~datatype :unchecked? ~unchecked?})))))
 
 
-(defn ->int8-iter ^ByteIter [item unchecked?] (implement-iter-cast :int8))
-(defn ->int16-iter ^ShortIter [item unchecked?] (implement-iter-cast :int16))
-(defn ->int32-iter ^IntIter [item unchecked?] (implement-iter-cast :int32))
-(defn ->int64-iter ^LongIter [item unchecked?] (implement-iter-cast :int64))
-(defn ->float32-iter ^FloatIter [item unchecked?] (implement-iter-cast :float32))
-(defn ->float64-iter ^DoubleIter [item unchecked?] (implement-iter-cast :float64))
-(defn ->boolean-iter ^BooleanIter [item unchecked?] (implement-iter-cast :boolean))
+(defn ->int8-iter ^ByteIter [item unchecked?]
+  (implement-iter-cast :int8 item unchecked?))
+(defn ->int16-iter ^ShortIter [item unchecked?]
+  (implement-iter-cast :int16 item unchecked?))
+(defn ->int32-iter ^IntIter [item unchecked?]
+  (implement-iter-cast :int32 item unchecked?))
+(defn ->int64-iter ^LongIter [item unchecked?]
+  (implement-iter-cast :int64 item unchecked?))
+(defn ->float32-iter ^FloatIter [item unchecked?]
+  (implement-iter-cast :float32 item unchecked?))
+(defn ->float64-iter ^DoubleIter [item unchecked?]
+  (implement-iter-cast :float64 item unchecked?))
+(defn ->boolean-iter ^BooleanIter [item unchecked?]
+  (implement-iter-cast :boolean item unchecked?))
 
 (defn ->object-iter
   ^ObjectIter [item & [unchecked? datatype]]
@@ -293,39 +307,47 @@
 (defn datatype->mutable-type
   [datatype]
   (case datatype
-    :int8 'ByteMutable
-    :int16 'ShortMutable
-    :int32 'IntMutable
-    :int64 'LongMutable
-    :float32 'FloatMutable
-    :float64 'DoubleMutable
-    :boolean 'BooleanMutable
-    :object 'ObjectMutable))
+    :int8 'tech.v2.datatype.ByteMutable
+    :int16 'tech.v2.datatype.ShortMutable
+    :int32 'tech.v2.datatype.IntMutable
+    :int64 'tech.v2.datatype.LongMutable
+    :float32 'tech.v2.datatype.FloatMutable
+    :float64 'tech.v2.datatype.DoubleMutable
+    :boolean 'tech.v2.datatype.BooleanMutable
+    :object 'tech.v2.datatype.ObjectMutable))
 
 
 (defmacro implement-mutable-cast
-  [datatype]
-  `(if (instance? ~(resolve (datatype->mutable-type datatype)) ~'item)
-     ~'item
-     (dtype-proto/->mutable ~'item {:datatype ~datatype :unchecked? ~'unchecked?})))
+  [datatype item unchecked?]
+  `(if (instance? ~(resolve (datatype->mutable-type datatype)) ~item)
+     ~item
+     (dtype-proto/->mutable ~item {:datatype ~datatype :unchecked? ~unchecked?})))
 
 
 (defn ->int8-mutable
-  ^ByteMutable [item unchecked?] (implement-mutable-cast :int8))
+  ^ByteMutable [item unchecked?]
+  (implement-mutable-cast :int8 item unchecked?))
 (defn ->int16-mutable
-  ^ShortMutable [item unchecked?] (implement-mutable-cast :int16))
+  ^ShortMutable [item unchecked?]
+  (implement-mutable-cast :int16 item unchecked?))
 (defn ->int32-mutable
-  ^IntMutable [item unchecked?] (implement-mutable-cast :int32))
+  ^IntMutable [item unchecked?]
+  (implement-mutable-cast :int32 item unchecked?))
 (defn ->int64-mutable
-  ^LongMutable [item unchecked?] (implement-mutable-cast :int64))
+  ^LongMutable [item unchecked?]
+  (implement-mutable-cast :int64 item unchecked?))
 (defn ->float32-mutable
-  ^FloatMutable [item unchecked?] (implement-mutable-cast :float32))
+  ^FloatMutable [item unchecked?]
+  (implement-mutable-cast :float32 item unchecked?))
 (defn ->float64-mutable
-  ^DoubleMutable [item unchecked?] (implement-mutable-cast :float64))
+  ^DoubleMutable [item unchecked?]
+  (implement-mutable-cast :float64 item unchecked?))
 (defn ->boolean-mutable
-  ^BooleanMutable [item unchecked?] (implement-mutable-cast :boolean))
+  ^BooleanMutable [item unchecked?]
+  (implement-mutable-cast :boolean item unchecked?))
 (defn ->object-mutable
-  ^ObjectMutable [item unchecked?] (implement-mutable-cast :object))
+  ^ObjectMutable [item unchecked?]
+  (implement-mutable-cast :object item unchecked?))
 
 
 (defmacro datatype->mutable
@@ -552,19 +574,6 @@
       :boolean (BooleanArrayList/wrap ^booleans src-data)
       :char (CharArrayList/wrap ^chars src-data)
       (ObjectArrayList/wrap (as-object-array src-data)))))
-
-
-(defn datatype->mutable-type
-  [datatype]
-  (case datatype
-    :int8 'tech.v2.datatype.ByteMutable
-    :int16 'tech.v2.datatype.ShortMutable
-    :int32 'tech.v2.datatype.IntMutable
-    :int64 'tech.v2.datatype.LongMutable
-    :float32 'tech.v2.datatype.FloatMutable
-    :float64 'tech.v2.datatype.DoubleMutable
-    :boolean 'tech.v2.datatype.BooleanMutable
-    :object 'tech.v2.datatype.ObjectMutable))
 
 
 (defmacro extend-host-numeric-datatypes

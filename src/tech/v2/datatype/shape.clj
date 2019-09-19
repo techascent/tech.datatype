@@ -1,7 +1,6 @@
 (ns tech.v2.datatype.shape
   (:require [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.typecast :as typecast]
-            [tech.parallel.require :as parallel-require])
+            [tech.v2.datatype.typecast :as typecast])
   (:import [java.util List]
            [java.nio Buffer
             ByteBuffer ShortBuffer IntBuffer LongBuffer

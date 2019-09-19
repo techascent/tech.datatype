@@ -2,11 +2,9 @@
   "Taken from clojure.core.matrix pprint"
   (:require [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype :as dtype]
-            [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.unary-op :as unary]
             [tech.v2.tensor.impl :as tens-impl]
             [tech.v2.tensor.protocols :as tens-proto]
-            [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.pprint :as dtype-pprint])
   (:import [java.lang StringBuilder]
            [java.io Writer]
@@ -40,7 +38,7 @@
   [^StringBuilder sb ^String elem ^long clen]
   (let [c (long (count elem))
         ws (- clen c)]
-    (dotimes [i ws]
+    (dotimes [_i ws]
       (.append sb \space))
     (.append sb elem)))
 
@@ -87,8 +85,7 @@
    (let [formatter (or formatter dtype-pprint/format-object)]
      (if (number? tens)
        (formatter tens)
-       (let [n-dims (count (dtype/shape tens))
-             tens (-> (unary/unary-reader :object (formatter x) tens)
+       (let [tens (-> (unary/unary-reader :object (formatter x) tens)
                       (tens-impl/tensor-force))
              prefix (or prefix "")
              sb (StringBuilder.)]
@@ -99,8 +96,7 @@
 
 
 (defn tensor->string
-  ^String [tens & {:keys [print-datatype]
-                   :or {print-datatype :float64}}]
+  ^String [tens]
   (format "#tech.v2.tensor<%s>%s\n%s"
           (name (dtype/get-datatype tens))
           (dtype/shape tens)

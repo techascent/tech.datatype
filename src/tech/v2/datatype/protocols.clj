@@ -338,11 +338,11 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 
 
 (defmulti make-container
-  (fn [container-type datatype elem-seq-or-count options]
+  (fn [container-type _datatype _elem-seq-or-count _options]
     container-type))
 
 
 (defmulti copy!
-  (fn [dst src options]
+  (fn [dst src _options]
     [(safe-buffer-type src)
      (safe-buffer-type dst)]))

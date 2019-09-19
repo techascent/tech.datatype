@@ -27,29 +27,29 @@
     (let [item-seq (cond
                      (vector? item-seq) item-seq
                      (dtype/reader? item-seq) (dtype/->reader item-seq :int32)
-                     :else (vec item-seq))]
-      (let [n-elems (dtype/ecount item-seq)
-            first-item (long (item-seq 0))
-            last-item (long (item-seq (- n-elems 1)))
-            min-item (min first-item last-item)
-            max-item (max first-item last-item)
-            retval {:min-item min-item
-                    :max-item max-item}]
-        (if (= n-elems 1)
-          (assoc retval :type :+)
-          (let [mon-op (->> monotonic-operators
-                            (map (fn [[op-name op]]
-                                   (when (apply op item-seq)
-                                     op-name)))
-                            (remove nil?)
-                            first)]
-            (if (and (= n-elems
-                        (+ 1
-                           (- max-item
-                              min-item)))
-                     mon-op)
-              (assoc retval :type mon-op)
-              (assoc retval :sequence (vec item-seq)))))))))
+                     :else (vec item-seq))
+          n-elems (dtype/ecount item-seq)
+          first-item (long (item-seq 0))
+          last-item (long (item-seq (- n-elems 1)))
+          min-item (min first-item last-item)
+          max-item (max first-item last-item)
+          retval {:min-item min-item
+                  :max-item max-item}]
+      (if (= n-elems 1)
+        (assoc retval :type :+)
+        (let [mon-op (->> monotonic-operators
+                          (map (fn [[op-name op]]
+                                 (when (apply op item-seq)
+                                   op-name)))
+                          (remove nil?)
+                          first)]
+          (if (and (= n-elems
+                      (+ 1
+                         (- max-item
+                            min-item)))
+                   mon-op)
+            (assoc retval :type mon-op)
+            (assoc retval :sequence (vec item-seq))))))))
 
 
 (def classified-sequence-keys #{:type :min-item :max-item :sequence})
@@ -116,7 +116,7 @@
 
 
 (defn classified-sequence->elem-idx
-  ^long [{:keys [type min-item max-item sequence] :as dim} ^long shape-idx]
+  ^long [{:keys [type min-item max-item _sequence] :as dim} ^long shape-idx]
   (let [min-item (long min-item)
         max-item (long max-item)
         last-idx (- max-item min-item)]
@@ -131,7 +131,7 @@
 
 (defn classified-sequence->global-addr
   "Inverse of above"
-  ^long [{:keys [type min-item max-item sequence] :as dim} ^long shape-idx]
+  ^long [{:keys [type min-item max-item _sequence] :as dim} ^long shape-idx]
   (let [min-item (long min-item)
         max-item (long max-item)
         last-idx (- max-item min-item)]

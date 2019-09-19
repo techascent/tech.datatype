@@ -1,6 +1,5 @@
 (ns tech.v2.datatype.readers.range
   (:require [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.typecast :as typecast]))
 
 

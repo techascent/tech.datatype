@@ -1,7 +1,6 @@
 (ns tech.v2.datatype.primitive
   (:require [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.array :as dtype-ary]
-            [tech.v2.datatype.reader :as reader])
+            [tech.v2.datatype.array :as dtype-ary])
   (:import [tech.v2.datatype ObjectReader]))
 
 

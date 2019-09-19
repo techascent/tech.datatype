@@ -1,6 +1,5 @@
 (ns tech.v2.datatype.sparse.reader
   (:require [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.casting :as casting]

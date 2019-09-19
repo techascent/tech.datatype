@@ -1,13 +1,9 @@
 (ns tech.v2.datatype.reduce-op
-  (:require [tech.v2.datatype.reader :as reader]
-            [tech.v2.datatype.casting :as casting]
+  (:require [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.nio-access :as nio-access]
-            [tech.v2.datatype.argtypes :as argtypes])
+            [tech.v2.datatype.protocols :as dtype-proto])
   (:import [tech.v2.datatype
             BinaryOperators$ByteBinary  BinaryOperators$ShortBinary
             BinaryOperators$IntBinary  BinaryOperators$LongBinary
@@ -70,12 +66,12 @@
 
 
 (defmulti iterable-reduce-map
-  (fn [options reduce-op values]
+  (fn [_options _reduce-op values]
     (dtype-base/buffer-type values)))
 
 
 (defn default-iterable-reduce-map
-  [{:keys [datatype unchecked?] :as options} reduce-op values]
+  [{:keys [datatype unchecked?]} reduce-op values]
   (let [datatype (or datatype (dtype-base/get-datatype values))
         reduce-fn (get iterable-reduce-table (casting/safe-flatten datatype))]
     (reduce-fn reduce-op values unchecked?)))
@@ -200,7 +196,7 @@
 
 
 (defmulti dot-product
-  (fn [options lhs rhs bin-op reduce-op]
+  (fn [_options lhs rhs _bin-op _reduce-op]
     [(dtype-base/buffer-type lhs)
      (dtype-base/buffer-type rhs)]))
 

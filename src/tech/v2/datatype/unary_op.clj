@@ -2,10 +2,8 @@
   (:require [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.nio-access :as nio-access]
-            [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.reader :as reader])
   (:import [tech.v2.datatype
             ByteIter ShortIter IntIter LongIter
@@ -43,14 +41,19 @@
        ~(datatype->unary-op-type datatype)
      dtype-proto/PToUnaryOp
      {:convertible-to-unary-op? (constantly true)
-      :->unary-op
-      (fn [item# options#]
-        (when-not (= (dtype-proto/get-datatype item#)
-                     (:datatype options#))
-          (throw (ex-info (format "Cannot convert unary operator %s->%s"
-                                  ~datatype (:datatype options#))
-                          {})))
-        item#)}))
+      :->unary-op (fn [item# options#]
+                    (let [un-dtype# (or (:datatype options#)
+                                        (dtype-proto/get-datatype item#))
+                          unchecked?# (:unchecked? options#)]
+                      (if (= (casting/safe-flatten un-dtype#)
+                             ~datatype)
+                        item#
+                        (throw (ex-info "Unary operators cannot marshal" {}))
+                        ;; (let [marshal-fn# (get marshalling-unary-op-table
+                        ;;                        [~datatype (casting/safe-flatten
+                        ;;                                    un-dtype#)])]
+                        ;;   (marshal-fn# item# un-dtype# unchecked?#))
+                        )))}))
 
 (extend-unary-op :int8)
 (extend-unary-op :int16)
@@ -63,29 +66,29 @@
 
 
 (defmacro impl-unary-op-cast
-  [datatype item]
+  [datatype item unchecked?]
   `(if (instance? ~(resolve (datatype->unary-op-type datatype)) ~item)
      ~item
      (dtype-proto/->unary-op ~item {:datatype ~datatype
-                                    :unchecked? ~'unchecked?})))
+                                    :unchecked? ~unchecked?})))
 
 
 (defn int8->unary-op ^UnaryOperators$ByteUnary [item unchecked?]
-  (impl-unary-op-cast :int8 item))
+  (impl-unary-op-cast :int8 item unchecked?))
 (defn int16->unary-op ^UnaryOperators$ShortUnary [item unchecked?]
-  (impl-unary-op-cast :int16 item))
+  (impl-unary-op-cast :int16 item unchecked?))
 (defn int32->unary-op ^UnaryOperators$IntUnary [item unchecked?]
-  (impl-unary-op-cast :int32 item))
+  (impl-unary-op-cast :int32 item unchecked?))
 (defn int64->unary-op ^UnaryOperators$LongUnary [item unchecked?]
-  (impl-unary-op-cast :int64 item))
+  (impl-unary-op-cast :int64 item unchecked?))
 (defn float32->unary-op ^UnaryOperators$FloatUnary [item unchecked?]
-  (impl-unary-op-cast :float32 item))
+  (impl-unary-op-cast :float32 item unchecked?))
 (defn float64->unary-op ^UnaryOperators$DoubleUnary [item unchecked?]
-  (impl-unary-op-cast :float64 item))
+  (impl-unary-op-cast :float64 item unchecked?))
 (defn boolean->unary-op ^UnaryOperators$BooleanUnary [item unchecked?]
-  (impl-unary-op-cast :boolean item))
+  (impl-unary-op-cast :boolean item unchecked?))
 (defn object->unary-op ^UnaryOperators$ObjectUnary [item unchecked?]
-  (impl-unary-op-cast :object item))
+  (impl-unary-op-cast :object item unchecked?))
 
 
 (defmacro datatype->unary-op
@@ -143,43 +146,6 @@
                            :unknown ~dst-datatype arg#)))
              dtype-proto/POperator
              (op-name [item#] op-name#)))))))
-
-
-
-;; (def marshalling-unary-op-table (casting/make-marshalling-item-table
-;;                                  make-marshalling-unary-op-impl))
-
-
-(defmacro extend-unary-op
-  [datatype]
-  `(clojure.core/extend
-       ~(datatype->unary-op-type datatype)
-     dtype-proto/PToUnaryOp
-     {:convertible-to-unary-op? (constantly true)
-      :->unary-op (fn [item# options#]
-                    (let [un-dtype# (or (:datatype options#)
-                                        (dtype-proto/get-datatype item#))
-                          unchecked?# (:unchecked? options#)]
-                      (if (= (casting/safe-flatten un-dtype#)
-                             ~datatype)
-                        item#
-                        (throw (ex-info "Unary operators cannot marshal" {}))
-                        ;; (let [marshal-fn# (get marshalling-unary-op-table
-                        ;;                        [~datatype (casting/safe-flatten
-                        ;;                                    un-dtype#)])]
-                        ;;   (marshal-fn# item# un-dtype# unchecked?#))
-                        )))}))
-
-
-(extend-unary-op :int8)
-(extend-unary-op :int16)
-(extend-unary-op :int32)
-(extend-unary-op :int64)
-(extend-unary-op :float32)
-(extend-unary-op :float64)
-(extend-unary-op :boolean)
-(extend-unary-op :object)
-
 
 
 (defmacro make-unary-op
@@ -302,7 +268,7 @@
 
 
 (defmulti unary-reader-map
-  (fn [options un-op item]
+  (fn [_options _un-op item]
     (dtype-base/buffer-type item)))
 
 
@@ -318,7 +284,7 @@
 
 
 (defmethod unary-reader-map :default
-  [{:keys [datatype unchecked?] :as options} un-op item]
+  [{:as options} un-op item]
   (default-unary-reader-map options un-op item))
 
 

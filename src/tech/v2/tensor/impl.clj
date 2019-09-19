@@ -6,11 +6,8 @@
               [tech.v2.datatype.sparse.reader :as sparse-reader]
               [tech.v2.tensor.dimensions :as dims]
               [tech.v2.tensor.dimensions.shape :as shape]
-              [tech.v2.datatype.reader :as reader]
               [tech.v2.datatype.readers.indexed :as indexed-reader]
-              [tech.v2.datatype.writer :as writer]
               [tech.v2.datatype.writers.indexed :as indexed-writer]
-              [tech.v2.datatype.functional.impl :as fn-impl]
               [tech.v2.datatype.unary-op :as unary-op]
               [tech.v2.datatype.binary-op :as binary-op]
               [tech.v2.datatype.reduce-op :as reduce-op]
@@ -403,7 +400,7 @@
    (index-seq [item]
      (sparse-reader->index-seq (sparse-proto/as-sparse item) (dtype/shape item)))
    (sparse-value [item]
-     (when-let [sparse-data (sparse-proto/as-sparse buffer)]
+     (when (sparse-proto/as-sparse buffer)
        (sparse-proto/sparse-value buffer)))
 
 
@@ -424,7 +421,7 @@
    (convertible-to-tensor-reader? [item]
      (dtype-proto/convertible-to-reader? buffer))
    (->tensor-reader [item options]
-     (let [{:keys [datatype unchecked?]} options]
+     (let [{:keys [datatype]} options]
        (if (and (simple-dimensions? dimensions)
                 (instance? (resolve (tens-typecast/datatype->tensor-reader-type
                                      datatype))
@@ -663,8 +660,7 @@
         n-tens-elems (dtype/ecount tens)
         n-bcast-elems (shape/ecount bcast-shape)
         num-tens-shape (count tens-shape)
-        {:keys [shape strides offsets max-shape]
-         :as tens-dims} (tens-proto/dimensions tens)]
+        {:keys [shape strides offsets]} (tens-proto/dimensions tens)]
     (when-not (every? number? bcast-shape)
       (throw (ex-info "Broadcast shapes must only be numbers" {})))
     (when-not (>= n-bcast-elems
@@ -742,7 +738,7 @@
 
 (defn buffer-descriptor->tensor
   "Given a buffer descriptor, produce a tensor"
-  [{:keys [ptr datatype shape strides] :as buffer-desc}]
+  [{:keys [ptr datatype shape strides]}]
   (when (or (not ptr)
             (= 0 (Pointer/nativeValue ptr)))
     (throw (ex-info "Cannot create tensor from nil pointer."
@@ -979,7 +975,7 @@
 
 
 (defmulti matrix-matrix-dispatch
-  (fn [alpha lhs rhs bin-op reduce-op options]
+  (fn [_alpha lhs rhs bin-op reduce-op _options]
     [(tensor-buffer-type lhs)
      (tensor-buffer-type rhs)
      (dtype-base/op-name bin-op)
@@ -1128,7 +1124,7 @@
 
 
 (defmethod matrix-matrix-dispatch [:sparse :sparse :* :+]
-  [alpha lhs rhs bin-op reduce-op options]
+  [alpha lhs rhs bin-op _reduce-op options]
   (let [op-datatype (or (:datatype options)
                         (dtype/get-datatype lhs))
         [lhs-shape rhs-shape] (mmul-check lhs rhs)
@@ -1148,7 +1144,7 @@
         new-tens (new-tensor [result-rows result-columns]
                              :datatype op-datatype
                              :container-type :sparse)
-        tens-writer (dtype/->writer new-tens {:datatype op-datatype})
+        tens-writer (dtype/->writer new-tens op-datatype)
         rhs-columns (mapv  #(vector % (select rhs-trans % :all))
                            rhs-col-indexes)]
     ;;do the thing

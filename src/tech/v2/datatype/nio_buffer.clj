@@ -1,26 +1,14 @@
 (ns tech.v2.datatype.nio-buffer
   "Nio buffers really are the workhorses of the entire system."
   (:require [tech.jna :as jna]
-            [tech.v2.datatype.io :as dtype-io]
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.typecast :refer :all :as typecast]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.nio-access
-             :refer [buf-put buf-get
-                     datatype->pos-fn
-                     datatype->read-fn
-                     datatype->write-fn
-                     unchecked-full-cast
-                     checked-full-read-cast
-                     checked-full-write-cast
-                     nio-type? list-type?
-                     cls-type->read-fn
-                     cls-type->write-fn
-                     cls-type->pos-fn]]
+             :refer [buf-put]]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
-            [tech.jna :as jna]
             [tech.v2.datatype.array]
             [tech.resource :as resource]
             [tech.parallel.for :as parallel-for])
@@ -65,7 +53,7 @@
 (jna/def-jna-fn (jna/c-library-name) memset
   "Set a block of memory to a value"
   Pointer
-  [data ensure-ptr-like]
+  [data typecast/ensure-ptr-like]
   [val int]
   [num-bytes int])
 
@@ -84,7 +72,8 @@
      dtype-proto/PPrototype
      {:from-prototype (fn [src-ary# datatype# shape#]
                         (let [n-elems# (base/shape->ecount shape#)]
-                          (if (.isDirect (datatype->buffer-cast-fn ~datatype src-ary#))
+                          (if (.isDirect (typecast/datatype->buffer-cast-fn
+                                          ~datatype src-ary#))
                             (dtype-proto/make-container :native-buffer datatype#
                                                         n-elems# {})
                             (dtype-proto/make-container :nio-buffer datatype#
@@ -102,7 +91,7 @@
 
      dtype-proto/PToArray
      {:->sub-array (fn [item#]
-                     (let [item# (datatype->buffer-cast-fn ~datatype item#)]
+                     (let [item# (typecast/datatype->buffer-cast-fn ~datatype item#)]
                        (when-not (.isDirect item#)
                          {:java-array (.array item#)
                           :offset (.position item#)
@@ -113,15 +102,16 @@
                                       (dtype-proto/ecount item#))]
                         (base/copy! item# dst-ary#)))}
      dtype-proto/PNioBuffer
-     {:position (fn [item#] (.position (datatype->buffer-cast-fn ~datatype item#)))
-      :limit (fn [item#] (.limit (datatype->buffer-cast-fn ~datatype item#)))
-      :array-backed? (fn [item#] (not (.isDirect (datatype->buffer-cast-fn
+     {:position (fn [item#] (.position (typecast/datatype->buffer-cast-fn
+                                        ~datatype item#)))
+      :limit (fn [item#] (.limit (typecast/datatype->buffer-cast-fn ~datatype item#)))
+      :array-backed? (fn [item#] (not (.isDirect (typecast/datatype->buffer-cast-fn
                                                   ~datatype item#))))}
 
      dtype-proto/PSetConstant
      {:set-constant!
       (fn [item# offset# value# elem-count#]
-        (let [item# (datatype->buffer-cast-fn ~datatype item#)
+        (let [item# (typecast/datatype->buffer-cast-fn ~datatype item#)
               offset# (int offset#)
               elem-count# (int elem-count#)
               value# (casting/cast value# ~datatype)
@@ -139,7 +129,8 @@
 
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]
-                    (let [buf# (.slice (datatype->buffer-cast-fn ~datatype buffer#))
+                    (let [buf# (.slice (typecast/datatype->buffer-cast-fn
+                                        ~datatype buffer#))
                           offset# (long offset#)
                           len# (long length#)]
                       (.position buf# offset#)
@@ -179,11 +170,11 @@
      jna/PToPtr
      {:is-jna-ptr-convertible?
       (fn [item#]
-        (let [item# (datatype->buffer-cast-fn ~datatype item#)]
+        (let [item# (typecast/datatype->buffer-cast-fn ~datatype item#)]
           (.isDirect item#)))
       :->ptr-backing-store
       (fn [item#]
-        (let [item# (datatype->buffer-cast-fn ~datatype item#)]
+        (let [item# (typecast/datatype->buffer-cast-fn ~datatype item#)]
           (when (.isDirect item#)
             (let [ptr-addr# (Pointer/nativeValue (Native/getDirectBufferPointer item#))
                   retval#
@@ -222,5 +213,5 @@
 
 
 (defmethod dtype-proto/make-container :nio-buffer
-  [container-type datatype elem-count-or-seq options]
+  [_container-type datatype elem-count-or-seq options]
   (make-buffer-of-type datatype elem-count-or-seq options))

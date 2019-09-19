@@ -2,19 +2,9 @@
   (:require [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.nio-access
-             :refer [buf-put buf-get
-                     datatype->pos-fn
-                     datatype->read-fn
-                     datatype->write-fn
-                     unchecked-full-cast
-                     checked-full-read-cast
-                     checked-full-write-cast
-                     nio-type? list-type?
-                     cls-type->read-fn
-                     cls-type->write-fn
-                     cls-type->pos-fn]]
-            [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.iterator :as dtype-iter])
+             :refer [unchecked-full-cast
+                     checked-full-write-cast]]
+            [tech.v2.datatype.typecast :as typecast])
   (:import [tech.v2.datatype ObjectMutable ByteMutable
             ShortMutable IntMutable LongMutable
             FloatMutable DoubleMutable BooleanMutable]
@@ -47,7 +37,7 @@
 
 
 (defmacro make-mutable
-  [mutable-cls buffer-cls buffer mutable-dtype
+  [mutable-cls _buffer-cls buffer mutable-dtype
    intermediate-dtype buffer-dtype unchecked?]
   `(if ~unchecked?
      (reify ~mutable-cls

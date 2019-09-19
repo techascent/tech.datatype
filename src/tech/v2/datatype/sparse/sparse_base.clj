@@ -1,14 +1,11 @@
 (ns tech.v2.datatype.sparse.sparse-base
-  (:require [tech.v2.datatype.reader :as reader]
-            [tech.v2.datatype.readers.indexed :as indexed-reader]
+  (:require [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.sparse.reader
              :refer [make-sparse-value
                      make-sparse-reader]]
-            [tech.v2.datatype.binary-search :as dtype-search]
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
-            [tech.v2.datatype.iterator :as iterator]
             [tech.v2.datatype.iterable.masked :as masked-iterable]
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.protocols :as dtype-proto]
@@ -16,9 +13,7 @@
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
-            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.argsort :as argsort]
-            [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.functional.impl :as impl]
             [tech.v2.datatype.functional :as functional]))
 
@@ -218,7 +213,8 @@
              (let [output-dtype (if bool-op?
                                   :boolean
                                   dtype)]
-               [[dtype output-dtype] `(make-sparse-union-reader ~dtype ~output-dtype)]))]
+               [[dtype output-dtype]
+                `(make-sparse-union-reader ~dtype ~output-dtype)]))]
         (into {})))
 
 (def sparse-binary-op-table (make-sparse-binary-op-table))
@@ -237,7 +233,7 @@
                      (+ x b-offset)
                      new-indexes)]
     {:indexes new-indexes
-     :data new-data}))
+     :data new-values}))
 
 
 
@@ -258,7 +254,7 @@
 (defn dense-sparse-intersection
   "Make a new sparse item from the dense item that has the indexes from the original
   sparse item."
-  [sparse-item dense-item & {:keys [datatype sparse-value] :as options}]
+  [sparse-item dense-item & {:keys [datatype sparse-value]}]
   (let [sparse-indexes (sparse-proto/index-reader sparse-item)]
     (make-sparse-reader sparse-indexes
                         (indexed-reader/make-indexed-reader
@@ -277,7 +273,7 @@
         datatype (or (:datatype options)
                      (dtype-base/get-datatype sparse-lhs))
         flat-dtype (casting/safe-flatten datatype)
-        union-fn (get sparse-binary-op-table [datatype datatype])
+        union-fn (get sparse-binary-op-table [flat-dtype flat-dtype])
         sparse-map-type (or (:sparse-map-type options)
                             :union)
         [sparse-lhs sparse-rhs]
@@ -302,7 +298,7 @@
   (let [datatype (or (:datatype options)
                      (dtype-base/get-datatype sparse-lhs))
         flat-dtype (casting/safe-flatten datatype)
-        union-fn (get sparse-binary-op-table [datatype :boolean])]
+        union-fn (get sparse-binary-op-table [flat-dtype :boolean])]
     (union-fn bin-op sparse-lhs sparse-rhs (:unchecked? options) :boolean)))
 
 
@@ -332,8 +328,8 @@
                              (casting/cast (sparse-proto/sparse-value sparse-rhs)
                                            op-datatype))
             sparse-value (make-sparse-value op-datatype)
-            sparse-zero? (or (= (make-sparse-value op-datatype) sparse-lhs-val)
-                             (= (make-sparse-value op-datatype) sparse-rhs-val))]
+            sparse-zero? (or (= sparse-value sparse-lhs-val)
+                             (= sparse-value sparse-rhs-val))]
         (if sparse-zero?
           (let [sparse-lhs (if sparse-lhs
                              sparse-lhs
@@ -342,14 +338,13 @@
                              sparse-rhs
                              (dense-sparse-intersection sparse-lhs rhs))]
             (if any-dense?
-              (do
-                (make-sparse-reader (sparse-proto/index-reader sparse-lhs)
-                                    (binary-op/binary-reader-map
-                                     options bin-op
-                                     (sparse-proto/data-reader sparse-lhs)
-                                     (sparse-proto/data-reader sparse-rhs))
-                                    (dtype-base/ecount sparse-lhs)
-                                    :datatype op-datatype))
+              (make-sparse-reader (sparse-proto/index-reader sparse-lhs)
+                                  (binary-op/binary-reader-map
+                                   options bin-op
+                                   (sparse-proto/data-reader sparse-lhs)
+                                   (sparse-proto/data-reader sparse-rhs))
+                                  (dtype-base/ecount sparse-lhs)
+                                  :datatype op-datatype)
               (sparse-binary-map options bin-op
                                  sparse-lhs sparse-rhs)))
           (binary-op/binary-reader-map options bin-op lhs rhs)))

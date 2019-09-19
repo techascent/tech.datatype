@@ -1,15 +1,12 @@
 (ns tech.v2.datatype.typed-buffer
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
-            [tech.v2.datatype.io :as dtype-io]
             [tech.v2.datatype.base :as base]
             [tech.jna :as jna]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.mutable :as mutable]
-            [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.pprint :as dtype-pprint]
-            [tech.jna :as jna])
+            [tech.v2.datatype.pprint :as dtype-pprint])
   (:import [com.sun.jna Pointer]
            [java.io Writer]
            [tech.v2.datatype.protocols PDatatype]))
@@ -304,5 +301,5 @@
 
 
 (defmethod dtype-proto/make-container :typed-buffer
-  [container-type datatype elem-count-or-seq options]
+  [_container-type datatype elem-count-or-seq options]
   (make-typed-buffer datatype elem-count-or-seq options))

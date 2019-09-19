@@ -1,17 +1,11 @@
 (ns tech.v2.tensor
   (:require [tech.v2.datatype :as dtype]
-            [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.tensor.impl :as impl]
             [tech.v2.tensor.dimensions :as dims]
-            [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.tensor.protocols :as tens-proto]
             ;;Ensure printing things works.
             [tech.v2.tensor.pprint]
-            [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.functional.impl :as func-impl]
-            [tech.v2.datatype.sparse.protocols :as sparse-proto]
-            [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.binary-op :as binary-op]))
 
 
@@ -53,14 +47,14 @@
 
 (defn rows
   [tens]
-  (let [[n-rows n-cols] (dtype/shape tens)]
+  (let [[n-rows _] (dtype/shape tens)]
     (->> (range n-rows)
          (map #(select tens % :all)))))
 
 
 (defn columns
   [tens]
-  (let [[n-rows n-cols] (dtype/shape tens)]
+  (let [[_ n-cols] (dtype/shape tens)]
     (->> (range n-cols)
          (map #(select tens :all %)))))
 

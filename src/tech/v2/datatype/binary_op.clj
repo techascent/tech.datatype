@@ -4,9 +4,7 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.nio-access :as nio-access]
-            [tech.v2.datatype.reader :as reader]
-            [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.argtypes :as argtypes])
+            [tech.v2.datatype.unary-op :as unary-op])
   (:import [tech.v2.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
@@ -265,7 +263,7 @@
      (make-binary-op ~datatype ~opcode)
      ~lhs ~rhs))
   ([opcode lhs rhs]
-   `(binary-iterable :object ~opcode lhs rhs)))
+   `(binary-iterable :object ~opcode ~lhs ~rhs)))
 
 
 (defmacro make-binary-op-reader-impl
@@ -308,13 +306,13 @@
 
 
 (defmulti binary-reader-map
-  (fn [options binary-op lhs rhs]
+  (fn [_options _binary-op lhs rhs]
     [(dtype-base/buffer-type lhs)
      (dtype-base/buffer-type rhs)]))
 
 
 (defmethod binary-reader-map :default
-  [{:keys [datatype unchecked?] :as options} bin-op lhs rhs]
+  [options bin-op lhs rhs]
   (default-binary-reader-map options bin-op lhs rhs))
 
 
@@ -510,7 +508,7 @@
 
 
 (defn binary->unary
-  [{:keys [datatype unchecked? left-associate?]} bin-op constant-value]
+  [{:keys [datatype left-associate?]} bin-op constant-value]
   (let [datatype (or datatype (dtype-base/get-datatype constant-value))
         create-fn (get binary->unary-table (casting/safe-flatten datatype))]
     (create-fn bin-op datatype constant-value left-associate?)))

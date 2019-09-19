@@ -12,3 +12,4 @@ pom.xml.asc
 checkouts
 *.log
 .cpcache
+.clj-kondo/.cache

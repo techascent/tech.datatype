@@ -1,11 +1,9 @@
 (ns tech.v2.datatype.statistics
   (:require [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
-            [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.array]
             [kixi.stats.core :as kixi])
   (:refer-clojure :exclude [min max])

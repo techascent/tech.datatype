@@ -25,10 +25,12 @@
 
 
 (defn make-indexed-reader
-  [indexes values {:keys [datatype unchecked?]}]
-  (let [datatype (or datatype (dtype-proto/get-datatype values))
-        reader-fn (get indexed-reader-creators (casting/safe-flatten datatype))]
-    (reader-fn indexes values unchecked?)))
+  ([indexes values {:keys [datatype unchecked?]}]
+   (let [datatype (or datatype (dtype-proto/get-datatype values))
+         reader-fn (get indexed-reader-creators (casting/safe-flatten datatype))]
+     (reader-fn indexes values unchecked?)))
+  ([indexes values]
+   (make-indexed-reader indexes values {})))
 
 
 ;;Maybe values is random-read but the indexes are a large sequence
@@ -58,7 +60,9 @@
 
 
 (defn make-iterable-indexed-iterable
-  [indexes values {:keys [datatype unchecked?]}]
-  (let [datatype (or datatype (dtype-proto/get-datatype values))
-        reader-fn (get indexed-iterable-table (casting/safe-flatten datatype))]
-    (reader-fn indexes values unchecked?)))
+  ([indexes values {:keys [datatype unchecked?]}]
+   (let [datatype (or datatype (dtype-proto/get-datatype values))
+         reader-fn (get indexed-iterable-table (casting/safe-flatten datatype))]
+     (reader-fn indexes values unchecked?)))
+  ([indexes values]
+   (make-iterable-indexed-iterable indexes values {})))

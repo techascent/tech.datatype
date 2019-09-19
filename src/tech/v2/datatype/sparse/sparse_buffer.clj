@@ -6,13 +6,9 @@
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.binary-search :as dtype-search]
-            [tech.v2.datatype.argsort :as argsort]
-            [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.readers.range :as range-reader]
-            [tech.v2.datatype.readers.const :as const-reader]
-            [tech.v2.datatype.nio-access :as nio-access]))
+            [tech.v2.datatype.readers.const :as const-reader]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -25,6 +21,8 @@
 (defmacro make-sparse-writer
   [datatype]
   `(fn [item# desired-dtype# unchecked?#]
+     (when-not (keyword? desired-dtype#)
+       (throw (ex-info "item not keyword" {})))
      (let [b-offset# (long (:b-offset item#))
            b-elem-count# (long (:b-elem-count item#))
            sparse-value# (casting/datatype->cast-fn :unknown ~datatype
@@ -172,7 +170,7 @@
 
 
 (defn- global->local
-  ^long [^long index ^long b-offset]
+  ^long [^long _index ^long b-offset]
   (+ b-offset))
 
 
@@ -254,8 +252,8 @@
   (->writer [item options]
     (let [data-datatype (dtype-proto/get-datatype data)
           writer-datatype (or (:datatype options) data-datatype)
-          writer-fn (get sparse-writer-table (casting/safe-flatten data-datatype))]
-      (-> (writer-fn item data-datatype (:unchecked? options))
+          writer-fn (get sparse-writer-table (casting/safe-flatten writer-datatype))]
+      (-> (writer-fn item writer-datatype (:unchecked? options))
           (dtype-proto/->writer options))))
 
 
@@ -372,7 +370,7 @@
 
 
 (defmethod dtype-proto/make-container :sparse
-  [container-type datatype elem-seq options]
+  [_container-type datatype elem-seq options]
   (if (number? elem-seq)
     (make-sparse-buffer (dtype-proto/make-container :list :int32 0 {})
                         (dtype-proto/make-container :list datatype 0 {})

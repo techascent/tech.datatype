@@ -3,21 +3,13 @@
             [tech.v2.datatype.casting :as casting]
             [tech.jna :as jna]
             [tech.v2.datatype.nio-access
-             :refer [buf-put buf-get
-                     datatype->pos-fn
-                     datatype->read-fn
-                     datatype->write-fn
+             :refer [datatype->pos-fn
                      unchecked-full-cast
-                     checked-full-read-cast
                      checked-full-write-cast
-                     nio-type? list-type?
-                     cls-type->read-fn
-                     cls-type->write-fn
-                     cls-type->pos-fn]]
-            [tech.v2.datatype.typecast :refer :all :as typecast]
+                     cls-type->read-fn]]
+            [tech.v2.datatype.typecast :as typecast]
             ;;Load all iterator bindings
             [tech.v2.datatype.iterator]
-            [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.shape
              :refer [ecount]
              :as dtype-shape])

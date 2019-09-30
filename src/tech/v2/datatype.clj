@@ -27,7 +27,8 @@
             [tech.v2.datatype.jna]
             [tech.v2.datatype.list]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
-            [tech.v2.datatype.sparse.sparse-buffer])
+            [tech.v2.datatype.sparse.sparse-buffer]
+            [tech.v2.datatype.readers.indexed :as indexed-rdr])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
            [java.util Iterator List RandomAccess])
   (:refer-clojure :exclude [cast]))
@@ -436,6 +437,14 @@ Calls clojure.core.matrix/ecount."
       (object-reader n-elems
                      #(apply map-fn (map (fn [^ObjectReader reader]
                                            (.read reader %))))))))
+
+
+(defn indexed-reader
+  "Create an indexed reader that readers values from specific indexes.  The options
+  map can contain at least :datatype and :unchecked? to control the datatype
+  and casting correctness checks of the resulting reader."
+  [indexes values & [options]]
+  (indexed-rdr/make-indexed-reader indexes values options))
 
 
 (defn ->sparse

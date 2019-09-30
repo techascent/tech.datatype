@@ -15,12 +15,12 @@ efficient full typed copy functions when the types can be ascertained.
   1. datatype of this sequence
   2. Writing to, reading from
   3. Construction
-  4. Efficient mutable copy from one sequence to another
+  4. Efficient mutable copy into a container.
   5. Sparse buffer support
   6. n-dimensional tensor support
   7. Functional math support
-  
-  
+
+
 For a quick feel if the library, please check out our [cheatsheet](docs/cheatsheet.md).
 
 

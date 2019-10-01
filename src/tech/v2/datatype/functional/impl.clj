@@ -25,7 +25,8 @@
             [tech.v2.datatype.list]
             [tech.v2.datatype.primitive]
             [tech.v2.datatype.sparse.reader :as sparse-reader]
-            [tech.v2.datatype.comparator :as comparator])
+            [tech.v2.datatype.comparator :as comparator]
+            [tech.parallel.utils :as parallel-utils])
   (:import [java.util List RandomAccess]))
 
 (def ^:dynamic *datatype* nil)
@@ -34,21 +35,7 @@
 
 (defmacro export-symbols
   [src-ns & symbol-list]
-  (let [public-map (ns-publics (find-ns src-ns))]
-    `(do
-       ~@(mapv
-          (fn [sym-name]
-            `(def ~(with-meta (symbol (name sym-name))
-                     (let [org-meta (meta (get public-map (symbol (name sym-name))))]
-                       (when (:macro org-meta)
-                         (throw (ex-info (format "Cannot export macros: %s"
-                                                 sym-name)
-                                         {:symbol sym-name})))
-                       {:doc (:doc org-meta)
-                        :arglists `(quote ~(:arglists org-meta))
-                        :macro (:macro org-meta)}))
-               #'~(symbol (name src-ns) (name sym-name))))
-          symbol-list))))
+  `(parallel-utils/export-symbols ~src-ns ~@symbol-list))
 
 
 (defn default-options

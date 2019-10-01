@@ -21,7 +21,7 @@ efficient full typed copy functions when the types can be ascertained.
   7. Functional math support
 
 
-For a quick feel if the library, please check out our [cheatsheet](docs/cheatsheet.md).
+For a quick feel of the library, please check out our [cheatsheet](docs/cheatsheet.md).
 
 
 Design documenation is [here](docs).

@@ -400,18 +400,29 @@ Calls clojure.core.matrix/ecount."
 (defn ->reader
   "Create a reader of a specific type."
   [src-item & [datatype options]]
-  (dtype-proto/->reader src-item
-                        (assoc options
-                               :datatype
-                               (or datatype (get-datatype src-item)))))
+  (if (map? datatype)
+    (dtype-proto/->reader src-item datatype)
+    (dtype-proto/->reader src-item
+                          (assoc options
+                                 :datatype
+                                 (or datatype (get-datatype src-item))))))
+
+
+(defn ->>reader
+  "Create a reader of a specific type."
+  ([options src-item]
+   (dtype-proto/->reader src-item options))
+  ([src-item]
+   (->>reader src-item {})))
 
 
 (defn object-reader
   "Create an object reader from an elem count and a function from index to object."
-  [n-elems idx->item-fn]
+  [n-elems idx->item-fn & [datatype]]
   (let [n-elems (long n-elems)]
     (reify
       ObjectReader
+      (getDatatype [_] (or datatype :object))
       (lsize [_] (long n-elems))
       (read [_ elem-idx]
         (idx->item-fn elem-idx)))))

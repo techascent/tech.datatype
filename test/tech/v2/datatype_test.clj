@@ -310,3 +310,12 @@
          (-> (dtype/make-container :typed-buffer :uint8 (range 256))
              (dfn/descriptive-stats)
              (select-keys [:min :max])))))
+
+
+(deftest reader-sorting
+  (doseq [datatype (->> casting/base-host-datatypes
+                        (remove #(= :boolean %)))]
+    (let [breader (dtype/->reader (dtype/make-container :java-array datatype
+                                                        (reverse (range 10))))]
+      (is (= (vec (range 10))
+             (vec (map int (sort breader))))))))

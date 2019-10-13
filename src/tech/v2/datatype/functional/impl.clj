@@ -104,7 +104,7 @@
 (def datatype-width
   (->> [:object :float64 [:int64 :uint64]
         :float32 [:int32 :uint32]
-        [:uint64 :int16]
+        [:uint16 :int16]
         [:int8 :uint8] :boolean]
        (map-indexed vector)
        (mapcat (fn [[idx entry]]

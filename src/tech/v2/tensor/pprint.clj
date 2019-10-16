@@ -48,11 +48,14 @@
   [^StringBuilder sb row column-lengths] ;; the first element doesn't have a leading ws.
   (let [column-lengths (typecast/datatype->reader :int32 column-lengths)
         row (typecast/datatype->reader :object row)
-        cc (dtype/ecount column-lengths)]
+        cc (dtype/ecount column-lengths)
+        max-cc 5]
     (.append sb \[)
-    (dotimes [i cc]
+    (dotimes [i (min max-cc cc)]
       (when (> i 0) (.append sb \space))
       (append-elem sb (.read row i) (.read column-lengths i)))
+    (when (> cc max-cc)
+      (.append sb "..."))
     (.append sb \])))
 
 
@@ -65,15 +68,19 @@
         n-dims (count tens-shape)]
     (if (= 1 n-dims)
       (append-row sb tens column-lengths)
-      (do
+      (let [num-dim-items (long (first tens-shape))]
         (.append sb \[)
-        (dotimes [i (first tens-shape)]
+        (dotimes [i (min 3 num-dim-items)]
           (when (> i 0)
             (.append sb NL)
             (.append sb prefix))
           (rprint sb (apply tens-impl/select tens i
                             (repeat (dec n-dims) :all))
                   prefix column-lengths))
+        (when (> num-dim-items 3)
+          (.append sb "\n")
+          (.append sb prefix)
+          (.append sb "..."))
         (.append sb \])))))
 
 

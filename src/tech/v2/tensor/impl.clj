@@ -1161,3 +1161,15 @@
     (cond->> new-tens
       alpha
       (dtype-fn/apply-binary-op {:datatype op-datatype} bin-op alpha))))
+
+
+;;Object overrides we can now do because we have a tensor definition.
+(extend-type Object
+  dtype-proto/PToBufferDesc
+  (convertible-to-buffer-desc? [item]
+    (-> (ensure-tensor item)
+        (dtype-proto/convertible-to-buffer-desc?)))
+  (->buffer-descriptor [item]
+    (let [item (ensure-tensor item)]
+      (when (dtype-proto/convertible-to-buffer-desc? item)
+        (dtype-proto/->buffer-descriptor item)))))

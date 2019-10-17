@@ -30,6 +30,14 @@
                           matrix-matrix-dispatch
                           ->jvm)
 
+
+(defn as-buffer-descriptor
+  "Convenience function.  Also present in tech.v2.datatype, just here because
+  ensure-buffer-descriptor is in this namespace."
+  [tens]
+  (dtype/as-buffer-descriptor tens))
+
+
 (defn tensor->dimensions
   [tens]
   (tens-proto/dimensions tens))

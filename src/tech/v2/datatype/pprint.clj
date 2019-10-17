@@ -3,7 +3,7 @@
 
 
 ;; pretty-printing utilities for matrices
-(def ^:dynamic *number-format* "%.3f")
+(def ^:dynamic *number-format* "%.4G")
 
 
 (defn format-num [x]

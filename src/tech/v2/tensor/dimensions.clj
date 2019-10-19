@@ -342,7 +342,7 @@ to be reversed for the most efficient implementation."
         broadcast? (not= vec-shape max-shape)
         ;;Any indirect addressing?
         min-shape (drop-while #(= 1 %) shape)
-        local-ec (ecount dims)
+        local-ec shape-ecount
         n-elems (shape/ecount max-shape)
         stride-reader (typecast/datatype->reader :int32 (int-array strides))
         shape-reader (typecast/datatype->reader :int32 vec-shape)
@@ -378,19 +378,18 @@ to be reversed for the most efficient implementation."
                          (filter #(= local-ec (second %)))
                          (ffirst)))
             broadcast-amt (long (apply * 1 (drop (+ 1 ec-idx) max-shape)))]
-        (if (= n-dims 2)
-          (impl-idx-reader n-elems
-                           (rem (quot idx broadcast-amt)
-                                local-ec)
-                           (+ (* (rem row shape-0) stride-0)
-                              (* (rem col shape-1) stride-1))
-                           (dense-integer-dot-product
-                            stride-reader
-                            (binary-op/binary-iterable-map
-                             {:datatype :int32}
-                             rem-int-op
-                             indexes
-                             shape-reader)))))
+        (impl-idx-reader n-elems
+                         (rem (quot idx broadcast-amt)
+                              local-ec)
+                         (+ (* (rem row shape-0) stride-0)
+                            (* (rem col shape-1) stride-1))
+                         (dense-integer-dot-product
+                          stride-reader
+                          (binary-op/binary-iterable-map
+                           {:datatype :int32}
+                           rem-int-op
+                           indexes
+                           shape-reader))))
 
       ;;Special case where the entire shape is being broadcast from an
       ;;outer dimension. [2 2] broadcast into [4 2 2].

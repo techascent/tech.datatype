@@ -75,7 +75,7 @@
   [dimensions]
   (and (dims/direct? dimensions)
        (every? #(= 0 %) (:offsets dimensions))
-       (= (:max-shape dimensions))))
+       (= (:max-shape dimensions) (dims/shape dimensions))))
 
 
 (defn- simple-vector-dimensions?
@@ -526,9 +526,9 @@
                        (tensor->buffer tens)))
     tens))
 
-(defn ->tensor
-  [data & {:keys [datatype container-type]
-           :as options}]
+
+(defn explicit-make-tensor
+  [data {:keys [datatype container-type] :as options}]
   (let [data-shape (dtype/shape data)
         datatype (default-datatype datatype)
         container-type (default-container-type container-type)
@@ -540,6 +540,12 @@
        (dtype/make-container container-type datatype n-elems options)
        0 options))
      (dims/dimensions data-shape))))
+
+
+(defn ->tensor
+  [data & {:keys [datatype container-type]
+           :as options}]
+  (explicit-make-tensor data options))
 
 
 (defn new-tensor
@@ -606,11 +612,22 @@
 
 
 (defn broadcast-error
+  "We can simplify a broadcast tensor by converting it to a reader and then
+  creating a new read-only tensor out of it."
   [tens]
   (let [tens (ensure-tensor tens)]
-    (when (broadcast? tens)
-      (throw (ex-info "Operation does not support broadcast" {})))
-    tens))
+    (if (broadcast? tens)
+      (construct-tensor (reify
+                          dtype-proto/PToReader
+                          (convertible-to-reader? [rdr] true)
+                          (->reader [rdr options]
+                            (dtype-proto/->reader tens options))
+                          dtype-proto/PDatatype
+                          (get-datatype [rdr] (dtype-proto/get-datatype tens))
+                          dtype-proto/PCountable
+                          (ecount [rdr] (dtype/ecount tens)))
+                        (dims/dimensions (dtype/shape tens)))
+      tens)))
 
 
 (defn rotate

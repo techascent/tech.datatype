@@ -47,7 +47,7 @@
   [datatype]
   `(fn [reduce-op# iterable# unchecked?#]
      (let [reduce-op# (binary-op/datatype->binary-op ~datatype reduce-op# unchecked?#)
-           iter# (typecast/datatype->pure-iter ~datatype iterable# unchecked?#)]
+           iter# (typecast/datatype->iter ~datatype iterable# unchecked?#)]
        (loop [accum# (casting/datatype->sparse-value ~datatype)
               next?# (.hasNext iter#)
               item-count# (int 0)]

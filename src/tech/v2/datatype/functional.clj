@@ -141,7 +141,8 @@
 (defn magnitude-squared
   [item & [options]]
   (->> (unary-op/unary-map options (:sq unary-op/builtin-unary-ops) item)
-       (reduce-op/commutative-reader-reduce options (:+ binary-op/builtin-binary-ops))))
+       (reduce-op/commutative-reader-reduce options
+                                            (:+ binary-op/builtin-binary-ops))))
 
 
 (defn magnitude

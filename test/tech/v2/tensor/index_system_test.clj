@@ -4,7 +4,6 @@
             [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.readers.const :as const-reader]
-            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.functional :as dtype-fn]
             [clojure.pprint :as pp]
             [clojure.test :refer :all])

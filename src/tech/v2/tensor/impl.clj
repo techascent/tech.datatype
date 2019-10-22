@@ -136,8 +136,12 @@
 
        tens-proto/PTensor
        (is-tensor? [item#] true)
-       (dimensions [item] (tens-proto/dimensions base-tensor#))
-       (buffer [item] (tens-proto/buffer base-tensor#))
+       (dimensions [item#] (tens-proto/dimensions base-tensor#))
+       (buffer [item#] (tens-proto/buffer base-tensor#))
+
+       tens-proto/PToTensor
+       (convertible-to-tensor? [item#] true)
+       (convert-to-tensor [item#] base-tensor#)
 
        dtype-proto/PPrototype
        (from-prototype [m# datatype# shape#]
@@ -417,6 +421,10 @@
    (dimensions [item] dimensions)
    (buffer [item] buffer)
 
+   tens-proto/PToTensor
+   (convertible-to-tensor? [item] true)
+   (convert-to-tensor [item] item)
+
    tens-proto/PToTensorReader
    (convertible-to-tensor-reader? [item]
      (dtype-proto/convertible-to-reader? buffer))
@@ -496,9 +504,9 @@
   [item]
   (if (tensor? item)
     item
-    (if-let [item-shape (dtype-base/shape item)]
-      (construct-tensor item (dims/dimensions item-shape))
-      (throw (ex-info "Cannot construct tensor from item with no shape." {})))))
+    (if-let [retval (tens-proto/as-tensor item)]
+      retval
+      (throw (Exception. "Item is not convertible to tensor")))))
 
 
 (defn tensor->buffer
@@ -1183,10 +1191,19 @@
 ;;Object overrides we can now do because we have a tensor definition.
 (extend-type Object
   dtype-proto/PToBufferDesc
-  (convertible-to-buffer-desc? [item]
-    (-> (ensure-tensor item)
-        (dtype-proto/convertible-to-buffer-desc?)))
-  (->buffer-descriptor [item]
-    (let [item (ensure-tensor item)]
-      (when (dtype-proto/convertible-to-buffer-desc? item)
-        (dtype-proto/->buffer-descriptor item)))))
+  (convertible-to-buffer-desc? [item] false)
+  (->buffer-descriptor [item] (throw (Exception. "item is not convertible")))
+  tens-proto/PToTensor
+  (convertible-to-tensor? [item]
+    (or (dtype-proto/convertible-to-buffer-desc? item)
+        (dtype-proto/convertible-to-reader? item)))
+  (convert-to-tensor [item]
+    (cond
+      (dtype-proto/convertible-to-buffer-desc? item)
+      (-> (dtype-proto/->buffer-descriptor item)
+          (buffer-descriptor->tensor))
+      (dtype-proto/convertible-to-reader? item)
+      (construct-tensor item
+                        (dims/dimensions (dtype/shape item)))
+      :else
+      (throw (Exception. "Item is not convertible to tensor.")))))

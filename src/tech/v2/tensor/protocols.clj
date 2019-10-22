@@ -1,4 +1,5 @@
-(ns tech.v2.tensor.protocols)
+(ns tech.v2.tensor.protocols
+  (:require [tech.v2.datatype.protocols :as dtype-proto]))
 
 
 (defprotocol PTensor
@@ -12,18 +13,13 @@
 
 
 (defprotocol PToTensor
-  (tensor-convertible? [item])
+  (convertible-to-tensor? [item])
   (convert-to-tensor [item]))
-
-
-(extend-type Object
-  PToTensor
-  (tensor-convertible? [item] false))
 
 
 (defn as-tensor
   [item]
-  (when (tensor-convertible? item)
+  (when (convertible-to-tensor? item)
     (convert-to-tensor item)))
 
 

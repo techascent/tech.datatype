@@ -1,6 +1,8 @@
 (ns tech.v2.datatype.casting
   (:refer-clojure :exclude [cast])
-  (:require [clojure.set :as c-set]))
+  (:require [clojure.set :as c-set])
+  (:import [tech.v2.datatype DateUtility]
+           [java.util TimeZone]))
 
 
 (def signed-unsigned
@@ -255,6 +257,7 @@
     (cast-fn value)
     (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))
 
+
 (defmacro add-all-cast-fns
   []
   `(do
@@ -275,10 +278,198 @@
                [:boolean :object])))
 
 
+(def date-denominators
+  {:milliseconds 1
+   :seconds 1000
+   :minutes DateUtility/minutesToMillis
+   :hours DateUtility/hoursToMillis
+   :days DateUtility/daysToStandardMillis})
+
+
+(def date-denominator-names (set (keys date-denominators)))
+
+
+(defn valid-date-denominator?
+  [denominator]
+  (contains? date-denominator-names denominator))
+
+
+(defn check-date-denominator!
+  [denominator]
+  (when-not (valid-date-denominator? denominator)
+    (throw (Exception. (format "Unrecognized date denominator: %s"
+                               denominator))))
+  denominator)
+
+
+(defn date-denominator
+  ^long [denominator]
+  (if-let [retval (get date-denominators denominator)]
+    retval
+    (throw (Exception. (format "Unrecognized date denominator: %s"
+                               denominator)))))
+
+
+(def valid-datetime-base-datatypes
+  #{:int64})
+
+
+(defn valid-datetime-base-datatype?
+  [dtype]
+  (contains? valid-datetime-base-datatypes dtype))
+
+
+(defn check-date-base-datatype!
+  [dtype]
+  (when-not (valid-datetime-base-datatype? dtype)
+    (throw (Exception. "Invalid date base datatype: %s"
+                       dtype)))
+  dtype)
+
+
+(defn default-time-zone
+  []
+  (-> (TimeZone/getDefault)
+      (.getID)))
+
+
+(defn datetime-datatype->time-zone
+  ^TimeZone [datetime-datatype]
+  (let [timezone-name (-> (or (:time-zone datetime-datatype)
+                              (default-time-zone))
+                          str)]
+    (TimeZone/getTimeZone timezone-name)))
+
+
+(defn datetime-datatype
+  ([date-denominator time-zone base-datatype]
+   {:datatype :datetime
+    :base-datatype (check-date-base-datatype! base-datatype)
+    :denominator (check-date-denominator! date-denominator)
+    :time-zone time-zone})
+  ([date-denominator time-zone]
+   (datetime-datatype date-denominator time-zone :int64))
+  ([date-denominator]
+   (datetime-datatype date-denominator (default-time-zone)))
+  ([]
+   (datetime-datatype :milliseconds)))
+
+
+(defn datetime-datatype?
+  [item]
+  (= :datetime (:datatype item)))
+
+
+(defn datetime-object-family?
+  [item]
+  (or (= :instant item)
+      (= :local-date-time item)
+      (= :zoned-date-time item)))
+
+(defn datetime-family-class
+  [item]
+  (cond
+    (datetime-datatype? item) :concrete
+    (datetime-object-family? item) :object
+    :else :out-of-family))
+
+
+(defn datetime-family?
+  [item]
+  (not= :out-of-family (datetime-family-class item)))
+
+
+(def time-denominators
+  (->> (assoc date-denominators :nanoseconds 1E-6)
+       (map (fn [[k v]]
+              [k (double v)]))
+       (into {})))
+
+
+(def valid-time-denominators (set (keys time-denominators)))
+
+
+(defn valid-timeinterval-denominator?
+  [denominator]
+  (contains? valid-time-denominators denominator))
+
+
+(defn check-timeinterval-denominator!
+  [denominator]
+  (when-not (valid-timeinterval-denominator? denominator)
+    (throw (Exception. (format  "Invalid timeinterval denominator: %s" denominator))))
+  denominator)
+
+
+(def valid-timeinterval-datatypes
+  #{:int64})
+
+
+(defn valid-timeinterval-base-datatype?
+  [dtype]
+  (contains? valid-timeinterval-datatypes dtype))
+
+
+(defn check-timeinterval-base-datatype!
+  [dtype]
+  (when-not (valid-timeinterval-base-datatype? dtype)
+    (throw (Exception. (format "Invalid time interval datatype: %s"
+                               dtype))))
+  dtype)
+
+
+(defn timeinterval-datatype
+  ([denominator base-datatype]
+   {:datatype :timeinterval
+    :base-datatype (check-timeinterval-base-datatype! base-datatype)
+    :denominator (check-timeinterval-denominator! denominator)})
+  ([date-denominator]
+   (timeinterval-datatype date-denominator :int64))
+  ([]
+   (timeinterval-datatype :milliseconds)))
+
+
+(defn timeinterval-datatype?
+  [item]
+  (= :timeinterval (:datatype item)))
+
+
+(defn timeinterval-object-family?
+  [item]
+  (= :duration item))
+
+(defn timeinterval-family-class
+  [item]
+  (cond
+    (timeinterval-datatype? item) :concrete
+    (timeinterval-object-family? item) :object
+    :else :out-of-family))
+
+
+(defn timeinterval-family?
+  [item]
+  (not= :out-of-family (timeinterval-family-class item)))
+
+
+(defn composite-datatype?
+  [dtype]
+  (and (instance? java.util.Map dtype)
+       (contains? dtype :datatype)))
+
+(defn composite-datatype->base-datatype
+  "If this is a composite datatype, return the base datatype.  Else return
+  input unchanged."
+  [datatype]
+  (if (composite-datatype? datatype)
+    (:base-datatype datatype)
+    datatype))
+
+
 (defn datatype->host-type
   "Get the signed analog of an unsigned type or return datatype unchanged."
   [datatype]
-  (get unsigned-signed datatype datatype))
+  (let [datatype (composite-datatype->base-datatype datatype)]
+    (get unsigned-signed  datatype datatype)))
 
 
 (defn jvm-cast
@@ -289,7 +480,7 @@
 (defn datatype->safe-host-type
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
-  (case dtype
+  (case (composite-datatype->base-datatype dtype)
     :uint8 :int16
     :uint16 :int32
     :uint32 :int64
@@ -315,9 +506,10 @@
 (defn flatten-datatype
   "Move a datatype into the canonical set"
   [dtype]
-  (if (base-datatypes dtype)
-    dtype
-    :object))
+  (let [dtype (unwrap-datatype dtype)]
+    (if (base-datatypes dtype)
+      dtype
+      :object)))
 
 
 (defn safe-flatten

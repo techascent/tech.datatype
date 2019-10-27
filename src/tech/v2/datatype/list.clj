@@ -443,7 +443,7 @@
         typed-buf (if (or (number? elem-count-or-seq)
                           (instance? RandomAccess elem-count-or-seq)
                           (and (not (instance? Iterable elem-count-or-seq))
-                               (satisfies? dtype-proto/PToReader elem-count-or-seq)))
+                               (dtype-proto/convertible-to-reader? elem-count-or-seq)))
                     (-> (typed-buffer/make-typed-buffer
                          datatype
                          elem-count-or-seq options)

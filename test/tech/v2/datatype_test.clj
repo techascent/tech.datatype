@@ -247,10 +247,12 @@
 
 (deftest base-math-sanity
   (is (= 0.0 (-> (dfn/- (range 10) (range 10))
+                 (dtype/->reader :float64)
                  (dfn/pow 2)
                  (dfn/reduce-+))))
 
   (is (= 0.0 (-> (dfn/- (into-array (range 10)) (range 10))
+                 (dtype/->reader :float64)
                  (dfn/pow 2)
                  (dfn/reduce-+)))))
 

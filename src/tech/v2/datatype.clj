@@ -26,6 +26,7 @@
             [tech.v2.datatype.typed-buffer]
             [tech.v2.datatype.jna]
             [tech.v2.datatype.list]
+            [tech.v2.datatype.clj-range]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer]
             [tech.v2.datatype.readers.indexed :as indexed-rdr])

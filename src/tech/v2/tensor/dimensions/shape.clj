@@ -71,14 +71,12 @@
 
 
 (defn classified-sequence->sequence
-  [{:keys [min-item max-item type sequence]}]
-  (->> (if sequence
-         sequence
-         (case type
-           :+ (range min-item (inc (long max-item)))
-           :- (range max-item (dec (long min-item)) -1)))
-       ;;Ensure dtype/get-value works on result.
-       vec))
+  [{:keys [min-item max-item type sequence] :as cseq}]
+  (if sequence
+    sequence
+    (case type
+      :+ (range min-item (inc (long max-item)))
+      :- (range max-item (dec (long min-item)) -1))))
 
 
 (defn classified-sequence-max
@@ -100,7 +98,7 @@
                                                       :select-arg select-sequence}))))
   (let [source-sequence (classified-sequence->sequence source-sequence)]
     (->> (classified-sequence->sequence select-sequence)
-         (map #(get source-sequence (long %)))
+         (map #(dtype/get-value source-sequence (long %)))
          classify-sequence)))
 
 

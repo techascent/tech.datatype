@@ -321,3 +321,15 @@
                                                         (reverse (range 10))))]
       (is (= (vec (range 10))
              (vec (map int (sort breader))))))))
+
+
+(deftest object->string-reader-cast
+  (is (= :string
+         (-> (dtype/->reader ["a" "b"] :string)
+             (dtype/get-datatype)))))
+
+
+(deftest object->uint16
+  (is (= :uint16
+         (-> (dtype/->reader [1 2] :uint16)
+             (dtype/get-datatype)))))

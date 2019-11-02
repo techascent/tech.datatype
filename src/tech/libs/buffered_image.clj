@@ -13,6 +13,7 @@
             DataBufferByte DataBufferDouble DataBufferFloat
             DataBufferInt DataBufferShort DataBufferUShort
             DataBuffer]
+           [java.awt RenderingHints]
            [java.io InputStream]
            [tech.v2.datatype ShortReader ShortWriter]
            [javax.imageio ImageIO])
@@ -335,3 +336,23 @@
   [img format-str fname-or-stream]
   (with-open [ostream (io/output-stream fname-or-stream)]
     (ImageIO/write img format-str ostream)))
+
+
+(defn downsample-bilinear
+  ^BufferedImage [^BufferedImage src-img & {:keys [dst-img-width
+                                                   dst-img-height]}]
+  (let [src-img-width (.getWidth src-img)
+        src-img-height (.getHeight src-img)
+        dst-img-width (long (or dst-img-width
+                                (quot src-img-width 2)))
+        dst-img-height (long (or (dst-img-height)
+                                 (quot src-img-height 2)))
+        resized (BufferedImage. dst-img-width dst-img-height
+                                BufferedImage/TYPE_4BYTE_ABGR)]
+    (doto (.createGraphics resized)
+      (.setRenderingHint RenderingHints/KEY_INTERPOLATION
+                         RenderingHints/VALUE_INTERPOLATION_BILINEAR)
+      (.drawImage src-img 0 0 dst-img-width dst-img-height 0 0
+                  src-img-width src-img-height nil)
+      (.dispose))
+    resized))

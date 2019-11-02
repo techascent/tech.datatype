@@ -37,5 +37,5 @@
 (defn make-indexed-writer
   [indexes values {:keys [datatype unchecked?]}]
   (let [datatype (or datatype (dtype-proto/get-datatype values))
-        writer-fn (get indexed-writer-creators (casting/flatten-datatype datatype))]
+        writer-fn (get indexed-writer-creators (casting/safe-flatten datatype))]
     (writer-fn indexes values unchecked?)))

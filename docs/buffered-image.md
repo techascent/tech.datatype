@@ -141,4 +141,86 @@ user> (bufimg/as-ubyte-tensor test-img)
   [0   0 0]
   [0   0 0]
   [0   0 0]]]
+
+;;Having images be tensors is useful for a few things, but stats is one of them.
+
+user> (def planar-tens (dtt/transpose test-tens [2 0 1]))
+#'user/planar-tens
+user> planar-tens
+#tech.v2.tensor<uint8>[3 288 512]
+[[[172 172 171 ... 24 24 24]
+  [173 174 173 ... 23 23 23]
+  [174 175 174 ... 23 22 22]
+  ...
+  [ 37  37  37 ... 55 54 55]
+  [ 36  35  35 ... 52 50 53]
+  [ 39  37  34 ... 51 49 53]]
+ [[170 170 169 ... 18 18 18]
+  [171 172 171 ... 17 17 17]
+  [172 173 172 ... 17 16 16]
+  ...
+  [ 46  46  46 ... 51 50 51]
+  [ 45  44  44 ... 51 49 52]
+  [ 48  46  43 ... 50 48 52]]
+ [[170 170 169 ... 23 23 23]
+  [171 172 171 ... 22 22 22]
+  [172 173 172 ... 22 21 21]
+  ...
+  [ 84  84  83 ... 56 55 56]
+  [ 83  82  81 ... 55 53 56]
+  [ 86  84  80 ... 54 52 56]]]
+user> (require '[tech.v2.datatype.functional :as dfn])
+nil
+user> (map dfn/descriptive-stats planar-tens)
+({:min 0.0,
+  :mean 97.47846137154495,
+  :ecount 147456,
+  :standard-deviation 60.735870710272195,
+  :median 97.0,
+  :max 248.0}
+ {:min 5.0,
+  :mean 101.00441487631271,
+  :ecount 147456,
+  :standard-deviation 58.55138215866227,
+  :median 102.0,
+  :max 255.0}
+ {:min 5.0,
+  :mean 113.43905978729688,
+  :ecount 147456,
+  :standard-deviation 57.79730239195752,
+  :median 115.0,
+  :max 255.0})
+
+
+;;Drawing images work well in order to copy parts of one:
+(def new-img (bufimg/new-image 512 512 :int-argb))
+#'user/new-img
+user> (bufimg/draw-image! test-img new-img :dst-y-offset 128)
+#object[java.awt.image.BufferedImage 0x1ec0f94c "BufferedImage@1ec0f94c: type = 2 DirectColorModel: rmask=ff0000 gmask=ff00 bmask=ff amask=ff000000 IntegerInterleavedRaster: width = 512 height = 512 #Bands = 4 xOff = 0 yOff = 0 dataOffset[0] 0"]
+
+;;But so does selecting subrects of tensors
+
+user> (def copy-tens (dtt/select (bufimg/as-ubyte-tensor new-img) (range 128 (+ 288 128)) :all [0 1 2]))
+#'user/copy-tens
+user> copy-tens
+#tech.v2.tensor<uint8>[288 512 3]
+[[[172 170 170]
+  [172 170 170]
+  [171 169 169]
+  ...
+  [ 24  18  23]
+  [ 24  18  23]
+  [ 24  18  23]]
+
+
+user> (dtype/copy! test-img copy-tens)
+#tech.v2.tensor<uint8>[288 512 3]
+[[[172 170 170]
+  [172 170 170]
+  [171 169 169]
+  ...
+  [ 24  18  23]
+  [ 24  18  23]
+  [ 24  18  23]]
+  ...
 ```

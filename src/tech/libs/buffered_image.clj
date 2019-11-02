@@ -19,6 +19,8 @@
            [javax.imageio ImageIO])
   (:refer-clojure :exclude [load]))
 
+(set! *warn-on-reflection* true)
+
 
 (def image-types
   {:byte-bgr BufferedImage/TYPE_3BYTE_BGR
@@ -87,6 +89,9 @@
     (typed-buffer/set-datatype nio-buf (dtype-proto/get-datatype data-buf))))
 
 
+(declare new-image)
+
+
 (extend-type DataBuffer
   dtype-proto/PDatatype
   (get-datatype [item]
@@ -97,6 +102,12 @@
     (long (* (.getSize item)
              (.getNumBanks item))))
 
+  dtype-proto/PShape
+  (shape [item]
+    (if (> (.getNumBanks item) 1)
+      [(.getNumBanks item) (.getSize item)]
+      [(.getSize item)]))
+
   dtype-proto/PToNioBuffer
   (convertible-to-nio-buffer? [item]
     (and (= 1 (.getNumBanks item))
@@ -106,6 +117,11 @@
       (-> (data-buffer-banks item)
           first
           (dtype-proto/->buffer-backing-store))))
+  dtype-proto/PBuffer
+  (sub-buffer [item offset len]
+    (if-let [nio-buf (data-buffer-as-typed-buffer item)]
+      (dtype-proto/sub-buffer nio-buf offset len)
+      (throw (Exception. "Failed to get sub buffer of composite data buffer"))))
   dtype-proto/PToReader
   (convertible-to-reader? [item] true)
   (->reader [item options]
@@ -170,6 +186,9 @@
   (.. img getRaster getDataBuffer))
 
 
+(declare draw-image! as-ubyte-tensor)
+
+
 (extend-type BufferedImage
   dtype-proto/PDatatype
   (get-datatype [item]
@@ -188,6 +207,33 @@
         :byte-abgr-pre [height width 4]
         :byte-gray [height width 1]
         [height width 1])))
+  dtype-proto/PPrototype
+  (from-prototype [item datatype shape]
+    (when-not (= 3 (count shape))
+      (throw (Exception. "Shape must be 3 dimensional")))
+    (case datatype
+      :uint8 (case (long (last shape))
+               1 (BufferedImage. (second shape) (first shape)
+                                 BufferedImage/TYPE_BYTE_GRAY)
+               3 (BufferedImage. (second shape) (first shape)
+                                 BufferedImage/TYPE_3BYTE_BGR)
+               4 (BufferedImage. (second shape) (first shape)
+                                 (BufferedImage/TYPE_4BYTE_ABGR)))
+      :int32 (case (long (last shape))
+               3 (BufferedImage. (second shape) (first shape)
+                                 BufferedImage/TYPE_INT_RGB)
+               4 (BufferedImage. (second shape) (first shape)
+                                 BufferedImage/TYPE_INT_ARGB))))
+
+  dtype-proto/PClone
+  (clone [item datatype]
+    (if (= datatype (dtype/get-datatype item))
+      (dtype/copy! item
+                   (BufferedImage. (.getWidth item) (.getHeight item)
+                                   (.getType item)))
+      (draw-image! item (dtype-proto/from-prototype item datatype
+                                                    (dtype/shape
+                                                     (as-ubyte-tensor item))))))
   dtype-proto/PToNioBuffer
   (convertible-to-nio-buffer? [item]
     (dtype-proto/convertible-to-nio-buffer?
@@ -199,10 +245,35 @@
   (convertible-to-reader? [item] true)
   (->reader [item options]
     (dtype-proto/->reader (buffered-image->data-buffer item) options))
+  dtype-proto/PBuffer
+  (sub-buffer [item offset len]
+    (-> (buffered-image->data-buffer item)
+        (dtype-proto/sub-buffer offset len)))
   dtype-proto/PToWriter
   (convertible-to-writer? [item] true)
   (->writer [item options]
     (dtype-proto/->writer (buffered-image->data-buffer item) options)))
+
+
+(deftype SimpleReadWriteBuffer [reader writer]
+  dtype-proto/PDatatype
+  (get-datatype [item] (dtype-proto/get-datatype reader))
+  dtype-proto/PShape
+  (shape [item] (dtype-proto/shape reader))
+  dtype-proto/PCountable
+  (ecount [item] (dtype-proto/ecount reader))
+  dtype-proto/PToReader
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
+    (dtype-proto/->reader reader options))
+  dtype-proto/PToWriter
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (dtype-proto/->writer writer options))
+  dtype-proto/PBuffer
+  (sub-buffer [item offset length]
+    (SimpleReadWriteBuffer. (dtype-proto/sub-buffer reader offset length)
+                            (dtype-proto/sub-buffer writer offset length))))
 
 
 (deftype PackedIntUbyteBuffer [int-buffer n-elems shape n-channels
@@ -215,6 +286,37 @@
   (shape [item] shape)
   dtype-proto/PToReader
   (convertible-to-reader? [item] true)
+  dtype-proto/PBuffer
+  (sub-buffer [item offset len]
+    (-> (SimpleReadWriteBuffer. (dtype-proto/->reader item {})
+                                (dtype-proto/->writer item {}))
+        (dtype-proto/sub-buffer offset len)))
+  dtype-proto/PClone
+  (clone [item datatype]
+    (when-not (= datatype :uint8)
+      (throw (Exception. "Cannot create packed buffer for arbitrary datatypes")))
+    (PackedIntUbyteBuffer. (dtype-proto/clone int-buffer datatype)
+                           n-elems
+                           shape
+                           n-channels
+                           unsynchronized-writes?))
+  dtype-proto/PPrototype
+  (from-prototype [item datatype shape]
+    (when-not (= datatype :uint8)
+      (throw (Exception. "Cannot create packed buffer for arbitrary datatypes")))
+    (when-not (>= (count shape) 2)
+      (throw (Exception. "Must have more than 1 shape entry")))
+    (let [n-channels (last shape)
+          n-pixels (apply * (butlast shape))]
+      (when (> n-channels 4)
+        (throw (Exception. "More than 4 ubyte entries in 32 byte integer")))
+
+      (PackedIntUbyteBuffer. (dtype-proto/from-prototype int-buffer :int32
+                                                         [n-pixels])
+                             (apply * shape)
+                             shape
+                             n-channels
+                             unsynchronized-writes?)))
   (->reader [item options]
     (let [n-channels (long n-channels)
           src-reader (typecast/datatype->reader :int32 int-buffer)]
@@ -325,15 +427,15 @@
 
 (defn load
   "Load an image.  There are better versions of this in tech.io"
-  [fname-or-stream]
+  ^BufferedImage [fname-or-stream]
   (with-open [istream (io/input-stream fname-or-stream)]
     (ImageIO/read ^InputStream istream)))
 
 
-(defn save
+(defn save!
   "Save an image.  Format-str can be things like \"PNG\" or \"JPEG\".
   There are better versions of this in tech.io."
-  [img format-str fname-or-stream]
+  [^BufferedImage img ^String format-str fname-or-stream]
   (with-open [ostream (io/output-stream fname-or-stream)]
     (ImageIO/write img format-str ostream)))
 
@@ -356,3 +458,20 @@
                   src-img-width src-img-height nil)
       (.dispose))
     resized))
+
+
+(defn draw-image!
+  [^BufferedImage src-img ^BufferedImage dst-image
+   & {:keys [dst-x-offset dst-y-offset]}]
+  (let [img-width (.getWidth src-img)
+        img-height (.getHeight src-img)
+        dst-x-offset (long (or dst-x-offset 0))
+        dst-y-offset (long (or dst-y-offset 0))]
+    (doto (.getGraphics dst-image)
+      (.drawImage src-img dst-x-offset dst-y-offset
+                  (+ img-width dst-x-offset)
+                  (+ img-height dst-y-offset)
+                  0 0 img-width img-height
+                  nil)
+      (.dispose))
+    dst-image))

@@ -129,8 +129,10 @@
 
 (defn set-constant!
   "Set a constant value on a container."
-  [item offset value elem-count]
-  (base/set-constant! item offset value elem-count))
+  ([item offset value elem-count]
+   (base/set-constant! item offset value elem-count))
+  ([item value]
+   (base/set-constant! item 0 value (base/ecount item))))
 
 
 (defn get-value

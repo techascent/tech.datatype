@@ -118,7 +118,6 @@ user> (bufimg/as-ubyte-tensor test-img)
                         (bufimg/as-ubyte-tensor test-img)))
 #'user/img-writer
 user> (.write3d img-writer 2 2 1 255)
-Writing to index: 31
 nil
 user> (dtype/->reader test-img)
 [0 0 0 0 0 0 0 0 0 0 65280 0 0 0 0 0]

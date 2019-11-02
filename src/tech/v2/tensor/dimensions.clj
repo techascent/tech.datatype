@@ -271,7 +271,7 @@
 
 
 (defmacro ^:private impl-idx-reader
-  [n-elems opcode tenscode2d tenscode]
+  [n-elems opcode tenscode2d tenscode3d tenscode]
   `(reify
      IndexingSystem$Forward
      (lsize [item#] ~n-elems)
@@ -281,6 +281,7 @@
                                 (dtype/->iterable arglist# :int64)))
      tech.v2.tensor.LongTensorReader
      (read2d [~'reader ~'row ~'col] ~tenscode2d)
+     (read3d [~'reader ~'row ~'col ~'chan] ~tenscode3d)
      (tensorRead [~'reader ~'indexes] ~tenscode)))
 
 
@@ -352,9 +353,15 @@ to be reversed for the most efficient implementation."
         stride-1 (int (if (>= n-dims 2)
                         (.read stride-reader 1)
                         0))
+        stride-2 (int (if (>= n-dims 3)
+                        (.read stride-reader 2)
+                        0))
         shape-0 (int (first vec-shape))
         shape-1 (int (if (>= n-dims 2)
                        (second vec-shape)
+                       1))
+        shape-2 (int (if (>= n-dims 3)
+                       (nth vec-shape 2)
                        1))]
     (cond
       ;;Special case for indexes that increase monotonically
@@ -365,6 +372,9 @@ to be reversed for the most efficient implementation."
       (impl-idx-reader n-elems idx
                        (+ (* (int row) stride-0)
                           (* (int col) stride-1))
+                       (+ (* (int row) stride-0)
+                          (* (int col) stride-1)
+                          (* (int chan) stride-2))
                        (dense-integer-dot-product indexes stride-reader))
       ;;Special case for broadcasting a vector across an image (like applying bias).
       (and direct?
@@ -383,6 +393,9 @@ to be reversed for the most efficient implementation."
                               local-ec)
                          (+ (* (rem row shape-0) stride-0)
                             (* (rem col shape-1) stride-1))
+                         (+ (* (rem row shape-0) stride-0)
+                            (* (rem col shape-1) stride-1)
+                            (* (rem chan shape-2) stride-2))
                          (dense-integer-dot-product
                           stride-reader
                           (binary-op/binary-iterable-map
@@ -402,6 +415,9 @@ to be reversed for the most efficient implementation."
                        (rem idx local-ec)
                        (+ (* (rem row shape-0) stride-0)
                           (* (rem col shape-1) stride-1))
+                       (+ (* (rem row shape-0) stride-0)
+                          (* (rem col shape-1) stride-1)
+                          (* (rem chan shape-2) stride-2))
                        (dense-integer-dot-product
                         stride-reader
                         (binary-op/binary-iterable-map
@@ -426,13 +442,22 @@ to be reversed for the most efficient implementation."
                 shape-1 (int (if (>= n-dims 2)
                                (aget rev-shape 1)
                                1))
+                shape-2 (int (if (>= n-dims 3)
+                               (aget rev-shape 2)
+                               1))
                 offset-0 (aget rev-offsets 0)
                 offset-1 (int (if (>= n-dims 2)
                                 (aget rev-offsets 1)
                                 0))
+                offset-2 (int (if (>= n-dims 3)
+                                (aget rev-offsets 2)
+                                0))
                 stride-0 (aget rev-strides 0)
                 stride-1 (int (if (>= n-dims 2)
                                 (aget rev-strides 1)
+                                0))
+                stride-2 (int (if (>= n-dims 3)
+                                (aget rev-strides 2)
                                 0))]
             (if (and (not broadcast?)
                      (<= n-dims 2)
@@ -449,6 +474,9 @@ to be reversed for the most efficient implementation."
                  ;;We reversed them, so the indexes may be seem odd.
                  (+ (* (rem (unchecked-add col offset-0) shape-0) stride-0)
                     (* (rem (unchecked-add row offset-1) shape-1) stride-1))
+                 (+ (* (rem (unchecked-add chan offset-0) shape-0) stride-0)
+                    (* (rem (unchecked-add col offset-1) shape-1) stride-1)
+                    (* (rem (unchecked-add row offset-2) shape-2) stride-2))
                  (let [iter (typecast/datatype->iter :int64 indexes)]
                    (.read2d reader (.nextLong iter) (.nextLong iter))))
                 (impl-idx-reader
@@ -456,6 +484,7 @@ to be reversed for the most efficient implementation."
                  (let [first-elem (rem (+ idx offset-0) shape-0)]
                    (* first-elem stride-0))
                  (* (rem (unchecked-add col offset-0) shape-0) stride-0)
+                 (* (rem (unchecked-add chan offset-0) shape-0) stride-0)
                  (.read2d reader 0 (-> (typecast/datatype->iter :int64 indexes)
                                        (.nextLong)))))
               ;;Broadcasting with offsets but direct shape general case.
@@ -477,6 +506,10 @@ to be reversed for the most efficient implementation."
                      offset)))
                (+ (* (rem (unchecked-add col offset-0) shape-0) stride-0)
                   (* (rem (unchecked-add row offset-1) shape-1) stride-1))
+               (+ (* (rem (unchecked-add chan offset-0) shape-0) stride-0)
+                  (* (rem (unchecked-add col offset-1) shape-1) stride-1)
+                  (* (rem (unchecked-add row offset-2) shape-2) stride-2))
+
                (let [indexes (binary-op/binary-iterable-map
                               {:datatype :int32}
                               add-int-op
@@ -507,8 +540,11 @@ to be reversed for the most efficient implementation."
                                                              (int-array rev-max-shape))
                 max-strides (extend-strides max-shape)
                 max-stride-0 (int (first max-strides))
-                max-stride-1 (int (if (>= 2 n-dims)
+                max-stride-1 (int (if (>= n-dims 2)
                                     (second max-strides)
+                                    0))
+                max-stride-2 (int (if (>= n-dims 3)
+                                    (nth max-strides 2)
                                     0))
                 reverse-shape
                 ;;map into a vec guaranteed to be LongReaders
@@ -545,6 +581,10 @@ to be reversed for the most efficient implementation."
              (.read reader
                     (+ (* row max-stride-0)
                        (* col max-stride-1)))
+             (.read reader
+                    (+ (* row max-stride-0)
+                       (* col max-stride-1)
+                       (* chan max-stride-2)))
              (.read reader (int (dense-integer-dot-product indexes
                                                            max-strides))))))))))
 

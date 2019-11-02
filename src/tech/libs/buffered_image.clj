@@ -166,7 +166,7 @@
 
 (defn buffered-image->data-buffer
   ^DataBuffer [^BufferedImage img]
-  (.. img getData getDataBuffer))
+  (.. img getRaster getDataBuffer))
 
 
 (extend-type BufferedImage

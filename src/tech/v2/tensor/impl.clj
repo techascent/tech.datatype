@@ -126,6 +126,8 @@
          (.read data# (.read indexer# idx#)))
        (read2d [reader# row# col#]
          (.read data# (.read2d indexer# row# col#)))
+       (read3d [reader# row# col# chan#]
+         (.read data# (.read3d indexer# row# col# chan#)))
        (tensorRead [reader# indexes#]
          (.read data# (.tensorRead indexer# indexes#)))
        (applyTo [item# arglist#]
@@ -202,7 +204,7 @@
          ;;Can't think of a better way of doing this.
          ;;pprint requires the tensor methods *but* tostring requires
          ;;pprint...
-         (with-out-str (println base-tensor#)))
+         (.toString base-tensor#))
 
        sparse-proto/PSparse
        (index-seq [item#]
@@ -216,6 +218,106 @@
        sparse-proto/PToSparse
        (convertible-to-sparse? [item#] (not (nil? ~sparse-reader)))
        (->sparse [item#] item#))))
+
+
+(defmacro make-tensor-writer
+  [writer-datatype datatype item-shape indexer writer base-tensor]
+  `(let [^tech.v2.tensor.LongTensorReader indexer# ~indexer
+         data# (typecast/datatype->writer ~writer-datatype ~writer)
+         shape# ~item-shape
+         n-elems# (long (apply * 1 shape#))
+         n-dims# (count shape#)
+         strides# (dims/extend-strides shape#)
+         base-tensor# ~base-tensor]
+     (reify
+       ~(tens-typecast/datatype->tensor-writer-type writer-datatype)
+       (getDatatype [item#] ~datatype)
+       (lsize [item#] n-elems#)
+       (write [item# idx# value#]
+         (.write data# (.read indexer# idx#) value#))
+       (write2d [writer# row# col# value#]
+         (.write data# (.read2d indexer# row# col#) value#))
+       (write3d [writer# row# col# chan# value#]
+         (.write data# (.read3d indexer# row# col# chan#) value#))
+       (tensorWrite [writer# indexes# value#]
+         (.write data# (.tensorRead indexer# indexes#) value#))
+       (applyTo [item# arglist#]
+         (.write data# (apply indexer# (butlast arglist#))
+                 (casting/datatype->cast-fn :unknown ~writer-datatype
+                                            (last arglist#))))
+
+       dtype-proto/PShape
+       (shape [m] shape#)
+
+       tens-proto/PTensor
+       (is-tensor? [item#] true)
+       (dimensions [item#] (tens-proto/dimensions base-tensor#))
+       (buffer [item#] (tens-proto/buffer base-tensor#))
+
+       tens-proto/PToTensor
+       (convertible-to-tensor? [item#] true)
+       (convert-to-tensor [item#] base-tensor#)
+
+       dtype-proto/PPrototype
+       (from-prototype [m# datatype# shape#]
+         (dtype-proto/from-prototype base-tensor# datatype# shape#))
+
+       dtype-proto/PToNioBuffer
+       (convertible-to-nio-buffer? [item#]
+         (dtype-proto/convertible-to-nio-buffer?  base-tensor#))
+       (->buffer-backing-store [item#]
+         (dtype-proto/->buffer-backing-store base-tensor#))
+
+       dtype-proto/PToList
+       (convertible-to-fastutil-list? [item#]
+         (dtype-proto/convertible-to-fastutil-list? base-tensor#))
+       (->list-backing-store [item#]
+         (dtype-proto/->list-backing-store base-tensor#))
+
+       jna/PToPtr
+       (is-jna-ptr-convertible? [item#]
+         (jna/is-jna-ptr-convertible? base-tensor#))
+       (->ptr-backing-store [item#]
+         (jna/->ptr-backing-store base-tensor#))
+
+
+       dtype-proto/PToBufferDesc
+       (convertible-to-buffer-desc? [item#]
+         (dtype-proto/convertible-to-buffer-desc? base-tensor#))
+       (->buffer-descriptor [item#]
+         (dtype-proto/->buffer-descriptor base-tensor#))
+
+
+       dtype-proto/PBuffer
+       (sub-buffer [item# offset# length#]
+         (dtype-proto/sub-buffer base-tensor# offset# length#))
+
+       dtype-proto/PSetConstant
+       (set-constant! [item# offset# value# elem-count#]
+         (dtype-proto/set-constant! base-tensor# offset# value# elem-count#))
+
+       dtype-proto/PWriteIndexes
+       (write-indexes! [item# indexes# values# options#]
+         (dtype-proto/write-indexes! base-tensor# indexes# values# options#))
+
+
+       dtype-proto/PToWriter
+       (convertible-to-writer? [item#]
+         (dtype-proto/convertible-to-writer? base-tensor#))
+       (->writer [item# options#]
+         (dtype-proto/->writer base-tensor# options#))
+
+
+       dtype-proto/PBufferType
+       (buffer-type [item#]
+         (dtype-proto/buffer-type base-tensor#))
+
+       Object
+       (toString [item]
+         ;;Can't think of a better way of doing this.
+         ;;pprint requires the tensor methods *but* tostring requires
+         ;;pprint...
+         (.toString base-tensor#)))))
 
 
 (defn- make-tensor-base-sparse-reader
@@ -260,6 +362,7 @@
                                              data
                                              {})
          (dims/ecount dimensions))))))
+
 
 
 (declare slice construct-tensor)
@@ -463,6 +566,44 @@
                                           item)
              :object (make-tensor-reader :object datatype item-shape
                                          indexes data-reader sparse-data
+                                         item))))))
+   tens-proto/PToTensorWriter
+   (convertible-to-tensor-writer? [item]
+     (dtype-proto/convertible-to-writer? buffer))
+   (->tensor-writer [item options]
+     (let [{:keys [datatype]} options]
+       (if (and (simple-dimensions? dimensions)
+                (instance? (resolve (tens-typecast/datatype->tensor-writer-type
+                                     datatype))
+                           buffer))
+         buffer
+         (let [data-writer (dtype-proto/->writer buffer options)
+               indexes (dimensions->index-reader dimensions)
+               item-shape (dtype-proto/shape item)]
+           (case (casting/safe-flatten datatype)
+             :int8 (make-tensor-writer :int8 datatype item-shape
+                                       indexes data-writer
+                                       item)
+             :int16 (make-tensor-writer :int16 datatype item-shape
+                                        indexes data-writer
+                                        item)
+             :int32 (make-tensor-writer :int32 datatype item-shape
+                                        indexes data-writer
+                                        item)
+             :int64 (make-tensor-writer :int64 datatype item-shape
+                                        indexes data-writer
+                                        item)
+             :float32 (make-tensor-writer :float32 datatype item-shape
+                                          indexes data-writer
+                                          item)
+             :float64 (make-tensor-writer :float64 datatype item-shape
+                                          indexes data-writer
+                                          item)
+             :boolean (make-tensor-writer :boolean datatype item-shape
+                                          indexes data-writer
+                                          item)
+             :object (make-tensor-writer :object datatype item-shape
+                                         indexes data-writer
                                          item))))))
    Iterable
    (iterator [item]

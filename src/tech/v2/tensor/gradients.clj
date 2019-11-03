@@ -111,7 +111,7 @@ This leads to ambiguous results as pixels not written to will be black but not t
                    res-tens)
         res-tens (tens-typecast/datatype->tensor-writer
                   :uint8 res-tens)
-        n-gradient-increments (long gradient-default-n)
+        gradient-default-n (long gradient-default-n)
         gradient-line
         (cond
           (keyword? gradient-name)
@@ -128,10 +128,10 @@ This leads to ambiguous results as pixels not written to will be black but not t
           gradient-name
           (instance? IFn gradient-name)
           (dtt/->tensor
-           (->> (range n-gradient-increments)
+           (->> (range gradient-default-n)
                 (map (fn [idx]
                        (let [p-val (/ (double idx)
-                                      (double n-gradient-increments))
+                                      (double gradient-default-n))
                              grad-val (gradient-name p-val)]
                          (when-not (= 3 (count grad-val))
                            (throw (Exception. (format

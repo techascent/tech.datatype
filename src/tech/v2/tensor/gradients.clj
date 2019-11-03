@@ -170,6 +170,9 @@ function returned: %s"
 
 
 (comment
+  (require '[clojure.java.io :as io])
+  (io/make-parents "gradient-demo/test.txt")
+
   (def test-src-tens (dtt/->tensor (repeat 128 (range 0 512))))
   (doseq [grad-name (keys @gradient-map)]
     (bufimg/save! (apply-gradient test-src-tens grad-name)

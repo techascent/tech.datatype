@@ -442,15 +442,16 @@
 
 (defn downsample-bilinear
   ^BufferedImage [^BufferedImage src-img & {:keys [dst-img-width
-                                                   dst-img-height]}]
+                                                   dst-img-height
+                                                   dst-img-type]}]
   (let [src-img-width (.getWidth src-img)
         src-img-height (.getHeight src-img)
         dst-img-width (long (or dst-img-width
                                 (quot src-img-width 2)))
         dst-img-height (long (or (dst-img-height)
                                  (quot src-img-height 2)))
-        resized (BufferedImage. dst-img-width dst-img-height
-                                BufferedImage/TYPE_4BYTE_ABGR)]
+        dst-img-type (or dst-img-type (image-type src-img))
+        resized (new-image dst-img-width dst-img-height dst-img-type)]
     (doto (.createGraphics resized)
       (.setRenderingHint RenderingHints/KEY_INTERPOLATION
                          RenderingHints/VALUE_INTERPOLATION_BILINEAR)

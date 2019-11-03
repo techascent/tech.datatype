@@ -1,4 +1,4 @@
-(ns tech.v2.tensor.gradients.build-gradients
+(ns tech.v2.tensor.color-gradients.build-gradients
   (:require [clojure.java.io :as io]
             [clojure.java.shell :as sh]
             [clojure.edn :as edn]

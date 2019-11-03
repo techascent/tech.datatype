@@ -448,7 +448,7 @@
         src-img-height (.getHeight src-img)
         dst-img-width (long (or dst-img-width
                                 (quot src-img-width 2)))
-        dst-img-height (long (or (dst-img-height)
+        dst-img-height (long (or dst-img-height
                                  (quot src-img-height 2)))
         dst-img-type (or dst-img-type (image-type src-img))
         resized (new-image dst-img-width dst-img-height dst-img-type)]

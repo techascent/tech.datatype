@@ -1,4 +1,4 @@
-(ns tech.v2.tensor.gradients
+(ns tech.v2.tensor.color-gradients
   "https://reference.wolfram.com/language/guide/ColorSchemes.html"
   (:require [clojure.java.io :as io]
             [tech.v2.tensor :as dtt]
@@ -31,8 +31,8 @@
      (double (or error 0.001))))
 
 
-(defn apply-gradient
-  "Apply a gradient to a tensor returning an image.  If data-min, data-max aren't
+(defn colorize
+  "Apply a color gradient to a tensor returning an image.  If data-min, data-max aren't
   provided they are found in the data.  A buffered image is returned.
   src-tens - Source tensor whose shape determines the shape of the final image.
   gradient-name -  may be a keyword, in which it must be a key in @gradient-map and
@@ -51,7 +51,8 @@
     in those sections.
   :check-invalid? - If true then the data is scanned for NAN or INF's.  Used in
     conjunction with :alpha?
-  :invert-gradient? - When true, reverses the provided gradient."
+  :invert-gradient? - When true, reverses the provided gradient.
+  :gradient-default-n - When an IFn is provided, it is quantized over n steps."
   [src-tens gradient-name & {:keys [data-min data-max
                                     alpha?
                                     check-invalid?
@@ -175,7 +176,7 @@ function returned: %s"
 
   (def test-src-tens (dtt/->tensor (repeat 128 (range 0 512))))
   (doseq [grad-name (keys @gradient-map)]
-    (bufimg/save! (apply-gradient test-src-tens grad-name)
+    (bufimg/save! (colorize test-src-tens grad-name)
                   "PNG"
                   (format "gradient-demo/%s.png" (name grad-name))))
   (defn bad-range
@@ -188,7 +189,7 @@ function returned: %s"
   ;;Sometimes data has NAN's or INF's
   (def test-nan-tens (dtt/->tensor (repeatedly 128 #(bad-range 0 512))))
   (doseq [grad-name (keys @gradient-map)]
-    (bufimg/save! (apply-gradient test-nan-tens grad-name
+    (bufimg/save! (colorize test-nan-tens grad-name
                                   :alpha? true
                                   :check-invalid? true)
                   "PNG"
@@ -202,7 +203,7 @@ function returned: %s"
                                            [(* 255 p-value) 0 (* (- 1.0 p-value)
                                                                  255)]))))))
 
-  (bufimg/save! (apply-gradient test-src-tens custom-gradient-tens)
+  (bufimg/save! (colorize test-src-tens custom-gradient-tens)
                 "PNG"
                 "gradient-demo/custom-tensor-gradient.png")
 
@@ -211,7 +212,7 @@ function returned: %s"
     (let [one-m-p (- 1.0 p-value)]
       [(* 255 one-m-p) (* 255 p-value) (* 255 one-m-p)]))
 
-  (bufimg/save! (apply-gradient test-src-tens custom-gradient-fn)
+  (bufimg/save! (colorize test-src-tens custom-gradient-fn)
                 "PNG"
                 "gradient-demo/custom-ifn-gradient.png")
   )

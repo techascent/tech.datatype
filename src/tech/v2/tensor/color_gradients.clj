@@ -32,9 +32,12 @@
 
 
 (defn colorize
-  "Apply a color gradient to a tensor returning an image.  If data-min, data-max aren't
-  provided they are found in the data.  A buffered image is returned.
+  "Apply a color gradient to a tensor returning an image.  Takes A 1 or 2d tensor.
+   If data-min, data-max aren't provided they are found in the data.
+   A buffered image is returned.
+
   src-tens - Source tensor whose shape determines the shape of the final image.
+
   gradient-name -  may be a keyword, in which it must be a key in @gradient-map and
       these gradients come from:
       https://reference.wolfram.com/language/guide/ColorSchemes.html.

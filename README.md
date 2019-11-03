@@ -2,6 +2,12 @@
 [![Clojars Project](https://clojars.org/techascent/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
 
 
+| Morning                                 | Noon                              |
+|---------                                |-------                            |
+|![morning](docs/images/morning-conus.png)|![noon](docs/images/noon-conus.png)|
+
+
+
 `tech.datatype` is for efficient manipulation of containers of data.
 
 A nice (slightly out of date) post explaining more is [here](http://techascent.com/blog/datatype-library.html).

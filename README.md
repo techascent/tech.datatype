@@ -13,7 +13,7 @@ HRRR and GFS models.
 
 
 * For a quick feel of the library, please check out our [cheatsheet](docs/cheatsheet.md)
-* Check out or docs on [buffered images](docs/buffered-images.md)
+* Check out our docs on [buffered images](docs/buffered-images.md)
 * APL-style [game of life](test/tech/v2/apl/game_of_life.clj)
 
 

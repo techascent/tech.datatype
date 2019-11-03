@@ -1,16 +1,25 @@
 # tech.datatype
 [![Clojars Project](https://clojars.org/techascent/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
 
+`tech.datatype` is for efficient N-dimensional numerics across a range of primitive
+datatypes.
 
-| Morning                                 | Noon                              |
+As examples of what you may do, here are some colorized tensors built from the US NOAA 
+HRRR and GFS models.
+
+| Morning Temps                           | Noon Temps                        | 
 |---------                                |-------                            |
 |![morning](docs/images/morning-conus.png)|![noon](docs/images/noon-conus.png)|
 
 
+* For a quick feel of the library, please check out our [cheatsheet](docs/cheatsheet.md)
+* Check out or docs on [buffered images](docs/buffered-images.md)
+* APL-style [game of life](test/tech/v2/apl/game_of_life.clj)
 
-`tech.datatype` is for efficient manipulation of containers of data.
 
-A nice (slightly out of date) post explaining more is [here](http://techascent.com/blog/datatype-library.html).
+A nice (slightly out of date) post explaining more is 
+[here](http://techascent.com/blog/datatype-library.html).
+
 
 Generalized efficient manipulations of sequences of primitive datatype.
 Includes specializations for java arrays, array views (subsection of an array)
@@ -26,8 +35,6 @@ efficient full typed copy functions when the types can be ascertained.
   6. n-dimensional tensor support
   7. Functional math support
 
-
-For a quick feel of the library, please check out our [cheatsheet](docs/cheatsheet.md).
 
 
 Design documenation is [here](docs).

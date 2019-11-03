@@ -20,4 +20,4 @@ a tensor:
 ```
 
 
-* [Documentation for colorizing](../src/tech/v2/tensor/color_gradients.clj#34)
+* [Documentation for colorizing](../src/tech/v2/tensor/color_gradients.clj#L34)

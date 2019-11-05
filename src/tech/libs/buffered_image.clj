@@ -8,12 +8,13 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.tensor :as dtt]
             [clojure.java.io :as io]
-            [clojure.set :as c-set])
+            [clojure.set :as c-set]
+            [clojure.string :as s])
   (:import [java.awt.image BufferedImage
             DataBufferByte DataBufferDouble DataBufferFloat
             DataBufferInt DataBufferShort DataBufferUShort
             DataBuffer]
-           [java.awt RenderingHints]
+           [java.awt RenderingHints Graphics2D]
            [java.io InputStream]
            [tech.v2.datatype ShortReader ShortWriter]
            [javax.imageio ImageIO])
@@ -418,8 +419,9 @@
 
 (defn new-image
   "Create a new buffered image.  img-type is a keyword and must be one of the
-  keys in the image-types map."
-  ^BufferedImage [width height img-type]
+  keys in the image-types map.
+  ** Arguments are reverse of the buffered image constructor **"
+  ^BufferedImage [height width img-type]
   (if-let [buf-img-type (get image-types img-type)]
     (BufferedImage. width height buf-img-type)
     (throw (Exception. "Unrecognized image type: %s" img-type))))
@@ -435,9 +437,57 @@
 (defn save!
   "Save an image.  Format-str can be things like \"PNG\" or \"JPEG\".
   There are better versions of this in tech.io."
-  [^BufferedImage img ^String format-str fname-or-stream]
-  (with-open [ostream (io/output-stream fname-or-stream)]
-    (ImageIO/write img format-str ostream)))
+  ([^BufferedImage img ^String format-str fname-or-stream]
+   (with-open [ostream (io/output-stream fname-or-stream)]
+     (ImageIO/write img format-str ostream)))
+  ([img ^String fname-str]
+   (let [format-str (.substring fname-str (inc (.lastIndexOf fname-str ".")))]
+     (save! img format-str fname-str))))
+
+
+(def interpolation-types
+  {:bilinear RenderingHints/VALUE_INTERPOLATION_BILINEAR
+   :cubic RenderingHints/VALUE_INTERPOLATION_BICUBIC
+   :nearest RenderingHints/VALUE_INTERPOLATION_NEAREST_NEIGHBOR})
+
+
+(defn draw-image!
+  "Draw a source image onto a destination image.  This can be used for scaling,
+  cropping, or copying images."
+  [^BufferedImage src-img ^BufferedImage dst-image
+   & {:keys [src-x-offset src-y-offset
+             src-rect-width src-rect-height
+             dst-x-offset dst-y-offset
+             dst-rect-width dst-rect-height
+             interpolation-type]}]
+  (let [dst-x-offset (long (or dst-x-offset 0))
+        dst-y-offset (long (or dst-y-offset 0))
+        src-x-offset (long (or src-x-offset 0))
+        src-y-offset (long (or src-y-offset 0))
+        min-width (min (.getWidth src-img) (.getWidth dst-image))
+        min-height (min (.getHeight src-img) (.getHeight dst-image))
+        src-rect-width (long (or src-rect-width min-width))
+        src-rect-height (long (or src-rect-height min-height))
+        dst-rect-width (long (or dst-rect-width min-width))
+        dst-rect-height (long (or dst-rect-height min-height))
+        g (.getGraphics dst-image)]
+    (when interpolation-type
+      (if-let [inter-num (get interpolation-types interpolation-type)]
+        (.setRenderingHint ^Graphics2D g
+                           RenderingHints/KEY_INTERPOLATION
+                           inter-num)
+        (throw (Exception. (format "Invalid interpolation type: %s"
+                                   interpolation-type)))))
+    (doto g
+      (.drawImage src-img dst-x-offset dst-y-offset
+                  (+ dst-rect-width dst-x-offset)
+                  (+ dst-rect-height dst-y-offset)
+                  src-x-offset src-y-offset
+                  (+ src-rect-width src-x-offset)
+                  (+ src-rect-height src-y-offset)
+                  nil)
+      (.dispose))
+    dst-image))
 
 
 (defn downsample-bilinear
@@ -452,27 +502,51 @@
                                  (quot src-img-height 2)))
         dst-img-type (or dst-img-type (image-type src-img))
         resized (new-image dst-img-width dst-img-height dst-img-type)]
-    (doto (.createGraphics resized)
-      (.setRenderingHint RenderingHints/KEY_INTERPOLATION
-                         RenderingHints/VALUE_INTERPOLATION_BILINEAR)
-      (.drawImage src-img 0 0 dst-img-width dst-img-height 0 0
-                  src-img-width src-img-height nil)
-      (.dispose))
-    resized))
+    (draw-image! src-img resized
+                 :src-rect-width src-img-width
+                 :src-rect-height src-img-height
+                 :dst-rect-width dst-img-width
+                 :dst-rect-height dst-img-height
+                 :interpolation-type :bilinear)))
 
 
-(defn draw-image!
-  [^BufferedImage src-img ^BufferedImage dst-image
-   & {:keys [dst-x-offset dst-y-offset]}]
-  (let [img-width (.getWidth src-img)
-        img-height (.getHeight src-img)
-        dst-x-offset (long (or dst-x-offset 0))
-        dst-y-offset (long (or dst-y-offset 0))]
-    (doto (.getGraphics dst-image)
-      (.drawImage src-img dst-x-offset dst-y-offset
-                  (+ img-width dst-x-offset)
-                  (+ img-height dst-y-offset)
-                  0 0 img-width img-height
-                  nil)
-      (.dispose))
-    dst-image))
+(defn resize
+  [src-img new-width new-height {:keys [resize-algorithm
+                                        dst-img-type]}]
+  (let [[src-height src-width _n-channels] (dtype/shape src-img)
+        retval (new-image new-width new-width
+                          (or dst-img-type
+                              (image-type src-img)))
+         resize-algorithm (or resize-algorithm
+                              (if (> (int new-width)
+                                     (int src-width))
+                                :bilinear
+                                :nearest))]
+    (draw-image! src-img retval
+                 :src-rect-width src-width
+                 :src-rect-height src-height
+                 :dst-rect-width new-width
+                 :dst-rect-height new-height
+                 :interpolation-type resize-algorithm)))
+
+(defn clone
+  [src-img]
+  (dtype/clone src-img))
+
+
+(defmethod dtype-proto/make-container :buffered-image
+  [container-type datatype img-shape options]
+  (when-not (= datatype :uint8)
+    (throw (Exception. "Only uint8 datatype allowed")))
+  (when-not (= 3 (count img-shape))
+    (throw (Exception. "Images must have 3 dimensions [h w c]")))
+  (let [[height width channels] img-shape
+        channels (long channels)]
+    (when-not (or (= channels 3)
+                  (= channels 4)
+                  (= channels 1))
+      (throw (Exception. "Byte images only support 1,3, or 4 channels.")))
+    (new-image height width (case channels
+                              1 :byte-gray
+                              3 :byte-bgr
+                              4 :byte-abgr))))

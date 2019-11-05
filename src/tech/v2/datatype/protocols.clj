@@ -123,13 +123,12 @@
     "Convert to an array containing a copy of the data"))
 
 (defn ->array [item]
-  (if (satisfies? PToArray item)
-    (when-let [ary-data (->sub-array item)]
-      (let [{:keys [java-array offset length]} ary-data]
-        (when (and (= (int offset) 0)
-                   (= (int (ecount java-array))
-                      (int length)))
-          java-array)))))
+  (when-let [ary-data (->sub-array item)]
+    (let [{:keys [java-array offset length]} ary-data]
+      (when (and (= (int offset) 0)
+                 (= (int (ecount java-array))
+                    (int length)))
+        java-array))))
 
 
 (defprotocol PToList

@@ -10,6 +10,10 @@ and creating tensors from buffered images.
 
 Buffered images implement the protocols required to be part of the datatype system.
 
+### Basics
+
+
+
 ```clojure
 
 user> (require '[tech.v2.datatype :as dtype])
@@ -53,6 +57,19 @@ user> (.read3d test-rdr 0 0 2)
 170
 user> (.read3d test-rdr 0 0 3)
 172
+```
+
+* One important thing to note is the return value of ensure-tensor shares the backing
+data store with the source object.  So you can write to the tensor with any of
+the datatype methods and the result will be written into the buffered image.
+
+
+### Different Image Types
+
+
+```clojure
+
+
 ;;If you have images of other base storage types you may get a different tensor than
 ;;you want:
 
@@ -114,6 +131,13 @@ user> (bufimg/as-ubyte-tensor test-img)
   [0 0 0]
   [0 0 0]]]
 
+```
+
+### Mutating The Image
+
+
+```clojure
+
 ;;You can use this as you can any other tensor.  See the cheatsheet.
 
 (def img-writer (tens-typecast/datatype->tensor-writer
@@ -143,6 +167,22 @@ user> (bufimg/as-ubyte-tensor test-img)
   [0   0 0]
   [0   0 0]
   [0   0 0]]]
+
+```
+
+### Tensor Operations
+
+All the tensor operations return data in-place.  So in the transpose call below a view
+is returned without actually doing any copies.  Iterating over tensors iterates
+over the outermost dimension return a sequence of tensor or a sequence of numbers
+if this is the last dimension.
+
+
+Our image is in BGR-interleaved format, so what we first do is transpose the image into
+BGR planar format.  We then use the statistical methods in datatype in order to get
+the per-channel statistics for the image.
+
+```clojure
 
 ;;Having images be tensors is useful for a few things, but stats is one of them.
 
@@ -192,8 +232,17 @@ user> (map dfn/descriptive-stats planar-tens)
   :standard-deviation 57.79730239195752,
   :median 115.0,
   :max 255.0})
+```
 
+### Cropping/Resizing Images
 
+For simple resize operations, we provide a resize convenience function that uses the
+buffered image graphics canvas to render a resized image into another image.
+
+Cropping can be done 2 ways.  The draw-image! method can crop or you can select
+regions of the images using the tensor api and then us the datatype copy! operation.
+
+```clojure
 ;;Drawing images work well in order to copy parts of one:
 (def new-img (bufimg/new-image 512 512 :int-argb))
 #'user/new-img
@@ -202,7 +251,8 @@ user> (bufimg/draw-image! test-img new-img :dst-y-offset 128)
 
 ;;But so does selecting subrects of tensors
 
-user> (def copy-tens (dtt/select (bufimg/as-ubyte-tensor new-img) (range 128 (+ 288 128)) :all [0 1 2]))
+user> (def copy-tens (dtt/select (bufimg/as-ubyte-tensor new-img)
+                                 (range 128 (+ 288 128)) :all [0 1 2]))
 #'user/copy-tens
 user> copy-tens
 #tech.v2.tensor<uint8>[288 512 3]
@@ -225,4 +275,41 @@ user> (dtype/copy! test-img copy-tens)
   [ 24  18  23]
   [ 24  18  23]]
   ...
+```
+
+
+### API Reference
+
+
+
+* `load` - load an image.  clojure.java.io/input-stream is called on the fname.
+* `new-image` - Create a new image.  Arguments are in row-major format:
+   height,width,img-type.
+* `image-type` - Returns the image type of the image.
+* `image-channel-map` - Returns a map of the channel names to indexes when the image
+   is interpreted as a uint8 tensor.
+* `as-ubyte-tensor` - interpret image as a uint8 tensor.  Works for byte and int image    types.
+* `draw-image` - Draw a source image onto a dest image.  You can specify the
+   source/dest rectangles and an interpolation method when resizing.
+* `downsample-bilinear` - Convenience method around `draw-image`.  Default is to halve
+  the height and width of the image.
+* `resize` - Convenience method that auto-determines the interpolation type based on
+  source/dest width ratio.
+* `clone` - Clone an image.  Simply calls `tech.v2.datatype/clone`.
+* `save!` - save the image.  You can specify a format optionally aside from the fname
+   or it will be inferred from the part of the fname following the last '.'.
+
+
+It is important to note that all of the datatype methods work on the image - `ecount`,
+`shape`, `get-datatype`, `copy!`, `set-constant!`.  All of the tensor methods work on
+the image - `ensure-tensor`, `select`, `reshape`, `transpose`.  You can create a
+tensor reader or writer from the image to get fully typed access to it in
+height,width,channel as demonstrated above.  Finally there is a new container type,
+`:buffered-image`, so you can use the `tech.v2.datatype/make-container` with
+container-type `:buffered-image` a datatype (which can only be `:uint8) and a shape
+to create a new image:
+
+```clojure
+tech.libs.buffered-image-test> (dtype/make-container :buffered-image :uint8 [4 4 4])
+#object[java.awt.image.BufferedImage 0x67005e49 "BufferedImage@67005e49: type = 6 ColorModel: #pixelBits = 32 numComponents = 4 color space = java.awt.color.ICC_ColorSpace@302cd36f transparency = 3 has alpha = true isAlphaPre = false ByteInterleavedRaster: width = 4 height = 4 #numDataElements 4 dataOff[0] = 3"]
 ```

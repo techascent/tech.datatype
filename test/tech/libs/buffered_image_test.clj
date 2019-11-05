@@ -37,3 +37,27 @@
         _ (dtype/set-constant! alpha-tens 255)]
     (is (dfn/equals (mapv (comp long dfn/mean) [new-img tens-img])
                     [-5240767 -5240767]))))
+
+
+(deftest channel-order
+  (let [test-img (bufimg/load "test/data/test.jpg")
+        [height width _n-chan] (dtype/shape test-img)
+        channel-fn
+        (fn [img-fmt]
+          (let [new-img (bufimg/new-image height width img-fmt)
+                _ (bufimg/draw-image! test-img new-img)
+                first-pix (-> (bufimg/as-ubyte-tensor new-img)
+                              (dtt/select 0 0 :all))
+                chan-map (bufimg/image-channel-map new-img)]
+            (->> [:r :g :b :a]
+                 (mapv (fn [chan-name]
+                         (if (contains? chan-map chan-name)
+                           (dtype/get-value first-pix
+                                            (get chan-map chan-name))
+                           255))))))
+        img-types [:byte-bgr :byte-abgr
+                   :int-argb :int-bgr :int-rgb]]
+    (doseq [img-type img-types]
+      (is (= [170 170 172 255]
+             (channel-fn img-type))
+          (format "Format %s failed channel order test" img-type)))))

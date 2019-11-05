@@ -52,19 +52,33 @@
 (defn image-channel-format
   "Get the image channel format of the buffered image.  Formats returned may be:
   :gray :bgr :rgb :abgr :argb :abgr-pre :argb-pre"
-  [^BufferedImage img]
+  [img]
   (case (image-type img)
     :byte-bgr :bgr
     :byte-abgr :abgr
     :byte-abgr-pre :abgr-pre
     :byte-gray :gray
-    :int-argb :argb
-    :int-argb-pre :argb-pre
-    :int-bgr :bgr
-    :int-rgb :rgb
+    :int-argb :bgra
+    :int-argb-pre :bgra-pre
+    :int-bgr :rgb
+    :int-rgb :bgr
     :ushort-555-rgb :rgb
     :ushort-565-rgb :rgb
     :ushort-gray :gray))
+
+
+(defn image-channel-map
+  "Get a map from keyword channel name to channel index in a ubyte tensor"
+  [img]
+  (case (image-type img)
+    :byte-bgr {:b 0 :g 1 :r 2}
+    :byte-abgr {:a 0 :b 1 :g 2 :r 3}
+    :byte-abgr-pre {:a 0 :b 1 :g 2 :r 3}
+    :byte-gray {:gray 0}
+    :int-argb {:b 0 :g 1 :r 2 :a 3}
+    :int-argb-pre {:b 0 :g 1 :r 2 :a 3}
+    :int-bgr {:r 0 :g 1 :b 2}
+    :int-rgb {:b 0 :g 1 :r 2}))
 
 
 (def data-buffer-types
@@ -84,13 +98,10 @@
   (data-buffer-banks [item]))
 
 
-(defn data-buffer-as-typed-buffer
+(defn- data-buffer-as-typed-buffer
   [^DataBuffer data-buf]
   (when-let [nio-buf (dtype-proto/->buffer-backing-store data-buf)]
     (typed-buffer/set-datatype nio-buf (dtype-proto/get-datatype data-buf))))
-
-
-(declare new-image)
 
 
 (extend-type DataBuffer
@@ -111,13 +122,19 @@
 
   dtype-proto/PToNioBuffer
   (convertible-to-nio-buffer? [item]
-    (and (= 1 (.getNumBanks item))
-         (= 0 (.getOffset item))))
+    (= 1 (.getNumBanks item)))
   (->buffer-backing-store [item]
     (when (dtype-proto/convertible-to-nio-buffer? item)
       (-> (data-buffer-banks item)
           first
-          (dtype-proto/->buffer-backing-store))))
+          (dtype-proto/->buffer-backing-store)
+          (dtype-proto/sub-buffer (.getOffset item) (.getSize item)))))
+  dtype-proto/PToArray
+  (->sub-array [item]
+    (when-let [nio-buf (dtype-proto/->buffer-backing-store item)]
+      (dtype-proto/->sub-array nio-buf)))
+  (->array-copy [item]
+    (dtype-proto/->array-copy (dtype-proto/->reader item nil)))
   dtype-proto/PBuffer
   (sub-buffer [item offset len]
     (if-let [nio-buf (data-buffer-as-typed-buffer item)]
@@ -242,6 +259,11 @@
   (->buffer-backing-store [item]
     (dtype-proto/->buffer-backing-store
      (buffered-image->data-buffer item)))
+  dtype-proto/PToArray
+  (->sub-array [item]
+    (dtype-proto/->sub-array (buffered-image->data-buffer item)))
+  (->array-copy [item]
+    (dtype-proto/->array-copy (buffered-image->data-buffer item)))
   dtype-proto/PToReader
   (convertible-to-reader? [item] true)
   (->reader [item options]

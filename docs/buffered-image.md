@@ -289,7 +289,7 @@ user> (dtype/copy! test-img copy-tens)
 * `image-channel-map` - Returns a map of the channel names to indexes when the image
    is interpreted as a uint8 tensor.
 * `as-ubyte-tensor` - interpret image as a uint8 tensor.  Works for byte and int image    types.
-* `draw-image` - Draw a source image onto a dest image.  You can specify the
+* `draw-image!` - Draw a source image onto a dest image.  You can specify the
    source/dest rectangles and an interpolation method when resizing.
 * `downsample-bilinear` - Convenience method around `draw-image`.  Default is to halve
   the height and width of the image.

@@ -253,21 +253,21 @@
   arg: >= 0."
   [rev-shape ^longs rev-strides ^longs rev-offsets ^longs rev-max-shape arg]
   (let [num-items (count rev-shape)]
-    (-> (loop [idx (long 0)
-               arg (long arg)
-               offset (long 0)]
-          (if (< idx num-items)
-            (let [next-max (aget rev-max-shape idx)
-                  next-stride (aget rev-strides idx)
-                  ^LongReader next-dim-entry (rev-shape idx)
-                  next-dim (.lsize next-dim-entry)
-                  next-offset (aget rev-offsets idx)
-                  shape-idx (rem (+ arg next-offset) next-dim)]
-              (recur (inc idx)
-                     (quot arg next-max)
-                     (+ offset (* next-stride
-                                  (.read next-dim-entry shape-idx)))))
-            offset)))))
+    (loop [idx (long 0)
+           arg (long arg)
+           offset (long 0)]
+      (if (< idx num-items)
+        (let [next-max (aget rev-max-shape idx)
+              next-stride (aget rev-strides idx)
+              ^LongReader next-dim-entry (rev-shape idx)
+              next-dim (.lsize next-dim-entry)
+              next-offset (aget rev-offsets idx)
+              shape-idx (rem (+ arg next-offset) next-dim)]
+          (recur (inc idx)
+                 (quot arg next-max)
+                 (+ offset (* next-stride
+                              (.read next-dim-entry shape-idx)))))
+        offset))))
 
 
 (defmacro ^:private impl-idx-reader
@@ -524,18 +524,21 @@ to be reversed for the most efficient implementation."
                    shape-reader))))))
           ;;Totally general case to encapsulate all the variations including indexed
           ;;dimensions.
-          (let [reverse-shape (mapv (fn [item]
-                                      (cond
-                                        (number? item)
-                                        (long item)
-                                        (map? item)
-                                        (dtype/->reader
-                                         (int-array
-                                          (shape/classified-sequence->sequence item))
-                                         :int32)
-                                        :else
-                                        (dtype/->reader item :int32)))
-                                    reverse-shape)
+          (let [^List reverse-shape
+                (mapv (fn [item]
+                        (cond
+                          (number? item)
+                          (let [item (long item)]
+                            (reify LongReader
+                              (lsize [rdr] item)
+                              (read [rdr idx] idx)))
+                          (map? item)
+                          (dtype/->reader
+                           (shape/classified-sequence->sequence item)
+                           :int64)
+                          :else
+                          (dtype/->reader item :int64)))
+                      reverse-shape)
                 reverse-max-shape (typecast/datatype->reader :int32
                                                              (int-array rev-max-shape))
                 max-strides (extend-strides max-shape)
@@ -546,25 +549,6 @@ to be reversed for the most efficient implementation."
                 max-stride-2 (int (if (>= n-dims 3)
                                     (nth max-strides 2)
                                     0))
-                reverse-shape
-                ;;map into a vec guaranteed to be LongReaders
-                (->> reverse-shape
-                     (mapv #(let [n-dims (shape/shape-entry->count %)]
-                              (cond
-                                (number? %)
-                                (reify LongReader
-                                  (lsize [item] n-dims)
-                                  (read [item shape-idx] shape-idx))
-                                (shape/classified-sequence? %)
-                                (reify LongReader
-                                  (lsize [item] n-dims)
-                                  (read [item shape-idx]
-                                    (unchecked-long
-                                     (shape/classified-sequence->elem-idx
-                                      %
-                                      shape-idx))))
-                                :else
-                                (dtype/->reader % :int64)))))
                 reverse-strides (dtype/make-container :java-array :int64
                                                       reverse-strides)
                 reverse-offsets (dtype/make-container :java-array :int64
@@ -1024,8 +1008,9 @@ https://cloojure.github.io/doc/core.matrix/clojure.core.matrix.html#var-select"
            strides :strides
            offsets :offsets
            offset :offset
-           buffer-length :length} (dims-select/dimensions->simpified-dimensions
-                                   shape strides offsets)]
+           buffer-length :length
+           :as _simplified-map} (dims-select/dimensions->simpified-dimensions
+                                 shape strides offsets)]
       {:dims (dimensions shape :strides strides :offsets offsets)
        :elem-offset offset
        :buffer-length buffer-length})))

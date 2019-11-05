@@ -19,5 +19,5 @@ a tensor:
     (throw (Exception. (format "Failed to find color data for var: %s" api-varname)))))
 ```
 
-
-* [Documentation for colorizing](../src/tech/v2/tensor/color_gradients.clj#L34)
+* [Gradient Demo](https://github.com/techascent/tech.datatype/blob/640733fa994f96dd3058e9ec83049d2efb3802c4/src/tech/v2/tensor/color_gradients.clj#L177)
+* [Documentation for colorizing](https://github.com/techascent/tech.datatype/blob/640733fa994f96dd3058e9ec83049d2efb3802c4/src/tech/v2/tensor/color_gradients.clj#L134)

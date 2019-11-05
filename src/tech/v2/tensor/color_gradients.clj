@@ -109,9 +109,11 @@ This leads to ambiguous results as pixels not written to will be black but not t
                     1 (bufimg/new-image 1 (first img-shape) img-type))
         ;;Flatten out src-tens and res-tens and make them readers
         n-channels (long (if alpha? 4 3))
+        _ (println (dtype/shape res-image))
         res-tens (dtt/reshape res-image [n-pixels n-channels])
+        _ (println (dtype/shape res-image))
         res-tens (if valid-indexes
-                   (dtt/select res-tens valid-indexes (range n-channels))
+                   (dtt/select res-tens valid-indexes :all)
                    res-tens)
         res-tens (tens-typecast/datatype->tensor-writer
                   :uint8 res-tens)
@@ -151,6 +153,7 @@ function returned: %s"
         n-pixels (long (if valid-indexes
                          (dtype/ecount valid-indexes)
                          n-pixels))]
+    (println n-pixels (dtype/shape res-tens) (dtype/shape src-reader))
     (if alpha?
       (pfor/parallel-for
        idx

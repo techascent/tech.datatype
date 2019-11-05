@@ -523,7 +523,7 @@
         dst-img-height (long (or dst-img-height
                                  (quot src-img-height 2)))
         dst-img-type (or dst-img-type (image-type src-img))
-        resized (new-image dst-img-width dst-img-height dst-img-type)]
+        resized (new-image dst-img-height dst-img-width dst-img-type)]
     (draw-image! src-img resized
                  :src-rect-width src-img-width
                  :src-rect-height src-img-height
@@ -536,7 +536,7 @@
   [src-img new-width new-height {:keys [resize-algorithm
                                         dst-img-type]}]
   (let [[src-height src-width _n-channels] (dtype/shape src-img)
-        retval (new-image new-width new-width
+        retval (new-image new-height new-width
                           (or dst-img-type
                               (image-type src-img)))
          resize-algorithm (or resize-algorithm

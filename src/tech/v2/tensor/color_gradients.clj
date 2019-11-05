@@ -105,8 +105,8 @@ This leads to ambiguous results as pixels not written to will be black but not t
                    :byte-abgr
                    :byte-bgr)
         res-image (case (count img-shape)
-                    2 (bufimg/new-image (second img-shape) (first img-shape) img-type)
-                    1 (bufimg/new-image (first img-shape) 1 img-type))
+                    2 (bufimg/new-image (first img-shape) (second img-shape) img-type)
+                    1 (bufimg/new-image 1 (first img-shape) img-type))
         ;;Flatten out src-tens and res-tens and make them readers
         n-channels (long (if alpha? 4 3))
         res-tens (dtt/reshape res-image [n-pixels n-channels])

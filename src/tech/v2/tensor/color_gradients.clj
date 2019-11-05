@@ -151,7 +151,6 @@ function returned: %s"
         n-pixels (long (if valid-indexes
                          (dtype/ecount valid-indexes)
                          n-pixels))]
-    (println n-pixels (dtype/shape res-tens) (dtype/shape src-reader))
     (if alpha?
       (pfor/parallel-for
        idx

@@ -7,6 +7,9 @@ and creating tensors from buffered images.
 
 ## Usage
 
+
+Buffered images implement the protocols required to be part of the datatype system.
+
 ```clojure
 
 user> (require '[tech.v2.datatype :as dtype])

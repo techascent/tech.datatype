@@ -333,3 +333,12 @@
   (is (= :uint16
          (-> (dtype/->reader [1 2] :uint16)
              (dtype/get-datatype)))))
+
+
+(defn copy-raw->item-time-test
+  []
+  (let [n-elems 10000
+        dst-ary (float-array n-elems)
+        src-data (map float (range n-elems))]
+    (time (dotimes [iter 1000]
+            (dtype/copy-raw->item! src-data dst-ary)))))

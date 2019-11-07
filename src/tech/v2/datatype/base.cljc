@@ -245,11 +245,18 @@
 
 (defn copy-raw-seq->item!
   [raw-data-seq ary-target target-offset options]
-  (reduce (fn [[ary-target target-offset] new-raw-data]
-            (dtype-proto/copy-raw->item! new-raw-data ary-target
-                                         target-offset options))
-          [ary-target target-offset]
-          raw-data-seq))
+  (let [writer (dtype-proto/->writer ary-target options)]
+    (reduce (fn [[ary-target target-offset] new-raw-data]
+              ;;Fastpath for sequences of numbers.  Avoids more protocol pathways.
+              (if (number? new-raw-data)
+                (do
+                  (writer target-offset new-raw-data)
+                  [ary-target (inc target-offset)])
+                ;;slow path if we didn't recognize the thing.
+                (dtype-proto/copy-raw->item! new-raw-data ary-target
+                                             target-offset options)))
+            [ary-target target-offset]
+            raw-data-seq)))
 
 
 (defn raw-dtype-copy!

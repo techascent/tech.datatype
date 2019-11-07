@@ -1078,3 +1078,24 @@ https://cloojure.github.io/doc/core.matrix/clojure.core.matrix.html#var-select"
   (when-not-error (= 2 (count shape))
     "Not a matrix" {:dimensions dims})
   (apply min strides))
+
+
+(defn contiguous-shape
+  "Starting from the right, return a sequence that counts the total number of contigous
+  elements see so far.  Used to decide if contiguous copy routines are worthwhile
+  or if just normal parallelized reader copy is fine."
+  [{:keys [shape strides]}]
+  (loop [rev-shape (reverse shape)
+         rev-strides (reverse strides)
+         start-elem 1
+         retval []]
+    (if (and (number? (first rev-shape))
+             (= (first rev-strides)
+                start-elem))
+      (let [n-elems (* (long (first rev-shape))
+                       (long (first rev-strides)))]
+        (recur (rest rev-shape)
+               (rest rev-strides)
+               n-elems
+               (conj retval n-elems)))
+      (seq (reverse retval)))))

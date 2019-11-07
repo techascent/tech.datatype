@@ -112,3 +112,17 @@
     (is (dfn/equals (sort test-indexes)
                     (dfn/argfilter #(not= 0 %)
                                    (tens/select test-tens :all :all 3))))))
+
+
+(defn strided-tensor-copy-time-test
+  []
+  (let [src-tens (-> (tens/new-tensor [2048 2048 4] :datatype :uint8)
+                     (tens/select (range 256 (* 2 256))
+                                  (range 256 (* 2 256))
+                                  :all))
+        dst-tens (tens/new-tensor [256 256 4] :datatype :uint8)]
+    ;; (dtype/copy! src-tens dst-tens)
+    (time (dotimes [iter 100]
+            (dtype/copy! src-tens dst-tens)))
+    :ok
+    ))

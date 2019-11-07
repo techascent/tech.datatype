@@ -114,6 +114,16 @@
                                    (tens/select test-tens :all :all 3))))))
 
 
+(deftest normal-tensor-select
+  (let [test-tens (-> (tens/->tensor (partition 3 (range 9)))
+                      (tens/select (concat [0 1] [0 2]) :all))]
+    (is (dfn/equals (tens/->tensor [[0.000 1.000 2.000]
+                                    [3.000 4.000 5.000]
+                                    [0.000 1.000 2.000]
+                                    [6.000 7.000 8.000]])
+                    test-tens))))
+
+
 (defn strided-tensor-copy-time-test
   []
   (let [src-tens (-> (tens/new-tensor [2048 2048 4] :datatype :uint8)

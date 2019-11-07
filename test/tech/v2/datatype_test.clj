@@ -335,10 +335,20 @@
              (dtype/get-datatype)))))
 
 
-(defn copy-raw->item-time-test
+(defn copy-raw->item-time-test-1
   []
   (let [n-elems 10000
         dst-ary (float-array n-elems)
         src-data (map float (range n-elems))]
     (time (dotimes [iter 1000]
+            (dtype/copy-raw->item! src-data dst-ary)))))
+
+
+(defn copy-raw->item-time-test-2
+  []
+  (let [n-elems 10000
+        n-seq-items 100
+        dst-ary (float-array (* n-elems n-seq-items))
+        src-data (map float-array (repeat n-seq-items (range n-elems)))]
+    (time (dotimes [iter 100]
             (dtype/copy-raw->item! src-data dst-ary)))))

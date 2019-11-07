@@ -27,17 +27,23 @@
 (defn- expand-select-arg
   [select-arg]
   (cond
-    (number? select-arg) (shape/classify-sequence select-arg)
-    (shape/classified-sequence? select-arg) select-arg
+    (number? select-arg)
+    (shape/classify-sequence select-arg)
+
+    (shape/classified-sequence? select-arg)
+    select-arg
+
     (instance? clojure.lang.LongRange select-arg)
     (shape/classify-sequence select-arg)
+
     (dtype/reader? select-arg)
     select-arg
+
     (= :all select-arg) select-arg
     (= :lla select-arg) select-arg
+    ;;else attempt to make it a reader
     :else
-    (throw (ex-info "Unrecognized select argument type"
-                    {:select-arg select-arg}))))
+    (vec select-arg)))
 
 
 (defn apply-select-arg-to-dimension

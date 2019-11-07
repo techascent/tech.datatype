@@ -1370,9 +1370,6 @@
 
 ;;Object overrides we can now do because we have a tensor definition.
 (extend-type Object
-  dtype-proto/PToBufferDesc
-  (convertible-to-buffer-desc? [item] false)
-  (->buffer-descriptor [item] (throw (Exception. "item is not convertible")))
   tens-proto/PToTensor
   (convertible-to-tensor? [item]
     (or (dtype-proto/convertible-to-buffer-desc? item)

@@ -160,10 +160,20 @@
     "Buffer descriptors are maps such that:
 {:ptr com.sun.jna.Pointer that keeps reference back to original buffer.
  :datatype datatype of data that ptr points to.
+ :device-type (optional) - one of #{:cpu :opencl :cuda}
  :shape -  vector of integers.
  :stride - vector of byte lengths for each dimension.
 }
 Note that this makes no mention of indianness; buffers are in the format of the host."))
+
+
+(extend-type Object
+  PToBufferDesc
+  (convertible-to-buffer-desc? [item] false)
+  (->buffer-descriptor [item] (throw (Exception. "item is not convertible"))))
+
+
+
 
 ;; Various other type conversions.  These happen quite a lot and we have found that
 ;; avoiding 'satisfies' is wise.  In all of these cases, options may contain at least

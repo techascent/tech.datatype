@@ -174,8 +174,8 @@ user> (bufimg/as-ubyte-tensor test-img)
 
 All the tensor operations return data in-place.  So in the transpose call below a view
 is returned without actually doing any copies.  Iterating over tensors iterates
-over the outermost dimension return a sequence of tensor or a sequence of numbers
-if this is the last dimension.
+over the outermost dimension returning a sequence of tensors or a sequence of numbers
+if this is a one dimension tensor.
 
 
 Our image is in BGR-interleaved format, so what we first do is transpose the image into

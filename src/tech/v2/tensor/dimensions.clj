@@ -626,7 +626,8 @@ to be reversed for the most efficient implementation."
                                :else
                                (apply min (dtype/->iterable shape-entry))))
                            shape))
-        [ordered-shape ordered-strides ordered-offsets ordered-shape-mins transpose-vec]
+        [ordered-shape ordered-strides ordered-offsets
+         ordered-shape-mins transpose-vec]
         (if strides-increasing?
           [shape strides offsets shape-mins nil]
           (let [index-ary (argsort/argsort strides {:datatype :int32 :reverse? true})]
@@ -635,7 +636,8 @@ to be reversed for the most efficient implementation."
              (indexed-reader/make-indexed-reader index-ary offsets {:datatype :int32})
              (if dims-direct?
                shape-mins
-               (indexed-reader/make-indexed-reader index-ary shape-mins {:datatype :int32}))
+               (indexed-reader/make-indexed-reader index-ary shape-mins
+                                                   {:datatype :int32}))
              ;;In order to invert an arbitrary transposition, argsort it
              (argsort/argsort index-ary {:datatype :int32})]))
         shape-obj-reader shape
@@ -660,7 +662,8 @@ to be reversed for the most efficient implementation."
                                                                 (not broadcasting?))
                                                          ordered-shape
                                                          (int-array max-shape)))
-        global-strides (typecast/datatype->reader :int32  (extend-strides global-shape))
+        global-strides (typecast/datatype->reader :int32
+                                                  (extend-strides global-shape))
         [shape-mults shape-int-reader]
         (when broadcasting?
           (let [safe-shape (shape/shape->count-vec shape)]
@@ -781,30 +784,9 @@ to be reversed for the most efficient implementation."
 
 
 (defn create-dimension-transforms [dims]
-  (let [created-dims (object-array 2)]
-    (assoc dims
-           :global->local
-           (reify
-             IDeref
-             (deref [item]
-               (locking created-dims
-                 (if-let [retval (aget created-dims 0)]
-                   retval
-                   (do
-                     (aset created-dims 0
-                           (get-elem-dims-global->local dims))
-                     (aget created-dims 0))))))
-           :local->global
-           (reify
-             IDeref
-             (deref [item]
-               (locking created-dims
-                 (if-let [retval (aget created-dims 1)]
-                   retval
-                   (do
-                     (aset created-dims 1
-                           (get-elem-dims-local->global dims))
-                     (aget created-dims 1)))))))))
+  (assoc dims
+         :global->local (delay (get-elem-dims-global->local dims))
+         :local->global (delay (get-elem-dims-local->global dims))))
 
 
 (defn ->global->local

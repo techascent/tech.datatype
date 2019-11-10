@@ -58,7 +58,12 @@
                          (when (= 2 (count shape))
                            (.read2d ^tech.v2.tensor.LongTensorReader forward
                                     (first global-shape)
-                                    (second global-shape)))]))))
+                                    (second global-shape)))
+                         (when (= 3 (count shape))
+                           (.read3d ^tech.v2.tensor.LongTensorReader forward
+                                    (first global-shape)
+                                    (second global-shape)
+                                    (nth global-shape 2)))]))))
 
          forward-elems (mapv (comp vec (partial take 2)) forward-full-elems)
          backward-elems (->> (range n-src-buffer-elems)
@@ -71,6 +76,8 @@
          tens-read-forward (mapv #(nth % 2) forward-full-elems)
          tens-2d-read-forward (when (= 2 (count max-shape))
                                 (mapv #(nth % 3) forward-full-elems))
+         tens-3d-read-forward (when (= 3 (count max-shape))
+                                (mapv #(nth % 4) forward-full-elems))
          explain-str (with-out-str
                        (pp/pprint {:shape shape
                                    :strides strides
@@ -87,7 +94,10 @@
               tens-2d-read-forward)
            (str "2d-read" explain-str)))
 
-
+     (when (= 3 (count max-shape))
+       (is (= local-forward
+              tens-3d-read-forward)
+           (str "3d-read" explain-str)))
 
      (is (= (vec forward-elems)
             (vec backward-elems))
@@ -144,5 +154,7 @@
 
   ;;Image in channels-first
   (base-index-system-test [3 4 4] [1 12 3] [3 4 4])
+  ;;Channels first and broadcast
+  (base-index-system-test [3 4 4] [1 12 3] [12 4 4])
 
   (base-index-system-test [3 [1 2]] [1 3] [3 2]))

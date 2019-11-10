@@ -3,6 +3,7 @@
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.functional :as dfn]
             [tech.v2.tensor :as tens]
+            [tech.v2.tensor.typecast :as dtt-typecast]
             [clojure.test :refer :all]))
 
 
@@ -95,3 +96,43 @@
             trans-desc (dtype/as-buffer-descriptor trans-tens)]
         (is (= {:datatype :float64, :shape [3 3], :strides [8 24]}
                (dissoc trans-desc :ptr)))))))
+
+
+(deftest tensor-writers
+  []
+  (let [test-dim 10
+        test-tens (tens/new-tensor [test-dim test-dim 4] :datatype :uint8)
+        reshape-tens (tens/reshape test-tens [(* test-dim test-dim) 4])
+        test-indexes [35 69 83 58 57 13 64 68 48 55 20 33 2 36
+                      21 17 88 94 91 85]
+        idx-tens (tens/select reshape-tens (long-array test-indexes) :all)
+        writer (dtt-typecast/datatype->tensor-writer :uin8 idx-tens)]
+    (dotimes [iter (count test-indexes)]
+      (.write2d writer iter 3 255))
+    (is (dfn/equals (sort test-indexes)
+                    (dfn/argfilter #(not= 0 %)
+                                   (tens/select test-tens :all :all 3))))))
+
+
+(deftest normal-tensor-select
+  (let [test-tens (-> (tens/->tensor (partition 3 (range 9)))
+                      (tens/select (concat [0 1] [0 2]) :all))]
+    (is (dfn/equals (tens/->tensor [[0.000 1.000 2.000]
+                                    [3.000 4.000 5.000]
+                                    [0.000 1.000 2.000]
+                                    [6.000 7.000 8.000]])
+                    test-tens))))
+
+
+(defn strided-tensor-copy-time-test
+  []
+  (let [src-tens (-> (tens/new-tensor [2048 2048 4] :datatype :uint8)
+                     (tens/select (range 256 (* 2 256))
+                                  (range 256 (* 2 256))
+                                  :all))
+        dst-tens (tens/new-tensor [256 256 4] :datatype :uint8)]
+    ;; (dtype/copy! src-tens dst-tens)
+    (time (dotimes [iter 100]
+            (dtype/copy! src-tens dst-tens)))
+    :ok
+    ))

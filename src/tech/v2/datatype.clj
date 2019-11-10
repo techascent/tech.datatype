@@ -26,6 +26,7 @@
             [tech.v2.datatype.typed-buffer]
             [tech.v2.datatype.jna]
             [tech.v2.datatype.list]
+            [tech.v2.datatype.clj-range]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer]
             [tech.v2.datatype.readers.indexed :as indexed-rdr])
@@ -128,8 +129,10 @@
 
 (defn set-constant!
   "Set a constant value on a container."
-  [item offset value elem-count]
-  (base/set-constant! item offset value elem-count))
+  ([item offset value elem-count]
+   (base/set-constant! item offset value elem-count))
+  ([item value]
+   (base/set-constant! item 0 value (base/ecount item))))
 
 
 (defn get-value

@@ -42,6 +42,17 @@
 (declare make-buffer-of-type)
 
 
+(defmacro datatype->buffer-creation
+  [datatype src-ary]
+  (case datatype
+    :int8 `(ByteBuffer/wrap ^bytes ~src-ary)
+    :int16 `(ShortBuffer/wrap ^shorts ~src-ary)
+    :int32 `(IntBuffer/wrap ^ints ~src-ary)
+    :int64 `(LongBuffer/wrap ^longs ~src-ary)
+    :float32 `(FloatBuffer/wrap ^floats ~src-ary)
+    :float64 `(DoubleBuffer/wrap ^doubles ~src-ary)))
+
+
 (defn in-range?
   [^long lhs-off ^long lhs-len ^long rhs-off ^long rhs-len]
     (or (and (>= rhs-off lhs-off)
@@ -128,14 +139,25 @@
 
 
      dtype-proto/PBuffer
-     {:sub-buffer (fn [buffer# offset# length#]
-                    (let [buf# (.slice (typecast/datatype->buffer-cast-fn
-                                        ~datatype buffer#))
-                          offset# (long offset#)
-                          len# (long length#)]
-                      (.position buf# offset#)
-                      (.limit buf# (+ offset# len#))
-                      buf#))}
+     {:sub-buffer
+      (fn [buffer# offset# length#]
+        (let [buffer# (typecast/datatype->buffer-cast-fn
+                       ~datatype buffer#)
+              sub-array-data# (dtype-proto/->sub-array buffer#)]
+          (if sub-array-data#
+            (let [{java-array# :java-array
+                   ary-offset# :offset} sub-array-data#
+                  buf# (datatype->buffer-creation ~datatype java-array#)
+                  new-offset# (+ (long offset#) (long ary-offset#))]
+              (.position buf# new-offset#)
+              (.limit buf# (+ new-offset# (long length#)))
+              buf#)
+            (let [buf# (.slice buffer#)
+                  offset# (long offset#)
+                  len# (long length#)]
+              (.position buf# offset#)
+              (.limit buf# (+ offset# len#))
+              buf#))))}
      dtype-proto/PToWriter
      {:convertible-to-writer? (constantly true)
       :->writer

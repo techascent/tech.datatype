@@ -301,10 +301,12 @@
 (defn unary-map
   "Either return an iterable or a reader depending on of the mapped item
   is an iterable or a reader"
-  [options un-op item]
-  (if (dtype-proto/convertible-to-reader? item)
-    (unary-reader-map options un-op item)
-    (unary-iterable-map options un-op item)))
+  ([options un-op item]
+   (if (dtype-proto/convertible-to-reader? item)
+     (unary-reader-map options un-op item)
+     (unary-iterable-map options un-op item)))
+  ([un-op item]
+   (unary-map {} un-op item)))
 
 
 (defmacro make-double-unary-op

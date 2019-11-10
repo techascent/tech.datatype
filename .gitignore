@@ -13,3 +13,4 @@ checkouts
 *.log
 .cpcache
 .clj-kondo/.cache
+gradient-demo

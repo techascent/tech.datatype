@@ -28,6 +28,11 @@
   (->tensor-reader [item options]))
 
 
+(defprotocol PToTensorWriter
+  (convertible-to-tensor-writer? [item])
+  (->tensor-writer [item options]))
+
+
 (extend-type Object
   PTensor
   (is-tensor? [item] false)

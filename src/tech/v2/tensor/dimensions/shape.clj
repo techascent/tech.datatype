@@ -4,7 +4,8 @@
   path."
   (:require [tech.v2.tensor.utils
              :refer [when-not-error reversev map-reversev]]
-            [tech.v2.datatype :as dtype]))
+            [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.functional :as dfn]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -24,15 +25,14 @@
      :min-item item-seq
      :max-item item-seq
      :scalar? true}
-    (let [item-seq (cond
-                     (vector? item-seq) item-seq
-                     (dtype/reader? item-seq) (dtype/->reader item-seq :int32)
-                     :else (vec item-seq))
-          n-elems (dtype/ecount item-seq)
-          first-item (long (item-seq 0))
-          last-item (long (item-seq (- n-elems 1)))
-          min-item (min first-item last-item)
-          max-item (max first-item last-item)
+    (let [n-elems (dtype/ecount item-seq)
+          [min-item max-item] (if (instance? clojure.lang.LongRange item-seq)
+                                [(first item-seq) (last item-seq)]
+                                ;;do it the hard way
+                                [(long (dfn/reduce-min item-seq))
+                                 (long (dfn/reduce-max item-seq))])
+          min-item (long min-item)
+          max-item (long max-item)
           retval {:min-item min-item
                   :max-item max-item}]
       (if (= n-elems 1)
@@ -49,7 +49,7 @@
                             min-item)))
                    mon-op)
             (assoc retval :type mon-op)
-            (assoc retval :sequence (vec item-seq))))))))
+            (assoc retval :sequence item-seq)))))))
 
 
 (def classified-sequence-keys #{:type :min-item :max-item :sequence})
@@ -71,14 +71,19 @@
 
 
 (defn classified-sequence->sequence
-  [{:keys [min-item max-item type sequence]}]
-  (->> (if sequence
-         sequence
-         (case type
-           :+ (range min-item (inc (long max-item)))
-           :- (range max-item (dec (long min-item)) -1)))
-       ;;Ensure dtype/get-value works on result.
-       vec))
+  [{:keys [min-item max-item type sequence] :as cseq}]
+  (if sequence
+    sequence
+    (case type
+      :+ (range min-item (inc (long max-item)))
+      :- (range max-item (dec (long min-item)) -1))))
+
+(defn classified-sequence->reader
+  [cseq]
+  (let [data (classified-sequence->sequence cseq)]
+    (if (dtype/reader? data)
+      data
+      (vec data))))
 
 
 (defn classified-sequence-max
@@ -98,10 +103,14 @@
              last-valid-index)
       (throw (ex-info "Select argument out of range" {:dimension source-sequence
                                                       :select-arg select-sequence}))))
-  (let [source-sequence (classified-sequence->sequence source-sequence)]
-    (->> (classified-sequence->sequence select-sequence)
-         (map #(get source-sequence (long %)))
-         classify-sequence)))
+  (let [source-sequence (classified-sequence->sequence source-sequence)
+        retval
+        (->> (classified-sequence->sequence select-sequence)
+             (map #(dtype/get-value source-sequence (long %)))
+             classify-sequence)]
+    (if (:scalar? select-sequence)
+      (assoc retval :scalar? true)
+      retval)))
 
 
 (defn reverse-classified-sequence

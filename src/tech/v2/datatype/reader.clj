@@ -289,11 +289,15 @@
   [src-reader options]
   (let [src-dtype (casting/safe-flatten
                    (dtype-proto/get-datatype src-reader))
-        dest-dtype (casting/safe-flatten
-                    (or (:datatype options)
-                        (dtype-proto/get-datatype src-reader)))]
+        dest-final-dtype  (or (:datatype options)
+                              (dtype-proto/get-datatype src-reader))
+        dest-dtype (casting/safe-flatten dest-final-dtype)]
     (if (= src-dtype dest-dtype)
-      src-reader
+      (if (or (= (dtype-proto/get-datatype src-reader)
+                 dest-final-dtype)
+              (not= :object dest-dtype))
+        src-reader
+        (make-object-wrapper src-reader dest-final-dtype {:unchecked? true}))
 
       (let [retval-reader
             (let [reader-fn (get marshalling-reader-table
@@ -302,10 +306,11 @@
                 (throw (ex-info (format "Failed to find marshalling reader %s->%s"
                                         src-dtype dest-dtype)
                                 {})))
-              (reader-fn src-reader dest-dtype
+              (reader-fn src-reader dest-final-dtype
                          {:unchecked? (:unchecked? options)}))
             retval-dtype (dtype-proto/get-datatype retval-reader)]
-        (if (not= retval-dtype dest-dtype)
+        (if (and (not= retval-dtype dest-dtype)
+                 (= :object dest-dtype))
           (make-object-wrapper retval-reader dest-dtype {:unchecked? true})
           retval-reader)))))
 

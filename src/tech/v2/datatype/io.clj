@@ -95,7 +95,8 @@
   [item indexes values options]
   (let [datatype (or (:datatype options) (dtype-proto/get-datatype item))]
     (fast-copy/parallel-write! values (indexed-reader/make-indexed-reader
-                                       indexes values (assoc options :datatype datatype))
+                                       indexes values (assoc options :datatype
+                                                             datatype))
                                true)
     values))
 

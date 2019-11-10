@@ -247,10 +247,12 @@
 
 (deftest base-math-sanity
   (is (= 0.0 (-> (dfn/- (range 10) (range 10))
+                 (dtype/->reader :float64)
                  (dfn/pow 2)
                  (dfn/reduce-+))))
 
   (is (= 0.0 (-> (dfn/- (into-array (range 10)) (range 10))
+                 (dtype/->reader :float64)
                  (dfn/pow 2)
                  (dfn/reduce-+)))))
 
@@ -319,3 +321,34 @@
                                                         (reverse (range 10))))]
       (is (= (vec (range 10))
              (vec (map int (sort breader))))))))
+
+
+(deftest object->string-reader-cast
+  (is (= :string
+         (-> (dtype/->reader ["a" "b"] :string)
+             (dtype/get-datatype)))))
+
+
+(deftest object->uint16
+  (is (= :uint16
+         (-> (dtype/->reader [1 2] :uint16)
+             (dtype/get-datatype)))))
+
+
+(defn copy-raw->item-time-test-1
+  []
+  (let [n-elems 10000
+        dst-ary (float-array n-elems)
+        src-data (map float (range n-elems))]
+    (time (dotimes [iter 1000]
+            (dtype/copy-raw->item! src-data dst-ary)))))
+
+
+(defn copy-raw->item-time-test-2
+  []
+  (let [n-elems 10000
+        n-seq-items 100
+        dst-ary (float-array (* n-elems n-seq-items))
+        src-data (map float-array (repeat n-seq-items (range n-elems)))]
+    (time (dotimes [iter 100]
+            (dtype/copy-raw->item! src-data dst-ary)))))

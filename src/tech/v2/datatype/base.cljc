@@ -245,11 +245,18 @@
 
 (defn copy-raw-seq->item!
   [raw-data-seq ary-target target-offset options]
-  (reduce (fn [[ary-target target-offset] new-raw-data]
-            (dtype-proto/copy-raw->item! new-raw-data ary-target
-                                         target-offset options))
-          [ary-target target-offset]
-          raw-data-seq))
+  (let [writer (dtype-proto/->writer ary-target options)]
+    (reduce (fn [[ary-target target-offset] new-raw-data]
+              ;;Fastpath for sequences of numbers.  Avoids more protocol pathways.
+              (if (number? new-raw-data)
+                (do
+                  (writer target-offset new-raw-data)
+                  [ary-target (inc target-offset)])
+                ;;slow path if we didn't recognize the thing.
+                (dtype-proto/copy-raw->item! new-raw-data ary-target
+                                             target-offset options)))
+            [ary-target target-offset]
+            raw-data-seq)))
 
 
 (defn raw-dtype-copy!
@@ -277,31 +284,34 @@
     (set-value! ary-target target-offset raw-data)
     [ary-target (+ target-offset 1)])
 
-  RandomAccess
-  (copy-raw->item! [raw-data ary-target ^long target-offset options]
-    (let [^List raw-data raw-data
-          num-elems (.size raw-data)]
-      (if (= 0 num-elems)
-        [ary-target target-offset]
-        (if (number? (.get raw-data 0))
-          (do
-            (parallel-for/parallel-for
-             idx num-elems
-             (set-value! ary-target (+ idx target-offset) (.get raw-data idx)))
-            [ary-target (+ target-offset num-elems)])
-          (copy-raw-seq->item! raw-data ary-target target-offset options)))))
-
-  java.lang.Iterable
-  (copy-raw->item! [raw-data ary-target target-offset options]
-    (copy-raw-seq->item! (seq raw-data) ary-target target-offset options))
-
   Object
-  (copy-raw->item! [raw-data ary-target offset options]
-    (if-let [reader (dtype-proto/as-reader raw-data)]
-      (raw-dtype-copy! reader ary-target offset options)
-      (if-let [base-type (dtype-proto/as-base-type raw-data)]
-        (raw-dtype-copy! base-type ary-target offset options)
-        (throw (ex-info "Raw copy not supported on object" {}))))))
+  (copy-raw->item! [raw-data ary-target ^long target-offset options]
+    (cond
+      (dtype-proto/convertible-to-reader? raw-data)
+      (let [src-reader (dtype-proto/as-reader raw-data)]
+        (if (or (not= :object (casting/flatten-datatype
+                               (get-datatype src-reader)))
+                (= :object (casting/flatten-datatype (get-datatype ary-target))))
+          (raw-dtype-copy! src-reader ary-target target-offset options)
+          (copy-raw-seq->item! (seq raw-data) ary-target target-offset options)))
+      (instance? RandomAccess raw-data)
+      (let [^List raw-data raw-data
+            num-elems (.size raw-data)]
+        (if (= 0 num-elems)
+          [ary-target target-offset]
+          (if (number? (.get raw-data 0))
+            (do
+              (parallel-for/parallel-for
+               idx num-elems
+               (set-value! ary-target (+ idx target-offset) (.get raw-data idx)))
+              [ary-target (+ target-offset num-elems)])
+            (copy-raw-seq->item! raw-data ary-target target-offset options))))
+      (instance? java.lang.Iterable raw-data)
+      (copy-raw-seq->item! (seq raw-data) ary-target
+                           target-offset options)
+
+      :else
+      (throw (ex-info "Raw copy not supported on object" {})))))
 
 
 (extend-protocol dtype-proto/PBuffer
@@ -353,10 +363,6 @@
     (let [retval
           (make-container :java-array (get-datatype item) (ecount item) {})]
       (copy! item retval)))
-
-  dtype-proto/PCopyRawData
-  (copy-raw->item! [raw-data ary-target target-offset options]
-    (copy-raw-seq->item! (seq raw-data) ary-target target-offset options))
 
 
   dtype-proto/PSetConstant

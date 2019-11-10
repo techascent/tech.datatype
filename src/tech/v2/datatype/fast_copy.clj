@@ -217,9 +217,7 @@
   of those concrete types exactly match."
   [dst src]
   (let [dst-ptr (typecast/as-ptr dst)
-        dst-ary (typecast/as-array dst)
         src-ptr (typecast/as-ptr src)
-        src-ary (typecast/as-array src)
         src-buf (typecast/as-nio-buffer src)
         dst-buf (typecast/as-nio-buffer dst)
         src-list (typecast/as-list src)
@@ -230,6 +228,8 @@
                             {})))
         src-dtype (dtype-proto/get-datatype (or src-buf src-list))
         dst-dtype (dtype-proto/get-datatype (or dst-buf dst-list))
+        src-ary (when src-buf (typecast/as-array src-buf))
+        dst-ary (when dst-buf (typecast/as-array dst-buf))
         n-elems (long (dtype-proto/ecount dst))]
     (when-not (= src-dtype dst-dtype)
       (throw (ex-info "Fast copy called inappropriately; datatypes do not match"

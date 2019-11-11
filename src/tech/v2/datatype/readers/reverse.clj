@@ -23,7 +23,9 @@
 
 
 (defn reverse-reader
-  [src-reader {:keys [datatype]}]
-  (let [datatype (or datatype (dtype-proto/get-datatype src-reader))
-        create-fn (get reverse-reader-table (casting/safe-flatten datatype))]
-    (create-fn src-reader)))
+  ([src-reader {:keys [datatype]}]
+   (let [datatype (or datatype (dtype-proto/get-datatype src-reader))
+         create-fn (get reverse-reader-table (casting/safe-flatten datatype))]
+     (create-fn src-reader)))
+  ([src-reader]
+   (reverse-reader src-reader {})))

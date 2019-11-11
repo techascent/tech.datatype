@@ -30,6 +30,11 @@
     (number? select-arg)
     (shape/classify-sequence select-arg)
 
+    (= :all select-arg)
+    select-arg
+    (= :lla select-arg)
+    select-arg
+
     (shape/classified-sequence? select-arg)
     select-arg
 
@@ -39,8 +44,7 @@
     (dtype/reader? select-arg)
     select-arg
 
-    (= :all select-arg) select-arg
-    (= :lla select-arg) select-arg
+
     ;;else attempt to make it a reader
     :else
     (vec select-arg)))
@@ -54,11 +58,11 @@ the selection applied."
   (let [dim (expand-dimension dim)
         ;;Select arg is now a map, a keyword, or a reader
         select-arg (expand-select-arg select-arg)
-        dim-type (cond (dtype/reader? dim) :reader
-                       (shape/classified-sequence? dim)  :classified-sequence
+        dim-type (cond (shape/classified-sequence? dim)  :classified-sequence
+                       (dtype/reader? dim) :reader
                        :else (throw (Exception. "Unrecognized dim type.")))
-        select-type (cond (dtype/reader? select-arg) :reader
-                          (shape/classified-sequence? select-arg) :classified-sequence
+        select-type (cond (shape/classified-sequence? select-arg) :classified-sequence
+                          (dtype/reader? select-arg) :reader
                           (keyword? select-arg) :keyword
                           :else (throw (Exception. "Unrecognized select type.")))]
     (case select-type
@@ -102,63 +106,68 @@ Returns:
 :offset offset}"
   [dimension-seq stride-seq dim-offset-seq]
   (let [[dimension-seq strides dim-offsets offset]
-        (reduce (fn [[dimension-seq strides dim-offsets offset]
-                     [dimension stride dim-offset]]
-                  (let [dimension (if (and (dtype/reader? dimension)
-                                           (= 1 (dtype/ecount dimension)))
-
-                                    (let [dim-val (dtype/get-value dimension 0)]
-                                      {:type :+ :min-item dim-val :max-item dim-val})
-                                    dimension)]
-                    (cond
-                      (dtype/reader? dimension)
-                      [(conj dimension-seq dimension)
-                       (conj strides stride)
-                       (conj dim-offsets dim-offset)
-                       offset]
-                      (shape/classified-sequence? dimension)
-                      ;;Shift the sequence down and record the new offset.
-                      (let [{:keys [type min-item max-item sequence
-                                    scalar?]} dimension
-                            max-item (- (long max-item) (long min-item))
-                            new-offset (+ (long offset)
-                                          (* (long stride)
-                                             (long (:min-item dimension))))
-                            min-item 0
-                            dimension (cond-> (assoc dimension
-                                                     :min-item min-item
-                                                     :max-item max-item)
-                                        sequence
-                                        (assoc :sequence (mapv (fn [idx]
-                                                                 (- (long idx)
-                                                                    (long min-item)))
-                                                               sequence)))
-                            ;;Now simplify the dimension if possible
-                            dimension (cond
-                                        (= min-item max-item)
-                                        1
-                                        (= :+ type)
-                                        (+ 1 max-item)
-                                        sequence
-                                        (:sequence dimension)
-                                        :else
-                                        dimension)]
-                        ;;A scalar single select arg means drop the dimension.
-                        (if-not (and (= 1 dimension)
-                                     scalar?
-                                     (= 0 (int dim-offset)))
-                          [(conj dimension-seq dimension)
-                           (conj strides stride)
-                           (conj dim-offsets dim-offset)
-                           new-offset]
-                          ;;We keep track of offsetting but we don't add the
-                          ;;element to the return value.
-                          [dimension-seq strides dim-offsets new-offset]))
-                      :else
-                      (throw (ex-info "Bad dimension type"
-                                      {:dimension dimension})))))
-                [[] [] [] 0]
-                (map vector dimension-seq stride-seq dim-offset-seq))
+        (reduce
+         (fn [[dimension-seq strides dim-offsets offset]
+              [dimension stride dim-offset]]
+           (let [dim-type (if (map? dimension)
+                            :classified-sequence
+                            :reader)
+                 [dim-type dimension]
+                 (if (and (= :reader dim-type)
+                          (= 1 (dtype/ecount dimension)))
+                   (let [dim-val (dtype/get-value dimension 0)]
+                     [:classified-sequence
+                      {:type :+ :min-item dim-val :max-item dim-val}])
+                   [dim-type dimension])]
+             (case dim-type
+               :reader
+               [(conj dimension-seq dimension)
+                (conj strides stride)
+                (conj dim-offsets dim-offset)
+                offset]
+               :classified-sequence
+               ;;Shift the sequence down and record the new offset.
+               (let [{:keys [type min-item max-item sequence
+                             scalar?]} dimension
+                     max-item (- (long max-item) (long min-item))
+                     new-offset (+ (long offset)
+                                   (* (long stride)
+                                      (long (:min-item dimension))))
+                     min-item 0
+                     dimension (cond-> (assoc dimension
+                                              :min-item min-item
+                                              :max-item max-item)
+                                 sequence
+                                 (assoc :sequence (mapv (fn [idx]
+                                                          (- (long idx)
+                                                             (long min-item)))
+                                                        sequence)))
+                     ;;Now simplify the dimension if possible
+                     dimension (cond
+                                 (= min-item max-item)
+                                 1
+                                 (= :+ type)
+                                 (+ 1 max-item)
+                                 sequence
+                                 (:sequence dimension)
+                                 :else
+                                 dimension)]
+                 ;;A scalar single select arg means drop the dimension.
+                 (if-not (and (= 1 dimension)
+                              scalar?
+                              (= 0 (int dim-offset)))
+                   [(conj dimension-seq dimension)
+                    (conj strides stride)
+                    (conj dim-offsets dim-offset)
+                    new-offset]
+                   ;;We keep track of offsetting but we don't add the
+                   ;;element to the return value.
+                   [dimension-seq strides dim-offsets new-offset]))
+               ;;Only readers and classified sequences allowed here.
+               (throw (ex-info "Bad dimension type"
+                               {:dimension dimension})))))
+         [[] [] [] 0]
+         (map vector dimension-seq stride-seq dim-offset-seq))
         retval
 
         {:dimension-seq dimension-seq

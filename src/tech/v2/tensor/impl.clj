@@ -1129,12 +1129,14 @@
             ^List dst-list (slice dst slice-arg)
             ^List src-list (slice src slice-arg)
             n-items (count dst-list)]
+        ;;Convert to reader to skip the tensor copy pathway and
+        ;;hopefully just hit fastpath.
         (parallel-for/parallel-for
          idx
          n-items
          (dtype-proto/copy!
-          (tensor->base-buffer-type (.get dst-list idx))
-          (tensor->base-buffer-type (.get src-list idx))
+          (dtype-proto/->reader (.get dst-list idx) {})
+          (dtype-proto/->reader (.get src-list idx) {})
           options)))
       (dtype-proto/copy! (tensor->base-buffer-type dst)
                          (tensor->base-buffer-type src)

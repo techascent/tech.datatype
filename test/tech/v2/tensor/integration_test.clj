@@ -136,3 +136,7 @@
             (dtype/copy! src-tens dst-tens)))
     :ok
     ))
+
+(comment
+  (strided-tensor-copy-time-test)
+  )

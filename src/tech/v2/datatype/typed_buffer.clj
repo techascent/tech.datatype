@@ -9,7 +9,8 @@
             [tech.v2.datatype.pprint :as dtype-pprint])
   (:import [com.sun.jna Pointer]
            [java.io Writer]
-           [tech.v2.datatype.protocols PDatatype]))
+           [tech.v2.datatype.protocols PDatatype]
+           [tech.v2.datatype ObjectReader ObjectWriter]))
 
 
 (set! *warn-on-reflection* true)
@@ -105,6 +106,7 @@
       (cond-> direct-writer
         (not writer-matches?)
         (dtype-proto/->writer {:datatype writer-datatype :unchecked? unchecked?}))))
+
 
   dtype-proto/PToReader
   (convertible-to-reader? [item] (dtype-proto/convertible-to-reader? backing-store))

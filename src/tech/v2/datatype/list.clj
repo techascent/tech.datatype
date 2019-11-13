@@ -358,36 +358,18 @@
      {:insert-block!
       (fn [list-item# idx# values# options#]
         (let [list-item# (datatype->list-cast-fn ~datatype list-item#)
-              ary-data# (dtype-proto/->sub-array values#)
-              idx# (int idx#)]
-          ;;first, try array as they are most general
-          (if (and ary-data#
-                   (= ~datatype (casting/flatten-datatype
-                                 (dtype-proto/get-datatype (:java-array ary-data#)))))
-            (.addElements list-item# idx#
-                          (typecast/datatype->array-cast-fn
-                           ~datatype (:java-array ary-data#))
-                          (int (:offset ary-data#))
-                          (int (:length ary-data#)))
-            ;;next, try list.
-            (let [list-values# (when (dtype-proto/list-convertible? values#)
-                                 (dtype-proto/->list-backing-store values#))]
-              (if (and list-values#
-                       (= ~datatype (casting/flatten-datatype
-                                     (dtype-proto/get-datatype list-values#))))
-                (.addAll list-item# idx# (datatype->list-cast-fn ~datatype
-                                                                 list-values#))
-                ;;fallback to element by element
-                (let [item-reader# (typecast/datatype->reader
-                                    ~datatype values# (:unchecked? options#))
-                      n-values# (.lsize item-reader#)]
-                  (parallel-for/serial-for
-                   iter-idx# n-values#
-                   (.add list-item# (+ idx# iter-idx#)
-                         (casting/datatype->cast-fn
-                          ~(casting/safe-flatten datatype)
-                          ~datatype
-                          (.read item-reader# iter-idx#))))))))))}))
+              n-values# (base/ecount values#)
+              idx# (long idx#)
+              n-total# (+ idx# n-values#)]
+          (when (< (.size list-item#) n-total#)
+            (.size list-item# n-total#))
+          (base/copy! values#
+                      0
+                      (dtype-proto/sub-buffer list-item# idx# n-values#)
+                      0
+                      n-values#
+                      options#)
+          list-item#))}))
 
 
 (extend-list ByteList :int8)

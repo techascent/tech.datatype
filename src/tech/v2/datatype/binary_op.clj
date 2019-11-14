@@ -192,9 +192,9 @@
 
 
 (extend-type Object
-  dtype-proto/PToUnaryOp
-  (convertible-to-unary-op? [item] (instance? clojure.lang.IFn item))
-  (->unary-op [item options]
+  dtype-proto/PToBinaryOp
+  (convertible-to-binary-op? [item] (instance? clojure.lang.IFn item))
+  (->binary-op [item options]
     (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
       (case dtype
         :int8 (make-binary-op :int8 (byte (item x y)))

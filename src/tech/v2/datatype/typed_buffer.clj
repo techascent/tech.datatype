@@ -10,7 +10,8 @@
   (:import [com.sun.jna Pointer]
            [java.io Writer]
            [tech.v2.datatype.protocols PDatatype]
-           [tech.v2.datatype ObjectReader ObjectWriter]))
+           [tech.v2.datatype ObjectReader ObjectWriter]
+           [clojure.lang Counted Indexed]))
 
 
 (set! *warn-on-reflection* true)
@@ -134,6 +135,20 @@
         (not= reader-datatype datatype)
         (dtype-proto/->reader {:datatype reader-datatype
                                :unchecked? unchecked?}))))
+
+
+  Counted
+  (count [item] (base/ecount item))
+
+
+  Indexed
+  (nth [item idx]
+    (base/get-value item idx))
+
+  (nth [item idx def-val]
+    (if (< idx (base/ecount item))
+      (nth item idx)
+      def-val))
 
 
   dtype-proto/PToIterable

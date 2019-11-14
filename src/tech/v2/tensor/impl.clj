@@ -27,7 +27,8 @@
               ObjectReader]
              [com.sun.jna Pointer]
              [java.io Writer]
-             [java.util List]))
+             [java.util List]
+             [clojure.lang Indexed Counted]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -367,7 +368,7 @@
 
 
 
-(declare slice construct-tensor)
+(declare slice construct-tensor select)
 
 (deftype Tensor [buffer dimensions buffer-type]
    dtype-proto/PDatatype
@@ -608,6 +609,28 @@
    Iterable
    (iterator [item]
      (.iterator ^Iterable (slice item 1)))
+
+
+   ;;We can't implement ObjectReader because then the tensor definition is ambiguous
+   ;;because when tensors are interpreted as readers they are simply a flat list of
+   ;;things in row major format.
+   ;;We can, however, implement enough stuff so you can destructure tensors and
+   ;;so clojure can deal with them intelligently.
+   Counted
+   (count [item] (int (first (dims/shape dimensions))))
+
+   Indexed
+   (nth [item idx]
+     (if (= 1 (count (:shape dimensions)))
+       (.read (typecast/datatype->reader :object (dtype/->reader item :object)) idx)
+       (apply select item idx (repeat (dec (count (:shape dimensions)))
+                                      :all))))
+   (nth [item idx def-val]
+    (let [shape (dims/shape dimensions)]
+      (if (< idx (long (first shape)))
+        (nth item idx)
+        def-val)))
+
    Object
    (toString [item]
      ;;Can't think of a better way of doing this.

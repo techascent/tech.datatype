@@ -124,6 +124,13 @@
                     test-tens))))
 
 
+(deftest tensor-destructure
+  (let [[a b c] (first (tens/->tensor (partition 3 (range 9))
+                                      :datatype :int64))]
+    (is (= [a b c]
+           [0 1 2]))))
+
+
 (defn strided-tensor-copy-time-test
   []
   (let [src-tens (-> (tens/new-tensor [2048 2048 4] :datatype :uint8)

@@ -67,8 +67,8 @@
 (defn descriptive-stats
   "Generate descriptive statistics for a particular item."
   [item & [stats-set]]
-  (let [stats-set (set (or stats-set [:mean :min :max :ecount :standard-deviation
-                                      :median]))
+  (let [stats-set (set (or stats-set [:mean :median :min :max :ecount :standard-deviation
+                                      :skew]))
         stats-desc (DescriptiveStatistics. (dtype-base/->double-array item))]
     (->> stats-set
          (map (fn [stats-key]

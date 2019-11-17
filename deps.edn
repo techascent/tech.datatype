@@ -4,4 +4,6 @@
         techascent/tech.parallel         {:mvn/version "2.2"}
         it.unimi.dsi/fastutil            {:mvn/version "8.2.1"}
         kixi/stats                       {:mvn/version "0.5.0"}
-        org.apache.commons/commons-math3 {:mvn/version "3.6.1"}}}
+        org.apache.commons/commons-math3 {:mvn/version "3.6.1"}}
+ :aliases {:test {:extra-deps {org.bytedeco.javacpp-presets/opencv-platform
+                               {:mvn/version "4.0.1-1.4.4"}}}}}

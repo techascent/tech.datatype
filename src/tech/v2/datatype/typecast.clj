@@ -416,7 +416,7 @@
   "JNA is extremely flexible in what it can take as an argument.  Anything convertible
   to a nio buffer, be it direct or array backend is fine."
   [item]
-  (if-let [dst-ptr (when (jna/as-ptr item))]
+  (if-let [dst-ptr (jna/as-ptr item)]
     dst-ptr
     (if-let [nio-buf (dtype-proto/as-nio-buffer item)]
       nio-buf

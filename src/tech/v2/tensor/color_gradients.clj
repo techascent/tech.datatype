@@ -60,13 +60,16 @@
                                                "Gradient fns must return bgr tuples:
 function returned: %s"
                                                grad-val))))
-                         grad-val))))))]
+                         grad-val))))))
+        n-pixels (long (first (dtype/shape gradient-line)))]
     ;;Gradients are accessed potentially many many times so reversing it here
     ;;is often wise as opposed to inline reversing in the main loops.
     (-> (if invert-gradient?
-          (-> (rdr-reverse/reverse-reader gradient-line)
-              (dtype/copy! (dtype/make-container :typed-buffer :uint8
-                                                 (dtype/ecount gradient-line))))
+          (-> (dtt/select gradient-line (range (dec n-pixels) -1 -1)
+                          :all)
+              (dtype/copy! (dtt/reshape (dtype/make-container :typed-buffer :uint8
+                                                              (dtype/ecount gradient-line))
+                                        [n-pixels 3])))
           gradient-line)
         (dtt/ensure-tensor))))
 
@@ -212,6 +215,23 @@ function returned: %s"
                   item)))))
   ;;Sometimes data has NAN's or INF's
   (def test-nan-tens (dtt/->tensor (repeatedly 128 #(bad-range 0 512))))
+
+  (colorize test-nan-tens :temperature-map
+                                             :alpha? true
+                                             :check-invalid? true
+                                             :invert-gradient? true
+                                             :data-min 0
+                                             :data-max 512)
+
+  (bufimg/save! (colorize test-nan-tens :temperature-map
+                                             :alpha? true
+                                             :check-invalid? true
+                                             :invert-gradient? true
+                                             :data-min 0
+                                             :data-max 512)
+                                   "PNG"
+                                   (format "gradient-demo/%s-nan.png"
+                                           (name :temperature-map)))
   (dotimes [iter 100]
     (time (doseq [grad-name (keys @gradient-map)]
             (comment (bufimg/save! (colorize test-nan-tens grad-name

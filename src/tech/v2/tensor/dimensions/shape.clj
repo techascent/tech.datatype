@@ -5,6 +5,7 @@
   (:require [tech.v2.tensor.utils
              :refer [when-not-error reversev map-reversev]]
             [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.readers.range :as rdr-range]
             [tech.v2.datatype.functional :as dfn]))
 
 
@@ -71,12 +72,12 @@
 
 
 (defn classified-sequence->sequence
-  [{:keys [min-item max-item type sequence] :as cseq}]
+  [{:keys [min-item max-item type sequence]}]
   (if sequence
     sequence
     (case type
-      :+ (range min-item (inc (long max-item)))
-      :- (range max-item (dec (long min-item)) -1))))
+      :+ (rdr-range/reader-range :int64 min-item (inc (long max-item)))
+      :- (rdr-range/reader-range :int64 max-item (dec (long min-item)) -1))))
 
 (defn classified-sequence->reader
   [cseq]
@@ -103,14 +104,38 @@
              last-valid-index)
       (throw (ex-info "Select argument out of range" {:dimension source-sequence
                                                       :select-arg select-sequence}))))
-  (let [source-sequence (classified-sequence->sequence source-sequence)
-        retval
-        (->> (classified-sequence->sequence select-sequence)
-             (map #(dtype/get-value source-sequence (long %)))
-             classify-sequence)]
-    (if (:scalar? select-sequence)
-      (assoc retval :scalar? true)
-      retval)))
+  (let [{src-min :min-item
+         src-type :type} source-sequence
+        {sel-min :min-item
+         sel-max :max-item
+         sel-type :type} select-sequence
+        src-min (long src-min)
+        sel-min (long sel-min)
+        sel-max (long sel-max)]
+    (cond
+      ;;Both source and select are monotonically increasing or decreasing
+      ;;Select selects within the source range.
+      (and src-type sel-type)
+      (let [min-item (+ src-min sel-min)
+            max-item (+ min-item (- (long sel-max) (long sel-min)))
+            src-type-inc (long (if (= :+ src-type) 1 -1))
+            sel-type-inc (long (if (= :+ sel-type) 1 -1))]
+        {:min-item min-item
+         :max-item max-item
+         :type (if (= 1 (* src-type-inc sel-type-inc))
+                 :+
+                 :-)
+         :scalar? (:scalar? select-sequence)})
+      :else
+      (let [source-sequence (classified-sequence->sequence source-sequence)
+            retval
+            (->> (classified-sequence->sequence select-sequence)
+                 (map #(dtype/get-value source-sequence (long %)))
+                 classify-sequence)]
+        (if (:scalar? select-sequence)
+          (assoc retval :scalar? true)
+          retval))
+      )))
 
 
 (defn reverse-classified-sequence

@@ -173,12 +173,18 @@
   (->unary-op [item options]
     (let [dtype (casting/safe-flatten (or (:datatype options) :object))]
       (case dtype
-        :int8 (make-unary-op :int8 (byte (item x)))
-        :int16 (make-unary-op :int16 (short (item x)))
-        :int32 (make-unary-op :int32 (int (item x)))
-        :int64 (make-unary-op :int64 (long (item x)))
-        :float32 (make-unary-op :float32 (float (item x)))
-        :float64 (make-unary-op :float64 (double (item x)))
+        :int8 (make-unary-op :int8 (casting/datatype->cast-fn
+                                    :unknown :int8 (item x)))
+        :int16 (make-unary-op :int16 (casting/datatype->cast-fn
+                                      :unknown :int16 (item x)))
+        :int32 (make-unary-op :int32 (casting/datatype->cast-fn
+                                      :unkown :int32 (item x)))
+        :int64 (make-unary-op :int64 (casting/datatype->cast-fn
+                                      :unknown :int64 (item x)))
+        :float32 (make-unary-op :float32 (casting/datatype->cast-fn
+                                          :unknown :float32 (item x)))
+        :float64 (make-unary-op :float64 (casting/datatype->cast-fn
+                                          :unknown :float64 (item x)))
         :boolean (make-unary-op :boolean (casting/datatype->cast-fn
                                                    :unkown
                                                    :boolean

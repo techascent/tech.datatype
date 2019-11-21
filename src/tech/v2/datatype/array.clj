@@ -61,10 +61,10 @@
      {:->sub-array (fn [item#]
                      {:java-array item#
                       :offset 0
-                      :length (base/ecount item#)})
+                      :length (count item#)})
       :->array-copy (fn [item#]
                       (base/copy! item# (make-array-of-type ~datatype
-                                                            (base/ecount item#))))}
+                                                            (count item#))))}
      dtype-proto/PBuffer
      {:sub-buffer (fn [buffer# offset# length#]
                     (dtype-proto/sub-buffer (dtype-proto/->buffer-backing-store buffer#)
@@ -291,7 +291,7 @@
     dtype-proto/PToList
     {:convertible-to-fastutil-list? (constantly true)
      :->list-backing-store (fn [item#]
-                             (ObjectArrayList/wrap item# (base/ecount item#)))}
+                             (ObjectArrayList/wrap item# (count item#)))}
 
 
     dtype-proto/PCopyRawData
@@ -366,7 +366,7 @@
     dtype-proto/PToArray
     {:->sub-array (fn [item] {:java-array item
                               :offset 0
-                              :length (base/ecount item)})
+                              :length (count item)})
      :->array-copy (fn [src-ary]
                      (base/copy! src-ary
                                  (make-array-of-type
@@ -377,4 +377,5 @@
 (extend-object-array-type (Class/forName "[Ljava.lang.Object;"))
 (extend-object-array-type (Class/forName "[Ljava.lang.String;"))
 (add-object-array-datatype-override! String :string)
+(add-object-array-datatype-override! Object :object)
 (add-numeric-array-constructor :string #(make-object-array-of-type String % {:construct? true}))

@@ -984,8 +984,9 @@ https://cloojure.github.io/doc/core.matrix/clojure.core.matrix.html#var-select"
       {:shape data-shp
        :args (vec args)})
     (let [{:keys [shape offsets strides]} dims
-
-          shape (map dims-select/apply-select-arg-to-dimension shape args)
+          ;;mapv here in order to correctly attribute timings during
+          ;;profiling.
+          shape (mapv dims-select/apply-select-arg-to-dimension shape args)
           {shape :dimension-seq
            strides :strides
            offsets :offsets

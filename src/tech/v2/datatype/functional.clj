@@ -8,9 +8,11 @@
             [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.binary-search :as binary-search]
             [tech.v2.datatype.base :as dtype-base]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.sparse.reader :as sparse-reader]
             [tech.v2.datatype.statistics]
-            [tech.v2.datatype.rolling])
+            [tech.v2.datatype.rolling]
+            [tech.parallel.for :as parallel-for])
   (:refer-clojure :exclude [+ - / *
                             <= < >= >
                             identity
@@ -136,6 +138,47 @@
     (boolean-op/unary-argfilter (impl/default-options {})
                                 bool-op
                                 filter-seq)))
+
+(defn argpartition-by
+  "Returns a map of partitioned-items->indexes.  Index generation is parallelized."
+  [partition-fn item-reader & [options]]
+  (let [n-elems (dtype-base/ecount item-reader)
+        reader-dtype (clojure.core/or (:datatype options) :object)
+        item-reader (->> (dtype-base/->reader item-reader
+                                              reader-dtype
+                                              (assoc options :datatype reader-dtype))
+                         (unary-op/unary-map partition-fn)
+                         (typecast/datatype->reader :object))]
+    (parallel-for/indexed-pmap
+     (fn [idx n-indexes]
+       (let [idx (long idx)
+             last-index (clojure.core/+ idx (long n-indexes))]
+         (loop [idx idx
+                retval (transient {})]
+           (if (clojure.core/< idx last-index)
+             (let [partition-key (.read item-reader idx)
+                   ^java.util.List existing-list
+                   (get retval partition-key
+                        (dtype-base/make-container :list :int64 0))]
+               (.add existing-list idx)
+               (recur (inc idx)
+                      (assoc! retval partition-key existing-list)))
+             (persistent! retval)))))
+     n-elems
+     (partial reduce (fn [last-map next-map]
+                       (->>
+                        (reduce
+                         (fn [last-map [map-key map-list]]
+                           (let [last-list (get last-map map-key
+                                                (dtype-base/make-container :list
+                                                                           :int64 0))]
+                             (dtype-base/insert-block! last-list
+                                                       (dtype-base/ecount last-list)
+                                                       map-list)
+                             (assoc! last-map map-key last-list)))
+                         (transient last-map)
+                         next-map)
+                        (persistent!)))))))
 
 
 (defn magnitude-squared

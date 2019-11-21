@@ -7,6 +7,7 @@
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.tensor.typecast :as tens-typecast]
             [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.readers.reverse :as rdr-reverse]
             [clojure.edn :as edn]
             [tech.parallel.for :as pfor]
             [tech.libs.buffered-image :as bufimg]
@@ -24,11 +25,53 @@
                               (dtt/ensure-tensor))))
 
 
-
 (defn- flp-close
   [val desired & [error]]
   (< (Math/abs (- (double val) (double desired)))
      (double (or error 0.001))))
+
+
+(defn gradient-name->gradient-line
+  [gradient-name invert-gradient? gradient-default-n]
+  (let [gradient-default-n (long gradient-default-n)
+        gradient-line
+        (cond
+          (keyword? gradient-name)
+          (let [src-gradient-info (get @gradient-map gradient-name)
+                _ (when-not src-gradient-info
+                    (throw (Exception.
+                            (format "Failed to find gradient %s"
+                                    gradient-name))))
+                gradient-tens @gradient-tens]
+            (dtt/select gradient-tens
+                        (:tensor-index src-gradient-info)
+                        :all :all))
+          (dtt/tensor? gradient-name)
+          gradient-name
+          (instance? IFn gradient-name)
+          (dtt/->tensor
+           (->> (range gradient-default-n)
+                (map (fn [idx]
+                       (let [p-val (/ (double idx)
+                                      (double gradient-default-n))
+                             grad-val (gradient-name p-val)]
+                         (when-not (= 3 (count grad-val))
+                           (throw (Exception. (format
+                                               "Gradient fns must return bgr tuples:
+function returned: %s"
+                                               grad-val))))
+                         grad-val))))))
+        n-pixels (long (first (dtype/shape gradient-line)))]
+    ;;Gradients are accessed potentially many many times so reversing it here
+    ;;is often wise as opposed to inline reversing in the main loops.
+    (-> (if invert-gradient?
+          (-> (dtt/select gradient-line (range (dec n-pixels) -1 -1)
+                          :all)
+              (dtype/copy! (dtt/reshape (dtype/make-container :typed-buffer :uint8
+                                                              (dtype/ecount gradient-line))
+                                        [n-pixels 3])))
+          gradient-line)
+        (dtt/ensure-tensor))))
 
 
 (defn colorize
@@ -63,25 +106,34 @@
                                     gradient-default-n]
                              :or {gradient-default-n 200}}]
   (let [img-shape (dtype/shape src-tens)
-        n-pixels (dtype/ecount src-tens)
-        valid-indexes (when check-invalid?
-                        (dfn/argfilter dfn/valid?
-                                       (dtype/->reader src-tens
-                                                       :float64)))
-        valid-indexes (if-not (= (dtype/ecount valid-indexes) n-pixels)
-                        valid-indexes
-                        nil)
-        _ (when (and valid-indexes (not alpha?))
-            (log/warnf "Invalid data valids detected but alpha not specified.
-This leads to ambiguous results as pixels not written to will be black but not transparent."))
-        src-reader (if valid-indexes
-                     (dtype/indexed-reader valid-indexes src-tens)
-                     src-tens)
         {data-min :min
-         data-max :max} (if (and data-min data-max)
-                          {:min data-min
-                           :max data-max}
-                          (dfn/descriptive-stats src-reader [:min :max]))
+         data-max :max
+         valid-indexes :valid-indexes
+         src-reader :src-reader}
+        (if (and data-min data-max)
+          {:min data-min
+           :max data-max
+           :src-reader src-tens}
+          ;;If we have to min/max check then we have to filter out invalid indexes.
+          ;;In that case we prefilter the data and trim it.  We always check for
+          ;;invalid data in the main loops below and this is faster than
+          ;;pre-checking and indexing.
+          (let [valid-indexes (when check-invalid?
+                                (dfn/argfilter dfn/valid?
+                                               (dtype/->reader src-tens
+                                                               :float64)))
+               src-reader (if (and valid-indexes
+                                        (not= (dtype/ecount valid-indexes)
+                                              (dtype/ecount src-tens)))
+                            (dtype/indexed-reader valid-indexes src-tens)
+                            src-tens)]
+            (merge
+             (dfn/descriptive-stats src-reader [:min :max])
+             {:src-reader src-reader
+              :valid-indexes valid-indexes})))
+        n-pixels (if valid-indexes
+                   (dtype/ecount valid-indexes)
+                   (dtype/ecount src-reader))
         data-min (double data-min)
         data-max (double data-max)
         _ (when (or (dfn/invalid? data-min)
@@ -95,11 +147,6 @@ This leads to ambiguous results as pixels not written to will be black but not t
                                                 (/ data-range))
                                             src-reader)
                      src-reader)
-        src-reader (if invert-gradient?
-                     (unary-op/unary-reader :float64
-                                            (- 1.0 x)
-                                            src-reader)
-                     src-reader)
         src-reader (typecast/datatype->reader :float64 src-reader)
         img-type (if alpha?
                    :byte-abgr
@@ -110,39 +157,10 @@ This leads to ambiguous results as pixels not written to will be black but not t
         ;;Flatten out src-tens and res-tens and make them readers
         n-channels (long (if alpha? 4 3))
         res-tens (dtt/reshape res-image [n-pixels n-channels])
-        res-tens (if valid-indexes
-                   (dtt/select res-tens valid-indexes :all)
-                   res-tens)
         res-tens (tens-typecast/datatype->tensor-writer
                   :uint8 res-tens)
-        gradient-default-n (long gradient-default-n)
-        gradient-line
-        (cond
-          (keyword? gradient-name)
-          (let [src-gradient-info (get @gradient-map gradient-name)
-                _ (when-not src-gradient-info
-                    (throw (Exception.
-                            (format "Failed to find gradient %s"
-                                    gradient-name))))
-                gradient-tens @gradient-tens]
-            (dtt/select gradient-tens
-                        (:tensor-index src-gradient-info)
-                        :all :all))
-          (dtt/tensor? gradient-name)
-          gradient-name
-          (instance? IFn gradient-name)
-          (dtt/->tensor
-           (->> (range gradient-default-n)
-                (map (fn [idx]
-                       (let [p-val (/ (double idx)
-                                      (double gradient-default-n))
-                             grad-val (gradient-name p-val)]
-                         (when-not (= 3 (count grad-val))
-                           (throw (Exception. (format
-                                               "Gradient fns must return bgr tuples:
-function returned: %s"
-                                               grad-val))))
-                         grad-val))))))
+        gradient-line (gradient-name->gradient-line gradient-name invert-gradient?
+                                                    gradient-default-n)
         n-gradient-increments (long (first (dtype/shape gradient-line)))
         gradient-line (tens-typecast/datatype->tensor-reader
                        :uint8
@@ -155,21 +173,25 @@ function returned: %s"
       (pfor/parallel-for
        idx
        n-pixels
-       (let [p-value (min 1.0 (max 0.0 (.read src-reader idx)))
-             line-idx (long (Math/round (* p-value line-last-idx)))]
-         ;;alpha channel first
-         (.write2d res-tens idx 0 255)
-         (.write2d res-tens idx 1 (.read2d gradient-line line-idx 0))
-         (.write2d res-tens idx 2 (.read2d gradient-line line-idx 1))
-         (.write2d res-tens idx 3 (.read2d gradient-line line-idx 2))))
+       (let [src-val (.read src-reader idx)]
+         (when (Double/isFinite src-val)
+           (let [p-value (min 1.0 (max 0.0 src-val))
+                 line-idx (long (Math/round (* p-value line-last-idx)))]
+             ;;alpha channel first
+             (.write2d res-tens idx 0 255)
+             (.write2d res-tens idx 1 (.read2d gradient-line line-idx 0))
+             (.write2d res-tens idx 2 (.read2d gradient-line line-idx 1))
+             (.write2d res-tens idx 3 (.read2d gradient-line line-idx 2))))))
       (pfor/parallel-for
        idx
        n-pixels
-       (let [p-value (min 1.0 (max 0.0 (.read src-reader idx)))
-             line-idx (long (Math/round (* p-value line-last-idx)))]
-         (.write2d res-tens idx 0 (.read2d gradient-line line-idx 0))
-         (.write2d res-tens idx 1 (.read2d gradient-line line-idx 1))
-         (.write2d res-tens idx 2 (.read2d gradient-line line-idx 2)))))
+       (let [src-val (.read src-reader idx)]
+         (when (Double/isFinite src-val)
+           (let [p-value (min 1.0 (max 0.0 (.read src-reader idx)))
+                 line-idx (long (Math/round (* p-value line-last-idx)))]
+             (.write2d res-tens idx 0 (.read2d gradient-line line-idx 0))
+             (.write2d res-tens idx 1 (.read2d gradient-line line-idx 1))
+             (.write2d res-tens idx 2 (.read2d gradient-line line-idx 2)))))))
     res-image))
 
 
@@ -178,10 +200,12 @@ function returned: %s"
   (io/make-parents "gradient-demo/test.txt")
 
   (def test-src-tens (dtt/->tensor (repeat 128 (range 0 512))))
-  (doseq [grad-name (keys @gradient-map)]
-    (bufimg/save! (colorize test-src-tens grad-name)
-                  "PNG"
-                  (format "gradient-demo/%s.png" (name grad-name))))
+  (time (doseq [grad-name (keys @gradient-map)]
+          (comment (bufimg/save! (colorize test-src-tens grad-name)
+                                 "PNG"
+                                 (format "gradient-demo/%s.png" (name grad-name))))
+          (colorize test-src-tens grad-name)
+          ))
   (defn bad-range
     [start end]
     (->> (range start end)
@@ -191,12 +215,39 @@ function returned: %s"
                   item)))))
   ;;Sometimes data has NAN's or INF's
   (def test-nan-tens (dtt/->tensor (repeatedly 128 #(bad-range 0 512))))
-  (doseq [grad-name (keys @gradient-map)]
-    (bufimg/save! (colorize test-nan-tens grad-name
-                                  :alpha? true
-                                  :check-invalid? true)
-                  "PNG"
-                  (format "gradient-demo/%s-nan.png" (name grad-name))))
+
+  (colorize test-nan-tens :temperature-map
+                                             :alpha? true
+                                             :check-invalid? true
+                                             :invert-gradient? true
+                                             :data-min 0
+                                             :data-max 512)
+
+  (bufimg/save! (colorize test-nan-tens :temperature-map
+                                             :alpha? true
+                                             :check-invalid? true
+                                             :invert-gradient? true
+                                             :data-min 0
+                                             :data-max 512)
+                                   "PNG"
+                                   (format "gradient-demo/%s-nan.png"
+                                           (name :temperature-map)))
+  (dotimes [iter 100]
+    (time (doseq [grad-name (keys @gradient-map)]
+            (comment (bufimg/save! (colorize test-nan-tens grad-name
+                                             :alpha? true
+                                             :check-invalid? true
+                                             :data-min 0
+                                             :data-max 512)
+                                   "PNG"
+                                   (format "gradient-demo/%s-nan.png"
+                                           (name grad-name))))
+            (colorize test-nan-tens grad-name
+                      :alpha? true
+                      :check-invalid? true
+                      :invert-gradient? true
+                      :data-min 0
+                      :data-max 512))))
 
   (def custom-gradient-tens (dtt/->tensor
                              (->> (range 100)
@@ -206,7 +257,8 @@ function returned: %s"
                                            [(* 255 p-value) 0 (* (- 1.0 p-value)
                                                                  255)]))))))
 
-  (bufimg/save! (colorize test-src-tens custom-gradient-tens)
+  (bufimg/save! (colorize test-src-tens custom-gradient-tens
+                          :invert-gradient? true)
                 "PNG"
                 "gradient-demo/custom-tensor-gradient.png")
 
@@ -215,7 +267,8 @@ function returned: %s"
     (let [one-m-p (- 1.0 p-value)]
       [(* 255 one-m-p) (* 255 p-value) (* 255 one-m-p)]))
 
-  (bufimg/save! (colorize test-src-tens custom-gradient-fn)
+  (bufimg/save! (colorize test-src-tens custom-gradient-fn
+                          :invert-gradient? true)
                 "PNG"
                 "gradient-demo/custom-ifn-gradient.png")
   )

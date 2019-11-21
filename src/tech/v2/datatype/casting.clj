@@ -1,8 +1,7 @@
 (ns tech.v2.datatype.casting
   (:refer-clojure :exclude [cast])
   (:require [clojure.set :as c-set])
-  (:import [tech.v2.datatype DateUtility]
-           [java.util TimeZone]))
+  (:import [tech.v2.datatype DateUtility]))
 
 
 (def signed-unsigned
@@ -294,12 +293,15 @@
   (contains? date-denominator-names denominator))
 
 
-(defn check-date-denominator!
+(defn check-date-denominator
   [denominator]
-  (when-not (valid-date-denominator? denominator)
-    (throw (Exception. (format "Unrecognized date denominator: %s"
-                               denominator))))
-  denominator)
+  (if (number? denominator)
+    denominator
+    (do
+      (when-not (valid-date-denominator? denominator)
+        (throw (Exception. (format "Unrecognized date denominator: %s"
+                                   denominator))))
+      (get date-denominators denominator))))
 
 
 (defn date-denominator
@@ -327,30 +329,16 @@
   dtype)
 
 
-(defn default-time-zone
-  []
-  (-> (TimeZone/getDefault)
-      (.getID)))
-
-
-(defn datetime-datatype->time-zone
-  ^TimeZone [datetime-datatype]
-  (let [timezone-name (-> (or (:time-zone datetime-datatype)
-                              (default-time-zone))
-                          str)]
-    (TimeZone/getTimeZone timezone-name)))
-
-
 (defn datetime-datatype
-  ([date-denominator time-zone base-datatype]
+  ([date-denominator utc-offset base-datatype]
    {:datatype :datetime
     :base-datatype (check-date-base-datatype! base-datatype)
-    :denominator (check-date-denominator! date-denominator)
-    :time-zone time-zone})
-  ([date-denominator time-zone]
-   (datetime-datatype date-denominator time-zone :int64))
+    :denominator (check-date-denominator date-denominator)
+    :utc-offset utc-offset})
+  ([date-denominator utc-offset]
+   (datetime-datatype date-denominator utc-offset :int64))
   ([date-denominator]
-   (datetime-datatype date-denominator (default-time-zone)))
+   (datetime-datatype date-denominator 0))
   ([]
    (datetime-datatype :milliseconds)))
 
@@ -501,6 +489,13 @@
     `(datatype->unchecked-cast-fn
       :ignored ~host-type
       (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
+
+
+(defn unwrap-datatype
+  [dtype]
+  (if (map? dtype)
+    (:datatype dtype)
+    dtype))
 
 
 (defn flatten-datatype

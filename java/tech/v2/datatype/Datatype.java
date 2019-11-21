@@ -4,5 +4,5 @@ import clojure.lang.Keyword;
 
 public interface Datatype
 {
-  Keyword getDatatype();
+  Object getDatatype();
 }

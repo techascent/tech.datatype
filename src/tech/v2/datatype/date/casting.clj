@@ -13,18 +13,6 @@
 (set! *warn-on-reflection* true)
 
 
-(defn options->time-zone
-  ^TimeZone [options]
-  (let [time-zone (:time-zone options)]
-    (cond
-      (instance? TimeZone time-zone)
-      time-zone
-      (string? time-zone)
-      (TimeZone/getTimeZone (str time-zone))
-      :else
-      (TimeZone/getDefault))))
-
-
 (defmulti datetime-reader-cast
   "Family of cast functions for going to/from/between datetime family objects"
   (fn [src-reader src-datatype dst-datatype options]
@@ -46,6 +34,7 @@
   [src-reader src-datatype dst-datatype options]
   (let [unchecked? (:unchecked? options)
         src-reader (typecast/datatype->reader :int64 src-reader unchecked?)]
+    (println src-reader)
     (reify LongReader
       (getDatatype [rdr] dst-datatype)
       (lsize [rdr] (.lsize src-reader))
@@ -55,7 +44,7 @@
 (defmethod datetime-reader-cast [:object :concrete]
   [src-reader src-datatype dst-datatype options]
   (let [src-reader (typecast/datatype->reader :object src-reader)
-        temp-datatype (casting/datetime-datatype :milliseconds "UTC")]
+        temp-datatype (casting/datetime-datatype)]
     (-> (case src-datatype
           :instant
           (reify LongReader
@@ -73,7 +62,7 @@
                 (-> (.toInstant dt)
                     (.toEpochMilli)))))
           :local-date-time
-          (let [tz (TimeZone/getDefault)]
+          (let [tz (TimeZone/getTimeZone "UTC")]
             (reify LongReader
               (getDatatype [rdr] temp-datatype)
               (lsize [rdr] (.lsize src-reader))
@@ -85,12 +74,23 @@
         (datetime-reader-cast temp-datatype dst-datatype options))))
 
 
+(defn options->time-zone
+  ^TimeZone [options]
+  (let [time-zone (:time-zone options)]
+    (cond
+      (instance? TimeZone time-zone)
+      time-zone
+      (string? time-zone)
+      (TimeZone/getTimeZone (str time-zone))
+      :else
+      (TimeZone/getDefault))))
+
+
 (defmethod datetime-reader-cast [:concrete :object]
   [src-reader src-datatype dst-datatype options]
   ;;Get source in the form of UTC milliseconds
   (let [src-reader (datetime-reader-cast src-reader src-datatype
-                                         (casting/datetime-datatype
-                                          :milliseconds "UTC")
+                                         (casting/datetime-datatype)
                                          options)
         src-reader (typecast/datatype->reader :int64 src-reader)]
     (case dst-datatype
@@ -126,13 +126,8 @@
     (let [src-reader (typecast/datatype->reader :int64 src-reader)
           src-denom (casting/date-denominator (:denominator src-datatype))
           dst-denom (casting/date-denominator (:denominator dst-datatype))
-          ^TimeZone src-tz (casting/datetime-datatype->time-zone src-datatype)
-          ^TimeZone dst-tz (casting/datetime-datatype->time-zone dst-datatype)
-          cur-epoch-millis (long (or (:current-epoch-seconds options)
-                                     (-> (Instant/now)
-                                         (.toEpochMilli))))
-          src-offset (.getOffset src-tz cur-epoch-millis)
-          dst-offset (.getOffset dst-tz cur-epoch-millis)
+          src-offset (long (:utc-offset src-datatype))
+          dst-offset (long (:utc-offset dst-datatype))
           unchecked? (:unchecked? options)]
       (reify LongReader
         (getDatatype [rdr] dst-datatype)

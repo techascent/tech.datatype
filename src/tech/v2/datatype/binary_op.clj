@@ -326,6 +326,18 @@
    `(binary-reader :object ~opcode ~lhs ~rhs)))
 
 
+(defn binary-map
+  "Either return an iterable or a reader depending on of the mapped item
+  is an iterable or a reader"
+  ([options un-op lhs rhs]
+   (if (and (dtype-proto/convertible-to-reader? lhs)
+            (dtype-proto/convertible-to-reader? rhs))
+     (binary-reader-map options un-op lhs rhs)
+     (binary-iterable-map options un-op lhs rhs)))
+  ([un-op lhs rhs]
+   (binary-map {} un-op lhs rhs)))
+
+
 (defmacro make-float-double-binary-op
   [opname op-code]
   `(reify

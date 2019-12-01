@@ -354,12 +354,12 @@
             (dtype/copy-raw->item! src-data dst-ary)))))
 
 
-(deftest argpartition-by-test
+(deftest arggroup-by-test
   ;;The operation returns values in object space
   ;;if it operates as :object datatype.  This is the default.
   (let [{truevals true
          falsevals false}
-        (dfn/argpartition-by even? (range 20))]
+        (dfn/arggroup-by even? (range 20))]
     (is (= truevals
            (vec (filter even? (range 20)))))
     (is (= falsevals
@@ -370,11 +370,22 @@
   ;;operates and returns values in long space.
   (let [{truevals 1
          falsevals 0}
-        (dfn/argpartition-by even? (range 20) {:datatype :int64})]
+        (dfn/arggroup-by even? (range 20) {:datatype :int64})]
     (is (= truevals
            (vec (filter even? (range 20)))))
     (is (= falsevals
            (vec (remove even? (range 20)))))))
+
+
+(deftest argpartition-by-test
+  ;;The operation returns values in object space
+  ;;if it operates as :object datatype.  This is the default.
+  (is (= [[0 (range 5)]
+          [1 (range 5 10)]
+          [2 (range 10 15)]
+          [3 (range 15 20)]]
+         (vec (dfn/argpartition-by #(quot (long %) 5) (range 20))))))
+
 
 
 (deftest typed-buffer-destructure

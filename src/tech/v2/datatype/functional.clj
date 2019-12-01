@@ -13,6 +13,7 @@
             [tech.v2.datatype.statistics]
             [tech.v2.datatype.rolling]
             [tech.parallel.for :as parallel-for])
+  (:import [java.util Iterator])
   (:refer-clojure :exclude [+ - / *
                             <= < >= >
                             identity
@@ -139,7 +140,8 @@
                                 bool-op
                                 filter-seq)))
 
-(defn argpartition-by
+
+(defn arggroup-by
   "Returns a map of partitioned-items->indexes.  Index generation is parallelized."
   [partition-fn item-reader & [options]]
   (let [n-elems (dtype-base/ecount item-reader)
@@ -179,6 +181,37 @@
                          (transient last-map)
                          next-map)
                         (persistent!)))))))
+
+
+(defn- do-argpartition-by
+  [^long start-idx ^Iterator item-iterable first-item]
+  (let [[end-idx next-item]
+        (loop [cur-idx start-idx]
+          (let [has-next? (.hasNext item-iterable)
+                next-item (when has-next? (.next item-iterable))]
+            (if (clojure.core/and has-next?
+                                  (= first-item next-item))
+              (recur (inc cur-idx))
+              [cur-idx next-item])))
+        end-idx (inc (long end-idx))]
+    (cons [first-item (range (long start-idx) end-idx)]
+          (when (.hasNext item-iterable)
+            (lazy-seq (do-argpartition-by end-idx item-iterable next-item))))))
+
+
+(defn argpartition-by
+  "Returns a sequence of [partition-key index-reader].  Index generation is not parallelized.
+  This design allows group-by and partition-by to be used interchangeably as they both
+  result in a sequence of [partition-key idx-reader].  This design is lazy."
+  [partition-fn item-iterable & [options]]
+  (let [reader-dtype (clojure.core/or (:datatype options) :object)
+        item-reader (->> (dtype-base/->iterable item-iterable
+                                                reader-dtype
+                                                (assoc options :datatype reader-dtype))
+                         (unary-op/unary-map partition-fn))
+        iterator (.iterator ^Iterable item-reader)]
+    (when (.hasNext iterator)
+      (do-argpartition-by 0 iterator (.next iterator)))))
 
 
 (defn magnitude-squared

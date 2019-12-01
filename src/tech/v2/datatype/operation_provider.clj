@@ -9,7 +9,8 @@
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.argtypes :as argtypes])
+            [tech.v2.datatype.argtypes :as argtypes]
+            [tech.v2.datatype.readers.const :as const-rdr])
   (:refer-clojure :exclude [cast]))
 
 
@@ -26,12 +27,11 @@
 
 (defn operand-type
   "Classify all the base primitive datatypes as numeric types."
-  [item]
-  (let [dtype (base/get-datatype item)]
-    (if (or (casting/numeric-type? dtype)
-            (= :boolean dtype))
-      :primitive
-      dtype)))
+  [dtype]
+  (if (or (casting/numeric-type? dtype)
+          (= :boolean dtype))
+    :primitive
+    dtype))
 
 
 (defmulti unary-provider
@@ -41,13 +41,52 @@
 
 (defmulti binary-provider
   "Binary providers are given both datatypes."
-  (fn [lhs-op rhs-op]
-    [(operand-type lhs-op) (operand-type rhs-op)]))
+  (fn [lhs-dtype rhs-dtype]
+    [(operand-type lhs-dtype) (operand-type rhs-dtype)]))
 
 
 (defn- operation-type
   [options]
-  (get options :op-type :numeric))
+  (get options :op-type :default))
+
+
+;;Implementation details around the default operation provider
+
+(def datatype-width
+  (->> [:object :float64 [:int64 :uint64]
+        :float32 [:int32 :uint32]
+        [:uint16 :int16]
+        [:int8 :uint8] :boolean]
+       (map-indexed vector)
+       (mapcat (fn [[idx entry]]
+                 (if (keyword? entry)
+                   [[entry idx]]
+                   (map vector entry (repeat idx)))))
+       (into {})))
+
+
+(defn next-integer-type
+  [lhs rhs]
+  (case (max (casting/int-width lhs)
+             (casting/int-width rhs))
+    8 :int16
+    16 :int32
+    :int64))
+
+
+(defn widest-datatype
+  [lhs-dtype rhs-dtype]
+  (if (= lhs-dtype rhs-dtype)
+    lhs-dtype
+    (let [lhs-rank (datatype-width lhs-dtype)
+          rhs-rank (datatype-width rhs-dtype)]
+      (cond
+        (< lhs-rank rhs-rank)
+        lhs-dtype
+        (= lhs-rank rhs-rank)
+        (next-integer-type lhs-dtype rhs-dtype)
+        :else
+        rhs-dtype))))
 
 
 (def default-provider
@@ -60,15 +99,14 @@
         :iterable (base/->iterable lhs (:datatype options) options)
         :reader (base/->reader lhs (:datatype options) options)))
     (unary-op [provider lhs op options]
-      (let [
-            [op boolean?]
+      (let [[op boolean?]
             (if (keyword? op)
               (if-let [un-op (get unary-op/builtin-unary-ops op)]
                 [(dtype-proto/->unary-op un-op options) false]
                 (if-let [bin-op (get boolean-op/builtin-boolean-unary-ops op)]
                   [(dtype-proto/->unary-boolean-op bin-op options) true]
                   (throw (Exception. (format "Failed to find unary op %s" op)))))
-              (if (and (= (operation-type options) :numeric)
+              (if (and (= (operation-type options) :default)
                        (dtype-proto/convertible-to-unary-op? op))
                 [(dtype-proto/->unary-op op options) false]
                 [(dtype-proto/->unary-boolean-op op options) true]))]
@@ -79,22 +117,32 @@
             (unary-op/unary-map options op lhs)))))
 
     (binary-op [provider lhs rhs op options]
-      (let [[op boolean?]
+      (let [op-datatype (or (:datatype options)
+                            (widest-datatype (base/get-datatype lhs)
+                                             (base/get-datatype rhs)))
+            options (assoc options :datatype op-datatype)
+            [op boolean?]
             (if (keyword? op)
               (if-let [un-op (get binary-op/builtin-binary-ops op)]
                 [(dtype-proto/->binary-op un-op options) false]
                 (if-let [bin-op (get boolean-op/builtin-boolean-binary-ops op)]
                   [(dtype-proto/->binary-boolean-op bin-op options) true]
                   (throw (Exception. (format "Failed to find binary op %s" op)))))
-              (if (and (= (operation-type options) :numeric)
+              (if (and (= (operation-type options) :default)
                        (dtype-proto/convertible-to-binary-op? op))
                 [(dtype-proto/->binary-op op options) false]
                 [(dtype-proto/->binary-boolean-op op options) true]))]
         (if (= (:argtype options) :scalar)
           (op lhs rhs)
-          (if boolean?
-            (boolean-op/boolean-binary-map options op lhs rhs)
-            (binary-op/binary-map options op lhs rhs)))))
+          (let [lhs (if (= (argtypes/arg->arg-type lhs) :scalar)
+                      (const-rdr/make-const-reader lhs op-datatype (base/ecount rhs))
+                      lhs)
+                rhs (if (= (argtypes/arg->arg-type rhs) :scalar)
+                      (const-rdr/make-const-reader rhs op-datatype (base/ecount lhs))
+                      rhs)]
+            (if boolean?
+              (boolean-op/boolean-binary-map options op lhs rhs)
+              (binary-op/binary-map options op lhs rhs))))))
 
     (reduce-op [provider lhs op options]
       (let [op-kwd op
@@ -114,11 +162,28 @@
           (reduce-op/iterable-reduce-map options op lhs))))))
 
 
-(defmethod unary-provider :default
+(defmethod unary-provider :primitive
   [lhs]
   default-provider)
 
 
-(defmethod binary-provider :default
+(defmethod unary-provider :object
+  [lhs]
+  default-provider)
+
+
+(defmethod binary-provider [:primitive :primitive]
+  [lhs rhs]
+  default-provider)
+
+(defmethod binary-provider [:object :primitive]
+  [lhs rhs]
+  default-provider)
+
+(defmethod binary-provider [:object :object]
+  [lhs rhs]
+  default-provider)
+
+(defmethod binary-provider [:primitive :object]
   [lhs rhs]
   default-provider)

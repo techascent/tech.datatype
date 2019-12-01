@@ -120,6 +120,8 @@
                             (widest-datatype (base/get-datatype lhs)
                                              (base/get-datatype rhs)))
             options (assoc options :datatype op-datatype)
+            lhs-arg-type (argtypes/arg->arg-type lhs)
+            rhs-arg-type (argtypes/arg->arg-type rhs)
             [op boolean?]
             (if (keyword? op)
               (if-let [un-op (get binary-op/builtin-binary-ops op)]
@@ -133,11 +135,15 @@
                 [(dtype-proto/->binary-boolean-op op options) true]))]
         (if (= (:argtype options) :scalar)
           (op lhs rhs)
-          (let [lhs (if (= (argtypes/arg->arg-type lhs) :scalar)
-                      (const-rdr/make-const-reader lhs op-datatype (base/ecount rhs))
+          (let [lhs (if (= lhs-arg-type :scalar)
+                      (const-rdr/make-const-reader lhs op-datatype
+                                                   (when (= :reader rhs-arg-type)
+                                                     (base/ecount rhs)))
                       lhs)
                 rhs (if (= (argtypes/arg->arg-type rhs) :scalar)
-                      (const-rdr/make-const-reader rhs op-datatype (base/ecount lhs))
+                      (const-rdr/make-const-reader rhs op-datatype
+                                                   (when (= :reader lhs-arg-type)
+                                                     (base/ecount lhs)))
                       rhs)]
             (if boolean?
               (boolean-op/boolean-binary-map options op lhs rhs)

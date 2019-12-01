@@ -392,3 +392,12 @@
   (let [[a b c] (dtype/make-container :typed-buffer :int64 [1 2 3])]
     (is (= [a b c]
            [1 2 3]))))
+
+
+(deftest simple-mse
+  (let [predictions (list 1 2 3 4 5)
+        labels (list 3 4 5 6 7)]
+    (is (= 20.0
+           (-> (dfn/- predictions labels)
+               (dfn/pow 2)
+               (dfn/reduce-+))))))

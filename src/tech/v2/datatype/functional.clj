@@ -99,7 +99,6 @@
   (indexed-reader/make-indexed-reader indexes data options))
 
 
-
 (defn argsort
   "Return a list of indexes in sorted-values order.  Values must be
   convertible to a reader.  Sorts least-to-greatest by default

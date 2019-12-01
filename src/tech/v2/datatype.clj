@@ -29,7 +29,8 @@
             [tech.v2.datatype.clj-range]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer]
-            [tech.v2.datatype.readers.indexed :as indexed-rdr])
+            [tech.v2.datatype.readers.indexed :as indexed-rdr]
+            [tech.v2.datatype.object-datatypes])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
            [java.util Iterator List RandomAccess])
   (:refer-clojure :exclude [cast]))

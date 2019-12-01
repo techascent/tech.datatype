@@ -45,12 +45,11 @@
     [(operand-type lhs-dtype) (operand-type rhs-dtype)]))
 
 
+;;Implementation details around the default operation provider
+
 (defn- operation-type
   [options]
   (get options :op-type :default))
-
-
-;;Implementation details around the default operation provider
 
 (def datatype-width
   (->> [:object :float64 [:int64 :uint64]

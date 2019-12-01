@@ -222,21 +222,18 @@
 
 (defn make-object-array-of-type
   [obj-type elem-count-or-seq options]
-  (let [elem-count-or-seq (if (or (number? elem-count-or-seq)
-                                     (:unchecked? options))
-                               elem-count-or-seq
-                               (map (partial jna/ensure-type obj-type)
-                                    elem-count-or-seq))]
+  (let [constructor (when (:constructor options)
+                      (:constructor options))
+        elem-count-or-seq (if (number? elem-count-or-seq)
+                            elem-count-or-seq
+                            (if constructor
+                              (map constructor elem-count-or-seq)
+                              elem-count-or-seq))]
     (if (number? elem-count-or-seq)
-      (let [constructor (if (:construct? options)
-                          (.getConstructor ^Class obj-type (make-array Class 0))
-                          nil)]
-        (if constructor
-          (into-array obj-type (repeatedly (long elem-count-or-seq)
-                                           #(.newInstance
-                                             ^Constructor constructor
-                                             (make-array Object 0))))
-          (make-array obj-type (long elem-count-or-seq))))
+      (if constructor
+        (into-array obj-type (repeatedly (long elem-count-or-seq)
+                                         constructor))
+        (make-array obj-type (long elem-count-or-seq)))
       (into-array obj-type elem-count-or-seq))))
 
 
@@ -372,10 +369,3 @@
                                  (make-array-of-type
                                   (base/get-datatype src-ary)
                                   (alength (typecast/as-object-array src-ary)))))}))
-
-
-(extend-object-array-type (Class/forName "[Ljava.lang.Object;"))
-(extend-object-array-type (Class/forName "[Ljava.lang.String;"))
-(add-object-array-datatype-override! String :string)
-(add-object-array-datatype-override! Object :object)
-(add-numeric-array-constructor :string #(make-object-array-of-type String % {:construct? true}))

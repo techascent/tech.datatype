@@ -201,10 +201,9 @@ function returned: %s"
 
   (def test-src-tens (dtt/->tensor (repeat 128 (range 0 512))))
   (time (doseq [grad-name (keys @gradient-map)]
-          (comment (bufimg/save! (colorize test-src-tens grad-name)
-                                 "PNG"
-                                 (format "gradient-demo/%s.png" (name grad-name))))
-          (colorize test-src-tens grad-name)
+          (bufimg/save! (colorize test-src-tens grad-name)
+                        "PNG"
+                        (format "gradient-demo/%s.png" (name grad-name)))
           ))
   (defn bad-range
     [start end]

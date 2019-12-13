@@ -404,3 +404,8 @@
 
 (deftest primitives-arent-readers
   (is (not (dtype/reader? 2))))
+
+
+(deftest infinite-ranges-arent-readers
+  (is (not (dtype/reader? (range))))
+  (is (dtype/reader? (range 5))))

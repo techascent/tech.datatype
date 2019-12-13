@@ -398,7 +398,8 @@ Calls clojure.core.matrix/ecount."
 
 (defn reader?
   [item]
-  (dtype-proto/convertible-to-reader? item))
+  (when item
+    (dtype-proto/convertible-to-reader? item)))
 
 
 (defn ->reader

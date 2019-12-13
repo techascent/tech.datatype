@@ -409,3 +409,7 @@
 (deftest infinite-ranges-arent-readers
   (is (not (dtype/reader? (range))))
   (is (dtype/reader? (range 5))))
+
+
+(deftest nil-isnt-a-reader
+  (is (not (dtype/reader? nil))))

@@ -401,3 +401,6 @@
            (-> (dfn/- predictions labels)
                (dfn/pow 2)
                (dfn/reduce-+))))))
+
+(deftest primitives-arent-readers
+  (is (not (dtype/reader? 2))))

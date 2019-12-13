@@ -199,9 +199,10 @@
 
 
 (defn argpartition-by
-  "Returns a sequence of [partition-key index-reader].  Index generation is not parallelized.
-  This design allows group-by and partition-by to be used interchangeably as they both
-  result in a sequence of [partition-key idx-reader].  This design is lazy."
+  "Returns a sequence of [partition-key index-reader].  Index generation is not
+  parallelized.  This design allows group-by and partition-by to be used
+  interchangeably as they both result in a sequence of [partition-key idx-reader].
+  This design is lazy."
   [partition-fn item-iterable & [options]]
   (let [reader-dtype (clojure.core/or (:datatype options) :object)
         item-reader (->> (dtype-base/->iterable item-iterable

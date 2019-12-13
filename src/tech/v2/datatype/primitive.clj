@@ -14,7 +14,10 @@
      dtype-proto/PCountable
      {:ecount (fn [item#] 1)}
      dtype-proto/PToReader
-     {:->reader (fn [item# options#]
+     ;;Reader conversion of primitives is inefficient so we allow it
+     ;;but do not advertise it
+     {:convertible-to-reader? (constantly false)
+      :->reader (fn [item# options#]
                   (-> (dtype-ary/make-array-of-type ~datatype [item#] true)
                       (dtype-proto/->reader options#)))}))
 

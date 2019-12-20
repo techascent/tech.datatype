@@ -195,6 +195,31 @@ function returned: %s"
     res-image))
 
 
+(defn- update-or-append-gradient
+  [img-fname gradient-name]
+  (let [png-img (bufimg/load img-fname)
+        [height width n-chans] (dtype/shape png-img)
+        ;;ensure known color palette and such
+        png-img (bufimg/resize png-img 260 1 {:dst-img-type :byte-bgr})
+        existing-map @gradient-map
+        existing-tens @gradient-tens
+        new-entry (get existing-map gradient-name
+                       {:tensor-index (count existing-map)
+                        :gradient-shape [260 3]})
+        existing-map (assoc existing-map gradient-name new-entry)
+        new-img (bufimg/new-image (count existing-map) 260 :byte-bgr)
+        img-tens (dtt/ensure-tensor new-img)]
+    (doseq [[grad-n {:keys [tensor-index gradient-shape]}] existing-map]
+      (dtype/copy!
+       (if (= gradient-name grad-n)
+         (dtt/select png-img 0 :all :all)
+         (dtt/select existing-tens tensor-index :all :all))
+       (dtt/select img-tens tensor-index :all :all)))
+    (spit "resources/gradients.edn" existing-map)
+    (bufimg/save! new-img "resources/gradients.png")
+    :ok))
+
+
 (comment
   (require '[clojure.java.io :as io])
   (io/make-parents "gradient-demo/test.txt")

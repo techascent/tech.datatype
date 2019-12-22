@@ -28,10 +28,12 @@
 (defn operand-type
   "Classify all the base primitive datatypes as numeric types."
   [dtype]
-  (if (or (casting/numeric-type? dtype)
-          (= :boolean dtype))
-    :primitive
-    dtype))
+  (if (keyword? dtype)
+    (if (or (casting/numeric-type? dtype)
+            (= :boolean dtype))
+      :primitive
+      dtype)
+    (:datatype dtype)))
 
 
 (defmulti unary-provider

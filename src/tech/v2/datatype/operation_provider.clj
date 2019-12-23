@@ -25,26 +25,15 @@
   (reduce-op [provider lhs op options]))
 
 
-(defn operand-type
-  "Classify all the base primitive datatypes as numeric types."
-  [dtype]
-  (if (keyword? dtype)
-    (if (or (casting/numeric-type? dtype)
-            (= :boolean dtype))
-      :primitive
-      dtype)
-    (:datatype dtype)))
-
-
 (defmulti unary-provider
   "Unary providers switch of the type of the operand."
-  operand-type)
+  base/operation-type)
 
 
 (defmulti binary-provider
   "Binary providers are given both datatypes."
   (fn [lhs-dtype rhs-dtype]
-    [(operand-type lhs-dtype) (operand-type rhs-dtype)]))
+    [(base/operation-type lhs-dtype) (base/operation-type rhs-dtype)]))
 
 
 ;;Implementation details around the default operation provider
@@ -169,28 +158,22 @@
           (reduce-op/iterable-reduce-map options op lhs))))))
 
 
-(defmethod unary-provider :primitive
-  [lhs]
-  default-provider)
+(defmacro define-unary-providers
+  [operation-type-seq provider]
+  `(do
+     ~@(for [op-type operation-type-seq]
+         `(defmethod unary-provider ~op-type [~'arg] ~provider))))
 
 
-(defmethod unary-provider :object
-  [lhs]
-  default-provider)
+
+(defmacro define-provider-matrix
+  [operation-type-seq provider]
+  `(do
+     ~@(for [lhs operation-type-seq
+             rhs operation-type-seq]
+         `(defmethod binary-provider [~lhs ~rhs] [~'lhs-arg ~'rhs-arg] ~provider))))
 
 
-(defmethod binary-provider [:primitive :primitive]
-  [lhs rhs]
-  default-provider)
 
-(defmethod binary-provider [:object :primitive]
-  [lhs rhs]
-  default-provider)
-
-(defmethod binary-provider [:object :object]
-  [lhs rhs]
-  default-provider)
-
-(defmethod binary-provider [:primitive :object]
-  [lhs rhs]
-  default-provider)
+(define-unary-providers [:scalar :iterable :reader] default-provider)
+(define-provider-matrix [:scalar :iterable :reader] default-provider)

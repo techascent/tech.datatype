@@ -2,7 +2,8 @@
   (:require [tech.v2.datatype.casting :as casting])
   (:import [tech.v2.datatype Datatype Countable
             ObjectIter IteratorObjectIter
-            ObjectReader ObjectWriter]))
+            ObjectReader ObjectWriter]
+           [java.util List]))
 
 
 (set! *warn-on-reflection* true)
@@ -10,13 +11,21 @@
 (defprotocol PDatatype
   (get-datatype [item]))
 
+
 (extend-type Datatype
   PDatatype
   (get-datatype [item] (.getDatatype item)))
 
+
 (extend-type Object
   PDatatype
   (get-datatype [item] :object))
+
+
+(defprotocol POperationType
+  (operation-type [item]))
+
+
 
 (defprotocol PCountable
   (ecount [item]))
@@ -274,6 +283,16 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 
 
 (extend-type Object
+  POperationType
+  (operation-type [item]
+    (cond
+      (or (number? item) (nil? item)) :scalar
+      (convertible-to-reader? item)
+      :reader
+      (convertible-to-iterable? item)
+      :iterable
+      :else
+      :scalar))
   PToWriter
   (convertible-to-writer? [item]
     (or (base-type-convertible? item)

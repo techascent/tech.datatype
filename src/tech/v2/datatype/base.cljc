@@ -83,6 +83,12 @@
   (dtype-proto/get-datatype item))
 
 
+(defn operation-type
+  [item]
+  (when item
+    (dtype-proto/operation-type item)))
+
+
 (defn make-container
   ([container-type datatype elem-seq options]
    (dtype-proto/make-container container-type datatype

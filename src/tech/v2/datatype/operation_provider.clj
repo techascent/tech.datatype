@@ -36,12 +36,6 @@
     [(base/operation-type lhs-dtype) (base/operation-type rhs-dtype)]))
 
 
-;;Implementation details around the default operation provider
-
-(defn- operation-type
-  [options]
-  (get options :op-type :default))
-
 (def datatype-width
   (->> [:object :float64 [:int64 :uint64]
         :float32 [:int32 :uint32]
@@ -88,19 +82,23 @@
         :scalar (casting/cast lhs (:datatype options))
         :iterable (base/->iterable lhs (:datatype options) options)
         :reader (base/->reader lhs (:datatype options) options)))
-    (unary-op [provider lhs op options]
-      (let [[op boolean?]
+    (unary-op [provider lhs op {:keys [datatype] :as options}]
+      (let [optype (base/operation-type lhs)
+            datatype (or datatype (base/get-datatype lhs))
+            options (assoc options :datatype datatype)
+            [op boolean?]
             (if (keyword? op)
               (if-let [un-op (get unary-op/builtin-unary-ops op)]
                 [(dtype-proto/->unary-op un-op options) false]
                 (if-let [bin-op (get boolean-op/builtin-boolean-unary-ops op)]
                   [(dtype-proto/->unary-boolean-op bin-op options) true]
                   (throw (Exception. (format "Failed to find unary op %s" op)))))
-              (if (and (= (operation-type options) :default)
+              (if (and (or (= optype :reader)
+                           (= optype :iterable))
                        (dtype-proto/convertible-to-unary-op? op))
                 [(dtype-proto/->unary-op op options) false]
                 [(dtype-proto/->unary-boolean-op op options) true]))]
-        (if (= (:argtype options) :scalar)
+        (if (= optype :scalar)
           (op lhs)
           (if boolean?
             (boolean-op/boolean-unary-map options op lhs)
@@ -113,6 +111,14 @@
             options (assoc options :datatype op-datatype)
             lhs-arg-type (argtypes/arg->arg-type lhs)
             rhs-arg-type (argtypes/arg->arg-type rhs)
+            op-argtype (cond (or (= lhs-arg-type :iterable)
+                                 (= rhs-arg-type :iterable))
+                             :iterable
+                             (or (= lhs-arg-type :reader)
+                                 (= rhs-arg-type :reader))
+                             :reader
+                             :else
+                             :scalar)
             [op boolean?]
             (if (keyword? op)
               (if-let [un-op (get binary-op/builtin-binary-ops op)]
@@ -120,11 +126,11 @@
                 (if-let [bin-op (get boolean-op/builtin-boolean-binary-ops op)]
                   [(dtype-proto/->binary-boolean-op bin-op options) true]
                   (throw (Exception. (format "Failed to find binary op %s" op)))))
-              (if (and (= (operation-type options) :default)
+              (if (and (not= op-argtype :scalar)
                        (dtype-proto/convertible-to-binary-op? op))
                 [(dtype-proto/->binary-op op options) false]
                 [(dtype-proto/->binary-boolean-op op options) true]))]
-        (if (= (:argtype options) :scalar)
+        (if (= op-argtype :scalar)
           (op lhs rhs)
           (let [lhs (if (= lhs-arg-type :scalar)
                       (const-rdr/make-const-reader lhs op-datatype
@@ -140,8 +146,11 @@
               (boolean-op/boolean-binary-map options op lhs rhs)
               (binary-op/binary-map options op lhs rhs))))))
 
-    (reduce-op [provider lhs op options]
-      (let [op-kwd op
+    (reduce-op [provider lhs op {:keys [datatype] :as options}]
+      (let [datatype (or datatype (base/get-datatype lhs))
+            argtype (argtypes/arg->arg-type lhs)
+            options (assoc options :datatype datatype)
+            op-kwd op
             op
             (if (keyword? op)
               (if-let [op (get binary-op/builtin-binary-ops op)]

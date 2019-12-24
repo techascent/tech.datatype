@@ -50,24 +50,15 @@
 
 (defn apply-reduce-op
   "Reduce an iterable into one thing.  This is not currently parallelized."
-  [{:keys [datatype unchecked?] :as options} reduce-op values]
-  (let [datatype (or datatype (dtype-base/get-datatype values))
-        provider (op-provider/unary-provider datatype)
-        argtype (op-provider/argtype provider values)]
-    (op-provider/reduce-op provider values reduce-op (assoc options
-                                                            :argtype argtype
-                                                            :datatype datatype
-                                                            :unchecked? unchecked?))))
+  [options reduce-op values]
+  (op-provider/reduce-op (op-provider/unary-provider values)
+                         values reduce-op options))
+
 
 (defn- do-apply-unary-op
-  [{:keys [datatype unchecked?] :as options} un-op arg]
-  (let [datatype (or datatype (dtype-base/get-datatype arg))
-        provider (op-provider/unary-provider datatype)
-        argtype (op-provider/argtype provider arg)]
-    (op-provider/unary-op provider arg un-op (assoc options
-                                                    :argtype argtype
-                                                    :datatype datatype
-                                                    :unchecked? unchecked?))))
+  [{:keys [datatype unchecked?] :as options} unary-op arg]
+  (op-provider/unary-op (op-provider/unary-provider arg)
+                        arg unary-op options))
 
 
 (defn apply-unary-op
@@ -92,22 +83,9 @@
 
 (defn- do-apply-binary-op
   [options lhs rhs bin-op]
-  (let [lhs-dtype (or (:datatype options) (dtype-base/get-datatype lhs))
-        rhs-dtype (or (:datatype options) (dtype-base/get-datatype rhs))
-        provider (op-provider/binary-provider lhs-dtype rhs-dtype)
-        lhs-argtype (op-provider/argtype provider lhs)
-        rhs-argtype (op-provider/argtype provider rhs)
-        op-argtype (cond (or (= lhs-argtype :iterable)
-                             (= rhs-argtype :iterable))
-                         :iterable
-                         (or (= lhs-argtype :reader)
-                             (= rhs-argtype :reader))
-                         :reader
-                         :else
-                         :scalar)]
-    (op-provider/binary-op provider lhs rhs bin-op
-                           (assoc options :argtype op-argtype))))
-
+  (op-provider/binary-op (op-provider/binary-provider lhs rhs)
+                         lhs rhs
+                         bin-op options))
 
 
 (defn apply-binary-op

@@ -1,7 +1,6 @@
 (ns tech.v2.datatype.typecast
   (:require [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.casting :as casting]
-            [tech.jna :as jna])
+            [tech.v2.datatype.casting :as casting])
   (:import [tech.v2.datatype
             ObjectWriter ObjectReader ObjectMutable ObjectReaderIter ObjectIter
             ByteWriter ByteReader ByteMutable ByteReaderIter ByteIter
@@ -409,14 +408,14 @@
 
 (defn as-ptr
   ^Pointer [item]
-  (jna/as-ptr item))
+  (dtype-proto/as-jna-ptr item))
 
 
 (defn ensure-ptr-like
   "JNA is extremely flexible in what it can take as an argument.  Anything convertible
   to a nio buffer, be it direct or array backend is fine."
   [item]
-  (if-let [dst-ptr (jna/as-ptr item)]
+  (if-let [dst-ptr (as-ptr item)]
     dst-ptr
     (if-let [nio-buf (dtype-proto/as-nio-buffer item)]
       nio-buf

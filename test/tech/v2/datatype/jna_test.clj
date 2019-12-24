@@ -65,7 +65,7 @@
     (is (= [1 1 1 1 1] (-> (dtype/clone test-buf :datatype :uint8)
                            dtype/->vector)))
     (is (not= 0 (-> (dtype/clone test-buf :datatype :uint8)
-                    jna/->ptr-backing-store
+                    dtype/->jna-ptr
                     dtype-jna/pointer->address)))))
 
 

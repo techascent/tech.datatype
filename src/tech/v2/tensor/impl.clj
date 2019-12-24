@@ -406,12 +406,10 @@
        (typecast/as-list buffer)))
 
 
-   jna/PToPtr
-   (is-jna-ptr-convertible? [item]
-     (jna/ptr-convertible? buffer))
-   (->ptr-backing-store [item]
-     (when (simple-dimensions? dimensions)
-       (jna/as-ptr buffer)))
+   dtype-proto/PToJNAPointer
+   (convertible-to-data-pointer? [item]
+     (dtype-proto/convertible-to-data-pointer? buffer))
+   (->jna-ptr [item] (dtype-proto/->jna-ptr buffer))
 
 
    dtype-proto/PToBufferDesc
@@ -419,7 +417,7 @@
      (and (jna/ptr-convertible? buffer)
           (dims-suitable-for-desc? dimensions)))
    (->buffer-descriptor [item]
-     {:ptr (jna/as-ptr buffer)
+     {:ptr (dtype-proto/->jna-ptr buffer)
       :datatype (dtype/get-datatype buffer)
       :shape (dtype/shape item)
       :strides (mapv (partial * (casting/numeric-byte-width

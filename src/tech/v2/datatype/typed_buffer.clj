@@ -196,11 +196,11 @@
                                  (dtype-proto/->reader values {:datatype datatype}))
                                options))
 
-  jna/PToPtr
-  (is-jna-ptr-convertible? [item]
-    (jna/ptr-convertible? backing-store))
-  (->ptr-backing-store [item]
-    (jna/as-ptr backing-store))
+  dtype-proto/PToJNAPointer
+  (convertible-to-data-pointer? [item]
+    (dtype-proto/convertible-to-data-pointer? backing-store))
+  (->jna-ptr [item] (dtype-proto/->jna-ptr backing-store))
+
 
   dtype-proto/PToBufferDesc
   (convertible-to-buffer-desc? [item]

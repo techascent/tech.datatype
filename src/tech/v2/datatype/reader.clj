@@ -67,11 +67,11 @@
            (dtype-proto/list-convertible? src-item#))
          (->list-backing-store [reader#]
            (dtype-proto/as-list src-item#))
-         jna/PToPtr
-         (is-jna-ptr-convertible? [reader#]
-           (jna/ptr-convertible? src-item#))
-         (->ptr-backing-store [reader#]
-           (jna/as-ptr src-item#))
+         dtype-proto/PToJNAPointer
+         (convertible-to-data-pointer? [reader#]
+           (dtype-proto/convertible-to-data-pointer? src-item#))
+         (->jna-ptr [reader#]
+           (dtype-proto/->jna-ptr src-item#))
 
          dtype-proto/PToArray
          (->sub-array [reader#]
@@ -110,11 +110,11 @@
            (dtype-proto/list-convertible? src-item#))
          (->list-backing-store [reader#]
            (dtype-proto/as-list src-item#))
-         jna/PToPtr
-         (is-jna-ptr-convertible? [reader#]
-           (jna/ptr-convertible? src-item#))
-         (->ptr-backing-store [reader#]
-           (jna/as-ptr src-item#))
+         dtype-proto/PToJNAPointer
+         (convertible-to-data-pointer? [reader#]
+           (dtype-proto/convertible-to-data-pointer? src-item#))
+         (->jna-ptr [reader#]
+           (dtype-proto/->jna-ptr src-item#))
 
          dtype-proto/PToArray
          (->sub-array [reader#]

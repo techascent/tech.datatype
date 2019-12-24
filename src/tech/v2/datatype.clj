@@ -45,6 +45,11 @@
   (base/get-datatype item))
 
 
+(defn operation-type
+  [item]
+  (base/operation-type item))
+
+
 (defn make-container
   "Generically make a container of the given type.  Built in types are:
 
@@ -347,6 +352,16 @@ Calls clojure.core.matrix/ecount."
 (defn as-nio-buffer
   [src-item]
   (dtype-proto/as-nio-buffer src-item))
+
+
+(defn as-jna-ptr
+  [src-item]
+  (dtype-proto/as-jna-ptr src-item))
+
+
+(defn ->jna-ptr
+  [src-item]
+  (dtype-proto/->jna-ptr src-item))
 
 
 (defn as-list

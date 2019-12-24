@@ -1,8 +1,10 @@
 (ns tech.v2.datatype.protocols
-  (:require [tech.v2.datatype.casting :as casting])
+  (:require [tech.v2.datatype.casting :as casting]
+            [tech.jna :as jna])
   (:import [tech.v2.datatype Datatype Countable
             ObjectIter IteratorObjectIter
             ObjectReader ObjectWriter]
+           [com.sun.jna Pointer]
            [java.util List]))
 
 
@@ -98,6 +100,22 @@
 (extend-type Object
   PToNioBuffer
   (convertible-to-nio-buffer? [item] false))
+
+
+(defprotocol PToJNAPointer
+  (convertible-to-data-pointer? [item])
+  (->jna-ptr [item]))
+
+(extend-type Object
+  PToJNAPointer
+  (convertible-to-data-pointer? [item] (jna/is-jna-ptr-convertible? item))
+  (->jna-ptr [item] (jna/as-ptr item)))
+
+
+(defn as-jna-ptr
+  ^Pointer [item]
+  (when (and item (convertible-to-data-pointer? item))
+    (->jna-ptr item)))
 
 
 (defn nio-convertible?

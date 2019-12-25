@@ -388,11 +388,12 @@
   (let [base-value (functional/* (sparse-proto/sparse-value sparse-vec)
                                  (sparse-proto/sparse-ecount sparse-vec))
         item-dtype (or (:datatype options)
-                       (dtype-base/get-datatype sparse-vec))]
-    (-> (functional/+ base-value (impl/apply-reduce-op
-                                  (assoc options :datatype item-dtype)
-                                  (:+ binary-op/builtin-binary-ops)
-                                  (sparse-proto/data-reader sparse-vec)))
+                       (dtype-base/get-datatype sparse-vec))
+        rhs (impl/apply-reduce-op
+             (assoc options :datatype item-dtype)
+             (:+ binary-op/builtin-binary-ops)
+             (sparse-proto/data-reader sparse-vec))]
+    (-> (functional/+ base-value rhs)
         (casting/cast item-dtype))))
 
 

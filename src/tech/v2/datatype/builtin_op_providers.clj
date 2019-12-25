@@ -33,6 +33,20 @@
       (unary-op/unary-map options op lhs))))
 
 
+(defmacro define-scalar-unary-ops
+  []
+  `(do
+     ~@(->> (keys unary-op/builtin-unary-ops)
+            (map (fn [op-name]
+                   `(let [op-value# (~op-name unary-op/builtin-unary-ops)]
+                      (defmethod op-provider/unary-op
+                        [:scalar ~op-name]
+                        [op# lhs# options#]
+                        (op-value# lhs#))))))))
+
+(define-scalar-unary-ops)
+
+
 (defmethod op-provider/half-dispatch-boolean-unary-op :default
   [op lhs {:keys [datatype] :as options}]
   (let [datatype (or datatype (base/get-datatype lhs))
@@ -44,6 +58,20 @@
     (if (= :scalar (base/operation-type lhs))
       (op lhs)
       (boolean-op/boolean-unary-map options op lhs))))
+
+
+(defmacro define-scalar-boolean-unary-ops
+  []
+  `(do
+     ~@(->> (keys boolean-op/builtin-boolean-unary-ops)
+            (map (fn [op-name]
+                   `(let [op-value# (~op-name boolean-op/builtin-boolean-unary-ops)]
+                      (defmethod op-provider/unary-op
+                        [:scalar ~op-name]
+                        [op# lhs# options#]
+                        (op-value# lhs#))))))))
+
+(define-scalar-boolean-unary-ops)
 
 
 (def datatype-width
@@ -128,8 +156,23 @@
     (binary-op/binary-map options op lhs rhs)))
 
 
+(defmacro define-scalar-builtin-binary-ops
+  []
+  `(do
+     ~@(->> (keys binary-op/builtin-binary-ops)
+            (map (fn [op-name]
+                   `(let [op-value# (~op-name binary-op/builtin-binary-ops)]
+                      (defmethod op-provider/binary-op
+                        [:scalar :scalar ~op-name]
+                        [op# lhs# rhs# options#]
+                        (op-value# lhs# rhs#))))))))
+
+
+(define-scalar-builtin-binary-ops)
+
+
 (defmethod op-provider/half-dispatch-boolean-binary-op :default
-  [op lhs rhs op options]
+  [op lhs rhs options]
   (let [op-datatype (or (:datatype options)
                         (widest-datatype (base/get-datatype lhs)
                                          (base/get-datatype rhs)))
@@ -140,6 +183,21 @@
                (dtype-proto/->binary-boolean-op options))
         [lhs rhs] (generalize-binary-scalars lhs rhs op-datatype)]
     (boolean-op/boolean-binary-map options op lhs rhs)))
+
+
+(defmacro define-scalar-builtin-boolean-binary-ops
+  []
+  `(do
+     ~@(->> (keys boolean-op/builtin-boolean-binary-ops)
+            (map (fn [op-name]
+                   `(let [op-value# (~op-name boolean-op/builtin-boolean-binary-ops)]
+                      (defmethod op-provider/boolean-binary-op
+                        [:scalar :scalar ~op-name]
+                        [op# lhs# rhs# options#]
+                        (op-value# lhs# rhs#))))))))
+
+
+(define-scalar-builtin-boolean-binary-ops)
 
 
 (def commutative-ops (set [:* :+ :rem :min :max]))
@@ -195,21 +253,23 @@
             item-seq)))
 
 
-(def standard-binary-op-key-seq
+(defn standard-binary-op-key-seq
+  [opname]
   (-> (set (for [lhs [:scalar :iterable :reader]
                  rhs [:scalar :iterable :reader]]
-             [lhs rhs :argfilter]))
-      (disj [[:scalar :scalar] :argfilter])))
+             [lhs rhs opname]))
+      (disj [[:scalar :scalar] opname])))
 
 
 (defmacro def-standard-binary-op
-  [& body]
+  [opname & body]
   `(def-binary-op
-     ~standard-binary-op-key-seq
+     ~(standard-binary-op-key-seq opname)
      ~@body))
 
 
 (def-standard-binary-op
+  :argfilter
   [op lhs rhs bool-op]
   (let [op-datatype (widest-datatype (base/get-datatype lhs)
                                      (base/get-datatype rhs))
@@ -260,3 +320,18 @@
                          (transient last-map)
                          next-map)
                         (persistent!)))))))
+
+
+(def-unary-op
+ [[:iterable :arggroup-by]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by partition-fn
+               (dtype-proto/make-container
+                :java-array
+                (base/get-datatype item-reader)
+                item-reader) options))
+
+(def-unary-op
+ [[:reader :arggroup-by]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by partition-fn item-reader options))

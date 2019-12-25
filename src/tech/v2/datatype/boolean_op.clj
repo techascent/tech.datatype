@@ -737,9 +737,7 @@
      (->binary-boolean-op [item# options#]
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#
-             host-dtype# (if (casting/numeric-type? datatype#)
-                           (casting/safe-flatten datatype#)
-                           :float64)]
+             host-dtype# (casting/safe-flatten datatype#)]
          (-> (case host-dtype#
                :int8 (make-boolean-binary-op :int8 ~opcode)
                :int16 (make-boolean-binary-op :int16 ~opcode)

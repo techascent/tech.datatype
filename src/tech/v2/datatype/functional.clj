@@ -144,6 +144,11 @@
     (op-provider/unary-op :argfilter filter-seq bool-op)))
 
 
+(defn arggroup-by
+  [partition-fn item-reader & [options]]
+  (op-provider/unary-op :arggroup-by item-reader [partition-fn options]))
+
+
 (defn- do-argpartition-by
   [^long start-idx ^Iterator item-iterable first-item]
   (let [[end-idx next-item]

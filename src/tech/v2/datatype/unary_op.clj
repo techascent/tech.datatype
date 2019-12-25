@@ -377,7 +377,8 @@
      (->unary-op [item# options#]
        (let [{datatype# :datatype
               unchecked?# :unchecked?} options#]
-         (when-not (casting/numeric-type? datatype#)
+         (when-not (or (= :object datatype#)
+                       (casting/numeric-type? datatype#))
            (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
          (case (casting/safe-flatten datatype#)
            :int8 (make-unary-op ~opname :int8 (byte ~op-code))

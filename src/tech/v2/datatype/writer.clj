@@ -57,8 +57,8 @@
        (->list-backing-store [writer#]
          (dtype-proto/as-list ~src-item))
        dtype-proto/PToJNAPointer
-         (convertible-to-data-pointer? [writer#]
-           (dtype-proto/convertible-to-data-pointer? ~src-item))
+         (convertible-to-data-ptr? [writer#]
+           (dtype-proto/convertible-to-data-ptr? ~src-item))
          (->jna-ptr [writer#]
            (dtype-proto/->jna-ptr ~src-item))
        dtype-proto/PToArray
@@ -95,8 +95,8 @@
        (->list-backing-store [writer#]
          (dtype-proto/as-list ~src-item))
        dtype-proto/PToJNAPointer
-       (convertible-to-data-pointer? [writer#]
-           (dtype-proto/convertible-to-data-pointer? ~src-item))
+       (convertible-to-data-ptr? [writer#]
+           (dtype-proto/convertible-to-data-ptr? ~src-item))
        (->jna-ptr [writer#]
          (dtype-proto/->jna-ptr ~src-item))
 

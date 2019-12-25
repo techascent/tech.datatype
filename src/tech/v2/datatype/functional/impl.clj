@@ -30,8 +30,12 @@
             [tech.v2.datatype.operation-provider :as op-provider])
   (:import [java.util List RandomAccess]))
 
-(def ^:dynamic *datatype* nil)
-(def ^:dynamic *unchecked?* nil)
+
+(defn default-options
+  [item options]
+  (assoc options :datatype
+         (or (:datatype options)
+             (dtype-base/get-datatype item))))
 
 
 (defmacro export-symbols
@@ -39,26 +43,10 @@
   `(parallel-utils/export-symbols ~src-ns ~@symbol-list))
 
 
-(defn default-options
-  [options]
-  (merge options
-         (when *datatype*
-           {:datatype *datatype*})
-         (when *unchecked?*
-           {:unchecked? *unchecked?*})))
-
-
 (defn apply-reduce-op
   "Reduce an iterable into one thing.  This is not currently parallelized."
   [options reduce-op values]
-  (op-provider/reduce-op (op-provider/unary-provider values)
-                         values reduce-op options))
-
-
-(defn- do-apply-unary-op
-  [{:keys [datatype unchecked?] :as options} unary-op arg]
-  (op-provider/unary-op (op-provider/unary-provider arg)
-                        arg unary-op options))
+  (op-provider/reduce-op reduce-op values options))
 
 
 (defn apply-unary-op
@@ -68,7 +56,7 @@
   this method aside from building the next thing *unless* the inputs are scalar in which
   case the operation is evaluated immediately."
   [options un-op arg]
-  (do-apply-unary-op options un-op arg))
+  (op-provider/unary-op un-op arg options))
 
 
 (defn apply-unary-boolean-op
@@ -78,14 +66,12 @@
   this method aside from building the next thing *unless* the inputs are scalar in which
   case the operation is evaluated immediately."
   [options un-op arg]
-  (do-apply-unary-op (assoc options :op-type :boolean) un-op arg))
+  (op-provider/boolean-unary-op un-op arg options))
 
 
 (defn- do-apply-binary-op
   [options lhs rhs bin-op]
-  (op-provider/binary-op (op-provider/binary-provider lhs rhs)
-                         lhs rhs
-                         bin-op options))
+  (op-provider/binary-op bin-op lhs rhs options))
 
 
 (defn apply-binary-op
@@ -101,6 +87,11 @@
          (reduce #(do-apply-binary-op options %1 %2 bin-op)))))
 
 
+(defn- do-apply-boolean-binary-op
+  [options lhs rhs bin-op]
+  (op-provider/boolean-binary-op bin-op lhs rhs options))
+
+
 (defn apply-binary-boolean-op
   "We perform a left-to-right reduction making scalars/readers/etc.  This matches
   clojure semantics.  Note that the results of this could be a reader, iterable or a
@@ -112,7 +103,7 @@
   (let [options (assoc options :op-type :boolean)
         all-args (concat [arg1 arg2] args)]
     (->> all-args
-         (reduce #(do-apply-binary-op options %1 %2 bin-op)))))
+         (reduce #(do-apply-boolean-binary-op options %1 %2 bin-op)))))
 
 
 (def all-builtins (->> (concat (->> unary/builtin-unary-ops
@@ -181,7 +172,7 @@
               :else
               (throw (ex-info "Incorrect op types" {:types argnum-types
                                                     :op-types op-types})))
-           (let [~'options (default-options {})]
+           (let [~'options {}]
              (if (= ~'n-args 1)
                ~(if
                   (contains? op-types :boolean-unary)
@@ -207,7 +198,7 @@
                            (format "Operator called with too few (%s) arguments."
                                    ~'n-args)
                            {})))
-                 (let [~'options (default-options {})]
+                 (let [~'options {}]
                    (if (= ~'n-args 1)
                      (apply-reduce-op ~'options ~op-name (first ~'args))
                      (~op-name-symbol

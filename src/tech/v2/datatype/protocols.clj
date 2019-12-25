@@ -103,18 +103,18 @@
 
 
 (defprotocol PToJNAPointer
-  (convertible-to-data-pointer? [item])
+  (convertible-to-data-ptr? [item])
   (->jna-ptr [item]))
 
 (extend-type Object
   PToJNAPointer
-  (convertible-to-data-pointer? [item] (jna/is-jna-ptr-convertible? item))
+  (convertible-to-data-ptr? [item] (jna/is-jna-ptr-convertible? item))
   (->jna-ptr [item] (jna/as-ptr item)))
 
 
 (defn as-jna-ptr
   ^Pointer [item]
-  (when (and item (convertible-to-data-pointer? item))
+  (when (and item (convertible-to-data-ptr? item))
     (->jna-ptr item)))
 
 

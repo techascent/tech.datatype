@@ -407,8 +407,8 @@
 
 
    dtype-proto/PToJNAPointer
-   (convertible-to-data-pointer? [item]
-     (dtype-proto/convertible-to-data-pointer? buffer))
+   (convertible-to-data-ptr? [item]
+     (dtype-proto/convertible-to-data-ptr? buffer))
    (->jna-ptr [item] (dtype-proto/->jna-ptr buffer))
 
 

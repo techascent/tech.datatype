@@ -3,7 +3,8 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.comparator :as dtype-comp])
+            [tech.v2.datatype.comparator :as dtype-comp]
+            [tech.v2.datatype.operation-provider :as op-provider])
   (:import [it.unimi.dsi.fastutil.bytes ByteArrays ByteComparator]
            [it.unimi.dsi.fastutil.shorts ShortArrays ShortComparator]
            [it.unimi.dsi.fastutil.ints IntArrays IntComparator]

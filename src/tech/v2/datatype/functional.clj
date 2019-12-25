@@ -4,7 +4,7 @@
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.functional.impl :as impl]
-            [tech.v2.datatype.argsort :as argsort]
+            [tech.v2.datatype.operation-provider :as op-provider]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.binary-search :as binary-search]
             [tech.v2.datatype.base :as dtype-base]
@@ -99,6 +99,17 @@
   (indexed-reader/make-indexed-reader indexes data options))
 
 
+(defmacro def-provider-fn
+  [fn-name docstring first-arg & args]
+  (let [opname (keyword (name fn-name))]
+    `(defn ~fn-name ~docstring
+       [~first-arg ~@args]
+       (op-provider/apply-fn (op-provider/unary-provider ~first-arg)
+                             ~opname
+                             ~first-arg
+                             [~@args]))))
+
+
 (defn argsort
   "Return a list of indexes in sorted-values order.  Values must be
   convertible to a reader.  Sorts least-to-greatest by default
@@ -108,9 +119,8 @@
   [values & {:keys [parallel?]
              :or {parallel? true}
              :as options}]
-  (let [options (impl/default-options (assoc options :parallel? parallel?))]
-    (argsort/argsort (sparse-reader/->reader values)
-                     (impl/default-options options))))
+  (let [options (impl/default-options values (assoc options :parallel? parallel?))]
+    (op-provider/unary-op :argsort values options)))
 
 
 (defn binary-search
@@ -119,67 +129,19 @@
   contains the index.  If the element is not found, then it contains the index where
   the element would be inserted to maintain sort order of the values."
   [values target & {:as options}]
-  (let [options (impl/default-options options)
+  (let [options (impl/default-options values options)
         datatype (clojure.core/or (:datatype options)
-                                  (dtype-base/get-datatype target))]
-    (binary-search/binary-search
-     (sparse-reader/->reader values datatype)
-     target options)))
+                                  (dtype-base/get-datatype target))
+        options (assoc options :datatype datatype)]
+    (op-provider/unary-op :binary-search values options)))
 
 
 (defn argfilter
   "Returns a (potentially infinite) sequence of indexes that pass the filter."
   [bool-op filter-seq & [second-seq]]
   (if second-seq
-    (boolean-op/binary-argfilter (impl/default-options {})
-                                 bool-op
-                                 filter-seq
-                                 second-seq)
-    (boolean-op/unary-argfilter (impl/default-options {})
-                                bool-op
-                                filter-seq)))
-
-
-(defn arggroup-by
-  "Returns a map of partitioned-items->indexes.  Index generation is parallelized."
-  [partition-fn item-reader & [options]]
-  (let [n-elems (dtype-base/ecount item-reader)
-        reader-dtype (clojure.core/or (:datatype options) :object)
-        item-reader (->> (dtype-base/->reader item-reader
-                                              reader-dtype
-                                              (assoc options :datatype reader-dtype))
-                         (unary-op/unary-map partition-fn)
-                         (typecast/datatype->reader :object))]
-    (parallel-for/indexed-pmap
-     (fn [idx n-indexes]
-       (let [idx (long idx)
-             last-index (clojure.core/+ idx (long n-indexes))]
-         (loop [idx idx
-                retval (transient {})]
-           (if (clojure.core/< idx last-index)
-             (let [partition-key (.read item-reader idx)
-                   ^java.util.List existing-list
-                   (get retval partition-key
-                        (dtype-base/make-container :list :int64 0))]
-               (.add existing-list idx)
-               (recur (inc idx)
-                      (assoc! retval partition-key existing-list)))
-             (persistent! retval)))))
-     n-elems
-     (partial reduce (fn [last-map next-map]
-                       (->>
-                        (reduce
-                         (fn [last-map [map-key map-list]]
-                           (let [last-list (get last-map map-key
-                                                (dtype-base/make-container :list
-                                                                           :int64 0))]
-                             (dtype-base/insert-block! last-list
-                                                       (dtype-base/ecount last-list)
-                                                       map-list)
-                             (assoc! last-map map-key last-list)))
-                         (transient last-map)
-                         next-map)
-                        (persistent!)))))))
+    (op-provider/binary-op :argfilter filter-seq second-seq bool-op)
+    (op-provider/unary-op :argfilter filter-seq bool-op)))
 
 
 (defn- do-argpartition-by

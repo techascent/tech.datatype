@@ -825,7 +825,7 @@
   ([opcode]
    `(make-float-double-boolean-unary-op ~opcode :unnamed)))
 
-
+9.
 (def builtin-boolean-unary-ops
   {:not (make-boolean-unary-op :boolean (not x))
    :nan?

@@ -197,8 +197,8 @@
                                options))
 
   dtype-proto/PToJNAPointer
-  (convertible-to-data-pointer? [item]
-    (dtype-proto/convertible-to-data-pointer? backing-store))
+  (convertible-to-data-ptr? [item]
+    (dtype-proto/convertible-to-data-ptr? backing-store))
   (->jna-ptr [item] (dtype-proto/->jna-ptr backing-store))
 
 

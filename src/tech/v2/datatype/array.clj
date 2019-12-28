@@ -275,6 +275,9 @@
                        (get @*object-array-datatype-override* ary-data-cls
                             ary-data-cls)))}
 
+    dtype-proto/PCountable
+    {:ecount (fn [item] (alength ^"[Ljava.lang.Object;" item))}
+
     dtype-proto/PToBackingStore
     {:->backing-store-seq (fn [item] [(dtype-proto/->sub-array item)])}
 

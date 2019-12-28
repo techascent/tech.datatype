@@ -94,4 +94,7 @@
       (is (= [nil nil "bye!" "hi" nil]
              (dtype/->vector test-ary)))
       (is (= ["bye!" "hi" nil]
-             (dtype/->vector sub-buf))))))
+             (dtype/->vector sub-buf)))))
+  (let [test-ary (into-array Object (repeat 10 (set (range 10))))]
+    (is (= 10 (dtype/ecount test-ary)))
+    (is (dtype/->array test-ary))))

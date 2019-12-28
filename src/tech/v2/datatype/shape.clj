@@ -29,7 +29,8 @@
     (cond
       (scalar? item)
       0
-      (.isArray ^Class (type item))
+      (and (instance? Class (type item))
+           (.isArray ^Class (type item)))
       (apply * (dtype-proto/shape item))
       :else
       (count item)))
@@ -38,7 +39,8 @@
     (cond
       (scalar? item)
       nil
-      (.isArray ^Class (type item))
+      (and (instance? Class (type item))
+           (.isArray ^Class (type item)))
       (let [n-elems (count item)]
         (-> (concat [n-elems]
                     (when (> n-elems 0)

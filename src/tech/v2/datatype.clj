@@ -21,17 +21,10 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
             ;;Support for base container types
-            [tech.v2.datatype.array]
-            [tech.v2.datatype.nio-buffer]
-            [tech.v2.datatype.typed-buffer]
-            [tech.v2.datatype.jna]
-            [tech.v2.datatype.list]
-            [tech.v2.datatype.clj-range]
-            [tech.v2.datatype.builtin-op-providers]
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.sparse.sparse-buffer]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
-            [tech.v2.datatype.object-datatypes])
+            [tech.v2.datatype.functional])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
            [java.util Iterator List RandomAccess])
   (:refer-clojure :exclude [cast]))

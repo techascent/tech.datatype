@@ -103,8 +103,7 @@
            n-cpus# (.availableProcessors
                    (Runtime/getRuntime))
            n-elems-per-group# (quot n-elems# n-cpus#)
-           n-groups# (+ n-cpus# 1)
-           accum# (casting/datatype->sparse-value ~datatype)]
+           n-groups# (+ n-cpus# 1)]
        (->> (range n-groups#)
             (pmap
              (fn [group-idx#]
@@ -113,16 +112,21 @@
                      end-idx# (min n-elems#
                                    (+ start-idx# n-elems-per-group#))
                      n-loop-elems# (- end-idx# start-idx#)]
-                      (loop [accum# accum#
-                             idx# 0]
-                        (if (< idx# n-loop-elems#)
-                          (recur
-                           (.op reduce-op#
-                                accum#
-                                (.read reader#
-                                       (+ idx# start-idx#)))
-                           (inc idx#))
-                          accum#)))))
+                 (when (not (== start-idx# end-idx#))
+                   (loop [accum# (casting/datatype->sparse-value ~datatype)
+                          idx# 0]
+                     (if (< idx# n-loop-elems#)
+                       (recur
+                        (if (== idx# 0)
+                          (.read reader#
+                                 (+ idx# start-idx#))
+                          (.op reduce-op#
+                               accum#
+                               (.read reader#
+                                      (+ idx# start-idx#))))
+                        (inc idx#))
+                       accum#))))))
+            (remove nil?)
             (reduce (fn [accum# next-elem#]
                       (.op reduce-op# accum# next-elem#)))
             (#(.finalize reduce-op# % n-elems#))))))

@@ -413,3 +413,8 @@
 
 (deftest nil-isnt-a-reader
   (is (not (dtype/reader? nil))))
+
+
+(deftest reduce-+-iterable
+  (is (= (apply + (range 1000))
+         (-> (range 1000) into-array dfn/reduce-+))))

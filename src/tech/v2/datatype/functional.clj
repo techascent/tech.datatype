@@ -12,7 +12,17 @@
             [tech.v2.datatype.sparse.reader :as sparse-reader]
             [tech.v2.datatype.statistics]
             [tech.v2.datatype.rolling]
-            [tech.parallel.for :as parallel-for])
+            [tech.parallel.for :as parallel-for]
+            ;;For functional to work right a lot of the requires in datatype
+            ;;need to be working
+            [tech.v2.datatype.array]
+            [tech.v2.datatype.nio-buffer]
+            [tech.v2.datatype.typed-buffer]
+            [tech.v2.datatype.jna]
+            [tech.v2.datatype.list]
+            [tech.v2.datatype.clj-range]
+            [tech.v2.datatype.object-datatypes]
+            [tech.v2.datatype.builtin-op-providers])
   (:import [java.util Iterator])
   (:refer-clojure :exclude [+ - / *
                             <= < >= >
@@ -22,7 +32,6 @@
                             bit-or bit-flip bit-clear
                             bit-shift-left bit-shift-right unsigned-bit-shift-right
                             quot rem cast not and or]))
-
 
 
 (def all-builtins (impl/define-all-builtins))

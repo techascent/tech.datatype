@@ -111,7 +111,8 @@
   "Dimensions contain information about how to map logical global indexes to local
   buffer addresses."
   [shape & {:keys [strides offsets max-shape]}]
-  (let [shape (if max-shape
+  (let [shape (if (dtype/reader? shape) shape (vec shape))
+        shape (if max-shape
                 (let [num-extend (- (dtype-base/ecount max-shape)
                                     (dtype-base/ecount shape))]
                   (if-not (= num-extend 0)

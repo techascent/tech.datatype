@@ -662,13 +662,18 @@
     (dtype/container-type tens)))
 
 
+(declare ->tensor)
+
+
 (defn ensure-tensor
+  "If you can, make a tensor without copying the data.  If you can't,
+  make a new tensor from the data."
   [item]
   (if (tensor? item)
     item
     (if-let [retval (tens-proto/as-tensor item)]
       retval
-      (throw (Exception. "Item is not convertible to tensor")))))
+      (->tensor item))))
 
 
 (defn tensor->buffer
@@ -1403,7 +1408,12 @@
       (-> (dtype-proto/->buffer-descriptor item)
           (buffer-descriptor->tensor))
       (dtype-proto/convertible-to-reader? item)
-      (construct-tensor item
-                        (dims/dimensions (dtype/shape item)))
+      (let [item-shape (dtype-proto/shape item)
+            shape-ecount (apply * item-shape)
+            item-reader (dtype/->reader item)
+            reader-ecount (dtype/ecount item-reader)]
+        (when (= shape-ecount reader-ecount)
+          (construct-tensor item
+                            (dims/dimensions (dtype/shape item)))))
       :else
       (throw (Exception. "Item is not convertible to tensor.")))))

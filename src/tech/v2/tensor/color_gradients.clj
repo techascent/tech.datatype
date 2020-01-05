@@ -7,13 +7,11 @@
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.tensor.typecast :as tens-typecast]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.readers.reverse :as rdr-reverse]
             [clojure.edn :as edn]
             [tech.parallel.for :as pfor]
-            [tech.libs.buffered-image :as bufimg]
-            [clojure.tools.logging :as log])
+            [tech.libs.buffered-image :as bufimg])
   (:import [java.awt.image BufferedImage]
-           [tech.v2.tensor ByteTensorReader]
+           [tech.v2.datatype ObjectReader]
            [clojure.lang IFn]))
 
 
@@ -105,7 +103,8 @@ function returned: %s"
                                     invert-gradient?
                                     gradient-default-n]
                              :or {gradient-default-n 200}}]
-  (let [img-shape (dtype/shape src-tens)
+  (let [src-tens (dtt/ensure-tensor src-tens)
+        img-shape (dtype/shape src-tens)
         {data-min :min
          data-max :max
          valid-indexes :valid-indexes
@@ -193,6 +192,19 @@ function returned: %s"
              (.write2d res-tens idx 1 (.read2d gradient-line line-idx 1))
              (.write2d res-tens idx 2 (.read2d gradient-line line-idx 2)))))))
     res-image))
+
+
+(defn colorize->clj
+  "Same as colorize but returns a ND sequence of [b g r] persistent vectors.
+  For options, see documentation in colorize."
+  [src-tens gradient-name & options]
+  (when (seq src-tens)
+    (let [src-dims (dtype/shape src-tens)]
+      (-> (apply colorize src-tens gradient-name options)
+          ;;In case of 1d.  colorize always returns buffered image which is always
+          ;;2d.
+          (dtt/reshape (concat src-dims [3]))
+          (dtt/->jvm)))))
 
 
 (defn- update-or-append-gradient

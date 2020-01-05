@@ -418,3 +418,7 @@
 (deftest reduce-+-iterable
   (is (= (apply + (range 1000))
          (-> (range 1000) into-array dfn/reduce-+))))
+
+
+(deftest binary-search
+  (is (= [true 5] (dfn/binary-search (range 10) 5))))

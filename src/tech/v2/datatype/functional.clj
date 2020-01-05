@@ -6,7 +6,6 @@
             [tech.v2.datatype.functional.impl :as impl]
             [tech.v2.datatype.operation-provider :as op-provider]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
-            [tech.v2.datatype.binary-search :as binary-search]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.sparse.reader :as sparse-reader]
@@ -142,7 +141,7 @@
         datatype (clojure.core/or (:datatype options)
                                   (dtype-base/get-datatype target))
         options (assoc options :datatype datatype)]
-    (op-provider/unary-op :binary-search values options)))
+    (op-provider/binary-op :binary-search values target options)))
 
 
 (defn argfilter

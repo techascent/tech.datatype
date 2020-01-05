@@ -2,6 +2,7 @@
   (:require [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.binary-search :refer [binary-search]]
             [tech.parallel.for :as parallel-for]
             [tech.v2.datatype.readers.const :refer [make-const-reader]]
             [tech.v2.datatype.unary-op :as unary-op]
@@ -335,3 +336,9 @@
  [[:reader :arggroup-by]]
   [op item-reader [partition-fn options]]
   (arggroup-by partition-fn item-reader options))
+
+
+(def-binary-op
+  [[:reader :scalar :binary-search]]
+  [op item-reader target {:as options}]
+  (binary-search item-reader target options))

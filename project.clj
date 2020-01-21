@@ -1,4 +1,4 @@
-(defproject techascent/tech.datatype "4.71"
+(defproject techascent/tech.datatype "4.72-SNAPSHOT"
   :description "Library for efficient manipulation of contiguous mutable containers of primitive datatypes."
   :url "http://github.com/tech-ascent/tech.datatype"
   :license {:name "Eclipse Public License"

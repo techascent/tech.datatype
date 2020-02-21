@@ -1,5 +1,6 @@
 (ns tech.v2.tensor.integration-test
   (:require [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.functional :as dfn]
             [tech.v2.tensor :as dtt]
@@ -150,6 +151,21 @@
             (dtype/copy! src-tens dst-tens)))
     :ok
     ))
+
+
+(defn read-time-test
+  []
+  (let [src-tens (dtt/new-tensor [2048 2048 4] :datatype :uint8)]
+    (time
+     (dotimes [iter 1]
+       (let [src-tens (dtt/select src-tens (range 256 (* 2 256))
+                                  (range 256 (* 2 256))
+                                  :all)
+             reader (typecast/datatype->reader :uint8 src-tens false)
+             r-ecount (dtype/ecount reader)]
+         (dotimes [idx 1]
+           (.read reader idx)))))))
+
 
 (comment
   (strided-tensor-copy-time-test)

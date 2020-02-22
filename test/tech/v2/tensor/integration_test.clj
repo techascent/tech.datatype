@@ -161,8 +161,9 @@
        (let [src-tens (dtt/select src-tens (range 256 (* 2 256))
                                   (range 256 (* 2 256))
                                   :all)
-             reader (typecast/datatype->reader :uint8 src-tens false)
+             reader (typecast/datatype->reader :int8 src-tens true)
              r-ecount (dtype/ecount reader)]
+         (println (type reader))
          (dotimes [idx 1]
            (.read reader idx)))))))
 

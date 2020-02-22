@@ -116,16 +116,23 @@
            unchecked? :unchecked?} options
           reader-datatype (or reader-datatype datatype)
           src-unchecked? true
+          ;;There is an unchecked fastpath that does not attempt to do elementwise
+          ;;conversions of the data in the buffer.
+          [intermediate-datatype src-datatype]
+          (if (and unchecked?
+                   (= reader-datatype (base/get-datatype backing-store)))
+            [reader-datatype reader-datatype]
+            [datatype (casting/safe-flatten datatype)])
           direct-reader (cond
                           (dtype-proto/as-nio-buffer backing-store)
                           (reader/make-buffer-reader item
-                                                     (casting/safe-flatten datatype)
-                                                     datatype
+                                                     src-datatype
+                                                     intermediate-datatype
                                                      src-unchecked?)
                           (dtype-proto/as-list backing-store)
                           (reader/make-list-reader item
-                                                   (casting/safe-flatten datatype)
-                                                   datatype
+                                                   src-datatype
+                                                   intermediate-datatype
                                                    src-unchecked?)
                           :else
                           (dtype-proto/->reader backing-store

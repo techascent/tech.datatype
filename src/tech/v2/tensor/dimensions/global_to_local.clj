@@ -3,30 +3,54 @@
   transform indexes in global coordinates mapped to local coordinates."
   (:require [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.datatype :as dtype]
-            [tech.v2.datatype.functional :as dtype-fn]))
+            [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.functional :as dtype-fn]
+            [primitive-math :as pmath]))
+
+(set! *unchecked-math* :warn-on-boxed)
+(set! *warn-on-reflection* true)
+
+
+(defn buffer-ecount
+  "What is the necessary ecount for a given buffer"
+  ^long [{:keys [shape strides]}]
+  ;;In this case the length of strides is so small as to make the general
+  ;;method fast to just use object methods.
+  (let [stride-idx (dtype-fn/argmax {:datatype :object} strides)
+        stride-val (dtype/get-value strides stride-idx)
+        shape-val (dtype/get-value shape stride-idx)
+        shape-val (long
+                   (cond
+                     (number? shape-val)
+                     shape-val
+                     (shape/classified-sequence? shape-val)
+                     (shape/classified-sequence-max shape-val)
+                     :else
+                     (apply max (dtype/->reader
+                                 shape-val :int32))))]
+    (* shape-val (long stride-val))))
 
 
 (defn dims->shape-data
-  [{:keys [shape strides offsets max-shape]} dims]
+  [{:keys [shape strides offsets max-shape] :as dims}]
   (let [direct? (shape/direct-shape? shape)
         shape-ecount (long (apply * max-shape))
+        offsets? (not (every? #(== 0 (long %)) offsets))
         dense? (if direct?
                  (= shape-ecount
                     (buffer-ecount dims))
                  false)
         increasing? (if direct?
                       (and (apply >= strides)
-                           (every? #(= 0 %) offsets))
+                           (not offsets?))
                       false)
-        vec-shape (if direct?
-                    shape
-                    (shape/shape->count-vec shape))
+        vec-shape (shape/shape->count-vec shape)
         broadcast? (not= vec-shape max-shape)]
     {:direct? direct?
      :dense? dense?
      :increasing? increasing?
      :broadcast? broadcast?
-     :offsets? (boolean (seq offsets))
+     :offsets? offsets?
      :n-dims (count shape)
      :shape-ecount shape-ecount
      :vec-shape vec-shape}))
@@ -37,268 +61,157 @@
   (dissoc shape-data :shape-ecount :vec-shape))
 
 
-(defn get-elem-dims-global->local-ast
-  "Return an ast of the form:
-  Reads data in row-major form.
-  {:signature - ast signature this method will work on.
-   :methods - method definitions - read, read2d, read3d. May be sparse.
-   :constructor - variable definitions used by method definitions & initialization
-                  used by method definitions.  Takes a dimension object.
-  }
-  "
-  [dims]
-  (let [{:keys [shape strides offsets max-shape]} dims
-        {:keys [direct? shape-ecount dense? increasing?
-                n-dims vec-shape broadcase?] :as shape-data} (dims->shape-data dims)
-        n-dims (long n-dims)
-        shape-ecount (long shape-ecount)
+(defn shape-ary->strides
+  "Strides assuming everything is increasing and packed"
+  ^longs [^longs shape-vec]
+  (let [retval (long-array (count shape-vec))
+        n-elems (alength retval)
+        n-elems-dec (dec n-elems)]
+    (loop [idx n-elems-dec
+           last-stride 1]
+      (if (>= idx 0)
+        (let [next-stride (* last-stride
+                             (if (== idx n-elems-dec)
+                               1
+                               (aget shape-vec (inc idx))))]
+          (aset retval idx next-stride)
+          (recur (dec idx) next-stride))
+        retval))))
 
-        ;;Any indirect addressing?
-        min-shape (drop-while #(= 1 %) shape)
-        local-ec shape-ecount
-        n-elems (shape/ecount max-shape)
-        stride-reader (typecast/datatype->reader :int32 (int-array strides))
-        shape-reader (typecast/datatype->reader :int32 vec-shape)
-        n-dims (count shape)
-        ;;The 2d case is important and special.
-        stride-0 (int (.read stride-reader 0))
-        stride-1 (int (if (>= n-dims 2)
-                        (.read stride-reader 1)
-                        0))
-        stride-2 (int (if (>= n-dims 3)
-                        (.read stride-reader 2)
-                        0))
-        shape-0 (int (first vec-shape))
-        shape-1 (int (if (>= n-dims 2)
-                       (second vec-shape)
-                       1))
-        shape-2 (int (if (>= n-dims 3)
-                       (nth vec-shape 2)
-                       1))]
-    ;;If the shape is all integers (no indirect indexing)
-    (if direct?
-      {:signature (shape-data->signature shape-data)
-       :methods
-       (merge {:read (->> '(loop [idx (long 0)
-                                  arg (long arg)
-                                  offset (long 0)]
-                             (if (< idx num-items)
-                               (let [next-max (aget rev-max-shape idx)
-                                     next-stride (aget rev-strides idx)
-                                     ^LongReader next-dim-entry (rev-shape idx)
-                                     next-dim (.lsize next-dim-entry)
-                                     next-offset (aget rev-offsets idx)
-                                     shape-idx (rem (+ arg next-offset) next-dim)]
-                                 (recur (inc idx)
-                                        (quot arg next-max)
-                                        (+ offset (* next-stride
-                                                     (.read next-dim-entry shape-idx)))))))) }
-              )})
+
+(defn find-breaks
+  "Attempt to reduce the dimensionality of the shape but do not
+  change its elementwise global->local definition.  This is done because
+  the running time of elementwise global->local is dependent upon the
+  number of dimensions in the shape."
+  ([^objects shape ^longs strides
+    ^longs max-shape ^longs offsets]
+   (let [n-elems (alength shape)
+         n-elems-dec (dec n-elems)]
+     (loop [idx n-elems-dec
+            last-stride 1
+            last-break n-elems
+            breaks nil]
+       (if (>= idx 0)
+         (let [last-shape-entry (if (== idx n-elems-dec)
+                                  nil
+                                  (aget shape (inc idx)))
+               last-entry-number? (number? last-shape-entry)
+               next-stride (pmath/* last-stride
+                                    (if (== idx n-elems-dec)
+                                      1
+                                      (if last-entry-number?
+                                        (long last-shape-entry)
+                                        -1)))
+               current-offset (aget offsets idx)
+               last-offset (if (== idx n-elems-dec)
+                             current-offset
+                             (aget offsets (inc idx)))
+               next-shape-entry (aget shape idx)
+               entry-number? (number? next-shape-entry)
+               next-break
+               (if (and (pmath/== (aget strides idx)
+                                  next-stride)
+                        (and last-entry-number?
+                             (pmath/== (long last-shape-entry)
+                                       (aget max-shape (inc idx))))
+                        (and entry-number?
+                             (pmath/== (long next-shape-entry)
+                                       (aget max-shape idx)))
+                        (== current-offset last-offset)
+                        (== last-offset 0))
+                 last-break
+                 (inc idx))
+               breaks (if (== next-break last-break)
+                        breaks
+                        (conj breaks (range next-break last-break)))]
+           (recur (dec idx) (aget strides idx) next-break breaks))
+         (conj breaks (range 0 last-break))))))
+  ([{:keys [shape strides offsets max-shape] :as dims}]
+   (find-breaks (object-array shape)
+                (long-array strides)
+                (long-array max-shape)
+                (long-array offsets))))
+
+
+(defn reduce-dimensionality
+  "Make a smaller equivalent shape in terms of row-major addressing
+  from the given shape."
+  ([{:keys [shape strides offsets max-shape] :as dims}
+    offsets?
+    broadcast?]
+   (let [shape (object-array shape)
+         strides (long-array strides)
+         offsets (long-array offsets)
+         max-shape (long-array max-shape)
+         breaks (find-breaks shape strides max-shape offsets)]
+     {:shape (object-array (map #(if (== 1 (count %))
+                                   (aget shape (long (first %)))
+                                   (apply * (map (fn [idx]
+                                                   (aget shape (long idx)))
+                                                 %)))
+                                breaks))
+      :strides (long-array (map
+                            #(reduce * (map (fn [idx] (aget strides (long idx)))
+                                            %))
+                            breaks))
+      :offsets (when offsets?
+                 (long-array (map
+                              #(reduce + (map (fn [idx] (aget offsets (long idx)))
+                                              %))
+                              breaks)))
+      :max-shape (when broadcast?
+                   (long-array (map
+                                #(reduce * (map (fn [idx] (aget max-shape (long idx)))
+                                                %))
+                                breaks)))}))
+  ([[{:keys [shape strides offsets max-shape] :as dims}]]
+   (reduce-dimensionality dims true true)))
+
+
+
+(defn dims->global->local-equation
+  [{:keys [shape strides offsets max-shape] :as dims} & [shape-data]]
+  (let [shape-data (or shape-data (dims->shape-data dims))
+        n-dims (long (:n-dims shape-data))
+        n-dims-dec (dec n-dims)
+        direct? (:direct? shape-data)
+        offsets? (:offsets? shape-data)
+        broadcast? (:broadcast? shape-data)
+        reduced-dims (reduce-dimensionality dims offsets? broadcast?)
+        ^objects shape (:shape reduced-dims)
+        ^longs strides (:strides reduced-dims)
+        ^longs offsets (when offsets? (:offsets reduced-dims))
+        ^longs max-shape (if broadcast?
+                           (:max-shape reduced-dims)
+                           (long-array (shape/shape-vec shape)))
+        ^longs max-shape-strides (if broadcast?
+                                   (shape-ary->strides max-shape)
+                                   strides)
+        shape-vec (:shape-vec shape-data)]
     (cond
-      ;;Special case for indexes that increase monotonically
-      (and direct?
-           (not broadcast?)
-           dense?
-           increasing?)
-      (impl-idx-reader n-elems idx
-                       (+ (* (int row) stride-0)
-                          (* (int col) stride-1))
-                       (+ (* (int row) stride-0)
-                          (* (int col) stride-1)
-                          (* (int chan) stride-2))
-                       (dense-integer-dot-product indexes stride-reader))
-      ;;Special case for broadcasting a vector across an image (like applying bias).
-      (and direct?
-           (= (ecount dims)
-              (apply max vec-shape))
-           dense?
-           increasing?)
-      (let [ec-idx (long
-                    (->> (map-indexed vector (left-pad-ones
-                                              vec-shape max-shape))
-                         (filter #(= local-ec (second %)))
-                         (ffirst)))
-            broadcast-amt (long (apply * 1 (drop (+ 1 ec-idx) max-shape)))]
-        (impl-idx-reader n-elems
-                         (rem (quot idx broadcast-amt)
-                              local-ec)
-                         (+ (* (rem row shape-0) stride-0)
-                            (* (rem col shape-1) stride-1))
-                         (+ (* (rem row shape-0) stride-0)
-                            (* (rem col shape-1) stride-1)
-                            (* (rem chan shape-2) stride-2))
-                         (dense-integer-dot-product
-                          stride-reader
-                          (binary-op/binary-iterable-map
-                           {:datatype :int32}
-                           rem-int-op
-                           indexes
-                           shape-reader))))
-
-      ;;Special case where the entire shape is being broadcast from an
-      ;;outer dimension. [2 2] broadcast into [4 2 2].
-      (and direct?
-           dense?
-           increasing?
-           (= min-shape
-              (take-last (count min-shape) max-shape)))
-      (impl-idx-reader n-elems
-                       (rem idx local-ec)
-                       (+ (* (rem row shape-0) stride-0)
-                          (* (rem col shape-1) stride-1))
-                       (+ (* (rem row shape-0) stride-0)
-                          (* (rem col shape-1) stride-1)
-                          (* (rem chan shape-2) stride-2))
-                       (dense-integer-dot-product
-                        stride-reader
-                        (binary-op/binary-iterable-map
-                         {:datatype :int32}
-                         rem-int-op
-                         indexes
-                         shape-reader)))
-      :else
-      (let [{:keys [reverse-shape reverse-strides]}
-            (->reverse-data dims)
-            rev-max-shape (int-array (utils/reversev max-shape))
-            reverse-offsets (if-let [item-offsets (:offsets dims)]
-                              (utils/reversev item-offsets)
-                              (const-reader/make-const-reader 0 :int32
-                                                              (count reverse-shape)))]
-        ;;General case when direct shape
-        (if direct?
-          (let [rev-shape (int-array reverse-shape)
-                rev-strides (int-array reverse-strides)
-                rev-offsets (int-array reverse-offsets)
-                shape-0 (aget rev-shape 0)
-                shape-1 (int (if (>= n-dims 2)
-                               (aget rev-shape 1)
-                               1))
-                shape-2 (int (if (>= n-dims 3)
-                               (aget rev-shape 2)
-                               1))
-                offset-0 (aget rev-offsets 0)
-                offset-1 (int (if (>= n-dims 2)
-                                (aget rev-offsets 1)
-                                0))
-                offset-2 (int (if (>= n-dims 3)
-                                (aget rev-offsets 2)
-                                0))
-                stride-0 (aget rev-strides 0)
-                stride-1 (int (if (>= n-dims 2)
-                                (aget rev-strides 1)
-                                0))
-                stride-2 (int (if (>= n-dims 3)
-                                (aget rev-strides 2)
-                                0))]
-            (if (and (not broadcast?)
-                     (<= n-dims 2)
-                     access-increasing?)
-              ;;Common cases with offsetting
-              (if (= 2 n-dims)
-                (impl-idx-reader
-                 n-elems
-                 (let [first-elem (rem (unchecked-add idx offset-0) shape-0)
-                       next-elem (rem (unchecked-add (quot idx shape-0) offset-1)
-                                      shape-1)]
-                   (unchecked-add (unchecked-multiply first-elem stride-0)
-                                  (unchecked-multiply  next-elem stride-1)))
-                 ;;We reversed them, so the indexes may be seem odd.
-                 (+ (* (rem (unchecked-add col offset-0) shape-0) stride-0)
-                    (* (rem (unchecked-add row offset-1) shape-1) stride-1))
-                 (+ (* (rem (unchecked-add chan offset-0) shape-0) stride-0)
-                    (* (rem (unchecked-add col offset-1) shape-1) stride-1)
-                    (* (rem (unchecked-add row offset-2) shape-2) stride-2))
-                 (let [iter (typecast/datatype->iter :int64 indexes)]
-                   (.read2d reader (.nextLong iter) (.nextLong iter))))
-                (impl-idx-reader
-                 n-elems
-                 (let [first-elem (rem (+ idx offset-0) shape-0)]
-                   (* first-elem stride-0))
-                 (* (rem (unchecked-add col offset-0) shape-0) stride-0)
-                 (* (rem (unchecked-add chan offset-0) shape-0) stride-0)
-                 (.read2d reader 0 (-> (typecast/datatype->iter :int64 indexes)
-                                       (.nextLong)))))
-              ;;Broadcasting with offsets but direct shape general case.
-              (impl-idx-reader
-               n-elems
-               (let [arg idx]
-                 (loop [idx (long 0)
-                        arg (long arg)
-                        offset (long 0)]
-                   (if (< idx n-dims)
-                     (let [next-max (aget rev-max-shape idx)
-                           next-stride (aget rev-strides idx)
-                           next-dim (aget rev-shape idx)
-                           next-off (aget rev-offsets idx)
-                           shape-idx (rem (+ arg next-off) next-dim)]
-                       (recur (inc idx)
-                              (quot arg next-max)
-                              (+ offset (* next-stride shape-idx))))
-                     offset)))
-               (+ (* (rem (unchecked-add col offset-0) shape-0) stride-0)
-                  (* (rem (unchecked-add row offset-1) shape-1) stride-1))
-               (+ (* (rem (unchecked-add chan offset-0) shape-0) stride-0)
-                  (* (rem (unchecked-add col offset-1) shape-1) stride-1)
-                  (* (rem (unchecked-add row offset-2) shape-2) stride-2))
-
-               (let [indexes (binary-op/binary-iterable-map
-                              {:datatype :int32}
-                              add-int-op
-                              indexes
-                              offsets)]
-                 (dense-integer-dot-product
-                  stride-reader
-                  (binary-op/binary-iterable-map
-                   {:datatype :int32}
-                   rem-int-op
-                   indexes
-                   shape-reader))))))
-          ;;Totally general case to encapsulate all the variations including indexed
-          ;;dimensions.
-          (let [^List reverse-shape
-                (mapv (fn [item]
-                        (cond
-                          (number? item)
-                          (let [item (long item)]
-                            (reify LongReader
-                              (lsize [rdr] item)
-                              (read [rdr idx] idx)))
-                          (map? item)
-                          (dtype/->reader
-                           (shape/classified-sequence->sequence item)
-                           :int64)
-                          :else
-                          (dtype/->reader item :int64)))
-                      reverse-shape)
-                reverse-max-shape (typecast/datatype->reader :int32
-                                                             (int-array rev-max-shape))
-                max-strides (extend-strides max-shape)
-                max-stride-0 (int (first max-strides))
-                max-stride-1 (int (if (>= n-dims 2)
-                                    (second max-strides)
-                                    0))
-                max-stride-2 (int (if (>= n-dims 3)
-                                    (nth max-strides 2)
-                                    0))
-                reverse-strides (dtype/make-container :java-array :int64
-                                                      reverse-strides)
-                reverse-offsets (dtype/make-container :java-array :int64
-                                                      reverse-offsets)
-                reverse-max-shape (dtype/make-container :java-array :int64
-                                                        reverse-max-shape)]
-            (impl-idx-reader
-             n-elems
-             (elem-idx->addr reverse-shape
-                             reverse-strides
-                             reverse-offsets
-                             reverse-max-shape
-                             idx)
-             (.read reader
-                    (+ (* row max-stride-0)
-                       (* col max-stride-1)))
-             (.read reader
-                    (+ (* row max-stride-0)
-                       (* col max-stride-1)
-                       (* chan max-stride-2)))
-             (.read reader (int (dense-integer-dot-product indexes
-                                                           max-strides))))))))))
+      (and direct?)
+      )
+    (->> (range n-dims)
+         (mapcat (fn [dim-idx]
+                   (let [dim-idx (long dim-idx)
+                         shape-sym (symbol (str "shape-" dim-idx))
+                         stride-sym (symbol (str "stride-" dim-idx))
+                         offset-sym (symbol (str "offset-" dim-idx))
+                         specific-shape (long (shape-vec (- n-dims-dec dim-idx)))
+                         specific-max-shape (long (max-shape (- n-dims-dec dim-idx)))
+                         specific-offset (long (offsets (- n-dims-dec dim-idx)))
+                         idx-eqn (if (== specific-offset 0)
+                                   'idx
+                                   (list '+ 'idx specific-offset))
+                         local-idx-eqn (if (== specific-shape specific-max-shape)
+                                         idx-eqn
+                                         (list 'rem idx-eqn specific-shape))]
+                     (concat
+                      [(list '+= 'retval (list '* (list 'quot local-idx-eqn shape-sym)
+                                               stride-sym))]
+                      (when-not (= dim-idx ()))
+                      (list 'assign 'idx (list 'rem ))))
+                   )))
+    )
+  )

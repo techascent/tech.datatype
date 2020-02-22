@@ -1,5 +1,6 @@
 (ns tech.v2.datatype.nio-access
-  (:require [tech.v2.datatype.casting :as casting])
+  (:require [tech.v2.datatype.casting :as casting]
+            [primitive-math :as pmath])
   (:import [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer]
            [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
@@ -14,12 +15,16 @@
 
 (defmacro buf-put
   [buffer idx buf-pos value]
-  `(.put ~buffer (+ ~idx ~buf-pos) ~value))
+  (if (= 0 buf-pos)
+    `(.put ~buffer ~idx ~value)
+    `(.put ~buffer (pmath/+ ~idx ~buf-pos) ~value)))
 
 
 (defmacro buf-get
   [buffer idx buf-pos]
-  `(.get ~buffer (+ ~idx ~buf-pos)))
+  (if (= 0 buf-pos)
+    `(.get ~buffer ~idx ~buf-pos)
+    `(.get ~buffer (pmath/+ ~idx ~buf-pos))))
 
 
 (defmacro datatype->pos-fn

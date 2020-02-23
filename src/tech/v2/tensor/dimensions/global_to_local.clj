@@ -107,17 +107,15 @@
                last-offset (if (== idx n-elems-dec)
                              current-offset
                              (aget offsets (inc idx)))
-               next-shape-entry (aget shape idx)
-               entry-number? (number? next-shape-entry)
+               shape-entry (aget shape idx)
+               shape-entry-number? (number? shape-entry)
                next-break
                (if (and (pmath/== (aget strides idx)
                                   next-stride)
+                        shape-entry-number?
                         (and last-entry-number?
                              (pmath/== (long last-shape-entry)
                                        (aget max-shape (inc idx))))
-                        (and entry-number?
-                             (pmath/== (long next-shape-entry)
-                                       (aget max-shape idx)))
                         (== current-offset last-offset)
                         (== last-offset 0))
                  last-break
@@ -134,6 +132,13 @@
                 (long-array offsets))))
 
 
+(defn- number-or-reader
+  [shape-entry]
+  (if (number? shape-entry)
+    shape-entry
+    (dtype/->reader shape-entry :int64)))
+
+
 (defn reduce-dimensionality
   "Make a smaller equivalent shape in terms of row-major addressing
   from the given shape."
@@ -146,13 +151,15 @@
          max-shape (long-array max-shape)
          breaks (find-breaks shape strides max-shape offsets)]
      {:shape (object-array (map #(if (== 1 (count %))
-                                   (aget shape (long (first %)))
+                                   (->
+                                    (aget shape (long (first %)))
+                                    (number-or-reader))
                                    (apply * (map (fn [idx]
                                                    (aget shape (long idx)))
                                                  %)))
                                 breaks))
       :strides (long-array (map
-                            #(reduce * (map (fn [idx] (aget strides (long idx)))
+                            #(reduce min (map (fn [idx] (aget strides (long idx)))
                                             %))
                             breaks))
       :offsets (when offsets?
@@ -165,9 +172,77 @@
                                 #(reduce * (map (fn [idx] (aget max-shape (long idx)))
                                                 %))
                                 breaks)))}))
-  ([[{:keys [shape strides offsets max-shape] :as dims}]]
+  ([{:keys [shape strides offsets max-shape] :as dims}]
    (reduce-dimensionality dims true true)))
 
+
+(defn- ast-symbol-access
+  [symbol-stem dim-idx]
+  (symbol (format "%s-%d" symbol-stem dim-idx)))
+
+
+(defn- ast-array-access
+  [symbol-stem dim-idx-sym]
+  `(~'aget ~symbol-stem ~dim-idx-sym))
+
+
+(defn- make-symbol
+  [symbol-stem dim-idx]
+  (if (number? dim-idx)
+    (ast-symbol-access symbol-stem dim-idx)
+    (ast-array-access (symbol symbol-stem) dim-idx)))
+
+
+(defn elemwise-ast
+  [dim-idx direct? offsets? broadcast?
+   trivial-stride?
+   most-rapidly-changing-index?
+   least-rapidly-changing-index?]
+  (let [shape (make-symbol "shape" dim-idx)
+        stride (make-symbol "stride" dim-idx)
+        offset (make-symbol "offset" dim-idx)
+        max-shape-stride (make-symbol "max-shape-stride" dim-idx)]
+    (let [idx (if most-rapidly-changing-index?
+                `~'idx
+                `(~'quot ~'idx ~max-shape-stride))
+          offset-idx (if offsets?
+                       `(~'+ ~idx ~offset)
+                       `~idx)
+          shape-ecount (if direct?
+                           `~shape
+                           `(.lsize ~shape))
+          idx-bcast (if (or offsets? broadcast? (not least-rapidly-changing-index?))
+                      `(~'rem ~offset-idx ~shape-ecount)
+                      `~offset-idx)
+          elem-idx (if direct?
+                     `~idx-bcast
+                     `(.read ~shape ~idx-bcast))]
+      (if trivial-stride?
+        `~elem-idx
+        `(~'* ~elem-idx ~stride)))))
+
+
+(defn global->local-ast
+  [n-dims direct-vec offsets? broadcast?
+   trivial-last-stride?]
+  (if (= n-dims 1)
+    (elemwise-ast 0 (direct-vec 0) offsets? broadcast?
+                  trivial-last-stride? true true)
+    (let [n-dims (long n-dims)
+          n-dims-dec (dec n-dims)]
+      {:key [n-dims direct-vec offsets? broadcast? trivial-last-stride?]
+       :ast
+       (->> (range n-dims)
+            (map (fn [dim-idx]
+                   (let [dim-idx (long dim-idx)
+                         least-rapidly-changing-index? (== dim-idx 0)
+                         most-rapidly-changing-index? (== dim-idx n-dims-dec)
+                         trivial-stride? (and most-rapidly-changing-index?
+                                              trivial-last-stride?)]
+                     (elemwise-ast dim-idx (direct-vec dim-idx) offsets? broadcast?
+                                   trivial-stride? most-rapidly-changing-index?
+                                   least-rapidly-changing-index?))))
+            (into ['+]))})))
 
 
 (defn dims->global->local-equation
@@ -175,43 +250,16 @@
   (let [shape-data (or shape-data (dims->shape-data dims))
         n-dims (long (:n-dims shape-data))
         n-dims-dec (dec n-dims)
-        direct? (:direct? shape-data)
         offsets? (:offsets? shape-data)
         broadcast? (:broadcast? shape-data)
         reduced-dims (reduce-dimensionality dims offsets? broadcast?)
-        ^objects shape (:shape reduced-dims)
-        ^longs strides (:strides reduced-dims)
-        ^longs offsets (when offsets? (:offsets reduced-dims))
-        ^longs max-shape (if broadcast?
-                           (:max-shape reduced-dims)
-                           (long-array (shape/shape-vec shape)))
-        ^longs max-shape-strides (if broadcast?
-                                   (shape-ary->strides max-shape)
-                                   strides)
-        shape-vec (:shape-vec shape-data)]
-    (cond
-      (and direct?)
-      )
-    (->> (range n-dims)
-         (mapcat (fn [dim-idx]
-                   (let [dim-idx (long dim-idx)
-                         shape-sym (symbol (str "shape-" dim-idx))
-                         stride-sym (symbol (str "stride-" dim-idx))
-                         offset-sym (symbol (str "offset-" dim-idx))
-                         specific-shape (long (shape-vec (- n-dims-dec dim-idx)))
-                         specific-max-shape (long (max-shape (- n-dims-dec dim-idx)))
-                         specific-offset (long (offsets (- n-dims-dec dim-idx)))
-                         idx-eqn (if (== specific-offset 0)
-                                   'idx
-                                   (list '+ 'idx specific-offset))
-                         local-idx-eqn (if (== specific-shape specific-max-shape)
-                                         idx-eqn
-                                         (list 'rem idx-eqn specific-shape))]
-                     (concat
-                      [(list '+= 'retval (list '* (list 'quot local-idx-eqn shape-sym)
-                                               stride-sym))]
-                      (when-not (= dim-idx ()))
-                      (list 'assign 'idx (list 'rem ))))
-                   )))
-    )
-  )
+        ^objects reduced-shape (:shape reduced-dims)
+        direct-vec (mapv number? reduced-shape)
+        ^longs reduced-strides (:strides reduced-dims)
+        ^longs reduced-offsets (when offsets? (:offsets reduced-dims))
+        ^longs reduced-max-shape (when broadcast? (:max-shape reduced-dims))
+        n-reduced-dims (alength reduced-shape)]
+    (assoc
+     (global->local-ast n-reduced-dims direct-vec offsets? broadcast?
+                        (== 1 (aget reduced-strides (dec n-reduced-dims))))
+     :reduced-dims reduced-dims)))

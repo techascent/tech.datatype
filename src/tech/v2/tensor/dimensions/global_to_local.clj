@@ -82,7 +82,7 @@
 (defn find-breaks
   "Attempt to reduce the dimensionality of the shape but do not
   change its elementwise global->local definition.  This is done because
-  the running time of elementwise global->local is dependent upon the
+  the running time of elementwise global->local is heavily dependent upon the
   number of dimensions in the shape."
   ([^objects shape ^longs strides
     ^longs max-shape ^longs offsets]
@@ -230,7 +230,11 @@
                   trivial-last-stride? true true)
     (let [n-dims (long n-dims)
           n-dims-dec (dec n-dims)]
-      {:key [n-dims direct-vec offsets? broadcast? trivial-last-stride?]
+      {:key {:n-dims n-dims
+             :direct-vec direct-vec
+             :offsets? offsets?
+             :broadcast? broadcast?
+             :trivial-last-stride? trivial-last-stride?}
        :ast
        (->> (range n-dims)
             (map (fn [dim-idx]
@@ -242,7 +246,7 @@
                      (elemwise-ast dim-idx (direct-vec dim-idx) offsets? broadcast?
                                    trivial-stride? most-rapidly-changing-index?
                                    least-rapidly-changing-index?))))
-            (into ['+]))})))
+            (apply list '+))})))
 
 
 (defn dims->global->local-equation

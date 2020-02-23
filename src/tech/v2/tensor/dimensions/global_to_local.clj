@@ -3,9 +3,17 @@
   transform indexes in global coordinates mapped to local coordinates."
   (:require [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.datatype :as dtype]
-            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.functional :as dtype-fn]
-            [primitive-math :as pmath]))
+            [primitive-math :as pmath]
+            [insn.core :as insn]
+            [insn.op :as insn-op]
+            [insn.clojure :as insn-clj]
+            [camel-snake-kebab.core :as csk])
+  (:import [tech.v2.datatype LongReader]
+           [java.util List ArrayList Map HashMap]
+           [java.lang.reflect Constructor]
+           [java.util.function Function]
+           [java.util.concurrent ConcurrentHashMap]))
 
 (set! *unchecked-math* :warn-on-boxed)
 (set! *warn-on-reflection* true)
@@ -134,8 +142,12 @@
 
 (defn- number-or-reader
   [shape-entry]
-  (if (number? shape-entry)
+  (cond
+    (number? shape-entry)
     shape-entry
+    (shape/classified-sequence? shape-entry)
+    (shape/classified-sequence->reader shape-entry)
+    :else
     (dtype/->reader shape-entry :int64)))
 
 
@@ -177,20 +189,14 @@
 
 
 (defn- ast-symbol-access
-  [symbol-stem dim-idx]
-  (symbol (format "%s-%d" symbol-stem dim-idx)))
-
-
-(defn- ast-array-access
-  [symbol-stem dim-idx-sym]
-  `(~'aget ~symbol-stem ~dim-idx-sym))
+  [ary-name dim-idx]
+  {:ary-name ary-name
+   :dim-idx dim-idx})
 
 
 (defn- make-symbol
   [symbol-stem dim-idx]
-  (if (number? dim-idx)
-    (ast-symbol-access symbol-stem dim-idx)
-    (ast-array-access (symbol symbol-stem) dim-idx)))
+  (ast-symbol-access symbol-stem dim-idx))
 
 
 (defn elemwise-ast
@@ -198,10 +204,10 @@
    trivial-stride?
    most-rapidly-changing-index?
    least-rapidly-changing-index?]
-  (let [shape (make-symbol "shape" dim-idx)
-        stride (make-symbol "stride" dim-idx)
-        offset (make-symbol "offset" dim-idx)
-        max-shape-stride (make-symbol "max-shape-stride" dim-idx)]
+  (let [shape (make-symbol :shape dim-idx)
+        stride (make-symbol :stride dim-idx)
+        offset (make-symbol :offset dim-idx)
+        max-shape-stride (make-symbol :max-shape-stride dim-idx)]
     (let [idx (if most-rapidly-changing-index?
                 `~'idx
                 `(~'quot ~'idx ~max-shape-stride))
@@ -230,11 +236,12 @@
                   trivial-last-stride? true true)
     (let [n-dims (long n-dims)
           n-dims-dec (dec n-dims)]
-      {:key {:n-dims n-dims
-             :direct-vec direct-vec
-             :offsets? offsets?
-             :broadcast? broadcast?
-             :trivial-last-stride? trivial-last-stride?}
+      {:signature
+       {:n-dims n-dims
+        :direct-vec direct-vec
+        :offsets? offsets?
+        :broadcast? broadcast?
+        :trivial-last-stride? trivial-last-stride?}
        :ast
        (->> (range n-dims)
             (map (fn [dim-idx]
@@ -249,21 +256,341 @@
             (apply list '+))})))
 
 
-(defn dims->global->local-equation
-  [{:keys [shape strides offsets max-shape] :as dims} & [shape-data]]
+(defn elem-idx->addr-fn
+  "High-dimension (>3) fallback."
+  [n-dims ^objects shape ^longs strides
+   ^longs offsets ^longs max-shape
+   ^longs max-shape-stride]
+  (let [n-dims (long n-dims)
+        n-elems (pmath/* (aget max-shape-stride 0)
+                         (aget max-shape 0))]
+    (if offsets
+      (reify LongReader
+        (lsize [rdr] n-elems)
+        (read [rdr idx]
+          (loop [dim 0
+                 result 0]
+            (if (< dim n-dims)
+              (let [shape-val (aget shape dim)
+                    offset (aget offsets idx)
+                    idx (pmath//
+                         (pmath/+ idx offset)
+                         (aget max-shape-stride dim))
+                    stride (aget strides dim)
+                    local-val (if (number? shape-val)
+                                (-> (pmath/rem idx (long shape-val))
+                                    (pmath/* stride))
+                                (-> (.read ^LongReader shape-val
+                                           (pmath/rem idx
+                                                      (.lsize ^LongReader shape-val)))
+                                    (pmath/* stride)))]
+                (recur (pmath/inc dim) (pmath/+ result local-val)))
+              result))))
+      (reify LongReader
+        (lsize [rdr] n-elems)
+        (read [rdr idx]
+          (loop [dim 0
+                 result 0]
+            (if (< dim n-dims)
+              (let [shape-val (aget shape dim)
+                    idx (pmath// idx (aget max-shape-stride dim))
+                    stride (aget strides dim)
+                    local-val (if (number? shape-val)
+                                (-> (pmath/rem idx (long shape-val))
+                                    (pmath/* stride))
+                                (-> (.read ^LongReader shape-val
+                                           (pmath/rem idx
+                                                      (.lsize ^LongReader shape-val)))
+                                    (pmath/* stride)))]
+                (recur (pmath/inc dim) (pmath/+ result local-val)))
+              result)))))))
+
+
+(def constructor-args
+  (->>
+   [:shape :stride :offset :max-shape :max-shape-stride]
+   (map-indexed (fn [idx argname]
+                  ;;inc because arg0 is 'this' object
+                  [argname {:arg-idx (inc (long idx))
+                            :name (csk/->camelCase (name argname))}]))
+   (into {})))
+
+
+(defn dims->global->local-transformation
+  [{:keys [shape strides offsets max-shape] :as dims}
+   & {:keys [shape-data force-reader-fn?]}]
   (let [shape-data (or shape-data (dims->shape-data dims))
         n-dims (long (:n-dims shape-data))
         n-dims-dec (dec n-dims)
         offsets? (:offsets? shape-data)
         broadcast? (:broadcast? shape-data)
-        reduced-dims (reduce-dimensionality dims offsets? broadcast?)
+        ;;Always produce the max-shape vector
+        reduced-dims (reduce-dimensionality dims offsets? true)
         ^objects reduced-shape (:shape reduced-dims)
         direct-vec (mapv number? reduced-shape)
         ^longs reduced-strides (:strides reduced-dims)
         ^longs reduced-offsets (when offsets? (:offsets reduced-dims))
-        ^longs reduced-max-shape (when broadcast? (:max-shape reduced-dims))
+        ^longs reduced-max-shape (:max-shape reduced-dims)
+        ^longs max-shape-stride (shape-ary->strides reduced-max-shape)
         n-reduced-dims (alength reduced-shape)]
-    (assoc
-     (global->local-ast n-reduced-dims direct-vec offsets? broadcast?
-                        (== 1 (aget reduced-strides (dec n-reduced-dims))))
-     :reduced-dims reduced-dims)))
+    ;;We produce an AST and custom compile the result if the number of reduced
+    ;;dimensions is less than 3.
+    (if (and (not force-reader-fn?)
+             (<= n-reduced-dims 3))
+      (assoc
+       (global->local-ast n-reduced-dims direct-vec offsets? broadcast?
+                          (pmath/== 1 (aget reduced-strides (dec n-reduced-dims))))
+       :constructor-args (object-array [reduced-shape reduced-strides reduced-offsets
+                                        reduced-max-shape max-shape-stride])
+       :reduced-dims reduced-dims)
+      {:reader (elem-idx->addr-fn n-reduced-dims reduced-shape reduced-strides
+                                  reduced-offsets reduced-max-shape
+                                  max-shape-stride)
+       :reduced-dims reduced-dims})))
+
+
+(defn bool->str
+  ^String [bval]
+  (if bval "T" "F"))
+
+
+(defn direct-vec->str
+  ^String [^List dvec]
+  (let [builder (StringBuilder.)
+        iter (.iterator dvec)]
+    (loop [continue? (.hasNext iter)]
+      (when continue?
+        (let [next-val (.next iter)]
+          (.append builder (bool->str next-val))
+          (recur (.hasNext iter)))))
+    (.toString builder)))
+
+
+(defn ast-sig->class-name
+  [{:keys [signature]}]
+  (format "GToL%d%sOff%sBcast%sTrivLastS%s"
+          (:n-dims signature)
+          (direct-vec->str (:direct-vec signature))
+          (bool->str (:offsets? signature))
+          (bool->str (:broadcast? signature))
+          (bool->str (:trivial-last-stride? signature))))
+
+
+(defmulti apply-ast-fn!
+  (fn [ast ^Map fields ^List instructions]
+    (first ast)))
+
+
+(defn ensure-field!
+  [{:keys [ary-name dim-idx] :as field} ^Map fields]
+  (let [n-fields (.size fields)]
+    (-> (.computeIfAbsent fields ary-name
+                          (reify Function
+                            (apply [this ary-name]
+                              (assoc field
+                                     :field-idx n-fields
+                                     :name (format "%s%d"
+                                                   (csk/->camelCase (name ary-name))
+                                                   dim-idx)))))
+        :name)))
+
+
+(defn push-arg!
+  [ast fields ^List instructions]
+  (cond
+    (= 'idx ast)
+    (.add instructions [:lload 1])
+    (map? ast)
+    (do
+      (.add instructions [:aload 0])
+      (.add instructions [:getfield :this (ensure-field! ast fields) :long]))
+    (seq ast)
+    (apply-ast-fn! ast fields instructions)
+    :else
+    (throw (Exception. (format "Unrecognized ast element: %s" ast)))))
+
+
+(defn reduce-math-op!
+  [math-op ast ^Map fields ^List instructions]
+  (reduce (fn [prev-arg arg]
+            (push-arg! arg fields instructions)
+            (when-not (nil? prev-arg)
+              (.add instructions [math-op]))
+            arg)
+          nil
+          (rest ast)))
+
+
+(defmethod apply-ast-fn! '+
+  [ast ^Map fields ^List instructions]
+  (reduce-math-op! :ladd ast fields instructions))
+
+
+(defmethod apply-ast-fn! '*
+  [ast ^Map fields ^List instructions]
+  (reduce-math-op! :lmul ast fields instructions))
+
+
+(defmethod apply-ast-fn! 'quot
+  [ast ^Map fields ^List instructions]
+  (reduce-math-op! :ldiv ast fields instructions))
+
+
+(defmethod apply-ast-fn! 'rem
+  [ast ^Map fields ^List instructions]
+  (reduce-math-op! :lrem ast fields instructions))
+
+
+(defn eval-read-ast!
+  "Eval the read to isns instructions"
+  [ast ^Map fields ^List instructions]
+  (apply-ast-fn! ast fields instructions)
+  (.add instructions [:lreturn]))
+
+
+(defn emit-fields
+  [shape-scalar-vec ^Map fields]
+  (concat
+   (->> (vals fields)
+        (sort-by :name)
+        (mapv (fn [{:keys [name field-idx ary-name dim-idx]}]
+                (if (and (= ary-name :shape)
+                         (not (shape-scalar-vec dim-idx)))
+                  {:flags #{:public :final}
+                   :name name
+                   :type LongReader}
+                  {:flags #{:public :final}
+                   :name name
+                   :type :long}))))
+   [{:flags #{:public :final}
+     :name "nElems"
+     :type :long}]))
+
+
+(defn carg-idx
+  ^long [argname]
+  (if-let [idx-val (get-in constructor-args [argname :arg-idx])]
+    (long idx-val)
+    (throw (Exception. (format "Unable to find %s in %s"
+                               argname
+                               (keys constructor-args))))))
+
+
+(defn load-constructor-arg
+  [shape-scalar-vec {:keys [ary-name field-idx name dim-idx]}]
+  (let [carg-idx (carg-idx ary-name)]
+    (if (= ary-name :shape)
+      (if (not (shape-scalar-vec dim-idx))
+        [[:aload 0]
+         [:aload carg-idx]
+         [:ldc (int dim-idx)]
+         [:aaload]
+         [:checkcast LongReader]
+         [:putfield :this name LongReader]]
+        [[:aload 0]
+         [:aload carg-idx]
+         [:ldc (int dim-idx)]
+         [:aaload]
+         [:checkcast Long]
+         [:invokevirtual Long "longValue"]
+         [:putfield :this name :long]])
+      [[:aload 0]
+       [:aload carg-idx]
+       [:ldc (int dim-idx)]
+       [:laload]
+       [:putfield :this name :long]])))
+
+
+(defn emit-constructor
+  [shape-type-vec ^Map fields]
+  (concat [[:aload 0]
+           [:invokespecial :super :init [:void]]]
+          (->> (vals fields)
+               (sort-by :name)
+               (mapcat (partial load-constructor-arg shape-type-vec)))
+          [[:aload 0]
+           [:aload 4]
+           [:ldc (int 0)]
+           [:laload]
+           [:aload 5]
+           [:ldc (int 0)]
+           [:laload]
+           [:lmul]
+           [:putfield :this "nElems" :long]
+           [:return]]))
+
+
+(defn gen-ast-class-def
+  [{:keys [signature ast]}]
+  (let [cname (ast-sig->class-name test-ast)
+        pkg-symbol (symbol (format "tech.v2.datatype.%s" cname))
+        ;;map of name->field-data
+        fields (HashMap.)
+        read-instructions (ArrayList.)
+        ;;Which of the shape items are scalars
+        ;;they are either scalars or readers.
+        shape-scalar-vec (:direct-vec signature)]
+    (eval-read-ast! ast fields read-instructions)
+    {:name pkg-symbol
+     :interfaces [LongReader]
+     :fields (vec (emit-fields shape-scalar-vec fields))
+     :methods [{:flags #{:public}
+                :name :init
+                :desc [(Class/forName "[Ljava.lang.Object;")
+                       (Class/forName "[J")
+                       (Class/forName "[J")
+                       (Class/forName "[J")
+                       (Class/forName "[J")
+                       :void]
+                :emit (vec (emit-constructor shape-scalar-vec fields))}
+               {:flags #{:public}
+                :name "lsize"
+                :desc [:long]
+                :emit [[:aload 0]
+                       [:getfield :this "nElems" :long]
+                       [:lreturn]]}
+               {:flags #{:public}
+                :name "read"
+                :desc [:long :long]
+                :emit (vec read-instructions)}]}))
+
+
+(def defined-classes (ConcurrentHashMap.))
+(defn get-or-create-reader-fn
+  ^LongReader [{:keys [signature] :as ast-data}]
+  (.computeIfAbsent ^ConcurrentHashMap defined-classes
+                    signature
+                    (reify Function
+                      (apply [this signature]
+                        (let [class-def (gen-ast-class-def ast-data)
+                              ^Class class-obj (insn/define class-def)
+                              ^Constructor first-constructor
+                              (first (.getDeclaredConstructors
+                                      class-obj))]
+                          #(.newInstance first-constructor %))))))
+
+
+(defn dims->global->local
+  ^LongReader [dims]
+  (let [ast-data (dims->global->local-transformation dims)]
+    (if (:reader ast-data)
+      (:reader ast-data)
+      ((get-or-create-reader-fn ast-data)
+       (:constructor-args ast-data)))))
+
+
+(comment
+  (def test-ast
+    (dims->global->local-transformation
+     (dims/dimensions [256 256 4]
+                      :strides [8192 4 1])))
+
+  (def class-def (gen-ast-class-def test-ast))
+
+  (def class-obj (insn/define class-def))
+
+  (def first-constructor (first (.getDeclaredConstructors class-obj)))
+
+  (def idx-obj (.newInstance first-constructor (:constructor-args test-ast)))
+
+  )

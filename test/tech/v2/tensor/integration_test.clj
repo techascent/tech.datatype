@@ -147,8 +147,7 @@
                                   :all))
         dst-tens (dtt/new-tensor [256 256 4] :datatype :uint8)]
     ;; (dtype/copy! src-tens dst-tens)
-    (time (dotimes [iter 100]
-            (dtype/copy! src-tens dst-tens)))
+    (dtype/copy! src-tens dst-tens)
     :ok
     ))
 
@@ -156,15 +155,13 @@
 (defn read-time-test
   []
   (let [src-tens (dtt/new-tensor [2048 2048 4] :datatype :uint8)]
-    (time
-     (dotimes [iter 10]
-       (let [src-tens (dtt/select src-tens (range 256 (* 2 256))
-                                  (range 256 (* 2 256))
-                                  :all)
-             reader (typecast/datatype->reader :int8 src-tens true)
-             r-ecount (dtype/ecount reader)]
-         (dotimes [idx r-ecount]
-           (.read reader idx)))))))
+    (let [src-tens (dtt/select src-tens (range 256 (* 2 256))
+                               (range 256 (* 2 256))
+                               :all)
+          reader (typecast/datatype->reader :int8 src-tens true)
+          r-ecount (dtype/ecount reader)]
+      (dotimes [idx r-ecount]
+        (.read reader idx)))))
 
 
 (defn typed-buffer-read-time-test

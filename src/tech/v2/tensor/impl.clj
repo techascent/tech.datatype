@@ -22,7 +22,6 @@
               [tech.parallel.for :as parallel-for]
               [tech.jna :as jna])
     (:import [tech.v2.datatype
-              IndexingSystem$Forward
               IndexingSystem$Backward
               ObjectReader]
              [com.sun.jna Pointer]
@@ -56,7 +55,7 @@
 
 (defn- dimensions->index-reader
   [dimensions]
-  ^IndexingSystem$Forward (dims/->global->local dimensions))
+  ^LongReader (dims/->global->local dimensions))
 
 
 (defn- dimensions->index-inverter

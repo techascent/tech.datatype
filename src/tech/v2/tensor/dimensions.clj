@@ -10,6 +10,7 @@
   (:require [tech.v2.datatype :as dtype]
             [tech.v2.tensor.dimensions.select :as dims-select]
             [tech.v2.tensor.dimensions.shape :as shape]
+            [tech.v2.tensor.dimensions.global-to-local :as gtol]
             [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
@@ -24,7 +25,6 @@
              :refer [when-not-error reversev]
              :as utils])
   (:import [tech.v2.datatype
-            IndexingSystem$Forward
             IndexingSystem$Backward
             IntReader
             LongReader]
@@ -274,7 +274,7 @@
 (defmacro ^:private impl-idx-reader
   [n-elems opcode tenscode2d tenscode3d tenscode]
   `(reify
-     IndexingSystem$Forward
+     LongReader
      (lsize [item#] ~n-elems)
      (read [item# ~'idx] ~opcode)
      (applyTo [item# arglist#] (.tensorRead
@@ -323,7 +323,7 @@ to be reversed for the most efficient implementation."
 
 
 (defn get-elem-dims-global->local
-  ^IndexingSystem$Forward [dims]
+  ^LongReader [dims]
   ;;Special cases here for speed
   (let [{:keys [shape strides offsets max-shape]} dims
         direct? (direct? dims)
@@ -786,12 +786,13 @@ to be reversed for the most efficient implementation."
 
 (defn create-dimension-transforms [dims]
   (assoc dims
-         :global->local (delay (get-elem-dims-global->local dims))
+         :global->local (delay (gtol/dims->global->local dims))
+         ;;:global->local (delay (get-elem-dims-global->local dims))
          :local->global (delay (get-elem-dims-local->global dims))))
 
 
 (defn ->global->local
-  ^IndexingSystem$Forward [dims]
+  ^LongReader [dims]
   @(:global->local dims))
 
 

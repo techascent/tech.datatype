@@ -683,11 +683,15 @@
                                         class-obj))]
                             #(try (.newInstance first-constructor %)
                                   (catch Throwable e
-                                    (throw (ex-info "Error instantiating ast object"
+                                    (throw (ex-info (format "Error instantiating ast object: %s\n%s"
+                                                            (.getMessage e)
+                                                            ast-data)
                                                     {:error e
                                                      :ast (:ast ast-data)})))))
                           (catch Throwable e
-                            (throw (ex-info "Error generating ast object"
+                            (throw (ex-info (format "Error generating ast object: %s\n%s"
+                                                    (.getMessage e)
+                                                    ast-data)
                                             {:error e
                                              :ast (:ast ast-data)}))))))))
 

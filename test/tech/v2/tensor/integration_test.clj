@@ -5,6 +5,7 @@
             [tech.v2.datatype.functional :as dfn]
             [tech.v2.tensor :as dtt]
             [tech.v2.tensor.typecast :as dtt-typecast]
+            [tech.v2.tensor.tensor-copy :as tc]
             [clojure.test :refer :all]))
 
 
@@ -150,6 +151,17 @@
     (dtype/copy! src-tens dst-tens)
     :ok
     ))
+
+
+(defn strided-tensor-bit-blit-test
+  []
+  (let [src-tens (-> (dtt/new-tensor [2048 2048 4] :datatype :uint8)
+                     (dtt/select (range 256 (* 2 256))
+                                 (range 256 (* 2 256))
+                                 :all))
+        dst-tens (dtt/new-tensor [256 256 4] :datatype :uint8)]
+    ;; (dtype/copy! src-tens dst-tens)
+    (assert (= :ok (tc/bit-blit! src-tens dst-tens {})))))
 
 
 (defn read-time-test

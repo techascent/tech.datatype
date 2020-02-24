@@ -52,6 +52,8 @@
     (is (dtype-fn/equals default-reader ast-reader))))
 
 
+;;TODO - check broadcasting on leading dimension
+
 
 
 (comment

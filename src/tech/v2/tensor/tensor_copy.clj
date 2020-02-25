@@ -62,7 +62,7 @@
 
 (defn bit-blit!
   "Returns :ok if bit blit succeeds"
-  ([src dst options]
+  ([dst src options]
    (let [unchecked? (:unchecked? options)
          src-dtype (dtype/get-datatype src)
          dst-dtype (dtype/get-datatype dst)
@@ -104,12 +104,17 @@
                                        (dtype-proto/sub-buffer src-nio src-offset
                                                                block-size))))
                    :ok)))))))))
-  ([src dst]
+  ([dst src]
    (bit-blit! src dst {})))
 
 
 (defmethod dtype-proto/copy! [:tensor :tensor]
   [dst src options]
+  (when-not (= (dtype/shape dst)
+               (dtype/shape src))
+    (throw (Exception. (format "src shape %s doesn't match dst shape %s"
+                               (dtype/shape src)
+                               (dtype/shape dst)))))
   (when-not (= :ok (bit-blit! src dst options))
     (dtype-proto/copy! (tens-impl/tensor->base-buffer-type dst)
                        (tens-impl/tensor->base-buffer-type src)

@@ -105,7 +105,7 @@
                                                                block-size))))
                    :ok)))))))))
   ([dst src]
-   (bit-blit! src dst {})))
+   (bit-blit! dst src {})))
 
 
 (defmethod dtype-proto/copy! [:tensor :tensor]
@@ -115,7 +115,7 @@
     (throw (Exception. (format "src shape %s doesn't match dst shape %s"
                                (dtype/shape src)
                                (dtype/shape dst)))))
-  (when-not (= :ok (bit-blit! src dst options))
+  (when-not (= :ok (bit-blit! dst src options))
     (dtype-proto/copy! (tens-impl/tensor->base-buffer-type dst)
                        (tens-impl/tensor->base-buffer-type src)
                        options))
@@ -132,5 +132,5 @@
   (dtype/copy! (range (* 256 256 4)) 0 src-tens 0 (* 256 256 4) {:unchecked? true})
   (def dst-img-tens (tens-impl/new-tensor [2048 2048 4] :datatype :uint8))
   (def dst-tens (tens-impl/select dst-img-tens (range 256) (range 256) :all))
-  (def bit-blit-result (bit-blit! src-tens dst-tens {}))
+  (def bit-blit-result (bit-blit! dst-tens src-tens))
   )

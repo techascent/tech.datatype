@@ -4,6 +4,7 @@
             [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.datatype.functional :as dtype-fn]
             [clojure.test :refer [deftest is]]
+            [clojure.pprint :as pp]
             [criterium.core :as crit])
   (:import [tech.v2.datatype LongReader]))
 
@@ -15,20 +16,16 @@
   [base-dims expected-reduced-shape]
   (let [base-dims-reader (dims/get-elem-dims-global->local base-dims)
         reduced-dims (dims-analytics/reduce-dimensionality base-dims)
-        {:keys [constructor-args]
-         :as ast-data} (gtol/dims->global->local-transformation
-                        base-dims)
         default-reader (gtol/elem-idx->addr-fn reduced-dims)
-        ast-reader ((gtol/get-or-create-reader-fn ast-data) constructor-args)]
+        ast-reader (gtol/get-or-create-reader reduced-dims)
+        reduced-dims-ast (gtol/global->local-ast reduced-dims)]
     (is (= expected-reduced-shape
            (->> reduced-dims
                 (map (fn [[k v]] [k (vec v)]))
                 (into {}))))
     (is (dtype-fn/equals base-dims-reader default-reader))
-    (is (dtype-fn/equals default-reader ast-reader))
-    {:base-dims-reader base-dims-reader
-     :default-reader default-reader
-     :ast-reader ast-reader}))
+    (is (dtype-fn/equals default-reader ast-reader)
+        (with-out-str (pp/pprint (:ast reduced-dims-ast))))))
 
 
 (deftest strided-image-test
@@ -61,7 +58,7 @@
                          :max-shape-strides [16 1]}))
 
 ;;TODO - check broadcasting on leading dimension
-(deftest leading-bcast
+(deftest leading-bcast-1
   (compare-reader-impls (dims/dimensions [2 4 4]
                                          :strides [32 4 1]
                                          :max-shape [4 4 4])
@@ -69,8 +66,9 @@
                          :strides [32 1]
                          :offsets []
                          :max-shape [4 16]
-                         :max-shape-strides [16 1]})
+                         :max-shape-strides [16 1]}))
 
+(deftest leading-bcast-2
   (compare-reader-impls (dims/dimensions [2 4 4]
                                          :strides [16 4 1]
                                          :max-shape [4 4 4])
@@ -93,6 +91,18 @@
                          :max-shape-strides [16 4 1]}))
 
 
+(deftest offsets2
+  (compare-reader-impls (dims/dimensions [(int 4) 4]
+                                         :strides [4 1]
+                                         :offsets [1 1]
+                                         :max-shape [4 4])
+                        {:shape [4 4]
+	                 :strides [4 1]
+	                 :offsets [1 1]
+	                 :max-shape [4 4]
+	                 :max-shape-strides [4 1]}))
+
+
 (comment
   (do
     (println "Dimension indexing system reader timings")
@@ -100,12 +110,9 @@
                                      :strides [8192 4 1])
           ^LongReader base-dims-reader (dims/get-elem-dims-global->local base-dims)
 
-          {:keys [constructor-args]
-           :as ast-data} (gtol/dims->global->local-transformation
-                          base-dims)
-          ^LongReader default-reader (apply gtol/elem-idx->addr-fn constructor-args)
-          ^LongReader ast-reader ((gtol/get-or-create-reader-fn ast-data)
-                                  constructor-args)
+          reduced-dims (dims-analytics/reduce-dimensionality base-dims)
+          ^LongReader default-reader (gtol/elem-idx->addr-fn reduced-dims)
+          ^LongReader ast-reader (gtol/get-or-create-reader reduced-dims)
           n-elems (.lsize base-dims-reader)
           read-all-fn (fn [^LongReader rdr]
                         (dotimes [idx n-elems]
@@ -125,13 +132,9 @@
     (let [base-dims (dims/dimensions [256 256 [3 2 1 0]]
                                      :strides [8192 4 1])
           ^LongReader base-dims-reader (dims/get-elem-dims-global->local base-dims)
-
-          {:keys [constructor-args]
-           :as ast-data} (gtol/dims->global->local-transformation
-                          base-dims)
-          ^LongReader default-reader (apply gtol/elem-idx->addr-fn constructor-args)
-          ^LongReader ast-reader ((gtol/get-or-create-reader-fn ast-data)
-                                  constructor-args)
+          reduced-dims (dims-analytics/reduce-dimensionality base-dims)
+          ^LongReader default-reader (gtol/elem-idx->addr-fn reduced-dims)
+          ^LongReader ast-reader (gtol/get-or-create-reader reduced-dims)
           n-elems (.lsize base-dims-reader)
           read-all-fn (fn [^LongReader rdr]
                         (dotimes [idx n-elems]

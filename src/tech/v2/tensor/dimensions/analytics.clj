@@ -2,7 +2,8 @@
   (:require [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.functional :as dtype-fn]
-            [primitive-math :as pmath]))
+            [primitive-math :as pmath])
+  (:import [tech.v2.datatype LongReader]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -135,11 +136,12 @@
                 (long-array offsets))))
 
 
-(defn- shape-entry->number-or-reader
+(defn- shape-entry->long-or-reader
+  "Shapes contain either long objects or readers at this point."
   [shape-entry]
   (cond
     (number? shape-entry)
-    shape-entry
+    (long shape-entry)
     (shape/classified-sequence? shape-entry)
     (shape/classified-sequence->reader shape-entry)
     :else
@@ -163,7 +165,7 @@
      {:shape (object-array (map #(if (== 1 (count %))
                                    (->
                                     (aget shape (long (first %)))
-                                    (shape-entry->number-or-reader))
+                                    (shape-entry->long-or-reader))
                                    (apply * (map (fn [idx]
                                                    (aget shape (long idx)))
                                                  %)))
@@ -181,3 +183,23 @@
       :max-shape-strides (shape-ary->strides max-shape)}))
   ([{:keys [shape strides offsets max-shape] :as dims}]
    (reduce-dimensionality dims (any-offsets? dims))))
+
+
+(defn are-dims-bcast?
+  "Fast version of broadcasting check for when we know the types
+  the types of shapes and max-shape"
+  [reduced-dims]
+  (let [^objects shape (:shape reduced-dims)
+        ^longs max-shape (:max-shape reduced-dims)
+        n-elems (alength shape)]
+    (loop [idx 0
+           bcast? false]
+      (if (and (< idx n-elems)
+               (not bcast?))
+        (let [shape-entry (aget shape idx)
+              shape-ecount (if (number? shape-entry)
+                             (long shape-entry)
+                             (.lsize ^LongReader shape-entry))]
+          (recur (pmath/inc idx)
+                 (not (pmath/== shape-ecount (aget max-shape idx)))))
+        bcast?))))

@@ -13,9 +13,8 @@
 
 
 (defn compare-reader-impls
-  [base-dims expected-reduced-shape]
-  (let [base-dims-reader (dims/get-elem-dims-global->local base-dims)
-        reduced-dims (dims-analytics/reduce-dimensionality base-dims)
+  [base-dims expected-reduced-shape correct-addrs]
+  (let [reduced-dims (dims-analytics/reduce-dimensionality base-dims)
         default-reader (gtol/elem-idx->addr-fn reduced-dims)
         ast-reader (gtol/get-or-create-reader reduced-dims)
         reduced-dims-ast (gtol/global->local-ast reduced-dims)]
@@ -23,8 +22,8 @@
            (->> reduced-dims
                 (map (fn [[k v]] [k (vec v)]))
                 (into {}))))
-    (is (dtype-fn/equals base-dims-reader default-reader))
-    (is (dtype-fn/equals default-reader ast-reader)
+    (is (dtype-fn/equals correct-addrs default-reader))
+    (is (dtype-fn/equals correct-addrs ast-reader)
         (with-out-str (pp/pprint (:ast reduced-dims-ast))))))
 
 
@@ -35,7 +34,9 @@
                          :strides [32 1]
                          :offsets []
                          :max-shape [2 16]
-                         :max-shape-strides [16 1]}))
+                         :max-shape-strides [16 1]}
+                        [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 32 33 34
+                         35 36 37 38 39 40 41 42 43 44 45 46 47]))
 
 
 (deftest strided-image-reverse-rgb-test
@@ -45,7 +46,9 @@
                            :strides [32 4 1]
                            :offsets []
                            :max-shape [2 4 4]
-                           :max-shape-strides [16 4 1]}))
+                           :max-shape-strides [16 4 1]}
+                          [3 2 1 0 7 6 5 4 11 10 9 8 15 14 13 12 35 34
+                           33 32 39 38 37 36 43 42 41 40 47 46 45 44]))
 
 
 (deftest strided-image-reverse-rgb--most-sig-dim-test
@@ -55,7 +58,9 @@
                          :strides [32 1]
                          :offsets []
                          :max-shape [2 16]
-                         :max-shape-strides [16 1]}))
+                         :max-shape-strides [16 1]}
+                        [32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47
+                         0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]))
 
 ;;TODO - check broadcasting on leading dimension
 (deftest leading-bcast-1
@@ -66,7 +71,11 @@
                          :strides [32 1]
                          :offsets []
                          :max-shape [4 16]
-                         :max-shape-strides [16 1]}))
+                         :max-shape-strides [16 1]}
+                        [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 32 33 34
+                         35 36 37 38 39 40 41 42 43 44 45 46 47 0 1 2 3
+                         4 5 6 7 8 9 10 11 12 13 14 15 32 33 34 35 36 37
+                         38 39 40 41 42 43 44 45 46 47]))
 
 (deftest leading-bcast-2
   (compare-reader-impls (dims/dimensions [2 4 4]
@@ -76,7 +85,11 @@
                          :strides [1]
                          :offsets []
                          :max-shape [64]
-                         :max-shape-strides [1]}))
+                         :max-shape-strides [1]}
+                        [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
+                         20 21 22 23 24 25 26 27 28 29 30 31 0 1 2 3 4 5 6
+                         7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+                         25 26 27 28 29 30 31]))
 
 
 (deftest offsets
@@ -88,7 +101,11 @@
                          :strides [32 4 1],
                          :offsets [0 0 1],
                          :max-shape [4 4 4],
-                         :max-shape-strides [16 4 1]}))
+                         :max-shape-strides [16 4 1]}
+                        [1 2 3 0 5 6 7 4 9 10 11 8 13 14 15 12 33 34
+                         35 32 37 38 39 36 41 42 43 40 45 46 47 44 1
+                         2 3 0 5 6 7 4 9 10 11 8 13 14 15 12 33 34 35
+                         32 37 38 39 36 41 42 43 40 45 46 47 44]))
 
 
 (deftest offsets2
@@ -100,7 +117,8 @@
 	                 :strides [4 1]
 	                 :offsets [1 1]
 	                 :max-shape [4 4]
-	                 :max-shape-strides [4 1]}))
+	                 :max-shape-strides [4 1]}
+                        [5 6 7 4 9 10 11 8 13 14 15 12 1 2 3 0]))
 
 
 (comment

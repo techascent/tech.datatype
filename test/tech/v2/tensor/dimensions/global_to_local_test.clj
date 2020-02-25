@@ -1,6 +1,7 @@
 (ns tech.v2.tensor.dimensions.global-to-local-test
   (:require [tech.v2.tensor.dimensions :as dims]
             [tech.v2.tensor.dimensions.global-to-local :as gtol]
+            [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.datatype.functional :as dtype-fn]
             [clojure.test :refer [deftest is]]
             [criterium.core :as crit])
@@ -14,16 +15,17 @@
   (let [base-dims (dims/dimensions [2 4 4]
                                    :strides [32 4 1])
         base-dims-reader (dims/->global->local base-dims)
-        reduced-dims (gtol/reduce-dimensionality base-dims)
+        reduced-dims (dims-analytics/reduce-dimensionality base-dims)
         {:keys [constructor-args]
          :as ast-data} (gtol/dims->global->local-transformation
                         base-dims)
-        default-reader (apply gtol/elem-idx->addr-fn constructor-args)
+        default-reader (gtol/elem-idx->addr-fn reduced-dims)
         ast-reader ((gtol/get-or-create-reader-fn ast-data) constructor-args)]
     (is (= {:shape [2 16]
-	     :strides [32 1]
-	     :offsets [0 0]
-            :max-shape [2 16]}
+            :strides [32 1]
+            :offsets []
+            :max-shape [2 16]
+            :max-shape-strides [16 1]}
            (->> reduced-dims
                 (map (fn [[k v]] [k (vec v)]))
                 (into {}))))
@@ -35,16 +37,18 @@
   (let [base-dims (dims/dimensions [2 4 [3 2 1 0]]
                                    :strides [32 4 1])
         base-dims-reader (dims/->global->local base-dims)
-        reduced-dims (gtol/reduce-dimensionality base-dims)
+        reduced-dims (dims-analytics/reduce-dimensionality base-dims)
+        _ (println reduced-dims)
         {:keys [constructor-args]
          :as ast-data} (gtol/dims->global->local-transformation
                         base-dims)
-        default-reader (apply gtol/elem-idx->addr-fn constructor-args)
+        default-reader (gtol/elem-idx->addr-fn reduced-dims)
         ast-reader ((gtol/get-or-create-reader-fn ast-data) constructor-args)]
     (is (= {:shape [2 4 [3 2 1 0]]
             :strides [32 4 1]
-            :offsets [0 0 0]
-            :max-shape [2 4 4]}
+            :offsets []
+            :max-shape [2 4 4]
+            :max-shape-strides [16 4 1]}
            (->> reduced-dims
                 (map (fn [[k v]] [k (vec v)]))
                 (into {}))))
@@ -52,6 +56,26 @@
     (is (dtype-fn/equals default-reader ast-reader))))
 
 
+(deftest strided-image-reverse-rgb--most-sig-dim-test
+  (let [base-dims (dims/dimensions [[1 0] 4 4]
+                                   :strides [32 4 1])
+        base-dims-reader (dims/->global->local base-dims)
+        reduced-dims (dims-analytics/reduce-dimensionality base-dims)
+        {:keys [constructor-args]
+         :as ast-data} (gtol/dims->global->local-transformation
+                        base-dims)
+        default-reader (gtol/elem-idx->addr-fn reduced-dims)
+        ast-reader ((gtol/get-or-create-reader-fn ast-data) constructor-args)]
+    (is (= {:shape [[1 0] 16]
+	   :strides [32 1]
+	   :offsets []
+	   :max-shape [2 16]
+	   :max-shape-strides [16 1]}
+           (->> reduced-dims
+                (map (fn [[k v]] [k (vec v)]))
+                (into {}))))
+    (is (dtype-fn/equals base-dims-reader default-reader))
+    (is (dtype-fn/equals default-reader ast-reader))))
 ;;TODO - check broadcasting on leading dimension
 
 

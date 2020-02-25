@@ -1,10 +1,11 @@
 (ns tech.v2.tensor.tensor-copy
   (:require [tech.v2.tensor.impl :as tens-impl]
             [tech.v2.tensor.dimensions :as dims]
+            [tech.v2.tensor.dimensions.global-to-local :as gtol]
+            [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.fast-copy :as fast-copy]
-            [tech.v2.tensor.dimensions.global-to-local :as gtol]
             [tech.parallel.for :refer [parallel-for serial-for]])
   (:import [tech.v2.datatype LongReader]))
 
@@ -15,10 +16,10 @@
 
 (defn setup-dims-bit-blit
   [src-dims dst-dims]
-  (let [src-offsets? (gtol/any-offsets? src-dims)
-        dst-offsets? (gtol/any-offsets? dst-dims)
-        src-dims (gtol/reduce-dimensionality src-dims src-offsets?)
-        dst-dims (gtol/reduce-dimensionality dst-dims dst-offsets?)
+  (let [src-offsets? (dims-analytics/any-offsets? src-dims)
+        dst-offsets? (dims-analytics/any-offsets? dst-dims)
+        src-dims (dims-analytics/reduce-dimensionality src-dims src-offsets?)
+        dst-dims (dims-analytics/reduce-dimensionality dst-dims dst-offsets?)
         ^objects src-shape (:shape src-dims)
         ^longs src-strides (:strides src-dims)
         ^longs src-max-shape (:max-shape src-dims)
@@ -87,7 +88,7 @@
                n-blocks (long (:n-blocks dims-data))
                ^LongReader src-offset-reader (:src-offset-reader dims-data)
                ^LongReader dst-offset-reader (:dst-offset-reader dims-data)]
-           (if (>= block-size 512)
+           (when (>= block-size 512)
              (do
                (parallel-for
                 idx
@@ -95,8 +96,10 @@
                 (let [offset (* idx block-size)
                       src-offset (.read src-offset-reader offset)
                       dst-offset (.read dst-offset-reader offset)]
-                  (fast-copy/copy! (dtype-proto/sub-buffer dst-nio dst-offset block-size)
-                                   (dtype-proto/sub-buffer src-nio src-offset block-size))))
+                  (fast-copy/copy! (dtype-proto/sub-buffer dst-nio dst-offset
+                                                           block-size)
+                                   (dtype-proto/sub-buffer src-nio src-offset
+                                                           block-size))))
                :ok)))))))
   ([src dst]
    (bit-blit! src dst {})))

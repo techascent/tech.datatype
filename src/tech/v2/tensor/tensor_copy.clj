@@ -70,39 +70,51 @@
          ;;to avoid giving you those if
          src-buffer (tens-impl/tensor->buffer src)
          dst-buffer (tens-impl/tensor->buffer dst)
+         src-buf-type (dtype/buffer-type src-buffer)
+         dst-buf-type (dtype/buffer-type dst-buffer)
          src-nio (dtype/as-nio-buffer src-buffer)
-         dst-nio (dtype/as-nio-buffer dst-buffer)
-         src-nio-dtype (dtype/get-datatype src-nio)
-         dst-nio-dtype (dtype/get-datatype dst-nio)
-         ;;Base buffer types have to match
-         datatypes-match? (and (= src-nio-dtype dst-nio-dtype)
-                               ;;Tensor datatype have to match if not unchecked
-                               (or unchecked?
-                                   (and (= src-dtype
-                                           dst-dtype))))]
-     (when datatypes-match?
-       (when-let [dims-data (setup-dims-bit-blit
-                             (tens-impl/tensor->dimensions src)
-                             (tens-impl/tensor->dimensions dst))]
-         (let [block-size (long (:block-size dims-data))
-               n-blocks (long (:n-blocks dims-data))
-               ^LongReader src-offset-reader (:src-offset-reader dims-data)
-               ^LongReader dst-offset-reader (:dst-offset-reader dims-data)]
-           (when (>= block-size 512)
-             (do
-               (parallel-for
-                idx
-                n-blocks
-                (let [offset (* idx block-size)
-                      src-offset (.read src-offset-reader offset)
-                      dst-offset (.read dst-offset-reader offset)]
-                  (fast-copy/copy! (dtype-proto/sub-buffer dst-nio dst-offset
-                                                           block-size)
-                                   (dtype-proto/sub-buffer src-nio src-offset
-                                                           block-size))))
-               :ok)))))))
+         dst-nio (dtype/as-nio-buffer dst-buffer)]
+     (when (and (= :dense src-buf-type)
+                (= :dense dst-buf-type)
+                src-nio
+                dst-nio
+                (or unchecked?
+                    (= src-dtype
+                       dst-dtype)))
+       (let [src-nio-dtype (dtype/get-datatype src-nio)
+             dst-nio-dtype (dtype/get-datatype dst-nio)]
+         (when (= src-nio-dtype dst-nio-dtype)
+           (when-let [dims-data (setup-dims-bit-blit
+                                 (tens-impl/tensor->dimensions src)
+                                 (tens-impl/tensor->dimensions dst))]
+             (let [block-size (long (:block-size dims-data))
+                   n-blocks (long (:n-blocks dims-data))
+                   ^LongReader src-offset-reader (:src-offset-reader dims-data)
+                   ^LongReader dst-offset-reader (:dst-offset-reader dims-data)]
+               (when (>= block-size 512)
+                 (do
+                   (parallel-for
+                    idx
+                    n-blocks
+                    (let [offset (* idx block-size)
+                          src-offset (.read src-offset-reader offset)
+                          dst-offset (.read dst-offset-reader offset)]
+                      (fast-copy/copy! (dtype-proto/sub-buffer dst-nio dst-offset
+                                                               block-size)
+                                       (dtype-proto/sub-buffer src-nio src-offset
+                                                               block-size))))
+                   :ok)))))))))
   ([src dst]
    (bit-blit! src dst {})))
+
+
+(defmethod dtype-proto/copy! [:tensor :tensor]
+  [dst src options]
+  (when-not (= :ok (bit-blit! src dst options))
+    (dtype-proto/copy! (tens-impl/tensor->base-buffer-type dst)
+                       (tens-impl/tensor->base-buffer-type src)
+                       options))
+  dst)
 
 
 

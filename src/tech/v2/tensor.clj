@@ -6,7 +6,9 @@
             ;;Ensure printing things works.
             [tech.v2.tensor.pprint]
             [tech.v2.datatype.functional.impl :as func-impl]
-            [tech.v2.datatype.binary-op :as binary-op]))
+            [tech.v2.datatype.binary-op :as binary-op]
+            ;;registers a highly optimized copy function
+            [tech.v2.tensor.tensor-copy]))
 
 
 (func-impl/export-symbols tech.v2.tensor.impl

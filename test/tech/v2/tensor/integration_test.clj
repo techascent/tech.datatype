@@ -9,6 +9,10 @@
             [clojure.test :refer :all]))
 
 
+(set! *unchecked-math* :warn-on-boxed)
+(set! *warn-on-reflection* true)
+
+
 (deftest tensor->array-and-back
   (let [test-tens (dtt/->tensor (partition 3 (range 9)))]
     (doseq [row (dtt/rows test-tens)]

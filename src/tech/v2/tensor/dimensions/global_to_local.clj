@@ -118,7 +118,6 @@
         n-dims (alength shape)
         n-elems (pmath/* (aget max-shape-strides 0)
                          (aget max-shape 0))]
-    (println "offsets" (vec offsets))
     (if offsets
       (reify LongReader
         (lsize [rdr] n-elems)
@@ -127,7 +126,7 @@
                  result 0]
             (if (< dim n-dims)
               (let [shape-val (aget shape dim)
-                    offset (aget offsets idx)
+                    offset (aget offsets dim)
                     idx (pmath//
                          (pmath/+ idx offset)
                          (aget max-shape-strides dim))
@@ -550,31 +549,47 @@
         max-shape-strides (dims-analytics/shape-ary->strides max-shape)
         n-dims (alength max-shape-strides)
         n-dims-dec (dec n-dims)
-        n-dims-dec-1 (dec n-dims-dec)
-        n-dims-dec-2 (dec n-dims-dec-1)
+        n-dims-dec-1 (max 0 (dec n-dims-dec))
+        n-dims-dec-2 (max 0 (dec n-dims-dec-1))
         elemwise-reader (dims->global->local-reader dims)
-        n-elems (.lsize elemwise-reader)]
+        n-elems (.lsize elemwise-reader)
+
+        ;;Bounds checking
+        max-height (aget max-shape n-dims-dec-2)
+        max-row (aget max-shape n-dims-dec-1)
+        max-col (aget max-shape n-dims-dec)
+
+        ;;xyz->global row major index calculation
+        max-shape-strides-dec-1 (aget max-shape n-dims-dec-1)
+        max-shape-strides-dec-2 (aget max-shape n-dims-dec-2)]
     (reify LongTensorReader
       (lsize [rdr] n-elems)
       (read [rdr idx] (.read elemwise-reader idx))
       (read2d[this row col]
-        (let [max-row (aget max-shape n-dims-dec-1)
-              max-col (aget max-shape n-dims-dec)]
-          (when (or (pmath/>= col max-col)
-                    (pmath/>= row max-row))
-            (throw (Exception. (format "read2d - Arguments out of range - %s > %s"
-                                       [max-row max-col] [row col]))))
-          (when-not
-              (throw (Exception. (format "Row value %d out of range %d"
-                                         col (aget max-shape n-dims-dec-1)))))
+        (when (not= n-dims 2)
+          (throw (Exception. (format "Dimension error. Tensor is %d dimensional"
+                                     n-dims))))
+        (when (or (pmath/>= col max-col)
+                  (pmath/>= row max-row))
+          (throw (Exception. (format "read2d - One of arguments %s out of ranged %s"
+                                     [row col]
+                                     [max-row max-col]))))
 
-          (.read this (pmath/+ (pmath/* row (aget max-shape-strides
-                                                  n-dims-dec-1))
-                               col))))
+        (.read this (pmath/+ (pmath/* row max-shape-strides-dec-1)
+                             col)))
       (read3d [this height width chan]
+        (when (not= n-dims 3)
+          (throw (Exception. (format "Dimension error. Tensor is %d dimensional"
+                                     n-dims))))
+        (when (or (pmath/>= chan max-col)
+                  (pmath/>= width max-row)
+                  (pmath/>= height max-height))
+          (throw (Exception. (format "read3d - Arguments out of range - %s > %s"
+                                     [max-height max-row max-col]
+                                     [height width chan]))))
         (.read this (pmath/+
-                     (pmath/* height (aget max-shape-strides n-dims-dec-2))
-                     (pmath/* width (aget max-shape-strides n-dims-dec-1))
+                     (pmath/* height max-shape-strides-dec-2)
+                     (pmath/* width max-shape-strides-dec-1)
                      chan)))
       (tensorRead [this dims]
         (let [iter (.iterator dims)]

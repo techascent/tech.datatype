@@ -11,73 +11,86 @@
 (set! *unchecked-math* true)
 
 
-(deftest strided-image-test
-  (let [base-dims (dims/dimensions [2 4 4]
-                                   :strides [32 4 1])
-        base-dims-reader (dims/->global->local base-dims)
+(defn compare-reader-impls
+  [base-dims expected-reduced-shape]
+  (let [base-dims-reader (dims/get-elem-dims-global->local base-dims)
         reduced-dims (dims-analytics/reduce-dimensionality base-dims)
         {:keys [constructor-args]
          :as ast-data} (gtol/dims->global->local-transformation
                         base-dims)
         default-reader (gtol/elem-idx->addr-fn reduced-dims)
         ast-reader ((gtol/get-or-create-reader-fn ast-data) constructor-args)]
-    (is (= {:shape [2 16]
-            :strides [32 1]
-            :offsets []
-            :max-shape [2 16]
-            :max-shape-strides [16 1]}
+    (is (= expected-reduced-shape
            (->> reduced-dims
                 (map (fn [[k v]] [k (vec v)]))
                 (into {}))))
     (is (dtype-fn/equals base-dims-reader default-reader))
-    (is (dtype-fn/equals default-reader ast-reader))))
+    (is (dtype-fn/equals default-reader ast-reader))
+    {:base-dims-reader base-dims-reader
+     :default-reader default-reader
+     :ast-reader ast-reader}))
+
+
+(deftest strided-image-test
+  (compare-reader-impls (dims/dimensions [2 4 4]
+                                         :strides [32 4 1])
+                        {:shape [2 16]
+                         :strides [32 1]
+                         :offsets []
+                         :max-shape [2 16]
+                         :max-shape-strides [16 1]}))
 
 
 (deftest strided-image-reverse-rgb-test
-  (let [base-dims (dims/dimensions [2 4 [3 2 1 0]]
-                                   :strides [32 4 1])
-        base-dims-reader (dims/->global->local base-dims)
-        reduced-dims (dims-analytics/reduce-dimensionality base-dims)
-        _ (println reduced-dims)
-        {:keys [constructor-args]
-         :as ast-data} (gtol/dims->global->local-transformation
-                        base-dims)
-        default-reader (gtol/elem-idx->addr-fn reduced-dims)
-        ast-reader ((gtol/get-or-create-reader-fn ast-data) constructor-args)]
-    (is (= {:shape [2 4 [3 2 1 0]]
-            :strides [32 4 1]
-            :offsets []
-            :max-shape [2 4 4]
-            :max-shape-strides [16 4 1]}
-           (->> reduced-dims
-                (map (fn [[k v]] [k (vec v)]))
-                (into {}))))
-    (is (dtype-fn/equals base-dims-reader default-reader))
-    (is (dtype-fn/equals default-reader ast-reader))))
+    (compare-reader-impls (dims/dimensions [2 4 [3 2 1 0]]
+                                           :strides [32 4 1])
+                          {:shape [2 4 [3 2 1 0]]
+                           :strides [32 4 1]
+                           :offsets []
+                           :max-shape [2 4 4]
+                           :max-shape-strides [16 4 1]}))
 
 
 (deftest strided-image-reverse-rgb--most-sig-dim-test
-  (let [base-dims (dims/dimensions [[1 0] 4 4]
-                                   :strides [32 4 1])
-        base-dims-reader (dims/->global->local base-dims)
-        reduced-dims (dims-analytics/reduce-dimensionality base-dims)
-        {:keys [constructor-args]
-         :as ast-data} (gtol/dims->global->local-transformation
-                        base-dims)
-        default-reader (gtol/elem-idx->addr-fn reduced-dims)
-        ast-reader ((gtol/get-or-create-reader-fn ast-data) constructor-args)]
-    (is (= {:shape [[1 0] 16]
-	   :strides [32 1]
-	   :offsets []
-	   :max-shape [2 16]
-	   :max-shape-strides [16 1]}
-           (->> reduced-dims
-                (map (fn [[k v]] [k (vec v)]))
-                (into {}))))
-    (is (dtype-fn/equals base-dims-reader default-reader))
-    (is (dtype-fn/equals default-reader ast-reader))))
-;;TODO - check broadcasting on leading dimension
+  (compare-reader-impls (dims/dimensions [[1 0] 4 4]
+                                         :strides [32 4 1])
+                        {:shape [[1 0] 16]
+                         :strides [32 1]
+                         :offsets []
+                         :max-shape [2 16]
+                         :max-shape-strides [16 1]}))
 
+;;TODO - check broadcasting on leading dimension
+(deftest leading-bcast
+  (compare-reader-impls (dims/dimensions [2 4 4]
+                                         :strides [32 4 1]
+                                         :max-shape [4 4 4])
+                        {:shape [2 16]
+                         :strides [32 1]
+                         :offsets []
+                         :max-shape [4 16]
+                         :max-shape-strides [16 1]})
+
+  (compare-reader-impls (dims/dimensions [2 4 4]
+                                         :strides [16 4 1]
+                                         :max-shape [4 4 4])
+                        {:shape [32]
+                         :strides [1]
+                         :offsets []
+                         :max-shape [64]
+                         :max-shape-strides [1]}))
+
+
+(deftest offsets
+  (compare-reader-impls (dims/dimensions [2 4 4]
+                                         :strides [32 4 1]
+                                         :offsets [0 0 1]
+                                         :max-shape [4 4 4])
+                        {:shape [2 4 4],
+                         :strides [32 4 1],
+                         :offsets [0 0 1],
+                         :max-shape [4 4 4],
+                         :max-shape-strides [16 4 1]}))
 
 
 (comment

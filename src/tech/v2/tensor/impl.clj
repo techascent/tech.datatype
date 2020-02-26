@@ -743,8 +743,7 @@
                             (= container-type (dtype/container-type tens)))
                      (dtype/from-prototype (tensor->buffer tens)
                                            :datatype datatype
-                                           :shape (dtype/shape
-                                                   (tensor->buffer tens)))
+                                           :shape (dtype/shape tens))
                      (dtype/make-container (default-container-type container-type)
                                            datatype
                                            (dtype/ecount tens)))

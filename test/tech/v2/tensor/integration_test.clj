@@ -137,6 +137,16 @@
            [0 1 2]))))
 
 
+(deftest simple-clone
+  (let [src-tens (dtt/reshape (range (* 1 128 256)) [1 128 256])
+        sel-tens (dtt/select src-tens 0 (range 3) (range 3))]
+    (is (= [[0 1 2] [256 257 258] [512 513 514]]
+           (-> sel-tens
+               ;; set the type to something we can test against
+               (dtt/clone :datatype :int32)
+               (dtt/->jvm))))))
+
+
 (deftest ensure-tensor
   (is (dfn/equals (dtt/ensure-tensor [[0.0 0.2 0.4 0.6 0.8 1.0]
                                       [0.0 0.2 0.4 0.6 0.8 1.0]])

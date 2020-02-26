@@ -22,7 +22,6 @@
               [tech.parallel.for :as parallel-for]
               [tech.jna :as jna])
     (:import [tech.v2.datatype
-              IndexingSystem$Forward
               IndexingSystem$Backward
               ObjectReader]
              [com.sun.jna Pointer]
@@ -56,7 +55,7 @@
 
 (defn- dimensions->index-reader
   [dimensions]
-  ^IndexingSystem$Forward (dims/->global->local dimensions))
+  ^LongReader (dims/->global->local dimensions))
 
 
 (defn- dimensions->index-inverter
@@ -744,8 +743,7 @@
                             (= container-type (dtype/container-type tens)))
                      (dtype/from-prototype (tensor->buffer tens)
                                            :datatype datatype
-                                           :shape (dtype/shape
-                                                   (tensor->buffer tens)))
+                                           :shape (dtype/shape tens))
                      (dtype/make-container (default-container-type container-type)
                                            datatype
                                            (dtype/ecount tens)))
@@ -1119,54 +1117,6 @@
 (defmethod dtype-proto/copy! [:sparse :tensor]
   [dst src options]
   (dtype-proto/copy! (tensor->base-buffer-type dst) src options)
-  dst)
-
-
-(defmethod dtype-proto/copy! [:tensor :tensor]
-  [dst src options]
-  (let [dst-contig (dims/contiguous-shape
-                    (tensor->dimensions dst))
-        src-contig (dims/contiguous-shape
-                    (tensor->dimensions src))
-        min-contig (if (< (count dst-contig)
-                          (count src-contig))
-                     dst-contig
-                     src-contig)
-        num-contig (count min-contig)
-        min-contiguous (long (long (or (first min-contig)
-                                       0)))
-        n-dims (count (dtype/shape dst))
-        num-contig-dims (min (count dst-contig)
-                             (count src-contig))
-        buftypes [(dtype/buffer-type (tensor->buffer dst))
-                  (dtype/buffer-type (tensor->buffer src))]]
-    (if (and (> min-contiguous 1000)
-             (= [:dense :dense]
-                buftypes)
-             (= (dtype/get-datatype src)
-                (dtype/get-datatype dst))
-             (= (dtype/shape dst)
-                (dtype/shape src))
-             (not= num-contig n-dims)
-             (dtype-proto/->buffer-backing-store (tensor->buffer dst))
-             (dtype-proto/->buffer-backing-store (tensor->buffer src)))
-      (let [slice-arg (- (count (dtype/shape dst))
-                         num-contig-dims)
-            ^List dst-list (slice dst slice-arg)
-            ^List src-list (slice src slice-arg)
-            n-items (count dst-list)]
-        ;;Convert to reader to skip the tensor copy pathway and
-        ;;hopefully just hit fastpath.
-        (parallel-for/parallel-for
-         idx
-         n-items
-         (dtype-proto/copy!
-          (dtype-proto/->reader (.get dst-list idx) {})
-          (dtype-proto/->reader (.get src-list idx) {})
-          options)))
-      (dtype-proto/copy! (tensor->base-buffer-type dst)
-                         (tensor->base-buffer-type src)
-                         options)))
   dst)
 
 

@@ -51,7 +51,8 @@
          (getDatatype [reader#] ~intermediate-datatype)
          (lsize [reader#] n-elems#)
          (read [reader# idx#]
-           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype buffer# idx# buffer-pos#)
+           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype buffer#
+                                  idx# buffer-pos#)
                (unchecked-full-cast ~buffer-datatype ~intermediate-datatype
                                     ~reader-datatype)))
          dtype-proto/PToBackingStore
@@ -142,15 +143,24 @@
                   :as access-map}
                  (->> casting/buffer-access-table
                       (filter (comp casting/numeric-types :intermediate-datatype)))]
-             [access-map `(fn [src-item# buffer# unchecked?#]
-                            (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
-                                                                             buffer#)
-                                  buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
-                              (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
-                                                       ~buffer-datatype
-                                                       ~(typecast/datatype->buffer-type buffer-datatype)
-                                                       unchecked?# src-item#
-                                                       buffer# buffer-pos#)))])]
+             [access-map
+              `(fn [src-item# buffer# unchecked?#]
+                 (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
+                                                                  buffer#)
+                       buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
+                   (if (== 0 buffer-pos#)
+                     (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
+                                              ~buffer-datatype
+                                              ~(typecast/datatype->buffer-type
+                                                buffer-datatype)
+                                              unchecked?# src-item#
+                                              buffer# 0)
+                     (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
+                                              ~buffer-datatype
+                                              ~(typecast/datatype->buffer-type
+                                                buffer-datatype)
+                                              unchecked?# src-item#
+                                              buffer# buffer-pos#))))])]
         (into {})))
 
 

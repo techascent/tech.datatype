@@ -113,9 +113,6 @@
 
      dtype-proto/PPrototype
      {:from-prototype (fn [src-ary# datatype# shape#]
-                        (when-not (= 1 (count shape#))
-                          (throw (ex-info "Base containers cannot have complex shapes"
-                                          {:shape shape#})))
                         (make-list datatype# (base/shape->ecount shape#)))}
 
 

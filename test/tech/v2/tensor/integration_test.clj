@@ -1,10 +1,16 @@
 (ns tech.v2.tensor.integration-test
   (:require [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.functional :as dfn]
             [tech.v2.tensor :as dtt]
             [tech.v2.tensor.typecast :as dtt-typecast]
+            [tech.v2.tensor.tensor-copy :as tc]
             [clojure.test :refer :all]))
+
+
+(set! *unchecked-math* :warn-on-boxed)
+(set! *warn-on-reflection* true)
 
 
 (deftest tensor->array-and-back
@@ -131,6 +137,16 @@
            [0 1 2]))))
 
 
+(deftest simple-clone
+  (let [src-tens (dtt/reshape (range (* 1 128 256)) [1 128 256])
+        sel-tens (dtt/select src-tens 0 (range 3) (range 3))]
+    (is (= [[0 1 2] [256 257 258] [512 513 514]]
+           (-> sel-tens
+               ;; set the type to something we can test against
+               (dtt/clone :datatype :int32)
+               (dtt/->jvm))))))
+
+
 (deftest ensure-tensor
   (is (dfn/equals (dtt/ensure-tensor [[0.0 0.2 0.4 0.6 0.8 1.0]
                                       [0.0 0.2 0.4 0.6 0.8 1.0]])
@@ -146,10 +162,45 @@
                                   :all))
         dst-tens (dtt/new-tensor [256 256 4] :datatype :uint8)]
     ;; (dtype/copy! src-tens dst-tens)
-    (time (dotimes [iter 100]
-            (dtype/copy! src-tens dst-tens)))
+    (dtype/copy! src-tens dst-tens)
     :ok
     ))
+
+
+(defn strided-tensor-bit-blit-test
+  []
+  (let [src-tens (-> (dtt/new-tensor [2048 2048 4] :datatype :uint8)
+                     (dtt/select (range 256 (* 2 256))
+                                 (range 256 (* 2 256))
+                                 :all))
+        dst-tens (dtt/new-tensor [256 256 4] :datatype :uint8)]
+    ;; (dtype/copy! src-tens dst-tens)
+    (assert (= :ok (tc/bit-blit! src-tens dst-tens {})))))
+
+
+(defn read-time-test
+  []
+  (let [src-tens (dtt/new-tensor [2048 2048 4] :datatype :uint8)]
+    (let [src-tens (dtt/select src-tens (range 256 (* 2 256))
+                               (range 256 (* 2 256))
+                               :all)
+          reader (typecast/datatype->reader :int8 src-tens true)
+          r-ecount (dtype/ecount reader)]
+      (dotimes [idx r-ecount]
+        (.read reader idx)))))
+
+
+(defn typed-buffer-read-time-test
+  []
+  (let [n-elems (* 256 256 4)
+        buffer (dtype/make-container :typed-buffer :uint8 n-elems)]
+    (time
+     (dotimes [iter 1000]
+       (let [reader (typecast/datatype->reader :int8 buffer true)
+             r-ecount (dtype/ecount reader)]
+         (dotimes [idx r-ecount]
+           (.read reader idx)))))))
+
 
 (comment
   (strided-tensor-copy-time-test)

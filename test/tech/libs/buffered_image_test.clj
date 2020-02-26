@@ -11,8 +11,8 @@
   (let [test-img (bufimg/new-image 4 4 :int-rgb)
         test-writer (tens-typecast/datatype->tensor-writer
                      :uint8
-                     (bufimg/as-ubyte-tensor test-img))
-        _ (.write3d test-writer 2 2 2 255)]
+                     (bufimg/as-ubyte-tensor test-img))]
+    (.write3d test-writer 2 2 2 255)
     (is (= [0 0 0 0 0 0 0 0 0 0 16711680 0 0 0 0 0]
            (dtype/->vector test-img)))))
 

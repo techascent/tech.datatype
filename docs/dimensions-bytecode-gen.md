@@ -215,7 +215,7 @@ test much more thoroughly as well as producing objects that are tailored
 specifically to the addressing scheme presented by the reduced dimensions.
 
 
-### Step 1 - An AST
+### Step 1 - An Astract Syntax Tree
 
 
 Our first step, once producing correct reduced dimensions is to produce an AST that

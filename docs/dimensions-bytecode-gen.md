@@ -287,17 +287,16 @@ user> test-ast
 ```
 
 The AST above efficiently implements the global->local address space translation
-for exactly those reduced dims.  The properties the AST needs to be recreated are
-represented completely by the signature and thus we can cache compiled AST
-representations by signature.
+for exactly those reduced dims.  The AST can be completely recreated given only
+the signature thus we can cache compiled AST representations by signature.
 
-Keeping in mind that the least rapidly changing dimension, height is dimension
+Keeping in mind that the least rapidly changing dimension, `height`, is dimension
 0 and that width and channels have been collapsed into a single contiguous
 dimension we can write that AST in a slightly more human readable way:
 
 ```clojure
 '(+ (* (quot idx max-shape-stride-height) stride-height)
-    (rem idx shape-width-chan))
+    (rem idx shape-widthchan))
 ```
 
 

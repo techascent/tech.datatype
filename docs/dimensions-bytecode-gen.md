@@ -394,7 +394,7 @@ You can find some example java files compiled to readable AST definitions in our
 
 It is important to note that the class derives from
 [LongReader](../java/tech/v2/datatype/LongReader.java).  This is an interface that
-defines a [:int64->:int64] randomly addressable translation which is appropriate
+defines an [:int64->:int64] randomly addressable translation which is appropriate
 for our global->local address space pathway.
 
 

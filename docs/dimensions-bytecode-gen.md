@@ -304,12 +304,14 @@ dimension we can write that AST in a slightly more human readable way:
 ### Step 2 - A Class Definition
 
 
-Now we start interacting with the excellent [insn](https://github.com/jgpc42/insn)
-library.  `insn` is great because it wraps the bytecode generation facilities of
-[ow2.asm](https://asm.ow2.io/) in a functional, declarative abstraction *and stops
-right there* :-).  This is a signficiant foundational piece to building a great
-bytecode compiler as you can visually inspect the bytecode before you sent it to
-the actual compiler and you can build the bytecode in various functional ways.
+Now we start interacting with Justin Conklin's excellent
+[insn](https://github.com/jgpc42/insn) library.  `insn` is great because it wraps
+the bytecode generation facilities of [ow2.asm](https://asm.ow2.io/) in a
+functional, declarative abstraction *and stops right there* :-).  This is a
+signficant foundational piece to building a great bytecode compiler because it is
+easy to visually inspect the bytecode before it is sent to the actual compiler.  It
+is also easy to build as it is simply an abstraction built out of some of the
+fundamental types of Clojure: vectors, maps, keywords, and integers.
 
 
 The [bytecode](https://en.wikipedia.org/wiki/Java_bytecode_instruction_listings)
@@ -601,7 +603,7 @@ abstract transformations of your problem space!  In this way we can take advanta
 of the highest levels of abstraction possible but not pay a large performance cost
 for using these abstractions which, put colloquially, just makes our programming
 lives better and more dynamic.  For an example of a really well done system for
-producing late-bound but extremely fast code let us direct you to CMUCL's [compiler
+producing late-bound but extremely fast code allow us direct you to CMUCL's [compiler
 stack](https://www.cons.org/cmucl/doc/different-compilers.html) :-).
 
 Enjoy!

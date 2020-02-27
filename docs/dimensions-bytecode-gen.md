@@ -215,7 +215,7 @@ test much more thoroughly as well as producing objects that are tailored
 specifically to the addressing scheme presented by the reduced dimensions.
 
 
-### Step 1 - An Astract Syntax Tree
+### Step 1 - An Abstract Syntax Tree
 
 
 Our first step, once producing correct reduced dimensions is to produce an AST that
@@ -286,7 +286,7 @@ user> test-ast
   (rem idx {:ary-name :shape, :dim-idx 1}))}
 ```
 
-The ast above efficiently implements the global->local address space translation
+The AST above efficiently implements the global->local address space translation
 for exactly those reduced dims.  The properties the AST needs to be recreated are
 represented completely by the signature and thus we can cache compiled AST
 representations by signature.

@@ -132,10 +132,10 @@ user> (+ (* 1 (nth (:strides *1) 0))
 
 ## Reduced Dimensions
 
-`tech.v2.tensor.dimensions.analysis` presents ways to gain insight into some properties
-of the dimension objects.  One operation it presents is the ability to reduce the
-dimensionality of an object while keeping the row-major iteration order of
-global->local indexes the same.
+[tech.v2.tensor.dimensions.analysis.clj](../src/tech/v2/tensor/dimensions/analysis.clj)
+presents ways to gain insight into some properties of the dimension objects.
+One operation it presents is the ability to reduce the dimensionality of an object 
+while keeping the row-major iteration order of global->local indexes the same.
 
 
 Reducing dimensions allows us to define a minimum number of operations required to

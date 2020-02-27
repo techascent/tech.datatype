@@ -428,8 +428,8 @@ user> (map idx-obj (range 1020 1030))
 
 This is great!  We now have an implementation of LongReader compiled specifically
 to the equation it takes to transform those dimensions (and that have the same
-properties) as efficiently as possible into the local address space.  This type
-translation also works if do something like reverse the indexes of the first
+properties) as efficiently as possible into the local address space.  This overall
+type translation also works if we do something like reverse the indexes of the first
 dimension:
 
 ```clojure
@@ -598,12 +598,13 @@ to easily compare what we are doing to what javac will do and thus bootstrap a n
 problem without having to be experts in the JVM bytecode.
 
 
-We hope this encourages you to explore what is possible with extremely late-bound,
-abstract transformations of your problem space!  In this way we can take advantage
-of the highest levels of abstraction possible but not pay a large performance cost
-for using these abstractions which, put colloquially, just makes our programming
-lives better and more dynamic.  For an example of a really well done system for
-producing late-bound but extremely fast code allow us direct you to CMUCL's [compiler
-stack](https://www.cons.org/cmucl/doc/different-compilers.html) :-).
+We hope this encourages you to explore what is possible with extremely late-bound
+and abstract transformations of your problem space!  In this way we can take
+advantage of the highest levels of abstraction possible but not pay a large
+performance cost for using these abstractions which, put colloquially, just makes
+our programming lives better and more dynamic.  For an example of a really well done
+system for producing late-bound but extremely fast code allow us direct you to
+CMUCL's [compiler stack](https://www.cons.org/cmucl/doc/different-compilers.html)
+:-).
 
 Enjoy!

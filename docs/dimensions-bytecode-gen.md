@@ -10,7 +10,7 @@ like images and datasets and volumes and 3d objects so let's take a moment and t
 about the abstractions required efficiently present this interface.
 
 
-Dimension objects describe the N-dimensional addressing scheme and perform the
+`dimensions` objects describe the N-dimensional addressing scheme and perform the
 translation from our n-dimensional 'global' space into our 1-dimensional 'local'
 dense address spaces.  In other works they describe how to randomly addressed data
 buffers using an n-dimensional addressing scheme that supports numpy style in-place
@@ -51,7 +51,7 @@ user> (dtt/broadcast tens [2 6])
 ```
 
 These operations are all supported by the
-[dimension](../src/tech/v2/tensor/dimensions.clj) object.  This object is responsible
+[dimensions](../src/tech/v2/tensor/dimensions.clj) object.  This object is responsible
 for, given an address in the (possibly n dimensional) input space, produce an address
 in the linearly-addressed 'local' space of the buffer.
 

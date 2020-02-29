@@ -9,17 +9,16 @@
   any index buffers then it is considered an indirect shape."
   (:require [tech.v2.datatype :as dtype]
             [tech.v2.tensor.dimensions.select :as dims-select]
+            [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.tensor.dimensions.global-to-local :as gtol]
             [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.readers.const :as const-reader]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
-            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.argsort :as argsort]
             [tech.v2.tensor.utils
              :refer [when-not-error reversev]

@@ -10,6 +10,7 @@
 
 (set! *warn-on-reflection* true)
 
+
 (defprotocol PDatatype
   (get-datatype [item]))
 
@@ -297,6 +298,19 @@ Note that this makes no mention of indianness; buffers are in the format of the 
       retval)))
 
 
+(defprotocol PRangeConvertible
+  (convertible-to-range? [item])
+  (->range [item datatype]))
+
+
+(defprotocol PRange
+  (combine-range [lhs rhs])
+  (range-start [item])
+  (range-increment [item])
+  (range-min [item])
+  (range-max [item]))
+
+
 (declare make-container)
 
 
@@ -380,7 +394,10 @@ Note that this makes no mention of indianness; buffers are in the format of the 
   (convertible-to-binary-op? [item] false)
 
   PToBinaryBooleanOp
-  (convertible-to-binary-boolean-op? [item] false))
+  (convertible-to-binary-boolean-op? [item] false)
+
+  PRangeConvertible
+  (convertible-to-range? [item] false))
 
 
 (defmulti make-container

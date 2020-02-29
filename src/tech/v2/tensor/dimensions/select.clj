@@ -3,7 +3,8 @@
   (:require [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.tensor.utils :refer [when-not-error]]
             [tech.v2.datatype :as dtype]
-            [tech.v2.datatype.typecast :as typecast])
+            [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.monotonic-range :as dtype-range])
   (:import [tech.v2.datatype LongReader]))
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -12,89 +13,56 @@
 
 (defn- expand-dimension
   [dim]
-  (cond (number? dim)
-        {:type :+
-         :min-item 0
-         :max-item (- (long dim) 1)}
-        (shape/classified-sequence? dim) dim
-        (or (sequential? dim)
-            (dtype/reader? dim)) (shape/classify-sequence dim)
-        :else
-        (throw (ex-info "Failed to recognize dimension type"
-                        {:dimension dim}))))
+  (cond
+    (number? dim)
+    (dtype-range/make-range (long dim))
+    (shape/classified-sequence? dim)
+    dim
+    :else
+    (dtype/->reader dim :int64)))
 
 
 (defn- expand-select-arg
   [select-arg]
   (cond
     (number? select-arg)
-    (shape/classify-sequence select-arg)
-
+    (assoc (dtype-range/make-range (long select-arg))
+           :scalar? true)
     (= :all select-arg)
     select-arg
     (= :lla select-arg)
     select-arg
 
     (shape/classified-sequence? select-arg)
-    select-arg
-
-    (instance? clojure.lang.LongRange select-arg)
     (shape/classify-sequence select-arg)
 
     (dtype/reader? select-arg)
-    select-arg
-
+    (dtype/->reader select-arg :int64)
 
     ;;else attempt to make it a reader
     :else
-    (vec select-arg)))
+    (-> (vec select-arg)
+        (dtype/->reader :int64))))
 
 
 (defn apply-select-arg-to-dimension
   "Given a dimension and select argument, create a new dimension with
 the selection applied."
   [dim select-arg]
-  ;;Dim is now a map or a reader
-  (let [dim (expand-dimension dim)
+  ;;Dim is now a reader
+  (let [^LongReader dim (expand-dimension dim)
         ;;Select arg is now a map, a keyword, or a reader
-        select-arg (expand-select-arg select-arg)
-        dim-type (cond (shape/classified-sequence? dim)  :classified-sequence
-                       (dtype/reader? dim) :reader
-                       :else (throw (Exception. "Unrecognized dim type.")))
-        select-type (cond (shape/classified-sequence? select-arg) :classified-sequence
-                          (dtype/reader? select-arg) :reader
-                          (keyword? select-arg) :keyword
-                          :else (throw (Exception. "Unrecognized select type.")))]
-    (case select-type
-      :reader
-      (case dim-type
-        :reader (dtype/indexed-reader select-arg dim {:datatype :int64})
-        :classified-sequence
-        (if (and (= :+ (:type dim))
-                 (= 0 (long (:min-item dim))))
-          select-arg
-          (dtype/indexed-reader select-arg
-                                (shape/classified-sequence->reader dim)
-                                {:datatype :int64})))
-      :keyword
-      (case select-arg
-        :all dim
-        :lla (case dim-type
-               :reader (let [src-reader (typecast/datatype->reader :int64 dim)
-                             n-elems (.lsize src-reader)]
-                         (reify LongReader
-                           (lsize [rdr] n-elems)
-                           (read [rdr idx]
-                             (- n-elems idx 1))))
-               :classified-sequence (shape/reverse-classified-sequence dim)))
-      :classified-sequence
-      (case dim-type
-        :reader
-        (dtype/indexed-reader (shape/classified-sequence->reader select-arg)
-                              dim
-                              {:datatype :int64})
-        :classified-sequence
-        (shape/combine-classified-sequences dim select-arg)))))
+        select-arg (expand-select-arg select-arg)]
+    (cond
+      (= select-arg :all)
+      dim
+      (= select-arg :lla)
+      (shape/combine-classified-sequences dim
+                                          (dtype-range/reverse-range (.lsize dim)))
+      (dtype/reader? select-arg)
+      (shape/combine-classified-sequences dim select-arg)
+      :else
+      (throw (Exception. "Unrecognized select argument")))))
 
 
 (defn dimensions->simpified-dimensions
@@ -110,7 +78,7 @@ Returns:
          (fn [[dimension-seq strides dim-offsets offset]
               [dimension stride dim-offset]]
            (let [dim-type (if (map? dimension)
-                            :classified-sequence
+                            :classified-seqence
                             :reader)
                  [dim-type dimension]
                  (if (and (= :reader dim-type)

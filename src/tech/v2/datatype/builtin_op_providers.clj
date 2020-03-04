@@ -11,7 +11,13 @@
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.operation-provider :as op-provider]
             [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.argsort :refer [argsort]]))
+            [tech.v2.datatype.argsort :refer [argsort]])
+  (:import [it.unimi.dsi.fastutil.longs LongArrayList]
+           [java.util HashMap]))
+
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
 
 
 (defn- get-op
@@ -101,8 +107,8 @@
   [lhs-dtype rhs-dtype]
   (if (= lhs-dtype rhs-dtype)
     lhs-dtype
-    (let [lhs-rank (datatype-width lhs-dtype)
-          rhs-rank (datatype-width rhs-dtype)]
+    (let [lhs-rank (long (datatype-width lhs-dtype))
+          rhs-rank (long (datatype-width rhs-dtype))]
       (cond
         (< lhs-rank rhs-rank)
         lhs-dtype
@@ -290,37 +296,42 @@
                                               reader-dtype
                                               (assoc options :datatype reader-dtype))
                          (unary-op/unary-map partition-fn)
-                         (typecast/datatype->reader :object))]
+                         (typecast/datatype->reader :object))
+        list-fn (reify
+                  java.util.function.Function
+                  (apply [this _key]
+                    (LongArrayList.)))
+        bimap-fn (reify
+                   java.util.function.BiFunction
+                   (apply [this lhs rhs]
+                     (.addAll ^LongArrayList lhs
+                              ^LongArrayList rhs)
+                     lhs))]
     (parallel-for/indexed-pmap
      (fn [idx n-indexes]
        (let [idx (long idx)
-             last-index (clojure.core/+ idx (long n-indexes))]
-         (loop [idx idx
-                retval (transient {})]
+             last-index (clojure.core/+ idx (long n-indexes))
+             retval (HashMap.)]
+         (loop [idx idx]
            (if (clojure.core/< idx last-index)
              (let [partition-key (.read item-reader idx)
-                   ^java.util.List existing-list
-                   (get retval partition-key
-                        (base/make-container :list :int64 0))]
+                   ^LongArrayList existing-list
+                   (.computeIfAbsent retval partition-key list-fn)]
                (.add existing-list idx)
-               (recur (inc idx)
-                      (assoc! retval partition-key existing-list)))
-             (persistent! retval)))))
+               (recur (inc idx)))))
+         retval))
      n-elems
-     (partial reduce (fn [last-map next-map]
-                       (->>
-                        (reduce
-                         (fn [last-map [map-key map-list]]
-                           (let [last-list (get last-map map-key
-                                                (base/make-container :list
-                                                                           :int64 0))]
-                             (base/insert-block! last-list
-                                                       (base/ecount last-list)
-                                                       map-list)
-                             (assoc! last-map map-key last-list)))
-                         (transient last-map)
-                         next-map)
-                        (persistent!)))))))
+     (partial reduce (fn [^HashMap last-map ^HashMap next-map]
+                       (let [entry-set (.entrySet next-map)
+                             set-iter (.iterator entry-set)]
+                         (loop [continue? (.hasNext set-iter)]
+                           (when continue?
+                             (let [^java.util.Map$Entry entry (.next set-iter)]
+                               (.merge last-map
+                                       (.getKey entry)
+                                       (.getValue entry) bimap-fn)
+                               (recur (.hasNext set-iter))))))
+                       last-map)))))
 
 
 (def-unary-op

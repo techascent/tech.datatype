@@ -310,7 +310,9 @@ functional, declarative abstraction *and stops right there* :-).  This is a
 signficant foundational piece to building a great bytecode compiler because it is
 easy to visually inspect the bytecode before it is sent to the actual compiler.  It
 is also easy to build as it is simply an abstraction built out of some of the
-fundamental types of Clojure: vectors, maps, keywords, and integers.
+fundamental types of Clojure.  This is really nice because this AST gets automatic
+visualization via the REPL thus solving one of the problems with AST's - namely that 
+they can be opaque and difficult to debug.
 
 
 The [bytecode](https://en.wikipedia.org/wiki/Java_bytecode_instruction_listings)

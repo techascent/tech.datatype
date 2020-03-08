@@ -334,9 +334,10 @@
   (convertible-to-reader? [item] true)
   (->reader [item options]
     (let [^List item item
-          item-count (.size item)]
+          item-count (.size item)
+          item-dtype (get-datatype item)]
       (-> (reify ObjectReader
-            (getDatatype [_] :object)
+            (getDatatype [_] item-dtype)
             (lsize [_] item-count)
             (read [_ idx]
               (.get item idx)))
@@ -360,6 +361,21 @@
 (extend-reader-type FloatReader)
 (extend-reader-type DoubleReader)
 (extend-reader-type BooleanReader)
+
+
+(extend-protocol dtype-proto/PToWriter
+  RandomAccess
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (let [^List item item
+          item-count (.size item)
+          item-dtype (get-datatype item)]
+      (-> (reify ObjectWriter
+            (getDatatype [_] item-dtype)
+            (lsize [_] item-count)
+            (write [_ idx val]
+              (.set item idx val)))
+          (dtype-proto/->writer options)))))
 
 
 (extend-type Object

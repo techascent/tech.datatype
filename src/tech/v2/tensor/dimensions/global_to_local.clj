@@ -587,10 +587,13 @@
 (comment
   (require '[tech.v2.tensor.dimensions :as dims])
 
-  (def test-ast
-    (dims->global->local-transformation
-     (dims/dimensions [256 [3 2 1 0]]
-                      :strides [4 1])))
+  ;;Image dimensions when you have a 2048x2048 image and you
+  ;;want to crop a 256x256 sub-image out of it.
+  (def src-dims (dims/dimensions [256 256 4]
+                                 :strides [8192 4 1]))
+  (def reduced-dims (dims-analytics/reduce-dimensionality src-dims))
+
+  (def test-ast (global->local-ast reduced-dims))
 
   (def class-def (gen-ast-class-def test-ast))
 
@@ -598,6 +601,10 @@
 
   (def first-constructor (first (.getDeclaredConstructors class-obj)))
 
-  (def idx-obj (.newInstance first-constructor (:constructor-args test-ast)))
+  (def idx-obj (.newInstance first-constructor (reduced-dims->constructor-args
+                                                reduced-dims)))
+
+  ;;Due to striding, there is a discontinuity at index 1024
+  (def indexes (map idx-obj (range 1020 1030)))
 
   )

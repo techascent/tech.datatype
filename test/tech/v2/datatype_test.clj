@@ -3,12 +3,14 @@
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.casting :as casting]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.primitive]
             [tech.v2.datatype.list]
             [tech.parallel.for :as parallel-for]
             [tech.v2.datatype.functional :as dfn]
             [tech.v2.datatype.boolean-op :as boolean-op])
-  (:import [java.nio FloatBuffer]))
+  (:import [java.nio FloatBuffer]
+           [java.util ArrayList]))
 
 
 (deftest raw-copy-with-mutable-lazy-sequence
@@ -422,3 +424,13 @@
 
 (deftest binary-search
   (is (= [true 5] (dfn/binary-search (range 10) 5))))
+
+
+(deftest array-list-writers
+  (is (not (nil? (dtype/->writer (ArrayList.)))))
+  (let [new-list (ArrayList. ^java.util.Collection (repeat 10 nil))
+        writer (typecast/datatype->writer :float32 new-list)]
+    (.write writer 0 10)
+    (.write writer 5 99)
+    (is (= [10.0 nil nil nil nil 99.0 nil nil nil nil]
+           (vec new-list)))))

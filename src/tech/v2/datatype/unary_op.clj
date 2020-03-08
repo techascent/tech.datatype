@@ -48,7 +48,11 @@
                       (if (= (casting/safe-flatten un-dtype#)
                              ~datatype)
                         item#
-                        (throw (ex-info "Unary operators cannot marshal" {}))
+                        (throw (ex-info
+                                (format "Unary operators cannot marshal: %s, %s -> %s"
+                                        options#
+                                        (dtype-proto/get-datatype item#)
+                                        ~datatype) {}))
                         ;; (let [marshal-fn# (get marshalling-unary-op-table
                         ;;                        [~datatype (casting/safe-flatten
                         ;;                                    un-dtype#)])]

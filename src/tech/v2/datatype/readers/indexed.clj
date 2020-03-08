@@ -8,10 +8,11 @@
   [datatype]
   `(fn [indexes# values# unchecked?#]
      (let [idx-reader# (typecast/datatype->reader :int32 indexes# true)
+           values-dtype# (dtype-proto/get-datatype values#)
            values# (typecast/datatype->reader ~datatype values# unchecked?#)
            n-elems# (.lsize idx-reader#)]
        (reify ~(typecast/datatype->reader-type datatype)
-         (getDatatype [item#] ~datatype)
+         (getDatatype [item#] values-dtype#)
          (lsize [item#] (.lsize idx-reader#))
          (read [item# idx#]
            (.read values# (.read idx-reader# idx#)))
@@ -25,8 +26,9 @@
 
 
 (defn make-indexed-reader
-  ([indexes values {:keys [datatype unchecked?]}]
+  ([indexes values {:keys [datatype unchecked?] :as options}]
    (let [datatype (or datatype (dtype-proto/get-datatype values))
+         values (dtype-proto/->reader values (assoc options :datatype datatype))
          reader-fn (get indexed-reader-creators (casting/safe-flatten datatype))]
      (reader-fn indexes values unchecked?)))
   ([indexes values]

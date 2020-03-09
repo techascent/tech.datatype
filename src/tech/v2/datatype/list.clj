@@ -416,28 +416,67 @@
    (make-list datatype elem-count-or-seq {})))
 
 
+(defn ensure-dtype-matches
+  [item dtype]
+  (when item
+    (when-not (= (dtype-proto/get-datatype item)
+                 dtype)
+      (throw (Exception. (format "List datatype (%s) and value datatype (%s) do not match"
+                                 dtype (dtype-proto/get-datatype item)))))))
+
+
+(defn make-typed-list
+  ([src-list dst-dtype]
+   (if (= (dtype-proto/get-datatype src-list) dst-dtype)
+     src-list
+     (let [^List src-list src-list]
+       (reify
+         dtype-proto/PDatatype
+         (get-datatype [this] dst-dtype)
+         List
+         (size [this] (.size src-list))
+         (add [this val]
+           (.add this (.size src-list) val)
+           true)
+         (add [this idx val]
+           (ensure-dtype-matches val dst-dtype)
+           (.add src-list val))
+         (get [this idx] (.get src-list idx))
+         (set [this idx val]
+           (ensure-dtype-matches val dst-dtype)
+           (.set src-list idx val))
+         (subList [this start-offset end-offset]
+           (make-typed-list (.subList src-list start-offset end-offset)
+                            dst-dtype))
+         RandomAccess
+         Iterable
+         (iterator [this]
+           (.iterator src-list)))))))
+
+
 (defmethod dtype-proto/make-container :list
   [_ datatype elem-count-or-seq options]
-  (let [host-datatype? (= datatype (casting/host-flatten datatype))
-        typed-buf (if (or (number? elem-count-or-seq)
-                          (instance? RandomAccess elem-count-or-seq)
-                          (and (not (instance? Iterable elem-count-or-seq))
-                               (dtype-proto/convertible-to-reader? elem-count-or-seq)))
-                    (-> (typed-buffer/make-typed-buffer
-                         datatype
-                         elem-count-or-seq options)
-                        (#(.backing-store ^TypedBuffer %))
-                        dtype-proto/->list-backing-store)
-                    (let [list-data (make-list (casting/host-flatten datatype) 0)]
-                      (-> (dtype-proto/->iterable elem-count-or-seq
-                                                  {:datatype
-                                                   (casting/safe-flatten datatype)
-                                                   :unchecked?
-                                                   (:unchecked? options)})
-                          (iterable-to-list/iterable->list
-                           list-data
-                           {:unchecked? true
-                            :datatype datatype}))))]
-    (if host-datatype?
-      typed-buf
-      (typed-buffer/set-datatype typed-buf datatype))))
+  (let [src-buf (if (or (number? elem-count-or-seq)
+                        (instance? RandomAccess elem-count-or-seq)
+                        (and (not (instance? Iterable elem-count-or-seq))
+                             (dtype-proto/convertible-to-reader? elem-count-or-seq)))
+                  (-> (typed-buffer/make-typed-buffer
+                       datatype
+                       elem-count-or-seq options)
+                      (#(.backing-store ^TypedBuffer %))
+                      dtype-proto/->list-backing-store)
+                  (let [list-data (make-list (casting/host-flatten datatype) 0)]
+                    (-> (dtype-proto/->iterable elem-count-or-seq
+                                                {:datatype
+                                                 (casting/safe-flatten datatype)
+                                                 :unchecked?
+                                                 (:unchecked? options)})
+                        (iterable-to-list/iterable->list
+                         list-data
+                         {:unchecked? true
+                          :datatype datatype}))))]
+    (if (= (dtype-proto/get-datatype src-buf) datatype)
+      src-buf
+      (if (casting/numeric-type? datatype)
+        (typed-buffer/set-datatype src-buf datatype)
+        (make-typed-list src-buf datatype)))))

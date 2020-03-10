@@ -26,8 +26,16 @@
   ([] nil)
   ([item] item))
 
+(defn- construct-keyword
+  ([] nil)
+  ([item] (keyword item)))
+
+(defn- construct-symbol
+  ([] nil)
+  ([item] (symbol item)))
+
 
 (add-object-datatype Object :object construct-object)
 (add-object-datatype String :string str)
-(add-object-datatype Keyword :keyword keyword)
-(add-object-datatype Symbol :symbol symbol)
+(add-object-datatype Keyword :keyword construct-keyword)
+(add-object-datatype Symbol :symbol construct-symbol)

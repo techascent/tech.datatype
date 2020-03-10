@@ -479,6 +479,11 @@ Calls clojure.core.matrix/ecount."
     (sparse-proto/->sparse item)))
 
 
+(defn writer?
+  [item]
+  (when item
+    (dtype-proto/convertible-to-writer? item)))
+
 (defn ->writer
   "Create a writer of a specific type."
   [src-item & [datatype options]]

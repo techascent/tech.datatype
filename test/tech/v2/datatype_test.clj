@@ -440,3 +440,7 @@
   (is (= [1 2 3] (dtype/clone [1 2 3])))
   (is (= (vec (range 10))
          (vec (dtype/clone (range 10))))))
+
+
+(deftest persistent-vectors-are-not-writers
+  (is (not (dtype/writer? [1 2 3]))))

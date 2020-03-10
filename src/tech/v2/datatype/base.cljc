@@ -13,6 +13,7 @@
             ByteReader ShortReader IntReader LongReader
             FloatReader DoubleReader BooleanReader
             ObjectMutable]
+           [clojure.lang IPersistentVector]
            [java.util List RandomAccess]))
 
 
@@ -365,7 +366,8 @@
 
 (extend-protocol dtype-proto/PToWriter
   RandomAccess
-  (convertible-to-writer? [item] true)
+  (convertible-to-writer? [item]
+    (not (instance? IPersistentVector item)))
   (->writer [item options]
     (let [^List item item
           item-count (.size item)

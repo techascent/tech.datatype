@@ -420,3 +420,11 @@
       [0 0]
       [(get-value item-reader 0)
        (get-value item-reader (- item-ecount 1))])))
+
+
+(extend-type clojure.lang.PersistentVector
+  dtype-proto/PClone
+  (clone [item datatype]
+    (when-not (= datatype :object)
+      (throw (Exception. "Cannot clone persistent vectors to no object store")))
+    item))

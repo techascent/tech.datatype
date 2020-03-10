@@ -434,3 +434,9 @@
     (.write writer 5 99)
     (is (= [10.0 nil nil nil nil 99.0 nil nil nil nil]
            (vec new-list)))))
+
+
+(deftest clone-for-ranges-persistent-vectors
+  (is (= [1 2 3] (dtype/clone [1 2 3])))
+  (is (= (vec (range 10))
+         (vec (dtype/clone (range 10))))))

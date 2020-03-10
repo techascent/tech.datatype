@@ -427,6 +427,8 @@
 
 (defn make-typed-list
   ([src-list dst-dtype]
+   (when-not dst-dtype
+     (throw (Exception. "Cannot make a typed list with no datatype")))
    (if (= (dtype-proto/get-datatype src-list) dst-dtype)
      src-list
      (let [^List src-list src-list]

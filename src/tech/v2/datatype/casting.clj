@@ -226,6 +226,8 @@
       :float32 `(unchecked-float (float32-cast ~val))
       :float64 `(unchecked-double (float64-cast ~val))
       :boolean `(datatype->boolean ~src-dtype ~val)
+      :keyword `(keyword ~val)
+      :symbol `(symbol ~val)
       :object `~val)))
 
 

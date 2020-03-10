@@ -10,7 +10,7 @@
             FloatWriter FloatReader FloatMutable FloatReaderIter FloatIter
             DoubleWriter DoubleReader DoubleMutable DoubleReaderIter DoubleIter
             BooleanWriter BooleanReader BooleanMutable BooleanReaderIter BooleanIter]
-           [java.util Iterator]
+           [java.util Iterator List]
            [com.sun.jna Pointer]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
@@ -501,7 +501,7 @@
 (defn double-list-cast ^DoubleList [item] item)
 (defn boolean-list-cast ^BooleanList [item] item)
 (defn char-list-cast ^CharList [item] item)
-(defn object-list-cast ^ObjectList [item] item)
+(defn object-list-cast ^List [item] item)
 
 
 (defmacro datatype->list-cast-fn
@@ -515,7 +515,7 @@
     :float64 `(double-list-cast ~item)
     :boolean `(boolean-list-cast ~item)
     :char `(char-list-cast ~item)
-    :object `(object-list-cast ~item)))
+    `(object-list-cast ~item)))
 
 
 (defn datatype->list-type

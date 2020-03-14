@@ -1,17 +1,11 @@
 (ns tech.v2.datatype.functional
   (:require [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.binary-op :as binary-op]
-            [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.functional.impl :as impl]
             [tech.v2.datatype.operation-provider :as op-provider]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.sparse.reader :as sparse-reader]
-            [tech.v2.datatype.statistics]
-            [tech.v2.datatype.rolling]
-            [tech.parallel.for :as parallel-for]
             ;;For functional to work right a lot of the requires in datatype
             ;;need to be working
             [tech.v2.datatype.array]
@@ -155,6 +149,11 @@
 (defn arggroup-by
   [partition-fn item-reader & [options]]
   (op-provider/unary-op :arggroup-by item-reader [partition-fn options]))
+
+
+(defn arggroup-by-int
+  [partition-fn item-reader & [options]]
+  (op-provider/unary-op :arggroup-by-int item-reader [partition-fn options]))
 
 
 (defn- do-argpartition-by

@@ -13,6 +13,7 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.argsort :refer [argsort]])
   (:import [it.unimi.dsi.fastutil.longs LongArrayList]
+           [it.unimi.dsi.fastutil.ints IntArrayList]
            [java.util HashMap]))
 
 
@@ -286,58 +287,90 @@
                                  lhs
                                  rhs)))
 
+(defmacro dtype->list-constructor
+  [datatype]
+  (case datatype
+    :int32 `(IntArrayList.)
+    :int64 `(LongArrayList.)))
+
+
+(defmacro arggroup-by-impl
+  [datatype partition-fn item-reader options]
+  `(let [item-reader# ~item-reader
+         n-elems# (base/ecount item-reader#)
+         reader-dtype# (clojure.core/or (:datatype ~options) :object)
+         item-reader# (->> (base/->reader item-reader# reader-dtype#)
+                           (unary-op/unary-map ~partition-fn)
+                           (typecast/datatype->reader :object))
+        list-fn# (reify
+                   java.util.function.Function
+                   (apply [this# _key#] (dtype->list-constructor ~datatype)))
+        bimap-fn# (reify
+                    java.util.function.BiFunction
+                    (apply [this lhs# rhs#]
+                      (.addAll (typecast/datatype->list-cast-fn ~datatype lhs#)
+                               (typecast/datatype->list-cast-fn ~datatype rhs#))
+                     lhs#))]
+    (parallel-for/indexed-map-reduce
+     n-elems#
+     (fn [offset# n-indexes#]
+       (let [offset# (long offset#)
+             n-indexes# (long n-indexes#)
+             retval# (HashMap.)]
+         (dotimes [idx# n-indexes#]
+           (let [idx# (clojure.core/unchecked-add idx# offset#)
+                 partition-key# (.read item-reader# idx#)
+                 existing-list# (->> (.computeIfAbsent retval# partition-key# list-fn#)
+                                     (typecast/datatype->list-cast-fn ~datatype))]
+             (.add existing-list# (casting/datatype->unchecked-cast-fn
+                                   :int64
+                                   ~datatype idx#))))
+         retval#))
+     (partial reduce (fn [^HashMap last-map# ^HashMap next-map#]
+                       (let [entry-set# (.entrySet next-map#)]
+                         (parallel-for/doiter
+                          entry# entry-set#
+                          (let [^java.util.Map$Entry entry# entry#]
+                            (.merge last-map#
+                                    (.getKey entry#)
+                                    (.getValue entry#)
+                                    bimap-fn#))))
+                       last-map#)))))
+
+(defn arggroup-by-int
+  "Returns a map of partitioned-items->indexes.  Index generation is parallelized.
+  Specifically optimized for integer indexes."
+  [partition-fn item-reader options]
+  (arggroup-by-impl :int32 partition-fn item-reader options))
+
 
 (defn arggroup-by
   "Returns a map of partitioned-items->indexes.  Index generation is parallelized."
   [partition-fn item-reader & [options]]
-  (let [n-elems (base/ecount item-reader)
-        reader-dtype (clojure.core/or (:datatype options) :object)
-        item-reader (->> (base/->reader item-reader
-                                              reader-dtype
-                                              (assoc options :datatype reader-dtype))
-                         (unary-op/unary-map partition-fn)
-                         (typecast/datatype->reader :object))
-        list-fn (reify
-                  java.util.function.Function
-                  (apply [this _key]
-                    (LongArrayList.)))
-        bimap-fn (reify
-                   java.util.function.BiFunction
-                   (apply [this lhs rhs]
-                     (.addAll ^LongArrayList lhs
-                              ^LongArrayList rhs)
-                     lhs))]
-    (parallel-for/indexed-pmap
-     (fn [idx n-indexes]
-       (let [idx (long idx)
-             last-index (clojure.core/+ idx (long n-indexes))
-             retval (HashMap.)]
-         (loop [idx idx]
-           (if (clojure.core/< idx last-index)
-             (let [partition-key (.read item-reader idx)
-                   ^LongArrayList existing-list
-                   (.computeIfAbsent retval partition-key list-fn)]
-               (.add existing-list idx)
-               (recur (inc idx)))))
-         retval))
-     n-elems
-     (partial reduce (fn [^HashMap last-map ^HashMap next-map]
-                       (let [entry-set (.entrySet next-map)
-                             set-iter (.iterator entry-set)]
-                         (loop [continue? (.hasNext set-iter)]
-                           (when continue?
-                             (let [^java.util.Map$Entry entry (.next set-iter)]
-                               (.merge last-map
-                                       (.getKey entry)
-                                       (.getValue entry) bimap-fn)
-                               (recur (.hasNext set-iter))))))
-                       last-map)))))
+  (arggroup-by-impl :int64 partition-fn item-reader options))
+
+
+(def-unary-op
+ [[:iterable :arggroup-by-int]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-int partition-fn
+                   ;;Algorithm only works on readers; not on iterables
+                   (dtype-proto/make-container
+                    :java-array
+                    (base/get-datatype item-reader)
+                    item-reader) options))
+
+(def-unary-op
+ [[:reader :arggroup-by-int]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-int partition-fn item-reader options))
 
 
 (def-unary-op
  [[:iterable :arggroup-by]]
   [op item-reader [partition-fn options]]
   (arggroup-by partition-fn
+               ;;Algorithm only works on readers; not on iterables
                (dtype-proto/make-container
                 :java-array
                 (base/get-datatype item-reader)

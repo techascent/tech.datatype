@@ -5,6 +5,7 @@
             ObjectIter IteratorObjectIter
             ObjectReader ObjectWriter]
            [com.sun.jna Pointer]
+           [java.lang.reflect Method]
            [java.util List]))
 
 
@@ -288,6 +289,19 @@ Note that this makes no mention of indianness; buffers are in the format of the 
            (convertible-to-fastutil-list? item))))
 
 
+(defprotocol PBitmapSet
+  (set-and [lhs rhs])
+  (set-and-not [lhs rhs])
+  (set-or [lhs rhs])
+  (set-xor [lhs rhs])
+  (set-offset [item offset]
+    "Offset a set by an amount")
+  (set-add-range! [item start end])
+  (set-add-block! [item data])
+  (set-remove-range! [item start end])
+  (set-remove-block! [item data]))
+
+
 (defn as-base-type
   [item]
   (when-let [retval (or (as-nio-buffer item)
@@ -351,7 +365,19 @@ Note that this makes no mention of indianness; buffers are in the format of the 
       :else
       nil
       ))
-
+  PClone
+  (clone [item datatype]
+    (if (instance? java.lang.Cloneable item)
+      (do
+        (when-not (= datatype (get-datatype item))
+          (throw (Exception. "Generic objects cannot change types during clone.")))
+        (let [^Class item-cls (class item)
+              ^Method method
+              (.getMethod item-cls
+                          "clone"
+                          ^"[Ljava.lang.Class;" (into-array Class []))]
+          (.invoke method item (object-array 0))))
+      (throw (Exception. "Object is not cloneable."))))
   PToIterable
   (convertible-to-iterable? [item]
     (convertible-to-reader? item))

@@ -5,10 +5,11 @@
                                           :excludes [asm.ow2]}
         insn                             {:mvn/version "0.4.0"}
         it.unimi.dsi/fastutil            {:mvn/version "8.2.1"}
-        kixi/stats                       {:mvn/version "0.5.0"}
+        kixi/stats                       {:mvn/version "0.5.2"}
         org.apache.commons/commons-math3 {:mvn/version "3.6.1"}
         primitive-math                   {:mvn/version "0.1.6"}
-        camel-snake-kebab                {:mvn/version "0.4.0"}}
+        camel-snake-kebab                {:mvn/version "0.4.0"}
+        org.roaringbitmap/RoaringBitmap  {:mvn/version "0.8.13"}}
  :aliases
  {:test {:extra-deps
          {org.bytedeco.javacpp-presets/opencv-platform {:mvn/version "4.0.1-1.4.4"}

@@ -288,6 +288,19 @@ Note that this makes no mention of indianness; buffers are in the format of the 
            (convertible-to-fastutil-list? item))))
 
 
+(defprotocol PSetOps
+  (set-and [lhs rhs])
+  (set-and-not [lhs rhs])
+  (set-or [lhs rhs])
+  (set-xor [lhs rhs])
+  (offset-set [item offset]
+    "Offset a set by an amount")
+  (set-add-range! [item start end])
+  (set-add-block! [item data])
+  (set-remove-range! [item start end])
+  (set-remove-block! [item data]))
+
+
 (defn as-base-type
   [item]
   (when-let [retval (or (as-nio-buffer item)

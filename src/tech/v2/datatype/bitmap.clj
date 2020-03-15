@@ -2,7 +2,10 @@
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.clj-range :as clj-range])
+            [tech.v2.datatype.typed-buffer :as typed-buffer]
+            [tech.v2.datatype.clj-range :as clj-range]
+            [tech.v2.datatype.array]
+            [tech.v2.datatype.nio-buffer])
   (:import [it.unimi.dsi.fastutil.longs LongSet LongIterator]
            [org.roaringbitmap RoaringBitmap ImmutableBitmapDataProvider]
            [tech.v2.datatype SimpleLongSet LongReader LongBitmapIter]
@@ -44,20 +47,15 @@
                 (unchecked-int (+ start n-elems))))))))
 
 
-(defn ->bitmap
-  (^RoaringBitmap [item]
-   (cond
-     (instance? RoaringBitmap item)
-     item
-     (instance? LongRange item)
-     (long-range->bitmap item)
-     (nil? item)
-     (RoaringBitmap.)
-     :else
-     (doto (RoaringBitmap.)
-       (.add ^ints (ensure-int-array item)))))
-  (^RoaringBitmap []
-   (RoaringBitmap.)))
+(defn- construct-from-ints
+  ^RoaringBitmap [item]
+  (if-let [data (ensure-int-array item)]
+    (RoaringBitmap/bitmapOf data)
+    (throw (Exception. (format "Failed to construct roaring bitmap from item %s"
+                               item)))))
+
+
+(declare ->bitmap)
 
 
 (extend-type RoaringBitmap
@@ -65,9 +63,6 @@
   (get-datatype [bitmap] :uint32)
   dtype-proto/PCountable
   (ecount [bitmap] (.getLongCardinality bitmap))
-  dtype-proto/PToArray
-  (->sub-array [bitmap] nil)
-  (->array-copy [bitmap] (.toArray bitmap))
   dtype-proto/PToReader
   (convertible-to-reader? [bitmap] true)
   (->reader [bitmap options]
@@ -80,6 +75,14 @@
             Iterable
             (iterator [rdr] (LongBitmapIter. (.getIntIterator bitmap))))
           (dtype-proto/->reader options))))
+  dtype-proto/PClone
+  (clone [bitmap datatype]
+    (when-not (= datatype (dtype-base/get-datatype bitmap))
+      (throw (Exception. "Invalid datatype")))
+    (.clone bitmap))
+  dtype-proto/PToBitmap
+  (convertible-to-bitmap [item] true)
+  (as-roaring-bitmap [item] item)
   dtype-proto/PBitmapSet
   (set-and [lhs rhs] (RoaringBitmap/and lhs (->bitmap rhs)))
   (set-and-not [lhs rhs] (RoaringBitmap/andNot lhs (->bitmap rhs)))
@@ -98,3 +101,89 @@
   (set-remove-block! [bitmap data]
     (.remove bitmap ^ints (ensure-int-array data))
     bitmap))
+
+
+(defmethod print-method RoaringBitmap
+  [buf w]
+  (let [^java.io.Writer w w]
+    (.write w "#")
+    (.write w (.toString ^Object buf))))
+
+
+(defn bitmap->typed-buffer
+  [^RoaringBitmap bitmap]
+  (typed-buffer/set-datatype (.toArray bitmap) :uint32))
+
+
+(deftype BitmapSet [^RoaringBitmap bitmap]
+  SimpleLongSet
+  (getDatatype [item] :uin32)
+  (lsize [item] (.getLongCardinality bitmap))
+  (lcontains [item arg] (.contains bitmap (unchecked-int arg)))
+  (ladd [item arg] (.add bitmap (unchecked-int arg)) true)
+  (lremove [item arg] (.remove bitmap (unchecked-int arg)) true)
+  dtype-proto/PToReader
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
+    (dtype-proto/->reader bitmap options))
+  dtype-proto/PClone
+  (clone [item datatype]
+    (BitmapSet. (dtype-proto/clone bitmap datatype)))
+  dtype-proto/PToBitmap
+  (convertible-to-bitmap? [item] true)
+  (as-roaring-bitmap [item] bitmap)
+  Iterable
+  (iterator [item] (.iterator ^Iterable (dtype-proto/->reader bitmap {})))
+  dtype-proto/PBitmapSet
+  (set-and [lhs rhs] (BitmapSet. (dtype-proto/set-and bitmap rhs)))
+  (set-and-not [lhs rhs] (BitmapSet. (dtype-proto/set-and-not bitmap rhs)))
+  (set-or [lhs rhs] (BitmapSet. (dtype-proto/set-or bitmap rhs)))
+  (set-xor [lhs rhs] (BitmapSet. (dtype-proto/set-xor bitmap rhs)))
+  (set-offset [item offset] (BitmapSet. (dtype-proto/set-offset bitmap offset)))
+  (set-add-range! [item start end]
+    (dtype-proto/set-add-range! bitmap start end)
+    item)
+  (set-add-block! [item data]
+    (dtype-proto/set-add-block! item data)
+    item)
+  (set-remove-range! [item start end]
+    (dtype-proto/set-remove-range! bitmap start end)
+    item)
+  (set-remove-block! [item data]
+    (dtype-proto/set-remove-block! item data)
+    item))
+
+
+(defn ->bitmap
+  (^RoaringBitmap [item]
+   (cond
+     (dtype-proto/convertible-to-bitmap? item)
+     (dtype-proto/as-roaring-bitmap item)
+     (instance? LongRange item)
+     (long-range->bitmap item)
+     (nil? item)
+     (RoaringBitmap.)
+     :else
+     (if (= (dtype-base/get-datatype item) :uint32)
+       (if-let [ary-buf (when-let [nio-buf (dtype-proto/->buffer-backing-store item)]
+                          (dtype-proto/->sub-array nio-buf))]
+         (if (instance? (Class/forName "[I") (:java-array ary-buf))
+           (do
+             (doto (RoaringBitmap.)
+               (.addN ^ints (:java-array ary-buf)
+                      (int (:offset ary-buf))
+                      (int (:length ary-buf)))))
+           (construct-from-ints item))
+         (construct-from-ints item))
+       (construct-from-ints item))))
+  (^RoaringBitmap []
+   (RoaringBitmap.)))
+
+
+(defn ->unique-bitmap
+  (^RoaringBitmap [item]
+   (if (dtype-proto/convertible-to-bitmap? item)
+     (.clone ^RoaringBitmap (dtype-proto/as-roaring-bitmap item))
+     (->bitmap item)))
+  (^RoaringBitmap []
+   (RoaringBitmap.)))

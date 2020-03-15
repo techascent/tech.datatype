@@ -28,7 +28,8 @@
             [tech.v2.datatype.functional])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
            [java.util Iterator List RandomAccess]
-           [org.roaringbitmap RoaringBitmap])
+           [org.roaringbitmap RoaringBitmap]
+           [tech.v2.datatype.bitmap BitmapSet])
   (:refer-clojure :exclude [cast]))
 
 
@@ -505,7 +506,7 @@ Calls clojure.core.matrix/ecount."
                                 (or datatype (get-datatype src-item)))))
 
 
-(defn ->bitmap
+(defn ->bitmap-set
   "Create a bitmap capable of storing unsigned integers up to about 4 billion.
   Set operations are expected to be highly optimized.  Random reads potentially
   less so (although still not bad).
@@ -514,6 +515,17 @@ Calls clojure.core.matrix/ecount."
    (bitmap/->bitmap))
   ([item-seq]
    (bitmap/->bitmap item-seq)))
+
+
+(defn ->unique-bitmap-set
+  "Create a bitmap capable of storing unsigned integers up to about 4 billion.
+  Set operations are expected to be highly optimized.  Random reads potentially
+  less so (although still not bad).
+  Bitmaps are convertible to readers and the bitmap ops all apply to them."
+  ([]
+   (bitmap/->unique-bitmap))
+  ([item-seq]
+   (bitmap/->unique-bitmap item-seq)))
 
 
 ;; bitmap Set Operations
@@ -561,3 +573,16 @@ Calls clojure.core.matrix/ecount."
   "bitmap op"
   [item data]
   (dtype-proto/set-remove-block! item data))
+
+(defn bitmap->typed-buffer
+  [bitmap]
+  (bitmap/bitmap->typed-buffer bitmap))
+
+(defn bitmap->set
+  [bitmap]
+  (BitmapSet. bitmap))
+
+(defn as-roaring-bitmap
+  [item]
+  (when (dtype-proto/convertible-to-bitmap? item)
+    (dtype-proto/as-roaring-bitmap item)))

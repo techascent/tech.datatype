@@ -275,8 +275,8 @@
     item
     (dtype-proto/base-type-convertible? item)
     (TypedBuffer. (dtype-proto/get-datatype item)
-                   (or (dtype-proto/as-list item)
-                       (dtype-proto/as-nio-buffer item)))
+                   (or (dtype-proto/as-nio-buffer item)
+                       (dtype-proto/as-list item)))
     :else
     (throw (ex-info "Item is not convertible to typed buffer"
                     {:item-type (type item)}))))

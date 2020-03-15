@@ -289,6 +289,10 @@ Note that this makes no mention of indianness; buffers are in the format of the 
            (convertible-to-fastutil-list? item))))
 
 
+(defprotocol PToBitmap
+  (convertible-to-bitmap? [item])
+  (as-roaring-bitmap [item]))
+
 (defprotocol PBitmapSet
   (set-and [lhs rhs])
   (set-and-not [lhs rhs])
@@ -393,7 +397,10 @@ Note that this makes no mention of indianness; buffers are in the format of the 
   (convertible-to-binary-op? [item] false)
 
   PToBinaryBooleanOp
-  (convertible-to-binary-boolean-op? [item] false))
+  (convertible-to-binary-boolean-op? [item] false)
+
+  PToBitmap
+  (convertible-to-bitmap? [item] false))
 
 
 (defmulti make-container

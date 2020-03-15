@@ -13,6 +13,7 @@
             ByteReader ShortReader IntReader LongReader
             FloatReader DoubleReader BooleanReader
             ObjectMutable]
+           [java.lang.reflect Method]
            [clojure.lang IPersistentVector]
            [java.util List RandomAccess]))
 
@@ -411,8 +412,18 @@
 
   dtype-proto/PClone
   (clone [item datatype]
-    (copy! item (dtype-proto/from-prototype item datatype
-                                            (shape item)))))
+    (if (instance? java.lang.Cloneable item)
+      (do
+        (when-not (= datatype (get-datatype item))
+          (throw (Exception. "Generic objects cannot change types during clone.")))
+        (let [^Class item-cls (class item)
+              ^Method method
+              (.getMethod item-cls
+                          "clone"
+                          ^"[Ljava.lang.Class;" (into-array Class []))]
+          (.invoke method item (object-array 0))))
+      (copy! item (dtype-proto/from-prototype item datatype
+                                              (shape item))))))
 
 
 (defn item-inclusive-range

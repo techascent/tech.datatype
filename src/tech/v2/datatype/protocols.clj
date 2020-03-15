@@ -365,19 +365,6 @@ Note that this makes no mention of indianness; buffers are in the format of the 
       :else
       nil
       ))
-  PClone
-  (clone [item datatype]
-    (if (instance? java.lang.Cloneable item)
-      (do
-        (when-not (= datatype (get-datatype item))
-          (throw (Exception. "Generic objects cannot change types during clone.")))
-        (let [^Class item-cls (class item)
-              ^Method method
-              (.getMethod item-cls
-                          "clone"
-                          ^"[Ljava.lang.Class;" (into-array Class []))]
-          (.invoke method item (object-array 0))))
-      (throw (Exception. "Object is not cloneable."))))
   PToIterable
   (convertible-to-iterable? [item]
     (convertible-to-reader? item))

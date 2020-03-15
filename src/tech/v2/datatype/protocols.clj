@@ -308,11 +308,10 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 
 (defn as-base-type
   [item]
-  (when-let [retval (or (as-nio-buffer item)
-                   (as-list item))]
-    (when (= (get-datatype item)
-             (get-datatype retval))
-      retval)))
+  (if (instance? java.util.RandomAccess item)
+    (or (as-list item)
+        (as-nio-buffer item))
+    (as-nio-buffer item)))
 
 
 (declare make-container)
@@ -335,8 +334,13 @@ Note that this makes no mention of indianness; buffers are in the format of the 
         (.isArray ^Class (type item))))
   (->writer [item options]
     (cond
-      (base-type-convertible? item)
-      (-> (as-base-type item)
+      (convertible-to-nio-buffer? item)
+      (-> (->buffer-backing-store item)
+          (->writer (assoc options
+                           :datatype (get-datatype item)))
+          (->writer options))
+      (convertible-to-fastutil-list? item)
+      (-> (->list-backing-store item)
           (->writer (assoc options
                            :datatype (get-datatype item)))
           (->writer options))
@@ -354,18 +358,24 @@ Note that this makes no mention of indianness; buffers are in the format of the 
         (.isArray ^Class (type item))))
   (->reader [item options]
     (cond
-      (base-type-convertible? item)
-      (-> (as-base-type item)
+      (convertible-to-nio-buffer? item)
+      (-> (->buffer-backing-store item)
+          (->reader (assoc options
+                           :datatype (get-datatype item)))
+          (->reader options))
+      (convertible-to-fastutil-list? item)
+      (-> (->list-backing-store item)
           (->reader (assoc options
                            :datatype (get-datatype item)))
           (->reader options))
       (.isArray ^Class (type item))
       (let [^"[Ljava.lang.Object;" obj-ary item
             n-elems (alength obj-ary)]
-        (reify
-          ObjectReader
-          (lsize [item] n-elems)
-          (read [item idx] (aget obj-ary idx))))
+        (-> (reify
+              ObjectReader
+              (lsize [item] n-elems)
+              (read [item idx] (aget obj-ary idx)))
+            (->reader options)))
       :else
       nil
       ))
@@ -377,9 +387,9 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 
   PToMutable
   (convertible-to-mutable? [item]
-    (base-type-convertible? item))
+    (convertible-to-fastutil-list? item))
   (->mutable [item options]
-    (-> (as-base-type item)
+    (-> (->list-backing-store item)
         (->mutable (assoc options
                          :datatype (get-datatype item)))
         (->mutable options)))

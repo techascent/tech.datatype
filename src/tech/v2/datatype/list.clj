@@ -23,6 +23,7 @@
            [java.nio ByteBuffer ShortBuffer IntBuffer LongBuffer
             FloatBuffer DoubleBuffer Buffer]
            [java.util List ArrayList Arrays RandomAccess]
+           [tech.v2.datatype.typed_buffer TypedBuffer]
            [tech.v2.datatype
             ObjectReader ObjectWriter ObjectMutable
             ByteReader ByteWriter ByteMutable
@@ -480,5 +481,5 @@
     (if (= (dtype-proto/get-datatype src-buf) datatype)
       src-buf
       (if (casting/numeric-type? datatype)
-        (typed-buffer/set-datatype src-buf datatype)
+        (TypedBuffer. datatype src-buf)
         (make-typed-list src-buf datatype)))))

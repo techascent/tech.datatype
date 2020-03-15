@@ -10,6 +10,7 @@
            [org.roaringbitmap RoaringBitmap ImmutableBitmapDataProvider]
            [tech.v2.datatype SimpleLongSet LongReader LongBitmapIter]
            [clojure.lang IFn LongRange]
+           [tech.v2.datatype.typed_buffer TypedBuffer]
            [java.lang.reflect Field]))
 
 
@@ -81,7 +82,7 @@
       (throw (Exception. "Invalid datatype")))
     (.clone bitmap))
   dtype-proto/PToBitmap
-  (convertible-to-bitmap [item] true)
+  (convertible-to-bitmap? [item] true)
   (as-roaring-bitmap [item] item)
   dtype-proto/PBitmapSet
   (set-and [lhs rhs] (RoaringBitmap/and lhs (->bitmap rhs)))
@@ -112,7 +113,7 @@
 
 (defn bitmap->typed-buffer
   [^RoaringBitmap bitmap]
-  (typed-buffer/set-datatype (.toArray bitmap) :uint32))
+  (TypedBuffer. :uint32 (.toArray bitmap)))
 
 
 (deftype BitmapSet [^RoaringBitmap bitmap]

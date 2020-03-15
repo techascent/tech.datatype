@@ -43,6 +43,7 @@
           (.add (unchecked-int start)
                 (unchecked-int (+ start n-elems))))))))
 
+
 (defn ->bitmap
   ^RoaringBitmap [item]
   (cond

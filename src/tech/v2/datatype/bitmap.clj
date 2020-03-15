@@ -5,7 +5,7 @@
             [tech.v2.datatype.clj-range :as clj-range])
   (:import [it.unimi.dsi.fastutil.longs LongSet LongIterator]
            [org.roaringbitmap RoaringBitmap]
-           [tech.v2.datatype SimpleLongSet LongReader]
+           [tech.v2.datatype SimpleLongSet LongReader LongBitmapIter]
            [clojure.lang IFn LongRange]
            [java.lang.reflect Field]))
 
@@ -67,10 +67,13 @@
   (convertible-to-reader? [bitmap] true)
   (->reader [bitmap options]
     (let [n-elems (dtype-base/ecount bitmap)]
-      (-> (reify LongReader
+      (-> (reify
+            LongReader
             (getDatatype [rdr] :uint32)
             (lsize [rdr] n-elems)
-            (read [rdr idx] (Integer/toUnsignedLong (.select bitmap (int idx)))))
+            (read [rdr idx] (Integer/toUnsignedLong (.select bitmap (int idx))))
+            Iterable
+            (iterator [rdr] (LongBitmapIter. (.getIntIterator bitmap))))
           (dtype-proto/->reader options))))
   dtype-proto/PBitmapSet
   (set-and [lhs rhs] (RoaringBitmap/and lhs (->bitmap rhs)))

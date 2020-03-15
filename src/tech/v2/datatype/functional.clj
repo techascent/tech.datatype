@@ -156,6 +156,11 @@
   (op-provider/unary-op :arggroup-by-int item-reader [partition-fn options]))
 
 
+(defn arggroup-by-bitmap
+  [partition-fn item-reader & [options]]
+  (op-provider/unary-op :arggroup-by-bitmap item-reader [partition-fn options]))
+
+
 (defn- do-argpartition-by
   [^long start-idx ^Iterator item-iterable first-item]
   (let [[end-idx next-item]

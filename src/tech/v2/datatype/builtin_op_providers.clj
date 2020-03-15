@@ -11,9 +11,11 @@
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.operation-provider :as op-provider]
             [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.argsort :refer [argsort]])
+            [tech.v2.datatype.argsort :refer [argsort]]
+            [tech.v2.datatype.bitmap :refer (->bitmap)])
   (:import [it.unimi.dsi.fastutil.longs LongArrayList]
            [it.unimi.dsi.fastutil.ints IntArrayList]
+           [org.roaringbitmap RoaringBitmap]
            [java.util HashMap]))
 
 
@@ -287,11 +289,30 @@
                                  lhs
                                  rhs)))
 
-(defmacro dtype->list-constructor
+(defmacro dtype->storage-constructor
   [datatype]
   (case datatype
     :int32 `(IntArrayList.)
-    :int64 `(LongArrayList.)))
+    :int64 `(LongArrayList.)
+    :bitmap `(->bitmap)))
+
+(defn cast-bitmap
+  ^RoaringBitmap [item] item)
+
+(defmacro dtype->single-add!
+  [datatype existing val]
+  (if (= datatype :bitmap)
+    `(.add (cast-bitmap ~existing) (unchecked-int ~val))
+    `(.add (typecast/datatype->list-cast-fn ~datatype ~existing)
+           (casting/datatype->unchecked-cast-fn :int64 ~datatype ~val))))
+
+
+(defmacro dtype->bulk-add!
+  [datatype target new-vals]
+  (if (= datatype :bitmap)
+    `(.or (cast-bitmap ~target) (cast-bitmap ~new-vals))
+    `(.addAll (typecast/datatype->list-cast-fn ~datatype ~target)
+              (typecast/datatype->list-cast-fn ~datatype ~new-vals))))
 
 
 (defmacro arggroup-by-impl
@@ -304,12 +325,11 @@
                            (typecast/datatype->reader :object))
         list-fn# (reify
                    java.util.function.Function
-                   (apply [this# _key#] (dtype->list-constructor ~datatype)))
+                   (apply [this# _key#] (dtype->storage-constructor ~datatype)))
         bimap-fn# (reify
                     java.util.function.BiFunction
                     (apply [this lhs# rhs#]
-                      (.addAll (typecast/datatype->list-cast-fn ~datatype lhs#)
-                               (typecast/datatype->list-cast-fn ~datatype rhs#))
+                      (dtype->bulk-add! ~datatype lhs# rhs#)
                      lhs#))]
     (parallel-for/indexed-map-reduce
      n-elems#
@@ -320,11 +340,8 @@
          (dotimes [idx# n-indexes#]
            (let [idx# (clojure.core/unchecked-add idx# offset#)
                  partition-key# (.read item-reader# idx#)
-                 existing-list# (->> (.computeIfAbsent retval# partition-key# list-fn#)
-                                     (typecast/datatype->list-cast-fn ~datatype))]
-             (.add existing-list# (casting/datatype->unchecked-cast-fn
-                                   :int64
-                                   ~datatype idx#))))
+                 existing-list# (.computeIfAbsent retval# partition-key# list-fn#)]
+             (dtype->single-add! ~datatype existing-list# idx#)))
          retval#))
      (partial reduce (fn [^HashMap last-map# ^HashMap next-map#]
                        (let [entry-set# (.entrySet next-map#)]
@@ -344,10 +361,16 @@
   (arggroup-by-impl :int32 partition-fn item-reader options))
 
 
+(defn arggroup-by-bitmap
+  [partition-fn item-reader options]
+  (arggroup-by-impl :bitmap partition-fn item-reader options))
+
+
 (defn arggroup-by
   "Returns a map of partitioned-items->indexes.  Index generation is parallelized."
   [partition-fn item-reader & [options]]
   (arggroup-by-impl :int64 partition-fn item-reader options))
+
 
 
 (def-unary-op
@@ -364,6 +387,24 @@
  [[:reader :arggroup-by-int]]
   [op item-reader [partition-fn options]]
   (arggroup-by-int partition-fn item-reader options))
+
+
+(def-unary-op
+  [[:iterable :arggroup-by-bitmap]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-bitmap partition-fn
+                      ;;Algorithm only works on readers; not on iterables
+                      (dtype-proto/make-container
+                       :java-array
+                       (base/get-datatype item-reader)
+                       item-reader) options))
+
+(def-unary-op
+ [[:reader :arggroup-by-bitmap]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-bitmap partition-fn item-reader options))
+
+
 
 
 (def-unary-op

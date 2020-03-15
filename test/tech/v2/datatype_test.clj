@@ -402,6 +402,29 @@
            (vec (remove even? (range 20)))))))
 
 
+(deftest arggroup-by-bitmap-test
+  ;;The operation returns values in object space
+  ;;if it operates as :object datatype.  This is the default.
+  (let [{truevals true
+         falsevals false}
+        (dfn/arggroup-by-bitmap even? (range 20))]
+    (is (= (vec truevals)
+           (vec (filter even? (range 20)))))
+    (is (= (vec falsevals)
+           (vec (remove even? (range 20))))))
+
+
+  ;;Since the arguments is a long reader, the operation
+  ;;operates and returns values in long space.
+  (let [{truevals 1
+         falsevals 0}
+        (dfn/arggroup-by-int even? (range 20) {:datatype :int64})]
+    (is (= (vec truevals)
+           (vec (filter even? (range 20)))))
+    (is (= (vec falsevals)
+           (vec (remove even? (range 20)))))))
+
+
 (deftest argpartition-by-test
   ;;The operation returns values in object space
   ;;if it operates as :object datatype.  This is the default.

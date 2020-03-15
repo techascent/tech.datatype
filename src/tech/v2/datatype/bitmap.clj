@@ -4,7 +4,7 @@
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.clj-range :as clj-range])
   (:import [it.unimi.dsi.fastutil.longs LongSet LongIterator]
-           [org.roaringbitmap RoaringBitmap]
+           [org.roaringbitmap RoaringBitmap ImmutableBitmapDataProvider]
            [tech.v2.datatype SimpleLongSet LongReader LongBitmapIter]
            [clojure.lang IFn LongRange]
            [java.lang.reflect Field]))
@@ -45,15 +45,19 @@
 
 
 (defn ->bitmap
-  ^RoaringBitmap [item]
-  (cond
-    (instance? RoaringBitmap item)
-    item
-    (instance? LongRange item)
-    (long-range->bitmap item)
-    :else
-    (doto (RoaringBitmap.)
-      (.add ^ints (ensure-int-array item)))))
+  (^RoaringBitmap [item]
+   (cond
+     (instance? RoaringBitmap item)
+     item
+     (instance? LongRange item)
+     (long-range->bitmap item)
+     (nil? item)
+     (RoaringBitmap.)
+     :else
+     (doto (RoaringBitmap.)
+       (.add ^ints (ensure-int-array item)))))
+  (^RoaringBitmap []
+   (RoaringBitmap.)))
 
 
 (extend-type RoaringBitmap

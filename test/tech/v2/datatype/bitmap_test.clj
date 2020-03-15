@@ -18,4 +18,6 @@
     (is (= (vec big-range)
            (vec (dtype/->reader ba))))
     (is (= (set big-range)
-           (set (dtype/->reader ba))))))
+           (set (dtype/->reader ba)))))
+  (is (= #{}
+         (set (bitmap/->bitmap nil)))))

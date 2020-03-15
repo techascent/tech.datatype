@@ -158,12 +158,12 @@
 (defn ->bitmap
   (^RoaringBitmap [item]
    (cond
+     (nil? item)
+     (RoaringBitmap.)
      (dtype-proto/convertible-to-bitmap? item)
      (dtype-proto/as-roaring-bitmap item)
      (instance? LongRange item)
      (long-range->bitmap item)
-     (nil? item)
-     (RoaringBitmap.)
      :else
      (if (= (dtype-base/get-datatype item) :uint32)
        (if-let [ary-buf (when-let [nio-buf (dtype-proto/->buffer-backing-store item)]

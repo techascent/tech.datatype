@@ -16,6 +16,13 @@
          (lsize [item#] (.lsize idx-reader#))
          (read [item# idx#]
            (.read values# (.read idx-reader# idx#)))
+         dtype-proto/PConstantTimeMinMax
+         (has-constant-time-min-max? [item#]
+           (dtype-proto/has-constant-time-min-max? values#))
+         (constant-time-min [item#]
+           (dtype-proto/constant-time-min values#))
+         (constant-time-max [item#]
+           (dtype-proto/constant-time-max values#))
          dtype-proto/PToBackingStore
          (->backing-store-seq [item]
            (concat (dtype-proto/->backing-store-seq idx-reader#)

@@ -73,6 +73,10 @@
             (getDatatype [rdr] :uint32)
             (lsize [rdr] n-elems)
             (read [rdr idx] (Integer/toUnsignedLong (.select bitmap (int idx))))
+            dtype-proto/PConstantTimeMinMax
+            (has-constant-time-min-max? [rdr] true)
+            (constant-time-min [rdr] (.first bitmap))
+            (constant-time-max [rdr] (.last bitmap))
             Iterable
             (iterator [rdr] (LongBitmapIter. (.getIntIterator bitmap))))
           (dtype-proto/->reader options))))

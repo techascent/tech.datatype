@@ -73,6 +73,9 @@
     (if (> increment 0)
       (+ start (* (dec n-elems) increment))
       start))
+  (range-offset [item offset]
+    (Int64Range. (+ start (long offset))
+                 increment n-elems metadata))
   (range->reverse-map [item]
     (reify Map
       (size [m] n-elems)

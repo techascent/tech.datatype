@@ -76,6 +76,10 @@
             Iterable
             (iterator [rdr] (LongBitmapIter. (.getIntIterator bitmap))))
           (dtype-proto/->reader options))))
+  dtype-proto/PConstantTimeMinMax
+  (has-constant-time-min-max? [bitmap] true)
+  (constant-time-min [bitmap] (.first bitmap))
+  (constant-time-max [bitmap] (.last bitmap))
   dtype-proto/PClone
   (clone [bitmap datatype]
     (when-not (= datatype (dtype-base/get-datatype bitmap))
@@ -130,6 +134,10 @@
   dtype-proto/PClone
   (clone [item datatype]
     (BitmapSet. (dtype-proto/clone bitmap datatype)))
+  dtype-proto/PConstantTimeMinMax
+  (has-constant-time-min-max? [item] true)
+  (constant-time-min [item] (.first bitmap))
+  (constant-time-max [item] (.last bitmap))
   dtype-proto/PToBitmap
   (convertible-to-bitmap? [item] true)
   (as-roaring-bitmap [item] bitmap)

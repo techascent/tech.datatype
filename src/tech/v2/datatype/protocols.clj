@@ -315,9 +315,16 @@ Note that this makes no mention of indianness; buffers are in the format of the 
     (as-nio-buffer item)))
 
 
+(defprotocol PConstantTimeMinMax
+  (has-constant-time-min-max? [item])
+  (constant-time-min [item])
+  (constant-time-max [item]))
+
+
 (defprotocol PRangeConvertible
   (convertible-to-range? [item])
-  (->range [item datatype]))
+  (->range [item options]
+    "Convert to something that implements the PRange protocols"))
 
 
 (defprotocol PRange
@@ -325,7 +332,10 @@ Note that this makes no mention of indianness; buffers are in the format of the 
   (range-start [item])
   (range-increment [item])
   (range-min [item])
-  (range-max [item]))
+  (range-max [item])
+  (range->reverse-map [item]
+    "Return a map whose keys are the values of the range
+and whose values are the indexes that produce those values in the reader."))
 
 
 (declare make-container)
@@ -424,11 +434,15 @@ Note that this makes no mention of indianness; buffers are in the format of the 
   (convertible-to-binary-boolean-op? [item] false)
 
   PRangeConvertible
-  (convertible-to-range? [item] false))
+  (convertible-to-range? [item] false)
 
   PToBitmap
-  (convertible-to-bitmap? [item] false))
+  (convertible-to-bitmap? [item] false)
 
+  PConstantTimeMinMax
+  (constant-time-min-max? [item] (convertible-to-range? item))
+  (constant-time-min [item] (constant-time-min (->range item {})))
+  (constant-time-max [item] (constant-time-max (->range item {}))))
 
 (defmulti make-container
   (fn [container-type _datatype _elem-seq-or-count _options]

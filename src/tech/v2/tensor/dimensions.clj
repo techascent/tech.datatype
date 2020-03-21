@@ -27,7 +27,7 @@
             IndexingSystem$Backward
             IntReader
             LongReader]
-           [java.util List]
+           [java.util List Map]
            [it.unimi.dsi.fastutil.ints IntArrayList]
            [clojure.lang IDeref]))
 
@@ -383,84 +383,71 @@
             (when valid?
               [addr]))))
       :else
-      (reify
-        IndexingSystem$Backward
-        (localToGlobal [item local-idx]
-          (when-let [local-shape (local-address->local-shape
-                                  ordered-shape ordered-offsets
-                                  ordered-strides
-                                  ordered-shape-mins local-idx)]
-            (let [
-                  ;;move the local shape into the global space
-                  local-shape (if transpose-vec
-                                (typecast/datatype->reader
-                                 :int32
-                                 (indexed-reader/make-indexed-reader
-                                  transpose-vec local-shape {:datatype :int32
-                                                             :unchecked? true}))
-                                local-shape)
-                  local-shape
-                  (if dims-direct?
+      (let [^List shape-rev-map (mapv shape/dimension->reverse-long-map ordered-shape)]
+        (reify
+          IndexingSystem$Backward
+          (localToGlobal [item local-idx]
+            (when-let [local-shape (local-address->local-shape
+                                    ordered-shape ordered-offsets
+                                    ordered-strides
+                                    ordered-shape-mins local-idx)]
+              (let [;;move the local shape into the global space
+                    local-shape (if transpose-vec
+                                  (typecast/datatype->reader
+                                   :int32
+                                   (indexed-reader/make-indexed-reader
+                                    transpose-vec local-shape {:datatype :int32
+                                                               :unchecked? true}))
+                                  local-shape)
                     local-shape
-                    (let [local-shape
-                          (->> (map (fn [local-idx shape-entry _]
-                                      (cond
-                                        (number? shape-entry)
-                                        local-idx
-                                        (shape/classified-sequence? shape-entry)
-                                        (shape/classified-sequence->global-addr
-                                         shape-entry local-idx)
-                                        :else
-                                        (when-let [addr
-                                                   (boolean-op/argfind
-                                                    {:datatype :int32}
-                                                    (boolean-op/make-boolean-unary-op
-                                                     :int32
-                                                     (= x local-idx))
-                                                    shape-entry)]
-                                          addr)))
-                                    local-shape shape-obj-reader shape-mins)
-                               (remove nil?)
-                               vec)]
-                      (when (= (count local-shape)
-                               n-global-shape)
-                        local-shape)))]
-              (when (and local-shape)
-                (let [local-shape (typecast/datatype->reader :int32
-                                                             local-shape
-                                                             true)
-                      global-base-addr (int (dense-integer-dot-product
-                                             local-shape global-strides))]
-                  (if-not broadcasting?
-                    [global-base-addr]
-                    ;;Expansion out into global space
-                    (let [retval (dtype/make-container :list :int32 0)]
-                      (.add ^IntArrayList retval global-base-addr)
-                      (loop [idx (int 0)]
-                        (when (< idx n-global-shape)
-                          (let [local-idx (- n-global-shape idx 1)
-                                num-repeat (- (.read shape-mults local-idx) 1)
-                                multiplier (* (.read global-strides local-idx)
-                                              (.read shape-int-reader local-idx))
-                                ;;This is not something that would work in c++.  The unary
-                                ;;operation will make a reader out of retval which gets the
-                                ;;underyling nio buffer of fixed size.  Then the list will
-                                ;;perform insertions at the end evaulating the unary map
-                                ;;exactly over this initial reader.
-                                initial-reader (typecast/datatype->reader
-                                                :int32 retval true)]
-                            (loop [repeat-idx 0]
-                              (when (< repeat-idx num-repeat)
-                                (let [local-mult (* multiplier (+ repeat-idx 1))]
-                                  (dtype/insert-block! retval (dtype/ecount retval)
-                                                       (unary-op/default-unary-reader-map
-                                                        {:datatype :int32 :unchecked? true}
-                                                        (unary-op/make-unary-op
-                                                         :int32 (+ x local-mult))
-                                                        initial-reader)))
-                                (recur (unchecked-inc repeat-idx)))))
-                          (recur (unchecked-inc idx))))
-                      retval)))))))))))
+                    (if dims-direct?
+                      local-shape
+                      ;;Now we have to remap back to what input must have produced this output.
+                      (let [local-shape
+                            (->> (map (fn [local-idx shape-entry]
+                                        (.get ^Map shape-entry (long local-idx)))
+                                      local-shape shape-rev-map)
+                                 (remove nil?)
+                                 vec)]
+                        (when (= (count local-shape)
+                                 n-global-shape)
+                          local-shape)))]
+                (when (and local-shape)
+                  (let [local-shape (typecast/datatype->reader :int32
+                                                               local-shape
+                                                               true)
+                        global-base-addr (int (dense-integer-dot-product
+                                               local-shape global-strides))]
+                    (if-not broadcasting?
+                      [global-base-addr]
+                      ;;Expansion out into global space
+                      (let [retval (dtype/make-container :list :int32 0)]
+                        (.add ^IntArrayList retval global-base-addr)
+                        (loop [idx (int 0)]
+                          (when (< idx n-global-shape)
+                            (let [local-idx (- n-global-shape idx 1)
+                                  num-repeat (- (.read shape-mults local-idx) 1)
+                                  multiplier (* (.read global-strides local-idx)
+                                                (.read shape-int-reader local-idx))
+                                  ;;This is not something that would work in c++.  The unary
+                                  ;;operation will make a reader out of retval which gets the
+                                  ;;underyling nio buffer of fixed size.  Then the list will
+                                  ;;perform insertions at the end evaulating the unary map
+                                  ;;exactly over this initial reader.
+                                  initial-reader (typecast/datatype->reader
+                                                  :int32 retval true)]
+                              (loop [repeat-idx 0]
+                                (when (< repeat-idx num-repeat)
+                                  (let [local-mult (* multiplier (+ repeat-idx 1))]
+                                    (dtype/insert-block! retval (dtype/ecount retval)
+                                                         (unary-op/default-unary-reader-map
+                                                          {:datatype :int32 :unchecked? true}
+                                                          (unary-op/make-unary-op
+                                                           :int32 (+ x local-mult))
+                                                          initial-reader)))
+                                  (recur (unchecked-inc repeat-idx)))))
+                            (recur (unchecked-inc idx))))
+                        retval))))))))))))
 
 
 (defn create-dimension-transforms [dims]

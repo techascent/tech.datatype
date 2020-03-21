@@ -13,6 +13,8 @@
             ByteReader ShortReader IntReader LongReader
             FloatReader DoubleReader BooleanReader
             ObjectMutable]
+           [java.lang.reflect Method]
+           [clojure.lang IPersistentVector]
            [java.util List RandomAccess]))
 
 
@@ -334,9 +336,10 @@
   (convertible-to-reader? [item] true)
   (->reader [item options]
     (let [^List item item
-          item-count (.size item)]
+          item-count (.size item)
+          item-dtype (get-datatype item)]
       (-> (reify ObjectReader
-            (getDatatype [_] :object)
+            (getDatatype [_] item-dtype)
             (lsize [_] item-count)
             (read [_ idx]
               (.get item idx)))
@@ -360,6 +363,22 @@
 (extend-reader-type FloatReader)
 (extend-reader-type DoubleReader)
 (extend-reader-type BooleanReader)
+
+
+(extend-protocol dtype-proto/PToWriter
+  RandomAccess
+  (convertible-to-writer? [item]
+    (not (instance? IPersistentVector item)))
+  (->writer [item options]
+    (let [^List item item
+          item-count (.size item)
+          item-dtype (get-datatype item)]
+      (-> (reify ObjectWriter
+            (getDatatype [_] item-dtype)
+            (lsize [_] item-count)
+            (write [_ idx val]
+              (.set item idx val)))
+          (dtype-proto/->writer options)))))
 
 
 (extend-type Object
@@ -393,8 +412,18 @@
 
   dtype-proto/PClone
   (clone [item datatype]
-    (copy! item (dtype-proto/from-prototype item datatype
-                                            (shape item)))))
+    (if (instance? java.lang.Cloneable item)
+      (do
+        (when-not (= datatype (get-datatype item))
+          (throw (Exception. "Generic objects cannot change types during clone.")))
+        (let [^Class item-cls (class item)
+              ^Method method
+              (.getMethod item-cls
+                          "clone"
+                          ^"[Ljava.lang.Class;" (into-array Class []))]
+          (.invoke method item (object-array 0))))
+      (copy! item (dtype-proto/from-prototype item datatype
+                                              (shape item))))))
 
 
 (defn item-inclusive-range
@@ -404,3 +433,11 @@
       [0 0]
       [(get-value item-reader 0)
        (get-value item-reader (- item-ecount 1))])))
+
+
+(extend-type clojure.lang.PersistentVector
+  dtype-proto/PClone
+  (clone [item datatype]
+    (when-not (= datatype :object)
+      (throw (Exception. "Cannot clone persistent vectors to no object store")))
+    item))

@@ -1,6 +1,7 @@
 (ns tech.v2.datatype.object-datatypes
   (:require [tech.v2.datatype.array :as dtype-ary]
-            [tech.v2.datatype.protocols :as dtype-proto]))
+            [tech.v2.datatype.protocols :as dtype-proto])
+  (:import [clojure.lang Keyword Symbol]))
 
 
 
@@ -25,6 +26,16 @@
   ([] nil)
   ([item] item))
 
+(defn- construct-keyword
+  ([] nil)
+  ([item] (keyword item)))
+
+(defn- construct-symbol
+  ([] nil)
+  ([item] (symbol item)))
+
 
 (add-object-datatype Object :object construct-object)
 (add-object-datatype String :string str)
+(add-object-datatype Keyword :keyword construct-keyword)
+(add-object-datatype Symbol :symbol construct-symbol)

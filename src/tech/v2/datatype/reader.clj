@@ -250,18 +250,20 @@
 
 
 (defn- make-object-wrapper
-  [reader datatype options]
-  (let [item-dtype (dtype-proto/get-datatype reader)]
-    (when-not (and (= :object (casting/flatten-datatype item-dtype))
-                   (= :object (casting/flatten-datatype datatype)))
-      (throw (ex-info "Incorrect use of object wrapper"
-                      {:item-datatype item-dtype
-                       :target-datatype datatype})))
-    (if (= datatype item-dtype)
-      reader
-      (let [obj-reader (typecast/datatype->reader :object reader)]
-        (make-derived-reader :object datatype options obj-reader
-                             (.read src-reader idx) make-object-wrapper)))))
+  ([reader datatype options]
+   (let [item-dtype (dtype-proto/get-datatype reader)]
+     (when-not (and (= :object (casting/flatten-datatype item-dtype))
+                    (= :object (casting/flatten-datatype datatype)))
+       (throw (ex-info "Incorrect use of object wrapper"
+                       {:item-datatype item-dtype
+                        :target-datatype datatype})))
+     (if (= datatype item-dtype)
+       reader
+       (let [obj-reader (typecast/datatype->reader :object reader)]
+         (make-derived-reader :object datatype options obj-reader
+                              (.read src-reader idx) make-object-wrapper)))))
+  ([reader options]
+   (make-object-wrapper reader (:datatype options) options)))
 
 
 (declare make-marshalling-reader)

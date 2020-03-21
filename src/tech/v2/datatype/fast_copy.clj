@@ -24,7 +24,7 @@
              FloatReader FloatWriter
              DoubleReader DoubleWriter
              BooleanReader BooleanWriter]
-            [tech.v2.datatype.protocols PToReader]))
+            [tech.v2.datatype.protocols PToReader PToWriter]))
 
 
 (set! *warn-on-reflection* true)
@@ -42,25 +42,31 @@
 (defmacro parallel-slow-copy
   [datatype dst src unchecked?]
   (let [datatype (casting/safe-flatten datatype)]
-    `(if (or (instance? PToReader ~src)
-             (dtype-proto/convertible-to-reader? ~src))
-       (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
-             dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
-             n-elems# (.lsize dst-writer#)]
-         (parallel-for/parallel-for
-          idx# n-elems#
-          (.write dst-writer# idx# (.read src-reader# idx#))))
-       ;;Go the *much* slower iterator pathway
-       (let [src-iter# (typecast/datatype->iter ~datatype ~src ~unchecked?)
-             dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)]
-         (->> (range (.lsize dst-writer#))
-              (map (fn [idx#]
-                     [idx# (typecast/datatype->iter-next-fn ~datatype src-iter#)]))
-              ;;Attempt to get at least little bit of parallelism.  Given iterators
-              ;;implicitly make every item dependent upon the one before we can't
-              ;;really do much here aside from potentially
-              (pmap #(dst-writer# (first %) (second %)))
-              dorun)))))
+    `(do
+       (when-not (or (instance? PToWriter ~dst)
+                     (dtype-proto/convertible-to-writer? ~dst))
+         (throw (Exception.
+                 (format "Destination object of type %s is not convertible to writer"
+                         (type ~dst)))))
+       (if (and (or (instance? PToReader ~src)
+                    (dtype-proto/convertible-to-reader? ~src)))
+         (let [src-reader# (typecast/datatype->reader ~datatype ~src ~unchecked?)
+               dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)
+               n-elems# (.lsize dst-writer#)]
+           (parallel-for/parallel-for
+            idx# n-elems#
+            (.write dst-writer# idx# (.read src-reader# idx#))))
+         ;;Go the *much* slower iterator pathway
+         (let [src-iter# (typecast/datatype->iter ~datatype ~src ~unchecked?)
+               dst-writer# (typecast/datatype->writer ~datatype ~dst ~unchecked?)]
+           (->> (range (.lsize dst-writer#))
+                (map (fn [idx#]
+                       [idx# (typecast/datatype->iter-next-fn ~datatype src-iter#)]))
+                ;;Attempt to get at least little bit of parallelism.  Given iterators
+                ;;implicitly make every item dependent upon the one before we can't
+                ;;really do much here aside from potentially
+                (pmap #(dst-writer# (first %) (second %)))
+                dorun))))))
 
 
 (defn parallel-slow-copy!

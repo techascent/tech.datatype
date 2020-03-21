@@ -22,11 +22,14 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             ;;Support for base container types
             [tech.v2.datatype.sparse.protocols :as sparse-proto]
+            [tech.v2.datatype.bitmap :as bitmap]
             [tech.v2.datatype.sparse.sparse-buffer]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
             [tech.v2.datatype.functional])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
-           [java.util Iterator List RandomAccess])
+           [java.util Iterator List RandomAccess]
+           [org.roaringbitmap RoaringBitmap]
+           [tech.v2.datatype.bitmap BitmapSet])
   (:refer-clojure :exclude [cast]))
 
 
@@ -479,6 +482,11 @@ Calls clojure.core.matrix/ecount."
     (sparse-proto/->sparse item)))
 
 
+(defn writer?
+  [item]
+  (when item
+    (dtype-proto/convertible-to-writer? item)))
+
 (defn ->writer
   "Create a writer of a specific type."
   [src-item & [datatype options]]
@@ -496,3 +504,85 @@ Calls clojure.core.matrix/ecount."
                          (assoc options
                                 :datatype
                                 (or datatype (get-datatype src-item)))))
+
+
+(defn ->bitmap-set
+  "Create a bitmap capable of storing unsigned integers up to about 4 billion.
+  Set operations are expected to be highly optimized.  Random reads potentially
+  less so (although still not bad).
+  Bitmaps are convertible to readers and the bitmap ops all apply to them."
+  ([]
+   (bitmap/->bitmap))
+  ([item-seq]
+   (bitmap/->bitmap item-seq)))
+
+
+(defn ->unique-bitmap-set
+  "Create a bitmap capable of storing unsigned integers up to about 4 billion.
+  Set operations are expected to be highly optimized.  Random reads potentially
+  less so (although still not bad).
+  Bitmaps are convertible to readers and the bitmap ops all apply to them."
+  ([]
+   (bitmap/->unique-bitmap))
+  ([item-seq]
+   (bitmap/->unique-bitmap item-seq)))
+
+
+;; bitmap Set Operations
+(defn set-and
+  "bitmap op"
+  [lhs rhs]
+  (dtype-proto/set-and lhs rhs))
+
+(defn set-and-not
+  "bitmap op"
+  [lhs rhs]
+  (dtype-proto/set-and-not lhs rhs))
+
+(defn set-or
+  "bitmap op"
+  [lhs rhs]
+  (dtype-proto/set-or lhs rhs))
+
+(defn set-xor
+  "bitmap op"
+  [lhs rhs]
+  (dtype-proto/set-xor lhs rhs))
+
+(defn set-offset
+  "bitmap op"
+  [item offset]
+  (dtype-proto/set-offset item offset))
+
+(defn set-add-range!
+  "bitmap op"
+  [item start end]
+  (dtype-proto/set-add-range! item start end))
+
+(defn set-add-block!
+  "bitmap op"
+  [item data]
+  (dtype-proto/set-add-block! item data))
+
+(defn set-remove-range!
+  "bitmap op"
+  [item start end]
+  (dtype-proto/set-remove-range! item start end))
+
+(defn set-remove-block!
+  "bitmap op"
+  [item data]
+  (dtype-proto/set-remove-block! item data))
+
+(defn bitmap->typed-buffer
+  [bitmap]
+  (bitmap/bitmap->typed-buffer bitmap))
+
+(defn bitmap->set
+  [bitmap]
+  (BitmapSet. bitmap))
+
+(defn as-roaring-bitmap
+  [item]
+  (when (dtype-proto/convertible-to-bitmap? item)
+    (dtype-proto/as-roaring-bitmap item)))

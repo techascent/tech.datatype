@@ -65,7 +65,7 @@
                      (dtype-base/get-datatype sparse-item))
         sparse-item (sparse-proto/->sparse sparse-item)]
     (make-sparse-reader (sparse-proto/index-reader sparse-item)
-                        (impl/apply-unary-op {} un-op
+                        (impl/apply-unary-op {:datatype datatype} un-op
                                              (sparse-proto/data-reader sparse-item))
                         (dtype-base/ecount sparse-item)
                         :sparse-value
@@ -256,6 +256,7 @@
   sparse item."
   [sparse-item dense-item & {:keys [datatype sparse-value]}]
   (let [sparse-indexes (sparse-proto/index-reader sparse-item)]
+    (println "dense-sparse-intersection")
     (make-sparse-reader sparse-indexes
                         (indexed-reader/make-indexed-reader
                          sparse-indexes

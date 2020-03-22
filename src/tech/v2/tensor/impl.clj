@@ -815,11 +815,13 @@
   [tens new-shape]
   (let [tens (broadcast-error tens)
         new-dims (dims/in-place-reshape (tens-proto/dimensions tens)
-                                        new-shape)]
-    (construct-tensor
-     (dtype/sub-buffer (tensor->buffer tens)
-                       0 (dims/buffer-ecount new-dims))
-     new-dims)))
+                                        new-shape)
+        buffer-ecount (dims/buffer-ecount new-dims)
+        new-buffer (if buffer-ecount
+                     (-> (tensor->buffer tens)
+                         (dtype/sub-buffer 0 buffer-ecount))
+                     (tensor->buffer tens))]
+    (construct-tensor new-buffer new-dims)))
 
 
 (defn transpose

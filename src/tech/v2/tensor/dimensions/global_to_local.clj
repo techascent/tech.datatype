@@ -115,7 +115,8 @@
 
 
 (defn global->local-ast
-  ([{:keys [shape strides shape-ecounts shape-ecount-strides]} broadcast? signature]
+  ([{:keys [shape strides shape-ecounts shape-ecount-strides] :as _reduced-dims}
+    broadcast? signature]
    (let [n-dims (long (:n-dims signature))
          direct-vec (:direct-vec signature)
          offsets? (:offsets? signature)

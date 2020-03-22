@@ -22,6 +22,51 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
+(defn- base-dimension->reverse-long-map
+  "This could be expensive in a lot of situations.  Hopefully the sequence is a range.
+  We return a map that does the sparse reverse mapping on get.  IF there are multiple
+  right answers we return the first one."
+  ^Map [dim]
+  (cond
+    (number? dim)
+    (let [dim (long dim)]
+      (reify Map
+        (size [m] (unchecked-int dim))
+        (containsKey [m arg]
+          (and arg
+               (casting/integer-type?
+                (dtype-proto/get-datatype arg))
+               (let [arg (long arg)]
+                 (and (>= arg 0)
+                      (< arg dim)))))
+        (isEmpty [m] (== dim 0))
+        (entrySet [m]
+          (->> (range dim)
+               (map-indexed (fn [idx range-val]
+                              (MapEntry. range-val idx)))
+               set))
+        (getOrDefault [m k default-value]
+          (if (and k (casting/integer-type? (dtype-proto/get-datatype k)))
+            (let [arg (long k)]
+              (if (and (>= arg 0)
+                       (< arg dim))
+                arg
+                default-value))
+            default-value))
+        (get [m k] (long k))))
+    (dtype-proto/convertible-to-range? dim)
+    (dtype-proto/range->reverse-map (dtype-proto/->range dim {}))
+    :else
+    (let [group-map (dfn/arggroup-by identity
+                                     (dtype-proto/->reader dim {:datatype
+                                                                :int64}))]
+      ;;Also painful!  But less so than repeated linear searches.
+      (->> group-map
+           (map (fn [[k v]]
+                  [k (first v)]))
+           (into {})))))
+
+
 (defprotocol PIndexAlgebra
   (offset [item offset])
   (broadcast [item num-repetitions])
@@ -30,7 +75,10 @@
   (simple? [item])
   (get-offset [item])
   (get-reader [item])
-  (get-n-repetitions [item]))
+  (get-n-repetitions [item])
+  (reverse-index-map [item]
+    "Return a map implementation that maps indexes from local-space
+back into Y global space indexes."))
 
 (declare make-idx-alg)
 
@@ -67,6 +115,9 @@
   (get-offset [item] offset)
   (get-reader [item] reader)
   (get-n-repetitions [item] repetitions)
+  (reverse-index-map [item]
+
+    )
   dtype-proto/PBuffer
   (sub-buffer [item new-offset len]
     (let [new-offset (long new-offset)
@@ -200,7 +251,7 @@
       reader)))
 
 
-(defn- simplify-range
+(defn- simplify-range->direct
   "Ranges starting at 0 and incrementing by 1 can be represented by numbers"
   [item]
   (if (dtype-proto/convertible-to-range? item)
@@ -238,7 +289,7 @@
             (with-meta
               (dtype-range/make-range read-value (unchecked-inc read-value))
               {:select-scalar? true})))
-        (simplify-range
+        (simplify-range->direct
          (let [^LongReader select-arg (if (= select-arg :lla)
                                         (dtype-range/reverse-range n-elems)
                                         (dimension->reader select-arg))
@@ -279,13 +330,7 @@
   "Is the data represented natively, indexes starting at zero and incrementing by
   one?"
   [dim]
-  (boolean
-   (or (number? dim)
-       (when-let [dim-range (when (dtype-proto/convertible-to-range? dim)
-                              (dtype-proto/->range dim {}))]
-         (and
-          (== 1 (long (dtype-proto/range-increment dim-range)))
-          (== 0 (long (dtype-proto/range-start dim-range))))))))
+  (number? dim))
 
 
 
@@ -301,49 +346,6 @@
   (simple? [item] true)
   (get-offset [item] 0)
   (get-reader [item] item)
-  (get-n-repetitions [item] 1))
-
-
-(defn dimension->reverse-long-map
-  "This could be expensive in a lot of situations.  Hopefully the sequence is a range.
-  We return a map that does the sparse reverse mapping on get.  IF there are multiple
-  right answers we return the first one."
-  ^Map [dim]
-  (cond
-    (number? dim)
-    (let [dim (long dim)]
-      (reify Map
-        (size [m] (unchecked-int dim))
-        (containsKey [m arg]
-          (and arg
-               (casting/integer-type?
-                (dtype-proto/get-datatype arg))
-               (let [arg (long arg)]
-                 (and (>= arg 0)
-                      (< arg dim)))))
-        (isEmpty [m] (== dim 0))
-        (entrySet [m]
-          (->> (range dim)
-               (map-indexed (fn [idx range-val]
-                              (MapEntry. range-val idx)))
-               set))
-        (getOrDefault [m k default-value]
-          (if (and k (casting/integer-type? (dtype-proto/get-datatype k)))
-            (let [arg (long k)]
-              (if (and (>= arg 0)
-                       (< arg dim))
-                arg
-                default-value))
-            default-value))
-        (get [m k] (long k))))
-    (dtype-proto/convertible-to-range? dim)
-    (dtype-proto/range->reverse-map (dtype-proto/->range dim {}))
-    :else
-    (let [group-map (dfn/arggroup-by identity
-                                     (dtype-proto/->reader dim {:datatype
-                                                                :int64}))]
-      ;;Also painful!  But less so than repeated linear searches.
-      (->> group-map
-           (map (fn [[k v]]
-                  [k (first v)]))
-           (into {})))))
+  (get-n-repetitions [item] 1)
+  (reverse-index-map [item]
+    (base-dimension->reverse-long-map item)))

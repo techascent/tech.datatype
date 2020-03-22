@@ -14,58 +14,13 @@
 (set! *warn-on-reflection* true)
 
 
-(defn buffer-ecount
-  "What is the necessary ecount for a given buffer"
-  ^long [{:keys [shape strides]}]
-  ;;In this case the length of strides is so small as to make the general
-  ;;method fast to just use object methods.
-  (let [^List shape shape
-        ^List strides strides
-        stride-idx (int (dtype-fn/argmax {:datatype :int64} strides))
-        stride-val (long (.get strides stride-idx))
-        shape-val (.get shape stride-idx)
-        shape-val (long
-                   (cond
-                     (number? shape-val)
-                     shape-val
-                     (dtype-proto/has-constant-time-min-max? shape-val)
-                     (dtype-proto/constant-time-max shape-val)
-                     :else
-                     (apply max (dtype/->reader
-                                 shape-val :int64))))]
-    (* shape-val stride-val)))
-
-
-(defn dims->shape-data
-  [{:keys [shape strides shape-ecounts] :as dims}]
-  (let [direct? (shape/direct-shape? shape)
-        shape-ecount (long (apply * shape-ecounts))
-        offsets? (boolean (some idx-alg/offset? shape))
-        dense? (boolean (and direct?
-                             (== shape-ecount
-                                 (buffer-ecount dims))))
-        increasing? (boolean (and direct?
-                                  (apply >= strides)
-                                  (not offsets?)))
-        vec-shape (shape/shape->count-vec shape)
-        broadcast? (boolean (some idx-alg/broadcast? shape))]
-    {:direct? direct?
-     :dense? dense?
-     :increasing? increasing?
-     :broadcast? broadcast?
-     :offsets? offsets?
-     :n-dims (count shape)
-     :shape-ecount shape-ecount
-     :vec-shape vec-shape}))
-
-
-(defn shape-data->signature
-  [shape-data]
-  (dissoc shape-data :shape-ecount :vec-shape))
+(defn any-offsets?
+  [{:keys [shape]}]
+  (boolean (some idx-alg/offset? shape)))
 
 
 (defn shape-ary->strides
-  "Strides assuming everything is increasing and packed"
+  "Strides assuming everything is increasing and packed."
   ^LongList [^List shape-vec]
   (let [retval (long-array (count shape-vec))
         n-elems (alength retval)
@@ -160,6 +115,15 @@
       :shape-ecount-strides (shape-ary->strides shape-ecounts)}))
   ([dims]
    (reduce-dimensionality dims (any-offsets? dims))))
+
+
+(defn simple-direct-reduced-dims
+  "Create the simplest case of reduced dimensions."
+  [^long n-elems]
+  {:shape [n-elems]
+   :strides [1]
+   :shape-ecounts [n-elems]
+   :shape-entry-ecounts [1]})
 
 
 (defn dims->reduced-dims

@@ -9,10 +9,14 @@
             [tech.v2.datatype.monotonic-range :as dtype-range]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.readers.indexed :as indexed-rdr])
+            [tech.v2.datatype.readers.indexed :as indexed-rdr]
+            [tech.v2.datatype.functional :as dfn]
+            [tech.v2.datatype.casting :as casting])
   (:import [tech.v2.datatype LongReader]
            [tech.v2.datatype.monotonic_range Int64Range]
-           [clojure.lang IObj]))
+           [clojure.lang IObj]
+           [java.util Map]
+           [clojure.lang MapEntry]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -23,7 +27,10 @@
   (broadcast [item num-repetitions])
   (offset? [item])
   (broadcast? [item])
-  (simple? [item]))
+  (simple? [item])
+  (get-offset [item])
+  (get-reader [item])
+  (get-n-repetitions [item]))
 
 (declare make-idx-alg)
 
@@ -57,6 +64,9 @@
   (broadcast? [item] (not= 1 repetitions))
   (simple? [item] (and (== 0 offset)
                        (== 1 repetitions)))
+  (get-offset [item] offset)
+  (get-reader [item] reader)
+  (get-n-repetitions [item] repetitions)
   dtype-proto/PBuffer
   (sub-buffer [item new-offset len]
     (let [new-offset (long new-offset)
@@ -190,11 +200,30 @@
       reader)))
 
 
+(defn- simplify-range
+  "Ranges starting at 0 and incrementing by 1 can be represented by numbers"
+  [item]
+  (if (dtype-proto/convertible-to-range? item)
+    (let [item-rng (dtype-proto/->range item {})]
+      (if (and (== 0 (long (dtype-proto/range-start item-rng)))
+               (== 1 (long (dtype-proto/range-increment item-rng))))
+        (dtype-proto/ecount item)
+        item))
+    item))
+
+
 (defn select
   "Given a 'dimension', select and return a new 'dimension'.  A dimension could be
   a number which implies the range 0->number else it could be something convertible
   to a long reader.  This algorithm attempts to aggresively minimize the complexity
-  of the returned dimension object."
+  of the returned dimension object.
+  arguments may be
+  :all - no change
+  :lla - reverse index
+  :number - select that index
+  :sequence - select items in sequence.  Ranges will be better supported than truly
+  random access.
+  "
   [dim select-arg]
   (if (= select-arg :all)
     dim
@@ -209,32 +238,36 @@
             (with-meta
               (dtype-range/make-range read-value (unchecked-inc read-value))
               {:select-scalar? true})))
-        (let [^LongReader select-arg (if (= select-arg :lla)
-                                       (dtype-range/reverse-range n-elems)
-                                       (dimension->reader select-arg))
-              n-select-arg (.lsize select-arg)]
-          (if (dtype-proto/convertible-to-range? select-arg)
-            (let [select-arg (dtype-proto/->range select-arg {})]
-              (if (dtype-proto/convertible-to-range? dim)
-                (dtype-proto/combine-range (dtype-proto/->range dim {})
-                                           select-arg)
-                (let [sel-arg-start (long (dtype-proto/range-start select-arg))
-                      sel-arg-increment (long (dtype-proto/range-increment
-                                               select-arg))
-                      select-arg (dtype-proto/range-offset select-arg
-                                                           (- sel-arg-start))
-                      rdr (dtype-proto/sub-buffer rdr
-                                                  sel-arg-start
-                                                  (* sel-arg-increment n-select-arg))]
-                  (simplify-reader
-                   (if (== 1 (long (dtype-proto/range-increment select-arg)))
-                     rdr
-                     (indexed-rdr/make-indexed-reader select-arg rdr))))))
-            (simplify-reader
-             (indexed-rdr/make-indexed-reader select-arg rdr))))))))
+        (simplify-range
+         (let [^LongReader select-arg (if (= select-arg :lla)
+                                        (dtype-range/reverse-range n-elems)
+                                        (dimension->reader select-arg))
+               n-select-arg (.lsize select-arg)]
+           (if (dtype-proto/convertible-to-range? select-arg)
+             (let [select-arg (dtype-proto/->range select-arg {})]
+               (if (dtype-proto/convertible-to-range? dim)
+                 (dtype-proto/combine-range (dtype-proto/->range dim {})
+                                            select-arg)
+                 (let [sel-arg-start (long (dtype-proto/range-start select-arg))
+                       sel-arg-increment (long (dtype-proto/range-increment
+                                                select-arg))
+                       select-arg (dtype-proto/range-offset select-arg
+                                                            (- sel-arg-start))
+                       ;;the sub buffer operation here has a good chance of simplifying
+                       ;;the dimension object.
+                       rdr (dtype-proto/sub-buffer rdr
+                                                   sel-arg-start
+                                                   (* sel-arg-increment n-select-arg))]
+                   (simplify-reader
+                    (if (== 1 (long (dtype-proto/range-increment select-arg)))
+                      rdr
+                      (indexed-rdr/make-indexed-reader select-arg rdr))))))
+             (simplify-reader
+              (indexed-rdr/make-indexed-reader select-arg rdr)))))))))
 
 
 (defn dense?
+  "Are the indexes packed, increasing or decreasing by one."
   [dim]
   (boolean
    (or (number? dim)
@@ -242,7 +275,9 @@
             (== 1 (long (dtype-proto/range-increment
                          (dtype-proto/->range dim {}))))))))
 
-(defn native?
+(defn direct?
+  "Is the data represented natively, indexes starting at zero and incrementing by
+  one?"
   [dim]
   (boolean
    (or (number? dim)
@@ -253,8 +288,62 @@
           (== 0 (long (dtype-proto/range-start dim-range))))))))
 
 
+
 (extend-type Object
   PIndexAlgebra
+  (offset [item offset-val]
+    (offset (->index-alg item) offset-val))
+  (broadcast [item num-repetitions]
+    (broadcast (->index-alg item) num-repetitions))
   (offset? [item] false)
+  (get-offset [item] 0)
   (broadcast? [item] false)
-  (simple? [item] true))
+  (simple? [item] true)
+  (get-offset [item] 0)
+  (get-reader [item] item)
+  (get-n-repetitions [item] 1))
+
+
+(defn dimension->reverse-long-map
+  "This could be expensive in a lot of situations.  Hopefully the sequence is a range.
+  We return a map that does the sparse reverse mapping on get.  IF there are multiple
+  right answers we return the first one."
+  ^Map [dim]
+  (cond
+    (number? dim)
+    (let [dim (long dim)]
+      (reify Map
+        (size [m] (unchecked-int dim))
+        (containsKey [m arg]
+          (and arg
+               (casting/integer-type?
+                (dtype-proto/get-datatype arg))
+               (let [arg (long arg)]
+                 (and (>= arg 0)
+                      (< arg dim)))))
+        (isEmpty [m] (== dim 0))
+        (entrySet [m]
+          (->> (range dim)
+               (map-indexed (fn [idx range-val]
+                              (MapEntry. range-val idx)))
+               set))
+        (getOrDefault [m k default-value]
+          (if (and k (casting/integer-type? (dtype-proto/get-datatype k)))
+            (let [arg (long k)]
+              (if (and (>= arg 0)
+                       (< arg dim))
+                arg
+                default-value))
+            default-value))
+        (get [m k] (long k))))
+    (dtype-proto/convertible-to-range? dim)
+    (dtype-proto/range->reverse-map (dtype-proto/->range dim {}))
+    :else
+    (let [group-map (dfn/arggroup-by identity
+                                     (dtype-proto/->reader dim {:datatype
+                                                                :int64}))]
+      ;;Also painful!  But less so than repeated linear searches.
+      (->> group-map
+           (map (fn [[k v]]
+                  [k (first v)]))
+           (into {})))))

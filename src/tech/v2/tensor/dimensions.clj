@@ -8,11 +8,13 @@
   number.  This means that that dimension should be indexed indirectly.  If a shape has
   any index buffers then it is considered an indirect shape."
   (:require [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.tensor.dimensions.select :as dims-select]
             [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.tensor.dimensions.global-to-local :as gtol]
             [tech.v2.datatype.functional :as dtype-fn]
+            [tech.v2.datatype.index-algebra :as idx-alg]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.unary-op :as unary-op]
@@ -36,116 +38,77 @@
 (set! *warn-on-reflection* true)
 
 
-(defn extend-strides
-  "With no error checking, setup a new stride for the given shape.
-  If some of the original strides are known, they can be passed in."
-  [shape & [original-strides]]
-  (let [n-shape (dtype/ecount shape)
-        n-original-strides (count original-strides)
-        max-stride-idx (if (= 0 n-original-strides)
-                         0
-                         (dtype-fn/argmax {:datatype :int32} original-strides))
-        strides (int-array n-shape)]
-    (loop [idx 0
-           max-stride-idx (int max-stride-idx)]
-      (when (< idx n-shape)
-        (let [local-idx (- n-shape idx 1)
-              max-stride-idx
-              (if (< idx n-original-strides)
-                (let [org-idx (- n-original-strides idx 1)]
-                  (aset strides local-idx (int (get original-strides org-idx)))
-                  (if (= org-idx max-stride-idx)
-                    local-idx
-                    max-stride-idx))
-                (if (= idx 0)
-                  (do
-                    (aset strides local-idx 1)
-                    local-idx)
-                  (do
-                    (aset strides local-idx (* (aget strides max-stride-idx)
-                                               (int (shape (+ local-idx 1)))))
-                    local-idx)))]
-          (recur (unchecked-inc idx) (int max-stride-idx)))))
-    ;;Using persistent vectors for short things is often faster.
-    (vec strides)))
-
-
 (declare create-dimension-transforms)
 
 
-(defrecord Dimensions [shape strides offsets max-shape dense?
-                       ;;Implementations of IDeref
+(defrecord Dimensions [shape ;;list of things.  Not longs.
+                       strides ;;list of longs
+                       shape-ecounts ;;list of longs
+                       overall-ecount ;;ecount of the dimensions
+                       reduced-dims
+                       ;;This is the big thing.  If dimensions are native then
+                       ;;they can effectively be elided; the base item can be used
+                       ;;as a reader or copy target instead of a tensor.
+                       direct?
+                       ;;delay of global->local transformation
                        global->local
-                       local->global])
-
-(defn calculate-dense?
-  "This gets called a *lot*."
-  [shape strides]
-  (let [n-shape (count shape)
-        ^List shape shape
-        ^List strides strides]
-    (and (shape/direct-shape? shape)
-         (if (= 1 n-shape)
-           (= 1 (long (first strides)))
-           (let [[max-stride num-shape]
-                 (loop [item-idx 0
-                        max-stride (long 1)
-                        num-shape (long 1)]
-                   (if (< item-idx n-shape)
-                     (let [shape-entry (long (.get shape item-idx))
-                           stride-entry (long (.get strides item-idx))
-                           new-max-stride (if-not (= 1 shape-entry)
-                                            (* stride-entry shape-entry)
-                                            max-stride)]
-                       (recur (inc item-idx)
-                              (if (> new-max-stride max-stride)
-                                new-max-stride
-                                max-stride)
-                              (* num-shape shape-entry)))
-                     [max-stride num-shape]))]
-             (= max-stride num-shape))))))
+                       ;;delay of global->local transformation
+                       local->global]
+  dtype-proto/PShape
+  (shape [item] shape-ecounts)
+  dtype-proto/PCountable
+  (ecount [item] overall-ecount))
 
 
 (defn dimensions
   "Dimensions contain information about how to map logical global indexes to local
   buffer addresses."
-  [shape & {:keys [strides offsets max-shape]}]
-  (let [shape (if (dtype/reader? shape) shape (vec shape))
-        shape (if max-shape
-                (let [num-extend (- (dtype-base/ecount max-shape)
-                                    (dtype-base/ecount shape))]
-                  (if-not (= num-extend 0)
-                    (->> (concat (repeat num-extend 1)
-                                 shape)
-                         vec)
-                    shape))
-                shape)
-        n-elems (dtype-base/ecount shape)]
-    (if (and (= n-elems 1)
-             (nil? max-shape)
-             (nil? strides)
-             (nil? offsets))
-      (create-dimension-transforms
-       (->Dimensions shape [1] [0]
-                     (shape/shape->count-vec shape)
-                     true
-                     nil nil))
-      (let [strides (if (= n-elems (dtype-base/ecount strides))
-                      strides
-                      (extend-strides shape strides))
-            num-offsets (dtype-base/ecount offsets)
-            num-extension (- n-elems num-offsets)
-            offsets (if-not (= 0 num-extension)
-                      (->> (concat (repeat num-extension 0)
-                                   offsets)
-                           vec)
-                      offsets)
-            max-shape (or max-shape (shape/shape->count-vec shape))
-            half-retval (->Dimensions
-                         shape strides offsets max-shape
-                         (calculate-dense? shape strides)
-                         nil nil)]
-        (create-dimension-transforms half-retval)))))
+  ([shape strides]
+   (when-not (== (count shape) (count strides))
+     (throw (Exception. "shape/strides ecount mismatch")))
+   (let [shape-ecounts (mapv shape/shape-entry->count shape)
+         native? (every? idx-alg/direct? shape)
+         reduced-dims (dims-analytics/reduce-dimensionality
+                       {:shape shape
+                        :strides strides
+                        :shape-ecounts shape-ecounts})
+         overall-ecount (long (apply * shape-ecounts))])
+   (let [shape (if (dtype/reader? shape) shape (vec shape))
+         shape (if max-shape
+                 (let [num-extend (- (dtype-base/ecount max-shape)
+                                     (dtype-base/ecount shape))]
+                   (if-not (= num-extend 0)
+                     (->> (concat (repeat num-extend 1)
+                                  shape)
+                          vec)
+                     shape))
+                 shape)
+         n-elems (dtype-base/ecount shape)]
+     (if (and (= n-elems 1)
+              (nil? max-shape)
+              (nil? strides)
+              (nil? offsets))
+       (create-dimension-transforms
+        (->Dimensions shape [1] [0]
+                      (shape/shape->count-vec shape)
+                      true
+                      nil nil))
+       (let [strides (if (= n-elems (dtype-base/ecount strides))
+                       strides
+                       (extend-strides shape strides))
+             num-offsets (dtype-base/ecount offsets)
+             num-extension (- n-elems num-offsets)
+             offsets (if-not (= 0 num-extension)
+                       (->> (concat (repeat num-extension 0)
+                                    offsets)
+                            vec)
+                       offsets)
+             max-shape (or max-shape (shape/shape->count-vec shape))
+             half-retval (->Dimensions
+                          shape strides offsets max-shape
+                          (calculate-dense? shape strides)
+                          nil nil)]
+         (create-dimension-transforms half-retval))))))
 
 
 (defn ecount

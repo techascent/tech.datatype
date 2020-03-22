@@ -29,7 +29,7 @@ the selection applied."
   Return new shape, stride, offset array
   along with new buffer offset and if it can be calculated a new
   buffer length."
-  [select-seq shape-vec stride-vec offset-vec]
+  [select-seq shape-vec stride-vec]
   (let [^List select-vec (vec select-seq)
         ^List shape-vec shape-vec
         ^List stride-vec stride-vec
@@ -40,10 +40,7 @@ the selection applied."
                   (.size shape-vec))
       (throw (Exception. "Shape,select vecs do not match")))
     (loop [idx 0
-           buffer-offset 0
-           length-valid? true
-           max-stride 0
-           max-shape-val 0]
+           buffer-offset 0]
       (if (< idx n-elems)
         (let [new-shape-val (apply-select-arg-to-dimension
                              (.get shape-vec idx)
@@ -52,27 +49,20 @@ the selection applied."
               ;;add to result dims.
               new-shape-scalar? (:select-scalar? (meta new-shape-val))
               stride-val (long (.get stride-vec idx))
-              constant-min-max? (dtype-proto/has-constant-time-min-max? new-shape-val)
-              length-valid? (boolean (and length-valid? constant-min-max?))
-              buffer-offset (long (if constant-min-max?
+              [cmin new-shape-val]
+              (if (dtype-proto/convertible-to-range? new-shape-val)
+                (let [cmin (long (dtype-proto/constant-time-min new-shape-val))]
+                  [cmin (-> (dtype-proto/range-offset new-shape-val (- cmin))
+                            (idx-alg/simplify-range->direct))])
+                [nil new-shape-val])
+              buffer-offset (long (if cmin
                                     (+ buffer-offset
-                                       (* stride-val
-                                          (long (dtype-proto/constant-time-min
-                                                 new-shape-val))))
-                                    buffer-offset))
-              max-stride (max max-stride stride-val)
-              max-shape-val
-              (long (if (== max-stride stride-val)
-                      (unchecked-inc (long (dtype-proto/constant-time-max
-                                            new-shape-val)))
-                      max-shape-val))]
+                                       (* stride-val (long cmin)))
+                                    buffer-offset))]
           (when-not new-shape-scalar?
             (.add result-shape new-shape-val)
             (.add result-stride stride-val))
-          (recur (unchecked-inc idx) buffer-offset
-                 length-valid? max-stride max-shape-val))
+          (recur (unchecked-inc idx) buffer-offset))
         {:shape result-shape
          :strides result-stride
-         :offset buffer-offset
-         :length (when length-valid?
-                   (* max-stride max-shape-val))}))))
+         :offset buffer-offset}))))

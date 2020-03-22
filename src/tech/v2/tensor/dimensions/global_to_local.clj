@@ -104,7 +104,7 @@
 (defn reduced-dims->signature
   [{:keys [shape strides shape-ecounts shape-ecount-strides]} broadcast?]
   (let [n-dims (count shape)
-        direct-vec (mapv idx-alg/direct? shape)
+        direct-vec (mapv idx-alg/direct-reader? shape)
         offsets? (boolean (some idx-alg/offset? shape))
         trivial-last-stride? (== 1 (long (.get ^List strides (dec n-dims))))]
     {:n-dims n-dims
@@ -452,7 +452,9 @@
                             ^Constructor first-constructor
                             (first (.getDeclaredConstructors
                                     class-obj))]
-                        #(try (.newInstance first-constructor %)
+                        #(try
+                           (clojure.pprint/pprint ast-data)
+                           (.newInstance first-constructor %)
                               (catch Throwable e
                                 (throw (ex-info (format "Error instantiating ast object: %s\n%s"
                                                         e
@@ -500,8 +502,7 @@
 
 (defn dims->global->local
   ^LongTensorReader [{:keys [reduced-dims] :as dims}]
-  (let [reduced-dims (dims-analytics/dims->reduced-dims dims)
-        shape-ecounts (long-array (:shape-ecounts dims))
+  (let [shape-ecounts (long-array (:shape-ecounts dims))
         shape-ecount-strides (long-array (:shape-ecount-strides dims))
         n-dims (alength shape-ecount-strides)
         n-dims-dec (dec n-dims)
@@ -566,11 +567,11 @@
 
   ;;Image dimensions when you have a 2048x2048 image and you
   ;;want to crop a 256x256 sub-image out of it.
-  (def src-dims {:shape [256 256 4]
-                 :strides [8192 4 1]
-                 :shape-ecounts [256 256 4]
-                 :shape-ecount-strides (dims-analytics/shape-ary->strides
-                                        [256 256 4])})
+  (def src-dims (-> (dims/dimensions [4 4])
+                    (dims/rotate [1 2])
+                    (dims/select :all (range 2))
+                    (dims/transpose [1 0])
+                    (dims/broadcast [4 4])))
   (def reduced-dims (dims-analytics/reduce-dimensionality src-dims))
 
   (def test-ast (global->local-ast reduced-dims))
@@ -583,6 +584,8 @@
 
   (def idx-obj (.newInstance first-constructor (reduced-dims->constructor-args
                                                 reduced-dims)))
+
+
 
   ;;Due to striding, there is a discontinuity at index 1024
   (def indexes (map idx-obj (range 1020 1030)))

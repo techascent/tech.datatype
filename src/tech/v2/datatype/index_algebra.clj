@@ -14,9 +14,8 @@
             [tech.v2.datatype.casting :as casting])
   (:import [tech.v2.datatype LongReader]
            [tech.v2.datatype.monotonic_range Int64Range]
-           [clojure.lang IObj]
-           [java.util Map]
-           [clojure.lang MapEntry]))
+           [clojure.lang IObj MapEntry]
+           [java.util Map]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -50,91 +49,16 @@
             (let [arg (long k)]
               (if (and (>= arg 0)
                        (< arg dim))
-                arg
+                [arg]
                 default-value))
             default-value))
-        (get [m k] (long k))))
+        (get [m k] [(long k)])))
     (dtype-proto/convertible-to-range? dim)
     (dtype-proto/range->reverse-map (dtype-proto/->range dim {}))
     :else
-    (let [group-map (dfn/arggroup-by identity
-                                     (dtype-proto/->reader dim {:datatype
-                                                                :int64}))]
-      ;;Also painful!  But less so than repeated linear searches.
-      (->> group-map
-           (map (fn [[k v]]
-                  [k (first v)]))
-           (into {})))))
-
-
-(defprotocol PIndexAlgebra
-  (offset [item offset])
-  (broadcast [item num-repetitions])
-  (offset? [item])
-  (broadcast? [item])
-  (simple? [item])
-  (get-offset [item])
-  (get-reader [item])
-  (get-n-repetitions [item])
-  (reverse-index-map [item]
-    "Return a map implementation that maps indexes from local-space
-back into Y global space indexes."))
-
-(declare make-idx-alg)
-
-
-(deftype IndexAlg [^LongReader reader ^long n-reader-elems
-                   ^long offset ^long repetitions]
-  LongReader
-  (lsize [rdr] (* n-reader-elems repetitions))
-  (read [rdr idx] (.read reader (rem (+ idx offset)
-                                     n-reader-elems)))
-  dtype-proto/PRangeConvertible
-  (convertible-to-range? [item]
-    (and (dtype-proto/convertible-to-range? reader)
-         (simple? item)))
-  (->range [item options] (dtype-proto/->range reader options))
-  dtype-proto/PConstantTimeMinMax
-  (has-constant-time-min-max? [item]
-    (dtype-proto/has-constant-time-min-max? reader))
-  (constant-time-min [item] (dtype-proto/constant-time-min reader))
-  (constant-time-max [item] (dtype-proto/constant-time-max reader))
-  PIndexAlgebra
-  (offset [item new-offset]
-    (IndexAlg. reader n-reader-elems
-               (rem (+ offset (long new-offset))
-                    n-reader-elems)
-               repetitions))
-  (broadcast [item num-repetitions]
-    (IndexAlg. reader n-reader-elems
-               offset (* repetitions (long num-repetitions))))
-  (offset? [item] (not= 0 offset))
-  (broadcast? [item] (not= 1 repetitions))
-  (simple? [item] (and (== 0 offset)
-                       (== 1 repetitions)))
-  (get-offset [item] offset)
-  (get-reader [item] reader)
-  (get-n-repetitions [item] repetitions)
-  (reverse-index-map [item]
-
-    )
-  dtype-proto/PBuffer
-  (sub-buffer [item new-offset len]
-    (let [new-offset (long new-offset)
-          len (long len)]
-      (when-not (<= (+ new-offset len) (.lsize item))
-        (throw (Exception. "Sub buffer out of range.")))
-      (when-not (> len 0)
-        (throw (Exception. "Length is not > 0")))
-      (let [rel-offset (rem (long (+ offset new-offset))
-                            n-reader-elems)
-            len (long len)]
-        (if (<= (+ rel-offset len) n-reader-elems)
-          (dtype-proto/sub-buffer reader rel-offset len)
-          (reify LongReader
-            (lsize [rdr] len)
-            (read [rdr idx]
-              (.read item (+ idx new-offset)))))))))
+    (dfn/arggroup-by identity
+                     (dtype-proto/->reader dim {:datatype
+                                                :int64}))))
 
 
 (defn maybe-range-reader
@@ -174,6 +98,150 @@ back into Y global space indexes."))
             (has-constant-time-min-max? [item] true)
             (constant-time-min [item] item-min)
             (constant-time-max [item] item-max)))))))
+
+
+(defn- simplify-reader
+  [^LongReader reader]
+  (let [n-elems (.lsize reader)]
+    (cond
+      (= n-elems 1)
+      (dtype-range/make-range (.read reader 0) (inc (.read reader 0)))
+      (= n-elems 2)
+      (let [start (.read reader 0)
+            last-elem (.read reader 1)
+            increment (- last-elem start)]
+        (dtype-range/make-range start (+ last-elem increment) increment))
+      (<= n-elems 5)
+      (maybe-range-reader reader)
+      :else
+      reader)))
+
+
+(defn simplify-range->direct
+  "Ranges starting at 0 and incrementing by 1 can be represented by numbers"
+  [item]
+  (if (dtype-proto/convertible-to-range? item)
+    (let [item-rng (dtype-proto/->range item {})]
+      (if (and (== 0 (long (dtype-proto/range-start item-rng)))
+               (== 1 (long (dtype-proto/range-increment item-rng))))
+        (dtype-proto/ecount item)
+        item))
+    item))
+
+
+(defprotocol PIndexAlgebra
+  (offset [item offset])
+  (broadcast [item num-repetitions])
+  (offset? [item])
+  (broadcast? [item])
+  (simple? [item])
+  (get-offset [item])
+  (get-reader [item])
+  (get-n-repetitions [item])
+  (reverse-index-map [item]
+    "Return a map implementation that maps indexes from local-space
+back into Y global space indexes."))
+
+
+(defn- fixup-reverse-v
+  "Project a v into the index obj space"
+  [v ^long n-reader-elems ^long offset ^long repetitions]
+  (let [v (if (number? v)
+            [v]
+            v)
+        v (if (not= 0 offset)
+            (map #(rem (+ offset (long %))
+                       n-reader-elems) v)
+            v)
+        v (if (not= 1 repetitions)
+            (->> (range repetitions)
+                 (mapcat (fn [^long rep-idx]
+                           (let [offset (* rep-idx n-reader-elems)]
+                             (map #(+ offset (long %)) v)))))
+            v)]
+    v))
+
+(declare ->idx-alg)
+
+(deftype IndexAlg [^LongReader reader ^long n-reader-elems
+                   ^long offset ^long repetitions]
+  LongReader
+  (lsize [rdr] (* n-reader-elems repetitions))
+  (read [rdr idx] (.read reader (rem (+ idx offset)
+                                     n-reader-elems)))
+  dtype-proto/PRangeConvertible
+  (convertible-to-range? [item]
+    (and (dtype-proto/convertible-to-range? reader)
+         (simple? item)))
+  (->range [item options] (dtype-proto/->range reader options))
+  dtype-proto/PConstantTimeMinMax
+  (has-constant-time-min-max? [item]
+    (dtype-proto/has-constant-time-min-max? reader))
+  (constant-time-min [item] (dtype-proto/constant-time-min reader))
+  (constant-time-max [item] (dtype-proto/constant-time-max reader))
+  PIndexAlgebra
+  (offset [item new-offset]
+    (let [new-offset (rem (+ offset (long new-offset))
+                          n-reader-elems)]
+      (if (and (== 0 new-offset)
+               (== 1 repetitions))
+        (.get-reader item)
+        (IndexAlg. reader n-reader-elems
+                   new-offset
+                   repetitions))))
+  (broadcast [item num-repetitions]
+    (let [new-reps (* repetitions (long num-repetitions))]
+      (if (and (== 0 offset)
+               (== 1 new-reps))
+        (.get-reader item)
+        (IndexAlg. reader n-reader-elems
+                   offset
+                   new-reps))))
+  (offset? [item] (not= 0 offset))
+  (broadcast? [item] (not= 1 repetitions))
+  (simple? [item] (and (== 0 offset)
+                       (== 1 repetitions)))
+  (get-offset [item] offset)
+  (get-reader [item] (simplify-range->direct reader))
+  (get-n-repetitions [item] repetitions)
+  (reverse-index-map [item]
+    (let [^Map src-map (reverse-index-map reader)]
+      (reify Map
+        (size [m] (.size src-map))
+        (entrySet [m]
+          (->> (.entrySet src-map)
+               (map (fn [[k v]]
+                      (MapEntry.
+                       k
+                       (fixup-reverse-v v n-reader-elems
+                                        offset repetitions))))
+               set))
+        (getOrDefault [m k default]
+          (let [retval (.getOrDefault src-map k default)]
+            (if (identical? retval default)
+              default
+              (fixup-reverse-v retval n-reader-elems offset repetitions))))
+        (get [m k]
+          (when-let [v (.get src-map k)]
+            (fixup-reverse-v v n-reader-elems offset repetitions))))))
+  dtype-proto/PBuffer
+  (sub-buffer [item new-offset len]
+    (let [new-offset (long new-offset)
+          len (long len)]
+      (when-not (<= (+ new-offset len) (.lsize item))
+        (throw (Exception. "Sub buffer out of range.")))
+      (when-not (> len 0)
+        (throw (Exception. "Length is not > 0")))
+      (let [rel-offset (rem (long (+ offset new-offset))
+                            n-reader-elems)
+            len (long len)]
+        (if (<= (+ rel-offset len) n-reader-elems)
+          (dtype-proto/sub-buffer reader rel-offset len)
+          (reify LongReader
+            (lsize [rdr] len)
+            (read [rdr idx]
+              (.read item (+ idx new-offset)))))))))
+
 
 
 (defn dimension->reader
@@ -234,35 +302,6 @@ back into Y global space indexes."))
       (IndexAlg. rdr (.lsize rdr) 0 1))))
 
 
-(defn- simplify-reader
-  [^LongReader reader]
-  (let [n-elems (.lsize reader)]
-    (cond
-      (= n-elems 1)
-      (dtype-range/make-range (.read reader 0) (inc (.read reader 0)))
-      (= n-elems 2)
-      (let [start (.read reader 0)
-            last-elem (.read reader 1)
-            increment (- last-elem start)]
-        (dtype-range/make-range start (+ last-elem increment) increment))
-      (<= n-elems 5)
-      (maybe-range-reader reader)
-      :else
-      reader)))
-
-
-(defn- simplify-range->direct
-  "Ranges starting at 0 and incrementing by 1 can be represented by numbers"
-  [item]
-  (if (dtype-proto/convertible-to-range? item)
-    (let [item-rng (dtype-proto/->range item {})]
-      (if (and (== 0 (long (dtype-proto/range-start item-rng)))
-               (== 1 (long (dtype-proto/range-increment item-rng))))
-        (dtype-proto/ecount item)
-        item))
-    item))
-
-
 (defn select
   "Given a 'dimension', select and return a new 'dimension'.  A dimension could be
   a number which implies the range 0->number else it could be something convertible
@@ -273,8 +312,7 @@ back into Y global space indexes."))
   :lla - reverse index
   :number - select that index
   :sequence - select items in sequence.  Ranges will be better supported than truly
-  random access.
-  "
+  random access."
   [dim select-arg]
   (if (= select-arg :all)
     dim
@@ -326,6 +364,7 @@ back into Y global space indexes."))
             (== 1 (long (dtype-proto/range-increment
                          (dtype-proto/->range dim {}))))))))
 
+
 (defn direct?
   "Is the data represented natively, indexes starting at zero and incrementing by
   one?"
@@ -333,13 +372,22 @@ back into Y global space indexes."))
   (number? dim))
 
 
+(defn direct-reader?
+  [dim]
+  (or (number? dim)
+      (number? (get-reader dim))))
+
 
 (extend-type Object
   PIndexAlgebra
   (offset [item offset-val]
-    (offset (->index-alg item) offset-val))
+    (if (== 0 (long offset-val))
+      item
+      (offset (->index-alg item) offset-val)))
   (broadcast [item num-repetitions]
-    (broadcast (->index-alg item) num-repetitions))
+    (if (== 1 (long num-repetitions))
+      item
+      (broadcast (->index-alg item) num-repetitions)))
   (offset? [item] false)
   (get-offset [item] 0)
   (broadcast? [item] false)

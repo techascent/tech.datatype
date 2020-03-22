@@ -123,7 +123,7 @@
   {:shape [n-elems]
    :strides [1]
    :shape-ecounts [n-elems]
-   :shape-entry-ecounts [1]})
+   :shape-ecount-strides [1]})
 
 
 (defn dims->reduced-dims
@@ -136,6 +136,32 @@
   the types of shapes and max-shape"
   [reduced-dims]
   (boolean (some idx-alg/broadcast? (:shape reduced-dims))))
+
+
+(defn buffer-ecount
+  "Return a minimum buffer element count of possible."
+  [shape strides]
+  (let [n-dims (count shape)
+        ^List shape shape
+        ^List strides strides]
+    (loop [idx 0
+           buffer-length (Long. 1)]
+      (if (< idx n-dims)
+        (let [new-shape-val (.get shape idx)
+              stride-val (.get strides idx)
+              [cmin cmax :as mmax]
+              (cond
+                (number? new-shape-val)
+                [0 (dec (long new-shape-val))]
+                (dtype-proto/has-constant-time-min-max? new-shape-val)
+                [(long (dtype-proto/constant-time-min new-shape-val))
+                 (long (dtype-proto/constant-time-max new-shape-val))])
+              buffer-length (when (and buffer-length mmax)
+                              (+ (long buffer-length)
+                                 (* stride-val
+                                    (- (long cmax) (long cmin)))))]
+          (recur (unchecked-inc idx) buffer-length))
+        buffer-length))))
 
 
 (comment

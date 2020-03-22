@@ -108,7 +108,10 @@
       (get [m k]
         (let [arg (long k)
               rel-arg (- arg start)]
-          (quot rel-arg increment)))))
+          (when (and (== 0 (rem rel-arg increment))
+                     (>= arg (long (.range-min item)))
+                     (<= arg (long (.range-max item))))
+            (quot rel-arg increment))))))
   IObj
   (meta [this] metadata)
   (withMeta [this metadata]

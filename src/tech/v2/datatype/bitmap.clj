@@ -77,6 +77,9 @@
             (has-constant-time-min-max? [rdr] true)
             (constant-time-min [rdr] (.first bitmap))
             (constant-time-max [rdr] (.last bitmap))
+            dtype-proto/PToBitmap
+            (convertible-to-bitmap? [item] true)
+            (as-roaring-bitmap [item] bitmap)
             Iterable
             (iterator [rdr] (LongBitmapIter. (.getIntIterator bitmap))))
           (dtype-proto/->reader options))))
@@ -200,3 +203,26 @@
      (->bitmap item)))
   (^RoaringBitmap []
    (RoaringBitmap.)))
+
+
+
+(defn bitmap->efficient-random-access-reader
+  [bitmap]
+  (when (dtype-proto/convertible-to-bitmap? bitmap)
+    (let [^RoaringBitmap bitmap (dtype-proto/as-roaring-bitmap bitmap)
+          typed-buf (bitmap->typed-buffer bitmap)
+          src-reader (typecast/datatype->reader :int64 typed-buf)
+          n-elems (dtype-base/ecount typed-buf)
+          cmin (dtype-proto/constant-time-min bitmap)
+          cmax (dtype-proto/constant-time-max bitmap)]
+      (reify
+        LongReader
+        (lsize [rdr] n-elems)
+        (read [rdr idx] (.read src-reader idx))
+        dtype-proto/PToBitmap
+        (convertible-to-bitmap? [item] true)
+        (as-roaring-bitmap [item] bitmap)
+        dtype-proto/PConstantTimeMinMax
+        (has-constant-time-min-max? [item] true)
+        (constant-time-min [item] cmin)
+        (constant-time-max [item] cmax)))))

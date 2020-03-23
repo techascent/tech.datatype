@@ -23,8 +23,8 @@
 
 (defn- base-dimension->reverse-long-map
   "This could be expensive in a lot of situations.  Hopefully the sequence is a range.
-  We return a map that does the sparse reverse mapping on get.  IF there are multiple
-  right answers we return the first one."
+  We return a map that does the sparse reverse mapping on get.  We can return a number or
+  a sequence.  The fallback is (dfn/arggroup-by identity dim)"
   ^Map [dim]
   (cond
     (number? dim)
@@ -259,24 +259,10 @@ back into Y global space indexes."))
       {:scalar? true})
     (dtype-proto/convertible-to-range? item-seq)
     (dtype-proto/->range item-seq {})
-    (dtype-proto/convertible-to-bitmap? item-seq)
-    (let [bitmap (dtype-proto/as-roaring-bitmap item-seq)
-          ;;Random access on bitmaps is very bad.  So we create a typed buffer.
-          typed-buf (bitmap/bitmap->typed-buffer bitmap)
-          src-reader (typecast/datatype->reader :int64 typed-buf)
-          n-elems (dtype-base/ecount typed-buf)
-          cmin (dtype-proto/constant-time-min bitmap)
-          cmax (dtype-proto/constant-time-max bitmap)]
-      (reify
-        LongReader
-        (lsize [rdr] n-elems)
-        (read [rdr idx] (.read src-reader idx))
-        dtype-proto/PConstantTimeMinMax
-        (has-constant-time-min-max? [item] true)
-        (constant-time-min [item] cmin)
-        (constant-time-max [item] cmax)))
     (instance? IndexAlg item-seq)
     item-seq
+    (dtype-proto/convertible-to-bitmap? item-seq)
+    (bitmap/bitmap->efficient-random-access-reader item-seq)
     :else
     (let [item-seq (if (dtype-proto/convertible-to-reader? item-seq)
                      item-seq

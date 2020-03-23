@@ -333,7 +333,7 @@
       "Reshaped dimensions are larger than tensor"
       {:tensor-ecount (ecount existing-dims)
        :reshape-ecount (ecount new-dims)})
-    (if (:direct? existing-dims)
+    (if (:native? existing-dims)
       new-dims
       (throw (Exception. "Reshape on complex dimensions is unsupported")))))
 

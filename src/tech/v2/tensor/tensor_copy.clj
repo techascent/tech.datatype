@@ -1,13 +1,15 @@
 (ns tech.v2.tensor.tensor-copy
   (:require [tech.v2.tensor.impl :as tens-impl]
             [tech.v2.tensor.dimensions :as dims]
+            [tech.v2.datatype.index-algebra :as idx-alg]
             [tech.v2.tensor.dimensions.global-to-local :as gtol]
             [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.fast-copy :as fast-copy]
             [tech.parallel.for :refer [parallel-for serial-for]])
-  (:import [tech.v2.datatype LongReader]))
+  (:import [tech.v2.datatype LongReader]
+           [java.util List]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -20,37 +22,42 @@
         dst-offsets? (dims-analytics/any-offsets? dst-dims)
         src-dims (dims-analytics/reduce-dimensionality src-dims src-offsets?)
         dst-dims (dims-analytics/reduce-dimensionality dst-dims dst-offsets?)
-        ^objects src-shape (:shape src-dims)
-        ^longs src-strides (:strides src-dims)
-        ^longs src-max-shape (:max-shape src-dims)
-        ^longs src-offsets (:offsets src-dims)
-        n-src (alength src-shape)
+        ^List src-shape (:shape src-dims)
+        ^List src-strides (:strides src-dims)
+        ^List src-max-shape (:shape-ecounts src-dims)
+        n-src (.size src-shape)
         n-src-dec (dec n-src)
-        ^objects dst-shape (:shape dst-dims)
-        ^longs dst-strides (:strides dst-dims)
-        ^longs dst-max-shape (:max-shape dst-dims)
-        ^longs dst-offsets (:offsets dst-dims)
-        n-dst (alength dst-shape)
+        ^List dst-shape (:shape dst-dims)
+        ^List dst-strides (:strides dst-dims)
+        ^List dst-max-shape (:shape-ecounts dst-dims)
+        n-dst (.size dst-shape)
         n-dst-dec (dec n-dst)
 
-        both-direct? (and (number? (aget src-shape n-src-dec))
-                          (number? (aget dst-shape n-dst-dec)))
-        strides-packed? (and (== 1 (aget src-strides n-src-dec))
-                             (== 1 (aget dst-strides n-dst-dec)))
-        src-last-offset (if src-offsets? (aget src-offsets n-src-dec) 0)
-        dst-last-offset (if dst-offsets? (aget dst-offsets n-dst-dec) 0)]
+        both-direct? (and (number? (.get src-shape n-src-dec))
+                          (number? (.get dst-shape n-dst-dec)))
+        strides-packed? (and (== 1 (long (.get src-strides n-src-dec)))
+                             (== 1 (long (.get dst-strides n-dst-dec))))
+        src-last-offset (long (if src-offsets?
+                                (idx-alg/get-offset
+                                 (.get src-shape n-src-dec))
+                                0))
+        dst-last-offset (long
+                         (if dst-offsets?
+                           (idx-alg/get-offset
+                            (.get dst-shape n-dst-dec))
+                           0))]
     (when (and both-direct?
                strides-packed?
                (== 0 src-last-offset)
                (== 0 dst-last-offset))
-      (let [dst-last-shape (long (aget dst-shape n-dst-dec))
-            src-last-shape (long (aget src-shape n-src-dec))
+      (let [dst-last-shape (long (.get dst-shape n-dst-dec))
+            src-last-shape (long (.get src-shape n-src-dec))
             min-shape (min dst-last-shape src-last-shape)
             max-shape (max dst-last-shape src-last-shape)]
         ;;the shapes have to be commensurate
         (when (and (== 0 (rem max-shape min-shape))
-                   (== dst-last-shape (aget dst-max-shape n-dst-dec))
-                   (== src-last-shape (aget src-max-shape n-src-dec)))
+                   (== dst-last-shape (long (.get dst-max-shape n-dst-dec)))
+                   (== src-last-shape (long (.get src-max-shape n-src-dec))))
           (let [src-reader (gtol/reduced-dims->global->local-reader src-dims)
                 dst-reader (gtol/reduced-dims->global->local-reader dst-dims)]
             {:block-size min-shape

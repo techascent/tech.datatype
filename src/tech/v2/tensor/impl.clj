@@ -945,8 +945,7 @@
                         strides)]
       (-> (dtype-jna/unsafe-ptr->typed-pointer
            ptr buffer-len datatype)
-          (construct-tensor (dims/dimensions
-                             shape :strides strides))))))
+          (construct-tensor (dims/dimensions shape strides))))))
 
 
 (defmethod unary-op/unary-reader-map :tensor

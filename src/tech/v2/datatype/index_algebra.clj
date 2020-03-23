@@ -131,7 +131,8 @@
 
 (defprotocol PIndexAlgebra
   (offset [item offset])
-  (broadcast [item num-repetitions])
+  (broadcast [item n-elems]
+    "Make this item larger or smaller by simple duplication of indexes.")
   (offset? [item])
   (broadcast? [item])
   (simple? [item])
@@ -192,14 +193,19 @@ back into Y global space indexes."))
         (IndexAlg. reader n-reader-elems
                    new-offset
                    repetitions))))
-  (broadcast [item num-repetitions]
-    (let [new-reps (* repetitions (long num-repetitions))]
-      (if (and (== 0 offset)
-               (== 1 new-reps))
-        (.get-reader item)
-        (IndexAlg. reader n-reader-elems
-                   offset
-                   new-reps))))
+  (broadcast [item n-elems]
+    (let [n-elems (long n-elems)]
+      (when-not (== 0 (rem n-elems n-reader-elems))
+        (throw (Exception.
+                (format "Requested length %s and base length %s are not commensurate"
+                        n-elems n-reader-elems))))
+      (let [new-reps (quot n-elems n-reader-elems)]
+        (if (and (== 0 offset)
+                 (== 1 new-reps))
+          (.get-reader item)
+          (IndexAlg. reader n-reader-elems
+                     offset
+                     new-reps)))))
   (offset? [item] (not= 0 offset))
   (broadcast? [item] (not= 1 repetitions))
   (simple? [item] (and (== 0 offset)
@@ -324,8 +330,8 @@ back into Y global space indexes."))
            (if (dtype-proto/convertible-to-range? select-arg)
              (let [select-arg (dtype-proto/->range select-arg {})]
                (if (dtype-proto/convertible-to-range? dim)
-                 (dtype-proto/combine-range (dtype-proto/->range dim {})
-                                            select-arg)
+                 (dtype-proto/range-select (dtype-proto/->range dim {})
+                                           select-arg)
                  (let [sel-arg-start (long (dtype-proto/range-start select-arg))
                        sel-arg-increment (long (dtype-proto/range-increment
                                                 select-arg))
@@ -373,10 +379,13 @@ back into Y global space indexes."))
     (if (== 0 (long offset-val))
       item
       (offset (->index-alg item) offset-val)))
-  (broadcast [item num-repetitions]
-    (if (== 1 (long num-repetitions))
-      item
-      (broadcast (->index-alg item) num-repetitions)))
+  (broadcast [item n-elems]
+    (let [item-ecount (if (number? item)
+                        (long item)
+                        (dtype-base/ecount item))]
+      (if (== (long n-elems) item-ecount)
+        item
+        (broadcast (->index-alg item) n-elems))))
   (offset? [item] false)
   (get-offset [item] 0)
   (broadcast? [item] false)

@@ -162,9 +162,7 @@
                                   :all))
         dst-tens (dtt/new-tensor [256 256 4] :datatype :uint8)]
     ;; (dtype/copy! src-tens dst-tens)
-    (dtype/copy! src-tens dst-tens)
-    :ok
-    ))
+    (dtype/copy! src-tens dst-tens)))
 
 
 (defn strided-tensor-bit-blit-test

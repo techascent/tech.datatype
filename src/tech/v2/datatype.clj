@@ -21,9 +21,7 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.protocols :as dtype-proto]
             ;;Support for base container types
-            [tech.v2.datatype.sparse.protocols :as sparse-proto]
             [tech.v2.datatype.bitmap :as bitmap]
-            [tech.v2.datatype.sparse.sparse-buffer]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
             [tech.v2.datatype.functional])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
@@ -120,8 +118,10 @@
     :native-buffer
     (dtype-proto/nio-convertible? item)
     :typed-buffer
-    (sparse-proto/sparse-convertible? item)
-    :sparse))
+    ;;(sparse-proto/sparse-convertible? item)
+    ;;:sparse
+    )
+  )
 
 
 (defn set-value!
@@ -475,7 +475,8 @@ Calls clojure.core.matrix/ecount."
   (indexed-rdr/make-indexed-reader indexes values options))
 
 
-(defn ->sparse
+;;Sparse is gone for a bit.
+#_(defn ->sparse
   "Return an object that implements the sparse protocols."
   [item]
   (when (= :sparse (buffer-type item))

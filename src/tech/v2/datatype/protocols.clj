@@ -328,12 +328,15 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 
 
 (defprotocol PRange
-  (combine-range [lhs rhs])
+  (range-select [lhs rhs]
+    "Select the lhs range using the rhs range as an indexer.  Returns
+  a new range as if the elements of lhs were indexed by rhs.")
   (range-start [item])
   (range-increment [item])
   (range-min [item])
   (range-max [item])
-  (range-offset [item offset])
+  (range-offset [item offset]
+    "Offset this range by this offset.  Returns")
   (range->reverse-map [item]
     "Return a map whose keys are the values of the range
 and whose values are the indexes that produce those values in the reader."))

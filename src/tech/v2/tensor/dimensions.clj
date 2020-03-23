@@ -418,17 +418,7 @@ https://cloojure.github.io/doc/core.matrix/clojure.core.matrix.html#var-select"
     (let [shape (dims-analytics/left-extend-shape shape (count new-shape))
           strides (dims-analytics/left-extend-strides strides (count new-shape))]
       (dimensions
-       (mapv (fn [old-shape new-shape]
-               (let [old-shape-ec (shape/shape-entry->count old-shape)
-                     new-shape (long new-shape)
-                     leftover (rem new-shape old-shape-ec)]
-                 (when-not (== 0 leftover)
-                   (throw (Exception. "shape ecount and broadcast amount are wrong")))
-                 (when-not (>= new-shape old-shape-ec)
-                   (throw (Exception. "Broadcast amounts most be more than or equal")))
-                 (idx-alg/broadcast old-shape (quot new-shape
-                                                    old-shape-ec))))
-             shape new-shape)
+       (mapv idx-alg/broadcast shape new-shape)
        strides))))
 
 

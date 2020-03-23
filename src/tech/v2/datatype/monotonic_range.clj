@@ -48,7 +48,7 @@
   dtype-proto/PClone
   (clone [this datatype] (Int64Range. start increment n-elems metadata))
   dtype-proto/PRange
-  (combine-range [lhs rhs]
+  (range-select [lhs rhs]
     (let [r-start (long (dtype-proto/range-start rhs))
           r-n-elems (long (dtype-proto/ecount rhs))
           r-inc (long (dtype-proto/range-increment rhs))
@@ -57,7 +57,7 @@
           new-inc (* r-inc increment)]
       (when (or (> r-stop n-elems)
                 (>= r-start n-elems))
-        (throw (Exception. "Combined ranges - righthand side out of range")))
+        (throw (Exception. "select-ranges - righthand side out of range")))
       (Int64Range. new-start new-inc r-n-elems {})))
   (range-start [item] start)
   (range-increment [item] increment)

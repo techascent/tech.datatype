@@ -11,12 +11,12 @@
 (deftest idx-alg-test
   (let [item (-> [1 2 3 4]
                  (idx-alg/offset 2)
-                 (idx-alg/broadcast 2)
+                 (idx-alg/broadcast 8)
                  (idx-alg/select (range 1 5)))]
     (is (= [4 1 2 3] (vec item)))
     (is (= (vec (flatten (repeat 2 [4 1 2 3])))
-           (idx-alg/broadcast item 2)))
-    (let [new-item (-> (idx-alg/broadcast item 2)
+           (idx-alg/broadcast item 8)))
+    (let [new-item (-> (idx-alg/broadcast item 8)
                        (idx-alg/offset 3)
                        (idx-alg/select (range 2 6)))]
       (is (= [1 2 3 4] new-item))

@@ -84,19 +84,21 @@
          ^List shape shape
          native? (boolean
                   (and shape-direct?
-                       (> n-dims 1)
                        (== 1 (long (.get strides (dec n-dims))))
-                       (loop [idx 1]
-                         (let [ridx (- n-dims idx 1)]
-                           (cond
-                             (== idx n-dims) true
-                             (not= (long (.get strides ridx))
-                                   (let [didx (unchecked-inc ridx)]
-                                     (* (long (.get strides didx))
-                                        (long (.get shape didx)))))
-                             false
-                             :else
-                             (recur (unchecked-inc idx)))))))
+                       (or (== n-dims 1)
+                           (loop [idx 1]
+                             (let [ridx (- n-dims idx 1)]
+                               (cond
+                                 (== idx n-dims) true
+                                 (and
+                                  (not= (.get shape ridx) 1)
+                                  (not= (long (.get strides ridx))
+                                        (let [didx (unchecked-inc ridx)]
+                                          (* (long (.get strides didx))
+                                             (long (.get shape didx))))))
+                                 false
+                                 :else
+                                 (recur (unchecked-inc idx))))))))
          overall-ecount (long (apply * shape-ecounts))
          reduced-dims (dims-analytics/reduce-dimensionality
                        {:shape shape
@@ -408,23 +410,26 @@ https://cloojure.github.io/doc/core.matrix/clojure.core.matrix.html#var-select"
 
 
 (defn broadcast
-  "Broadcast one or more dimensions"
-  [{:keys [shape shape-ecounts] :as dims} new-shape]
+  "Broadcast one or more dimensions. End result is shape of target matches
+  new-shape"
+  [{:keys [shape shape-ecounts strides] :as dims} new-shape]
   (if (= shape-ecounts (vec new-shape))
     dims
-    (dimensions
-     (mapv (fn [old-shape new-shape]
-             (let [old-shape-ec (shape/shape-entry->count old-shape)
-                   new-shape (long new-shape)
-                   leftover (rem new-shape old-shape-ec)]
-               (when-not (== 0 leftover)
-                 (throw (Exception. "shape ecount and broadcast amount are wrong")))
-               (when-not (>= new-shape old-shape-ec)
-                 (throw (Exception. "Broadcast amounts most be more than or equal")))
-               (idx-alg/broadcast old-shape (quot new-shape
-                                                  old-shape-ec))))
-           shape new-shape)
-     (:strides dims))))
+    (let [shape (dims-analytics/left-extend-shape shape (count new-shape))
+          strides (dims-analytics/left-extend-strides strides (count new-shape))]
+      (dimensions
+       (mapv (fn [old-shape new-shape]
+               (let [old-shape-ec (shape/shape-entry->count old-shape)
+                     new-shape (long new-shape)
+                     leftover (rem new-shape old-shape-ec)]
+                 (when-not (== 0 leftover)
+                   (throw (Exception. "shape ecount and broadcast amount are wrong")))
+                 (when-not (>= new-shape old-shape-ec)
+                   (throw (Exception. "Broadcast amounts most be more than or equal")))
+                 (idx-alg/broadcast old-shape (quot new-shape
+                                                    old-shape-ec))))
+             shape new-shape)
+       strides))))
 
 
 (defn slice

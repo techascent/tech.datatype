@@ -30,5 +30,7 @@
 (deftest basic-mm
   (do-basic-mm :list :float64)
   (do-basic-mm :list :int32)
-  (do-basic-mm :sparse :int32)
-  (do-basic-mm :sparse :int16))
+  ;;sparse is disabled for now
+  (comment
+    (do-basic-mm :sparse :int32)
+    (do-basic-mm :sparse :int16)))

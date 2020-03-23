@@ -23,35 +23,60 @@
 (set! *warn-on-reflection* true)
 
 
+
 (defn elem-idx->addr-fn
   "High-dimension (>3) fallback.  Create a reader that can iterate
   through the dimension members."
   [reduced-dims]
-  (let [^"[Ltech.v2.datatype.LongReader;" shape
-        (->> (:shape reduced-dims)
-             (map idx-alg/dimension->reader)
-             (into-array LongReader))
-        strides (long-array (:strides reduced-dims))
-        shape-ecounts (long-array (:shape-ecounts reduced-dims))
-        shape-ecount-strides (long-array (:shape-ecount-strides reduced-dims))
+  (let [^objects shape (object-array (:shape reduced-dims))
+        ^longs strides (long-array (:strides reduced-dims))
+        ^longs offsets (when-not (every? #(== 0 (long %)) (:offsets reduced-dims))
+                         (long-array (:offsets reduced-dims)))
+        ^longs max-shape (long-array (:shape-ecounts reduced-dims))
+        ^longs max-shape-strides (long-array (:shape-ecount-strides reduced-dims))
         n-dims (alength shape)
-        n-elems (pmath/* (aget shape-ecount-strides 0)
-                         (aget shape-ecounts 0))]
-    (reify LongReader
-      (lsize [rdr] n-elems)
-      (read [rdr idx]
-        (loop [dim 0
-               result 0]
-          (if (< dim n-dims)
-            (let [^LongReader shape-val (aget shape dim)
-                  idx (pmath// idx (aget shape-ecount-strides dim))
-                  stride (aget strides dim)
-                  local-val (-> (.read ^LongReader shape-val
-                                       (pmath/rem idx
-                                                  (.lsize ^LongReader shape-val)))
-                                (pmath/* stride))]
-              (recur (pmath/inc dim) (pmath/+ result local-val)))
-            result))))))
+        n-elems (pmath/* (aget max-shape-strides 0)
+                         (aget max-shape 0))]
+    (if offsets
+      (reify LongReader
+        (lsize [rdr] n-elems)
+        (read [rdr idx]
+          (loop [dim 0
+                 result 0]
+            (if (< dim n-dims)
+              (let [shape-val (aget shape dim)
+                    offset (aget offsets dim)
+                    idx (pmath/+
+                         (pmath// idx (aget max-shape-strides dim))
+                         offset)
+                    stride (aget strides dim)
+                    local-val (if (number? shape-val)
+                                (-> (pmath/rem idx (long shape-val))
+                                    (pmath/* stride))
+                                (-> (.read ^LongReader shape-val
+                                           (pmath/rem idx
+                                                      (.lsize ^LongReader shape-val)))
+                                    (pmath/* stride)))]
+                (recur (pmath/inc dim) (pmath/+ result local-val)))
+              result))))
+      (reify LongReader
+        (lsize [rdr] n-elems)
+        (read [rdr idx]
+          (loop [dim 0
+                 result 0]
+            (if (< dim n-dims)
+              (let [shape-val (aget shape dim)
+                    idx (pmath// idx (aget max-shape-strides dim))
+                    stride (aget strides dim)
+                    local-val (if (number? shape-val)
+                                (-> (pmath/rem idx (long shape-val))
+                                    (pmath/* stride))
+                                (-> (.read ^LongReader shape-val
+                                           (pmath/rem idx
+                                                      (.lsize ^LongReader shape-val)))
+                                    (pmath/* stride)))]
+                (recur (pmath/inc dim) (pmath/+ result local-val)))
+              result)))))))
 
 
 (defn- ast-symbol-access
@@ -102,10 +127,10 @@
 
 
 (defn reduced-dims->signature
-  [{:keys [shape strides shape-ecounts shape-ecount-strides]} broadcast?]
+  [{:keys [shape strides offsets shape-ecounts shape-ecount-strides]} broadcast?]
   (let [n-dims (count shape)
         direct-vec (mapv idx-alg/direct-reader? shape)
-        offsets? (boolean (some idx-alg/offset? shape))
+        offsets? (boolean (some #(not= 0 %) offsets))
         trivial-last-stride? (== 1 (long (.get ^List strides (dec n-dims))))]
     {:n-dims n-dims
      :direct-vec direct-vec
@@ -145,8 +170,8 @@
   ([reduced-dims broadcast?]
    (global->local-ast reduced-dims broadcast?
                       (reduced-dims->signature reduced-dims broadcast?)))
-  ([reduced-dims]
-   (let [broadcast? (dims-analytics/are-dims-bcast? reduced-dims)]
+  ([{:keys [^List shape ^List shape-ecounts] :as reduced-dims}]
+   (let [broadcast? (dims-analytics/are-reduced-dims-bcast? reduced-dims)]
      (global->local-ast reduced-dims
                         broadcast?
                         (reduced-dims->signature reduced-dims broadcast?)))))
@@ -169,17 +194,16 @@
 
 (defn- rectify-shape-entry
   [shape-entry]
-  (let [shape-entry (idx-alg/get-reader shape-entry)]
-    (if (number? shape-entry)
-      (long shape-entry)
-      (dtype/->reader shape-entry :int64))))
+  (if (number? shape-entry)
+    (long shape-entry)
+    (dtype/->reader shape-entry :int64)))
 
 
 (defn reduced-dims->constructor-args
-  [{:keys [shape strides shape-ecounts shape-ecount-strides]}]
+  [{:keys [shape strides offsets shape-ecounts shape-ecount-strides]}]
   (let [argmap {:shape (object-array (map rectify-shape-entry shape))
                 :strides (long-array strides)
-                :offsets (long-array (map idx-alg/get-offset shape))
+                :offsets (long-array offsets)
                 :shape-ecounts  (long-array shape-ecounts)
                 :shape-ecount-strides (long-array shape-ecount-strides)}]
     (->> (vals constructor-args)
@@ -492,7 +516,7 @@
        (elem-idx->addr-fn reduced-dims))))
   (^LongReader [reduced-dims]
    (get-or-create-reader reduced-dims
-                         (dims-analytics/are-dims-bcast? reduced-dims)
+                         (dims-analytics/are-reduced-dims-bcast? reduced-dims)
                          false)))
 
 
@@ -574,7 +598,9 @@
 
   ;;Image dimensions when you have a 2048x2048 image and you
   ;;want to crop a 256x256 sub-image out of it.
-  (def src-dims (dims/dimensions [4] [16]))
+  (def src-dims (-> (dims/dimensions [2 4 4] [32 4 1])
+                    (dims/rotate [0 0 1])
+                    (dims/broadcast [4 4 4])))
   (def reduced-dims (dims-analytics/reduce-dimensionality src-dims))
 
   (def test-ast (global->local-ast reduced-dims))
@@ -585,9 +611,9 @@
 
   (def first-constructor (first (.getDeclaredConstructors class-obj)))
 
-  (def constructor-args (reduced-dims->constructor-args reduced-dims))
+  (def cargs (reduced-dims->constructor-args reduced-dims))
 
-  (def idx-obj (.newInstance first-constructor constructor-args))
+  (def idx-obj (.newInstance first-constructor cargs))
 
 
 

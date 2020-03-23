@@ -293,7 +293,7 @@
   operation hasn't yet been derived.  In this case, the best you can do is a O(N)
   iteration similar to dense math."
   ^IndexingSystem$Backward
-  [dims]
+  [dims global->local*]
   (if (:direct? dims)
     (reify IndexingSystem$Backward
       (localToGlobal [item local-idx] local-idx))
@@ -301,22 +301,25 @@
     ;;This will just make the problem go away and allows rapid indexing.
     (if (< (dtype/ecount dims)
            Integer/MAX_VALUE)
-      (let [group-map (dfn/arggroup-by-int identity (->global->local dims))]
+      (let [group-map (dfn/arggroup-by-int :identity @global->local*)]
         (reify IndexingSystem$Backward
           (localToGlobal [item local-idx]
-            (dtype/->reader (get group-map (long local-idx))
-                            :int64))))
-      (let [group-map (dfn/arggroup-by identity (->global->local dims))]
+            (when-let [retval (get group-map (long local-idx))]
+              (dtype/->reader retval :int64)))))
+      (let [group-map (dfn/arggroup-by :identity (->global->local dims))]
         (reify IndexingSystem$Backward
           (localToGlobal [item local-idx]
-            (get group-map (long local-idx))))))))
+            (when-let [retval (get group-map (long local-idx))]
+              (dtype/->reader retval :int64))))))))
 
 
 (defn create-dimension-transforms [dims]
-  (assoc dims
-         :global->local (delay (gtol/dims->global->local dims))
-         ;;:global->local (delay (get-elem-dims-global->local dims))
-         :local->global (delay (get-elem-dims-local->global dims))))
+  (let [global->local (delay (gtol/dims->global->local dims))]
+    (assoc dims
+           :global->local global->local
+           ;;:global->local (delay (get-elem-dims-global->local dims))
+           :local->global (delay (get-elem-dims-local->global
+                                  dims global->local)))))
 
 
 (defn in-place-reshape

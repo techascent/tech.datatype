@@ -1,8 +1,6 @@
 (ns tech.v2.tensor.dimensions.analytics
-  (:require [tech.v2.tensor.dimensions.shape :as shape]
-            [tech.v2.datatype :as dtype]
+  (:require [tech.v2.datatype :as dtype]
             [tech.v2.datatype.index-algebra :as idx-alg]
-            [tech.v2.datatype.functional :as dtype-fn]
             [tech.v2.datatype.protocols :as dtype-proto]
             [primitive-math :as pmath])
   (:import [tech.v2.datatype LongReader]
@@ -95,36 +93,34 @@
             shape-ecount-strides]}
     offsets?]
    ;;Make sure shape only contains long objects as numbers
-   (let [shape (mapv #(if (number? %) (long %) %)
-                               shape)]
-     (if (== 1 (count shape))
-       {:shape shape
-        :strides strides
+   (if (== 1 (count shape))
+     {:shape shape
+      :strides strides
+      :shape-ecounts shape-ecounts
+      :shape-ecount-strides (or shape-ecount-strides
+                                (shape-ary->strides shape-ecounts))}
+     (let [^List shape shape
+           ^List strides strides
+           ^List shape-ecounts shape-ecounts
+           breaks (find-breaks shape strides shape-ecounts)
+           shape-ecounts (mapv
+                          #(reduce * (map (fn [idx] (.get shape-ecounts (long idx)))
+                                          %))
+                          breaks)]
+       {:shape (mapv #(if (== 1 (count %))
+                        (.get shape (long (first %)))
+                        (apply * (map (fn [idx]
+                                        (.get shape (long idx)))
+                                      %)))
+                     breaks)
+        :strides (mapv
+                  #(apply min Long/MAX_VALUE
+                          (map (fn [idx]
+                                 (.get strides (long idx)))
+                               %))
+                  breaks)
         :shape-ecounts shape-ecounts
-        :shape-ecount-strides (or shape-ecount-strides
-                                  (shape-ary->strides shape-ecounts))}
-       (let [^List shape shape
-             ^List strides strides
-             ^List shape-ecounts shape-ecounts
-             breaks (find-breaks shape strides shape-ecounts)
-             shape-ecounts (mapv
-                            #(reduce * (map (fn [idx] (.get shape-ecounts (long idx)))
-                                            %))
-                            breaks)]
-         {:shape (mapv #(if (== 1 (count %))
-                          (.get shape (long (first %)))
-                          (apply * (map (fn [idx]
-                                          (.get shape (long idx)))
-                                        %)))
-                       breaks)
-          :strides (mapv
-                    #(apply min Long/MAX_VALUE
-                            (map (fn [idx]
-                                   (.get strides (long idx)))
-                                 %))
-                    breaks)
-          :shape-ecounts shape-ecounts
-          :shape-ecount-strides (shape-ary->strides shape-ecounts)}))))
+        :shape-ecount-strides (shape-ary->strides shape-ecounts)})))
   ([dims]
    (reduce-dimensionality dims (any-offsets? dims))))
 

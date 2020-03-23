@@ -167,9 +167,17 @@
      (into {}))))
 
 
+(defn- rectify-shape-entry
+  [shape-entry]
+  (let [shape-entry (idx-alg/get-reader shape-entry)]
+    (if (number? shape-entry)
+      (long shape-entry)
+      (dtype/->reader shape-entry :int64))))
+
+
 (defn reduced-dims->constructor-args
   [{:keys [shape strides shape-ecounts shape-ecount-strides]}]
-  (let [argmap {:shape (object-array (map idx-alg/get-reader shape))
+  (let [argmap {:shape (object-array (map rectify-shape-entry shape))
                 :strides (long-array strides)
                 :offsets (long-array (map idx-alg/get-offset shape))
                 :shape-ecounts  (long-array shape-ecounts)

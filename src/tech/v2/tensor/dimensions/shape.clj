@@ -52,11 +52,11 @@
   (let [count-vec (shape->count-vec shape)
         n-items (count count-vec)]
     (loop [idx 0
-           sum 0]
+           sum 1]
       (if (< idx n-items)
         (recur (unchecked-inc idx)
-               (unchecked-add sum
-                              (long (count-vec idx))))
+               (* (long (count-vec idx))
+                  sum))
         sum))))
 
 

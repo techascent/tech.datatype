@@ -320,9 +320,16 @@
   `(let [item-reader# ~item-reader
          n-elems# (base/ecount item-reader#)
          reader-dtype# (clojure.core/or (:datatype ~options) :object)
-         item-reader# (->> (base/->reader item-reader# reader-dtype#)
-                           (unary-op/unary-map ~partition-fn)
-                           (typecast/datatype->reader :object))
+         item-reader# (typecast/datatype->reader
+                       :object
+                       (if (or (= ~partition-fn :identity)
+                               (identical? ~partition-fn identity))
+                         item-reader#
+                         (let [un-op# (if (keyword? ~partition-fn)
+                                        (get unary-op/builtin-unary-ops ~partition-fn)
+                                        ~partition-fn)]
+                           (->> (base/->reader item-reader# reader-dtype#)
+                                (unary-op/unary-map un-op#)))))
         list-fn# (reify
                    java.util.function.Function
                    (apply [this# _key#] (dtype->storage-constructor ~datatype)))

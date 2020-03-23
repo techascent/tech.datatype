@@ -441,7 +441,7 @@ and whose values are the indexes that produce those values in the reader."))
   (convertible-to-bitmap? [item] false)
 
   PConstantTimeMinMax
-  (constant-time-min-max? [item] (convertible-to-range? item))
+  (has-constant-time-min-max? [item] (convertible-to-range? item))
   (constant-time-min [item] (constant-time-min (->range item {})))
   (constant-time-max [item] (constant-time-max (->range item {}))))
 

@@ -52,7 +52,7 @@
                        ^boolean shape-direct? ;; true if all shape entries are numbers
                        ;;True if all shape entries are numbers and based on those numbers
                        ;;the strides indicate data is packed.
-                       ^boolean direct?
+                       ^boolean native?
                        ;;Are the strides ordered from greatest to least?
                        ^boolean access-increasing?
                        ;;delay of global->local transformation
@@ -77,22 +77,26 @@
                                 (some idx-alg/offset? shape)))
          broadcast? (boolean (and (not shape-direct?)
                                   (some idx-alg/broadcast? shape)))
-         access-increasing? (boolean (apply >= strides))
+         access-increasing? (boolean (if (> n-dims 1)
+                                       (apply >= strides)
+                                       true))
          ^List strides strides
          ^List shape shape
-         direct? (boolean
+         native? (boolean
                   (and shape-direct?
-                       (== 1 (long (.get strides 0)))
+                       (> n-dims 1)
+                       (== 1 (long (.get strides (dec n-dims))))
                        (loop [idx 1]
-                         (cond
-                           (== idx n-dims) true
-                           (not= (long (.get strides idx))
-                                 (let [didx (unchecked-dec idx)]
-                                   (* (long (.get strides didx))
-                                      (long (.get shape didx)))))
-                           false
-                           :else
-                           (recur (unchecked-inc idx))))))
+                         (let [ridx (- n-dims idx 1)]
+                           (cond
+                             (== idx n-dims) true
+                             (not= (long (.get strides ridx))
+                                   (let [didx (unchecked-inc ridx)]
+                                     (* (long (.get strides didx))
+                                        (long (.get shape didx)))))
+                             false
+                             :else
+                             (recur (unchecked-inc idx)))))))
          overall-ecount (long (apply * shape-ecounts))
          reduced-dims (dims-analytics/reduce-dimensionality
                        {:shape shape
@@ -112,7 +116,7 @@
                                    broadcast?
                                    offsets?
                                    shape-direct?
-                                   direct?
+                                   native?
                                    access-increasing?
                                    nil
                                    nil)]
@@ -130,7 +134,7 @@
          shape-direct? true
          offsets? false
          broadcast? false
-         direct? true
+         native? true
          access-increasing? true
          overall-ecount (long (* (long (.get shape 0))
                                  (long (.get strides 0))))
@@ -147,7 +151,7 @@
                                    broadcast?
                                    offsets?
                                    shape-direct?
-                                   direct?
+                                   native?
                                    access-increasing?
                                    nil
                                    nil)]
@@ -190,8 +194,20 @@
 
 
 (defn direct?
-  [{:keys [direct?]}]
-  direct?)
+  [{:keys [shape-direct?]}]
+  shape-direct?)
+
+
+(defn native?
+  [{:keys [native?]}]
+  native?)
+
+
+(defn dense?
+  "This query isn't answered well above but if it is native then it is definitely
+  dense."
+  [{:keys [native?]}]
+  native?)
 
 
 (defn indirect?
@@ -406,6 +422,54 @@ https://cloojure.github.io/doc/core.matrix/clojure.core.matrix.html#var-select"
                                                   old-shape-ec))))
            shape new-shape)
      (:strides dims))))
+
+
+(defn slice
+  "Slice off the leftmost n-elems dimensions.
+  Return a sub-dim object that doesn't change and a long reader of offsets.
+  Returns
+  {:dimension - dimensions for every sub object
+   :offsets - long reader of offsets for the buffer.
+  }"
+  [{:keys [shape strides] :as original-dims} n-elems]
+  (let [n-elems (long n-elems)
+        n-shape (count shape)]
+    (if (and (== n-elems 1)
+             (== n-shape 1))
+      ;;base case where there is only one dimension.  This really means just turn
+      ;;the tensor into a reader.
+      {:dimensions original-dims
+       :offsets (long-array [0])}
+      (let [sub-dims (dimensions (vec (drop n-elems shape))
+                                 (vec (drop n-elems strides)))
+            offset-dims (dimensions (vec (take n-elems shape))
+                                    (vec (take n-elems strides)))]
+        {:dimensions sub-dims
+         :offsets (->global->local offset-dims)}))))
+
+
+(defn slice-right
+  "Slice off the rightmost n-elems dimensions.
+  Return a sub-dim object that doesn't change and a long reader of offsets.
+  Returns
+  {:dimension - dimensions for every sub object
+   :offsets - long reader of offsets for the buffer.
+  }"
+  [{:keys [shape strides] :as original-dims} n-elems]
+  (let [n-elems (long n-elems)
+        n-shape (count shape)]
+    (if (== n-elems n-shape)
+      ;;base case where there is only one dimension.  This really means just turn
+      ;;the tensor into a reader.
+      {:dimensions original-dims
+       :offsets (dtype/->reader (long-array [0]))}
+      (let [offset-dims (dimensions (vec (take-last n-elems shape))
+                                    (vec (take-last n-elems strides)))
+            n-sub-dims (- n-shape n-elems)
+            sub-dims (dimensions (vec (take n-sub-dims shape))
+                                 (vec (take n-sub-dims strides)))]
+        {:dimensions sub-dims
+         :offsets (->global->local offset-dims)}))))
 
 
 (defn dimensions->column-stride

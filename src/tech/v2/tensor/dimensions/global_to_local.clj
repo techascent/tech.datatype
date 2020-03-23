@@ -453,7 +453,6 @@
                             (first (.getDeclaredConstructors
                                     class-obj))]
                         #(try
-                           (clojure.pprint/pprint ast-data)
                            (.newInstance first-constructor %)
                               (catch Throwable e
                                 (throw (ex-info (format "Error instantiating ast object: %s\n%s"
@@ -567,11 +566,7 @@
 
   ;;Image dimensions when you have a 2048x2048 image and you
   ;;want to crop a 256x256 sub-image out of it.
-  (def src-dims (-> (dims/dimensions [4 4])
-                    (dims/rotate [1 2])
-                    (dims/select :all (range 2))
-                    (dims/transpose [1 0])
-                    (dims/broadcast [4 4])))
+  (def src-dims (dims/dimensions [4] [16]))
   (def reduced-dims (dims-analytics/reduce-dimensionality src-dims))
 
   (def test-ast (global->local-ast reduced-dims))
@@ -582,8 +577,9 @@
 
   (def first-constructor (first (.getDeclaredConstructors class-obj)))
 
-  (def idx-obj (.newInstance first-constructor (reduced-dims->constructor-args
-                                                reduced-dims)))
+  (def constructor-args (reduced-dims->constructor-args reduced-dims))
+
+  (def idx-obj (.newInstance first-constructor constructor-args))
 
 
 

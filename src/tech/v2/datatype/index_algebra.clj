@@ -182,7 +182,10 @@ back into Y global space indexes."))
   PIndexAlgebra
   (offset [item new-offset]
     (let [new-offset (rem (+ offset (long new-offset))
-                          n-reader-elems)]
+                          n-reader-elems)
+          new-offset (long (if (< new-offset 0)
+                             (+ new-offset n-reader-elems)
+                             new-offset))]
       (if (and (== 0 new-offset)
                (== 1 repetitions))
         (.get-reader item)

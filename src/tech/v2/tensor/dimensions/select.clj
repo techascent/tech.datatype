@@ -50,7 +50,8 @@ the selection applied."
               new-shape-scalar? (:select-scalar? (meta new-shape-val))
               stride-val (long (.get stride-vec idx))
               [cmin new-shape-val]
-              (if (dtype-proto/convertible-to-range? new-shape-val)
+              (if (and (not (number? new-shape-val))
+                       (dtype-proto/convertible-to-range? new-shape-val))
                 (let [cmin (long (dtype-proto/constant-time-min new-shape-val))]
                   [cmin (-> (dtype-proto/range-offset new-shape-val (- cmin))
                             (idx-alg/simplify-range->direct))])

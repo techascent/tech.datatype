@@ -90,29 +90,41 @@
 (defn reduce-dimensionality
   "Make a smaller equivalent shape in terms of row-major addressing
   from the given shape."
-  ([{:keys [shape strides shape-ecounts]}
+  ([{:keys [shape strides
+            shape-ecounts
+            shape-ecount-strides]}
     offsets?]
-   (let [^List shape shape
-         ^List strides strides
-         ^List shape-ecounts shape-ecounts
-         breaks (find-breaks shape strides shape-ecounts)
-         shape-ecounts (mapv
-                        #(reduce * (map (fn [idx] (.get shape-ecounts (long idx)))
-                                        %))
-                        breaks)]
-     {:shape (mapv #(if (== 1 (count %))
-                      (.get shape (long (first %)))
-                     (apply * (map (fn [idx]
-                                     (.get shape (long idx)))
-                                   %)))
-                  breaks)
-      :strides (mapv
-                #(reduce min (map (fn [idx]
-                                    (.get strides (long idx)))
-                                  %))
-                breaks)
-      :shape-ecounts shape-ecounts
-      :shape-ecount-strides (shape-ary->strides shape-ecounts)}))
+   ;;Make sure shape only contains long objects as numbers
+   (let [shape (mapv #(if (number? %) (long %) %)
+                               shape)]
+     (if (== 1 (count shape))
+       {:shape shape
+        :strides strides
+        :shape-ecounts shape-ecounts
+        :shape-ecount-strides (or shape-ecount-strides
+                                  (shape-ary->strides shape-ecounts))}
+       (let [^List shape shape
+             ^List strides strides
+             ^List shape-ecounts shape-ecounts
+             breaks (find-breaks shape strides shape-ecounts)
+             shape-ecounts (mapv
+                            #(reduce * (map (fn [idx] (.get shape-ecounts (long idx)))
+                                            %))
+                            breaks)]
+         {:shape (mapv #(if (== 1 (count %))
+                          (.get shape (long (first %)))
+                          (apply * (map (fn [idx]
+                                          (.get shape (long idx)))
+                                        %)))
+                       breaks)
+          :strides (mapv
+                    #(apply min Long/MAX_VALUE
+                            (map (fn [idx]
+                                   (.get strides (long idx)))
+                                 %))
+                    breaks)
+          :shape-ecounts shape-ecounts
+          :shape-ecount-strides (shape-ary->strides shape-ecounts)}))))
   ([dims]
    (reduce-dimensionality dims (any-offsets? dims))))
 
@@ -148,7 +160,7 @@
            buffer-length (Long. 1)]
       (if (< idx n-dims)
         (let [new-shape-val (.get shape idx)
-              stride-val (.get strides idx)
+              stride-val (long (.get strides idx))
               [cmin cmax :as mmax]
               (cond
                 (number? new-shape-val)

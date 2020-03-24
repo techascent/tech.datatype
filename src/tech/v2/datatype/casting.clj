@@ -1,6 +1,7 @@
 (ns tech.v2.datatype.casting
   (:refer-clojure :exclude [cast])
-  (:require [clojure.set :as c-set])
+  (:require [clojure.set :as c-set]
+            [primitive-math :as pmath])
   (:import [tech.v2.datatype DateUtility]))
 
 
@@ -164,18 +165,18 @@
   (if (= src-dtype dtype)
     val
     (case dtype
-      :int8 `(unchecked-byte (datatype->number ~src-dtype ~val))
-      :int16 `(unchecked-short (datatype->number ~src-dtype ~val))
-      :int32 `(unchecked-int (datatype->number ~src-dtype ~val))
-      :int64 `(unchecked-long (datatype->number ~src-dtype ~val))
+      :int8 `(pmath/byte (datatype->number ~src-dtype ~val))
+      :int16 `(pmath/short (datatype->number ~src-dtype ~val))
+      :int32 `(pmath/int (datatype->number ~src-dtype ~val))
+      :int64 `(pmath/long (datatype->number ~src-dtype ~val))
 
-      :uint8 `(bit-and (unchecked-short (datatype->number ~src-dtype ~val)) 0xFF)
-      :uint16 `(bit-and (unchecked-int (datatype->number ~src-dtype ~val)) 0xFFFF)
-      :uint32 `(bit-and (unchecked-long (datatype->number ~src-dtype ~val)) 0xFFFFFFFF)
-      :uint64 `(unchecked-long (datatype->number ~src-dtype ~val))
+      :uint8 `(pmath/byte->ubyte (datatype->number ~src-dtype ~val))
+      :uint16 `(pmath/short->ushort (datatype->number ~src-dtype ~val))
+      :uint32 `(pmath/int->uint (datatype->number ~src-dtype ~val))
+      :uint64 `(pmath/long (datatype->number ~src-dtype ~val))
 
-      :float32 `(unchecked-float (datatype->number ~src-dtype ~val))
-      :float64 `(unchecked-double (datatype->number ~src-dtype ~val))
+      :float32 `(pmath/float (datatype->number ~src-dtype ~val))
+      :float64 `(pmath/double (datatype->number ~src-dtype ~val))
       :boolean `(datatype->boolean ~src-dtype ~val)
       :object `~val)))
 
@@ -219,12 +220,12 @@
                                                    (long (datatype->number ~src-dtype
                                                                            ~val))
                                                    ~dst-dtype))
-      :int8 `(unchecked-byte (int8-cast ~val))
-      :int16 `(unchecked-short (int16-cast ~val))
-      :int32 `(unchecked-int (int32-cast ~val))
-      :int64 `(unchecked-long (int64-cast ~val))
-      :float32 `(unchecked-float (float32-cast ~val))
-      :float64 `(unchecked-double (float64-cast ~val))
+      :int8 `(pmath/byte (int8-cast ~val))
+      :int16 `(pmath/short (int16-cast ~val))
+      :int32 `(pmath/int (int32-cast ~val))
+      :int64 `(pmath/long (int64-cast ~val))
+      :float32 `(pmath/float (float32-cast ~val))
+      :float64 `(pmath/double (float64-cast ~val))
       :boolean `(datatype->boolean ~src-dtype ~val)
       :keyword `(keyword ~val)
       :symbol `(symbol ~val)

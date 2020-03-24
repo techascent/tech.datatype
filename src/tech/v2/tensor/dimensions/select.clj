@@ -49,6 +49,9 @@ the selection applied."
               ;;add to result dims.
               new-shape-scalar? (:select-scalar? (meta new-shape-val))
               stride-val (long (.get stride-vec idx))
+              ;;This resets ranges to start at zero at the cost of causing our host
+              ;;to offset the buffer.  In the case where the range is incrementing
+              ;;by 1, however, this leads to a native mapping to underlying buffers.
               [cmin new-shape-val]
               (if (and (not (number? new-shape-val))
                        (dtype-proto/convertible-to-range? new-shape-val))

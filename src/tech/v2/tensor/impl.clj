@@ -5,6 +5,7 @@
               [tech.v2.datatype.sparse.protocols :as sparse-proto]
               [tech.v2.datatype.sparse.reader :as sparse-reader]
               [tech.v2.tensor.dimensions :as dims]
+              [tech.v2.tensor.dimensions.analytics :as dims-analytics]
               [tech.v2.tensor.dimensions.shape :as shape]
               [tech.v2.datatype.readers.indexed :as indexed-reader]
               [tech.v2.datatype.writers.indexed :as indexed-writer]
@@ -23,7 +24,8 @@
               [tech.jna :as jna])
     (:import [tech.v2.datatype
               IndexingSystem$Backward
-              ObjectReader]
+              ObjectReader
+              LongReader]
              [com.sun.jna Pointer]
              [java.io Writer]
              [java.util List]
@@ -65,19 +67,12 @@
 
 (defn simple-dimensions?
   [dimensions]
-  (and (dims/direct? dimensions)
-       (dims/access-increasing? dimensions)
-       (dims/dense? dimensions)
-       (or (nil? (:max-shape dimensions))
-           (= (:max-shape dimensions)
-              (:shape dimensions)))))
+  (dims/native? dimensions))
 
 
 (defn dims-suitable-for-desc?
   [dimensions]
-  (and (dims/direct? dimensions)
-       (every? #(= 0 %) (:offsets dimensions))
-       (= (:max-shape dimensions) (dims/shape dimensions))))
+  (dims/direct? dimensions))
 
 
 (defn- simple-vector-dimensions?
@@ -100,7 +95,7 @@
 
 (defn- sparse-reader->index-seq
   [sparse-reader shape & [strides]]
-  (let [strides (or strides (dims/extend-strides shape))]
+  (let [strides (or strides (dims-analytics/shape-ary->strides shape))]
     (->> (when sparse-reader
            (sparse-proto/index-seq sparse-reader))
          (map (fn [{:keys [global-index] :as item}]
@@ -118,7 +113,6 @@
          shape# ~item-shape
          n-elems# (long (apply * 1 shape#))
          n-dims# (count shape#)
-         strides# (dims/extend-strides shape#)
          base-tensor# ~base-tensor]
      (reify
        ~(tens-typecast/datatype->tensor-reader-type reader-datatype)
@@ -207,19 +201,19 @@
          ;;pprint requires the tensor methods *but* tostring requires
          ;;pprint...
          (.toString base-tensor#))
+       #_(comment
+         sparse-proto/PSparse
+         (index-seq [item#]
+                    (sparse-reader->index-seq ~sparse-reader shape# strides#))
+         (sparse-value [item#] (sparse-proto/sparse-value ~sparse-reader))
+         (sparse-ecount [item#] (sparse-proto/sparse-ecount ~sparse-reader))
+         (readers [item#] (sparse-proto/readers ~sparse-reader))
+         (iterables [item] (sparse-proto/iterables ~sparse-reader))
 
-       sparse-proto/PSparse
-       (index-seq [item#]
-         (sparse-reader->index-seq ~sparse-reader shape# strides#))
-       (sparse-value [item#] (sparse-proto/sparse-value ~sparse-reader))
-       (sparse-ecount [item#] (sparse-proto/sparse-ecount ~sparse-reader))
-       (readers [item#] (sparse-proto/readers ~sparse-reader))
-       (iterables [item] (sparse-proto/iterables ~sparse-reader))
 
-
-       sparse-proto/PToSparse
-       (convertible-to-sparse? [item#] (not (nil? ~sparse-reader)))
-       (->sparse [item#] item#))))
+         sparse-proto/PToSparse
+         (convertible-to-sparse? [item#] (not (nil? ~sparse-reader)))
+         (->sparse [item#] item#)))))
 
 
 (defmacro make-tensor-writer
@@ -229,7 +223,6 @@
          shape# ~item-shape
          n-elems# (long (apply * 1 shape#))
          n-dims# (count shape#)
-         strides# (dims/extend-strides shape#)
          base-tensor# ~base-tensor]
      (reify
        ~(tens-typecast/datatype->tensor-writer-type writer-datatype)
@@ -322,7 +315,7 @@
          (.toString base-tensor#)))))
 
 
-(defn- make-tensor-base-sparse-reader
+#_(defn- make-tensor-base-sparse-reader
   [buffer dimensions]
   (when-let [reader (sparse-proto/as-sparse buffer)]
     (if (simple-dimensions? dimensions)
@@ -332,9 +325,7 @@
       (let [{:keys [indexes data]} (sparse-proto/readers reader)
             addr-inverter (dimensions->index-inverter dimensions)
             direct? (dims/direct? dimensions)
-            raw-shape (if direct?
-                        (:shape dimensions)
-                        (shape/shape->count-vec (:shape dimensions)))
+            raw-shape (dtype/shape dims)
             broadcasting? (not= (:max-shape dimensions)
                                 raw-shape)
             access-increasing? (dims/access-increasing? dimensions)
@@ -498,24 +489,23 @@
    (buffer-type [item]
      (or buffer-type (dtype-proto/buffer-type buffer)))
 
-
    ;;Tensors implement only a small subset of the sparse protocols
    ;;For the full set, calling sparse-proto/as-sparse is your only option.
-   sparse-proto/PSparse
-   (index-seq [item]
-     (sparse-reader->index-seq (sparse-proto/as-sparse item) (dtype/shape item)))
-   (sparse-value [item]
-     (when (sparse-proto/as-sparse buffer)
-       (sparse-proto/sparse-value buffer)))
+   #_(comment
+     sparse-proto/PSparse
+     (index-seq [item]
+                (sparse-reader->index-seq (sparse-proto/as-sparse item) (dtype/shape item)))
+     (sparse-value [item]
+                   (when (sparse-proto/as-sparse buffer)
+                     (sparse-proto/sparse-value buffer)))
 
-
-   sparse-proto/PToSparse
-   (convertible-to-sparse? [item]
-     (sparse-proto/sparse-convertible? buffer))
-   (->sparse [item]
-     (if (simple-dimensions? dimensions)
-       (sparse-proto/as-sparse buffer)
-       (make-tensor-base-sparse-reader buffer dimensions)))
+     sparse-proto/PToSparse
+     (convertible-to-sparse? [item]
+                             (sparse-proto/sparse-convertible? buffer))
+     (->sparse [item]
+               (if (simple-dimensions? dimensions)
+                 (sparse-proto/as-sparse buffer)
+                 (make-tensor-base-sparse-reader buffer dimensions))))
 
    tens-proto/PTensor
    (is-tensor? [item] true)
@@ -536,7 +526,7 @@
                                      datatype))
                            buffer))
          buffer
-         (let [sparse-data (make-tensor-base-sparse-reader buffer dimensions)
+         (let [sparse-data nil #_(make-tensor-base-sparse-reader buffer dimensions)
                data-reader (dtype-proto/->reader buffer options)
                indexes (dimensions->index-reader dimensions)
                item-shape (dtype-proto/shape item)]
@@ -707,6 +697,8 @@
         datatype (default-datatype datatype)
         container-type (default-container-type container-type)
         n-elems (apply * 1 data-shape)]
+    (when (= container-type :sparse)
+      (throw (Exception. "Sparse tensors are not yet updated.")))
     (construct-tensor
      (first
       (dtype/copy-raw->item!
@@ -784,28 +776,10 @@
           (:max-shape dimensions))))
 
 
-(defn broadcast-error
-  "We can simplify a broadcast tensor by converting it to a reader and then
-  creating a new read-only tensor out of it."
-  [tens]
-  (let [tens (ensure-tensor tens)]
-    (if (broadcast? tens)
-      (construct-tensor (reify
-                          dtype-proto/PToReader
-                          (convertible-to-reader? [rdr] true)
-                          (->reader [rdr options]
-                            (dtype-proto/->reader tens options))
-                          dtype-proto/PDatatype
-                          (get-datatype [rdr] (dtype-proto/get-datatype tens))
-                          dtype-proto/PCountable
-                          (ecount [rdr] (dtype/ecount tens)))
-                        (dims/dimensions (dtype/shape tens)))
-      tens)))
-
 
 (defn rotate
   [tens rotate-vec]
-  (let [tens (broadcast-error tens)]
+  (let [tens (ensure-tensor tens)]
     (construct-tensor (tens-proto/buffer tens)
                       (dims/rotate (tensor->dimensions tens)
                                    (mapv #(* -1 (long %)) rotate-vec)))))
@@ -813,18 +787,20 @@
 
 (defn reshape
   [tens new-shape]
-  (let [tens (broadcast-error tens)
+  (let [tens (ensure-tensor tens)
         new-dims (dims/in-place-reshape (tens-proto/dimensions tens)
-                                        new-shape)]
-    (construct-tensor
-     (dtype/sub-buffer (tensor->buffer tens)
-                       0 (dims/buffer-ecount new-dims))
-     new-dims)))
+                                        new-shape)
+        buffer-ecount (dims/buffer-ecount new-dims)
+        new-buffer (if buffer-ecount
+                     (-> (tensor->buffer tens)
+                         (dtype/sub-buffer 0 buffer-ecount))
+                     (tensor->buffer tens))]
+    (construct-tensor new-buffer new-dims)))
 
 
 (defn transpose
   [tens transpose-vec]
-  (let [tens (broadcast-error tens)]
+  (let [tens (ensure-tensor tens)]
     (construct-tensor (tens-proto/buffer tens)
                       (dims/transpose (tens-proto/dimensions tens)
                                       transpose-vec))))
@@ -832,10 +808,10 @@
 
 (defn select
   [tens & args]
-  (let [tens (broadcast-error tens)
-        {new-dims :dims
-         buf-offset :elem-offset
-         buf-len :buffer-length}
+  (let [tens (ensure-tensor tens)
+        {buf-offset :elem-offset
+         buf-len :buffer-ecount
+         :as new-dims}
         (apply dims/select (tens-proto/dimensions tens) args)]
     (construct-tensor (-> (tensor->buffer tens)
                           (dtype/sub-buffer buf-offset buf-len))
@@ -845,12 +821,12 @@
 (defn broadcast
   "Create a larger tensor by repeating dimensions of a smaller tensor."
   [tens bcast-shape]
-  (let [tens (broadcast-error tens)
+  (let [tens (ensure-tensor tens)
         tens-shape (dtype/shape tens)
         n-tens-elems (dtype/ecount tens)
         n-bcast-elems (shape/ecount bcast-shape)
         num-tens-shape (count tens-shape)
-        {:keys [shape strides offsets]} (tens-proto/dimensions tens)]
+        {:keys [shape strides] :as original-dims} (tens-proto/dimensions tens)]
     (when-not (every? number? bcast-shape)
       (throw (ex-info "Broadcast shapes must only be numbers" {})))
     (when-not (>= n-bcast-elems
@@ -868,30 +844,7 @@
                               bcast-shape tens-shape)
               {})))
     (construct-tensor (tens-proto/buffer tens)
-                      (dims/dimensions shape :strides strides :offsets offsets
-                                       :max-shape bcast-shape))))
-
-
-(defn- slice-select-args
-  [t-shape slice-dims]
-  (let [n-shape (count t-shape)
-        slice-dims (long slice-dims)
-        all-seq (repeat (- n-shape slice-dims) :all)
-        slice-shape (vec (take slice-dims t-shape))
-        slice-strides (dims/extend-strides slice-shape)
-        n-slices (apply * 1 slice-shape)]
-    (dtype/object-reader
-     n-slices
-     (fn [slice-idx]
-       (let [select-args
-             (->> slice-strides
-                  (reduce (fn [[slice-shape slice-idx] item-stride]
-                            [(conj slice-shape (quot (long slice-idx)
-                                                     (long item-stride)))
-                             (rem (long slice-idx) (long item-stride))])
-                          [[] slice-idx])
-                  first)]
-         (concat select-args all-seq))))))
+                      (dims/broadcast original-dims bcast-shape))))
 
 
 (defn slice
@@ -909,10 +862,56 @@
        (throw (ex-info (format "Slice operator n-dims out of range: %s:%s"
                                slice-dims t-shape)
                        {})))
-     (if (= slice-dims n-shape)
+     (if (== slice-dims n-shape)
        (dtype/->reader tens)
-       (->> (slice-select-args t-shape slice-dims)
-            (unary-op/unary-reader :object (apply select tens x)))))))
+       (let [{:keys [dimensions offsets]} (dims/slice (tensor->dimensions tens)
+                                                      slice-dims)
+             ^LongReader offsets offsets
+             n-offsets (.lsize offsets)
+             tens-buf (tensor->buffer tens)
+             buf-len (dtype/ecount tens-buf)]
+         (reify ObjectReader
+           (lsize [rdr] n-offsets)
+           (read [rdr idx]
+             (construct-tensor (dtype/sub-buffer
+                                tens-buf
+                                (.read offsets idx)
+                                (:buffer-ecount dimensions))
+                               dimensions))))))))
+
+
+(defn slice-right
+  "Return a sequence of tensors of reduced dimensionality.  n-dims indicates the number
+  of leading dimensions to remove.  For example, if you have an item of shape [3 4] and
+  1 is one you get a sequence of 3 vectors of length 4.  Returns a :object reader
+  where each index maps to a tensor."
+  ([tens]
+   (slice-right tens 1))
+  ([tens slice-dims]
+   (let [t-shape (dtype/shape tens)
+         n-shape (count t-shape)
+         slice-dims (long slice-dims)]
+     (when-not (<= slice-dims n-shape)
+       (throw (ex-info (format "Slice operator n-dims out of range: %s:%s"
+                               slice-dims t-shape)
+                       {})))
+     (let [{:keys [dimensions offsets]} (dims/slice-right
+                                         (tensor->dimensions tens)
+                                         slice-dims)
+           ^LongReader offsets offsets
+           n-offsets (.lsize offsets)
+           tens-buf (tensor->buffer tens)
+           buf-len (dtype/ecount tens-buf)]
+       (if (== slice-dims n-shape)
+         (dtype/->reader (construct-tensor tens-buf dimensions))
+         (reify ObjectReader
+           (lsize [rdr] n-offsets)
+           (read [rdr idx]
+             (construct-tensor (dtype/sub-buffer
+                                tens-buf
+                                (.read offsets idx)
+                                (:buffer-ecount dimensions))
+                               dimensions))))))))
 
 
 (defn ensure-buffer-descriptor
@@ -946,8 +945,7 @@
                         strides)]
       (-> (dtype-jna/unsafe-ptr->typed-pointer
            ptr buffer-len datatype)
-          (construct-tensor (dims/dimensions
-                             shape :strides strides))))))
+          (construct-tensor (dims/dimensions shape strides))))))
 
 
 (defmethod unary-op/unary-reader-map :tensor

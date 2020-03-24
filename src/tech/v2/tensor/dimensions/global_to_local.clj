@@ -5,6 +5,7 @@
             [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.datatype :as dtype]
             [tech.v2.datatype.functional :as dtype-fn]
+            [tech.v2.datatype.index-algebra :as idx-alg]
             [primitive-math :as pmath]
             [insn.core :as insn]
             [insn.op :as insn-op]
@@ -22,15 +23,17 @@
 (set! *warn-on-reflection* true)
 
 
+
 (defn elem-idx->addr-fn
   "High-dimension (>3) fallback.  Create a reader that can iterate
   through the dimension members."
   [reduced-dims]
-  (let [^objects shape (:shape reduced-dims)
-        ^longs strides (:strides reduced-dims)
-        ^longs offsets (:offsets reduced-dims)
-        ^longs max-shape (:max-shape reduced-dims)
-        ^longs max-shape-strides (:max-shape-strides reduced-dims)
+  (let [^objects shape (object-array (:shape reduced-dims))
+        ^longs strides (long-array (:strides reduced-dims))
+        ^longs offsets (when-not (every? #(== 0 (long %)) (:offsets reduced-dims))
+                         (long-array (:offsets reduced-dims)))
+        ^longs max-shape (long-array (:shape-ecounts reduced-dims))
+        ^longs max-shape-strides (long-array (:shape-ecount-strides reduced-dims))
         n-dims (alength shape)
         n-elems (pmath/* (aget max-shape-strides 0)
                          (aget max-shape 0))]
@@ -102,10 +105,10 @@
   (let [shape (make-symbol :shape dim-idx)
         stride (make-symbol :stride dim-idx)
         offset (make-symbol :offset dim-idx)
-        max-shape-stride (make-symbol :max-shape-stride dim-idx)]
+        shape-ecount-stride (make-symbol :shape-ecount-stride dim-idx)]
     (let [idx (if most-rapidly-changing-index?
                 `~'idx
-                `(~'quot ~'idx ~max-shape-stride))
+                `(~'quot ~'idx ~shape-ecount-stride))
           offset-idx (if offsets?
                        `(~'+ ~idx ~offset)
                        `~idx)
@@ -124,16 +127,11 @@
 
 
 (defn reduced-dims->signature
-  [reduced-dims broadcast?]
-  (let [^objects shape (:shape reduced-dims)
-        ^longs strides (:strides reduced-dims)
-        ^longs offsets (:offsets reduced-dims)
-        ^longs max-shape (:max-shape reduced-dims)
-        ^longs max-shape-strides (:max-shape-strides reduced-dims)
-        n-dims (alength shape)
-        direct-vec (mapv number? shape)
-        offsets? (boolean offsets)
-        trivial-last-stride? (== 1 (aget strides (dec n-dims)))]
+  [{:keys [shape strides offsets shape-ecounts shape-ecount-strides]} broadcast?]
+  (let [n-dims (count shape)
+        direct-vec (mapv idx-alg/direct-reader? shape)
+        offsets? (boolean (some #(not= 0 %) offsets))
+        trivial-last-stride? (== 1 (long (.get ^List strides (dec n-dims))))]
     {:n-dims n-dims
      :direct-vec direct-vec
      :offsets? offsets?
@@ -142,41 +140,38 @@
 
 
 (defn global->local-ast
-  ([reduced-dims broadcast? signature]
-   (let [^objects shape (:shape reduced-dims)
-         ^longs strides (:strides reduced-dims)
-         ^longs offsets (:offsets reduced-dims)
-         ^longs max-shape (:max-shape reduced-dims)
-         ^longs max-shape-strides (:max-shape-strides reduced-dims)
-
-         n-dims (long (:n-dims signature))
+  ([{:keys [shape strides shape-ecounts shape-ecount-strides] :as _reduced-dims}
+    broadcast? signature]
+   (let [n-dims (long (:n-dims signature))
          direct-vec (:direct-vec signature)
          offsets? (:offsets? signature)
          trivial-last-stride? (:trivial-last-stride? signature)]
      {:signature signature
-      :ast (if (= n-dims 1)
-             (elemwise-ast 0 (direct-vec 0) offsets? broadcast?
-                           trivial-last-stride? true true)
-             (let [n-dims-dec (dec n-dims)]
-               (->> (range n-dims)
-                    (map (fn [dim-idx]
-                           (let [dim-idx (long dim-idx)
-                                 least-rapidly-changing-index? (== dim-idx 0)
-                                 ;;This optimization removes the 'rem' on the most significant
-                                 ;;dimension.  Valid if we aren't broadcasting
-                                 most-rapidly-changing-index? (and (not broadcast?)
-                                                                   (== dim-idx n-dims-dec))
-                                 trivial-stride? (and most-rapidly-changing-index?
-                                                      trivial-last-stride?)]
-                             (elemwise-ast dim-idx (direct-vec dim-idx) offsets? broadcast?
-                                           trivial-stride? most-rapidly-changing-index?
-                                           least-rapidly-changing-index?))))
-                    (apply list '+))))}))
+      :ast
+      (if (= n-dims 1)
+        (elemwise-ast 0 (direct-vec 0) offsets? broadcast?
+                      trivial-last-stride? true true)
+        (let [n-dims-dec (dec n-dims)]
+          (->> (range n-dims)
+               (map (fn [dim-idx]
+                      (let [dim-idx (long dim-idx)
+                            least-rapidly-changing-index? (== dim-idx 0)
+                            ;;This optimization removes the 'rem' on the most
+                            ;;significant dimension.  Valid if we aren't
+                            ;;broadcasting
+                            most-rapidly-changing-index? (and (not broadcast?)
+                                                              (== dim-idx n-dims-dec))
+                            trivial-stride? (and most-rapidly-changing-index?
+                                                 trivial-last-stride?)]
+                        (elemwise-ast dim-idx (direct-vec dim-idx) offsets? broadcast?
+                                      trivial-stride? most-rapidly-changing-index?
+                                      least-rapidly-changing-index?))))
+               (apply list '+))))}))
   ([reduced-dims broadcast?]
    (global->local-ast reduced-dims broadcast?
                       (reduced-dims->signature reduced-dims broadcast?)))
-  ([reduced-dims]
-   (let [broadcast? (dims-analytics/are-dims-bcast? reduced-dims)]
+  ([{:keys [^List shape ^List shape-ecounts] :as reduced-dims}]
+   (let [broadcast? (dims-analytics/are-reduced-dims-bcast? reduced-dims)]
      (global->local-ast reduced-dims
                         broadcast?
                         (reduced-dims->signature reduced-dims broadcast?)))))
@@ -184,10 +179,11 @@
 
 (def constructor-args
   (let [name-map {:stride :strides
-                  :max-shape-stride :max-shape-strides
+                  :shape-ecount :shape-ecounts
+                  :shape-ecount-stride :shape-ecount-strides
                   :offset :offsets}]
     (->>
-     [:shape :stride :offset :max-shape :max-shape-stride]
+     [:shape :stride :offset :shape-ecount :shape-ecount-stride]
      (map-indexed (fn [idx argname]
                     ;;inc because arg0 is 'this' object
                     [argname {:arg-idx (inc (long idx))
@@ -196,16 +192,28 @@
      (into {}))))
 
 
+(defn- rectify-shape-entry
+  [shape-entry]
+  (if (number? shape-entry)
+    (long shape-entry)
+    (dtype/->reader shape-entry :int64)))
+
+
 (defn reduced-dims->constructor-args
-  [reduced-dims]
-  (->> (vals constructor-args)
-       (map (fn [{:keys [ary-name]}]
-              (if-let [carg (ary-name reduced-dims)]
-                carg
-                (when-not (= ary-name :offsets)
-                  (throw (Exception. (format "Failed to find constructor argument %s"
-                                             ary-name)))))))
-       (object-array)))
+  [{:keys [shape strides offsets shape-ecounts shape-ecount-strides]}]
+  (let [argmap {:shape (object-array (map rectify-shape-entry shape))
+                :strides (long-array strides)
+                :offsets (long-array offsets)
+                :shape-ecounts  (long-array shape-ecounts)
+                :shape-ecount-strides (long-array shape-ecount-strides)}]
+    (->> (vals constructor-args)
+         (map (fn [{:keys [ary-name]}]
+                (if-let [carg (ary-name argmap)]
+                  carg
+                  (when-not (= ary-name :offsets)
+                    (throw (Exception. (format "Failed to find constructor argument %s"
+                                               ary-name)))))))
+         (object-array))))
 
 
 (defn bool->str
@@ -458,7 +466,7 @@
 (def defined-classes (ConcurrentHashMap.))
 (defn get-or-create-reader
   (^LongReader [reduced-dims broadcast? force-default-reader?]
-   (let [n-dims (alength ^objects (:shape reduced-dims))]
+   (let [n-dims (count (:shape reduced-dims))]
      (if (and (not force-default-reader?)
               (<= n-dims 4))
        (let [signature (reduced-dims->signature reduced-dims broadcast?)
@@ -476,7 +484,8 @@
                             ^Constructor first-constructor
                             (first (.getDeclaredConstructors
                                     class-obj))]
-                        #(try (.newInstance first-constructor %)
+                        #(try
+                           (.newInstance first-constructor %)
                               (catch Throwable e
                                 (throw (ex-info (format "Error instantiating ast object: %s\n%s"
                                                         e
@@ -507,13 +516,13 @@
        (elem-idx->addr-fn reduced-dims))))
   (^LongReader [reduced-dims]
    (get-or-create-reader reduced-dims
-                         (dims-analytics/are-dims-bcast? reduced-dims)
+                         (dims-analytics/are-reduced-dims-bcast? reduced-dims)
                          false)))
 
 
 (defn dims->global->local-reader
   ^LongReader [dims]
-  (-> (dims-analytics/reduce-dimensionality dims)
+  (-> (dims-analytics/dims->reduced-dims dims)
       (get-or-create-reader)))
 
 
@@ -523,10 +532,10 @@
 
 
 (defn dims->global->local
-  ^LongTensorReader [{:keys [shape stride offset max-shape] :as dims}]
-  (let [max-shape (long-array max-shape)
-        max-shape-strides (dims-analytics/shape-ary->strides max-shape)
-        n-dims (alength max-shape-strides)
+  ^LongTensorReader [{:keys [reduced-dims] :as dims}]
+  (let [shape-ecounts (long-array (:shape-ecounts dims))
+        shape-ecount-strides (long-array (:shape-ecount-strides dims))
+        n-dims (alength shape-ecount-strides)
         n-dims-dec (dec n-dims)
         n-dims-dec-1 (max 0 (dec n-dims-dec))
         n-dims-dec-2 (max 0 (dec n-dims-dec-1))
@@ -534,13 +543,13 @@
         n-elems (.lsize elemwise-reader)
 
         ;;Bounds checking
-        max-height (aget max-shape n-dims-dec-2)
-        max-row (aget max-shape n-dims-dec-1)
-        max-col (aget max-shape n-dims-dec)
+        max-height (aget shape-ecounts n-dims-dec-2)
+        max-row (aget shape-ecounts n-dims-dec-1)
+        max-col (aget shape-ecounts n-dims-dec)
 
         ;;xyz->global row major index calculation
-        max-shape-strides-dec-1 (aget max-shape-strides n-dims-dec-1)
-        max-shape-strides-dec-2 (aget max-shape-strides n-dims-dec-2)]
+        shape-ecount-strides-dec-1 (aget shape-ecount-strides n-dims-dec-1)
+        shape-ecount-strides-dec-2 (aget shape-ecount-strides n-dims-dec-2)]
     (reify LongTensorReader
       (lsize [rdr] n-elems)
       (read [rdr idx] (.read elemwise-reader idx))
@@ -554,7 +563,7 @@
                                      [row col]
                                      [max-row max-col]))))
 
-        (.read this (pmath/+ (pmath/* row max-shape-strides-dec-1)
+        (.read this (pmath/+ (pmath/* row shape-ecount-strides-dec-1)
                              col)))
       (read3d [this height width chan]
         (when (not= n-dims 3)
@@ -567,8 +576,8 @@
                                      [max-height max-row max-col]
                                      [height width chan]))))
         (.read this (pmath/+
-                     (pmath/* height max-shape-strides-dec-2)
-                     (pmath/* width max-shape-strides-dec-1)
+                     (pmath/* height shape-ecount-strides-dec-2)
+                     (pmath/* width shape-ecount-strides-dec-1)
                      chan)))
       (tensorRead [this dims]
         (let [iter (.iterator dims)]
@@ -578,7 +587,7 @@
                         (if continue?
                           (let [next-val (long (.next iter))]
                             (recur (.hasNext iter)
-                                   (-> (* next-val (aget max-shape-strides idx))
+                                   (-> (* next-val (aget shape-ecount-strides idx))
                                        (pmath/+ val))
                                    (pmath/inc idx)))
                           val))))))))
@@ -589,8 +598,9 @@
 
   ;;Image dimensions when you have a 2048x2048 image and you
   ;;want to crop a 256x256 sub-image out of it.
-  (def src-dims (dims/dimensions [256 256 4]
-                                 :strides [8192 4 1]))
+  (def src-dims (-> (dims/dimensions [2 4 4] [32 4 1])
+                    (dims/rotate [0 0 1])
+                    (dims/broadcast [4 4 4])))
   (def reduced-dims (dims-analytics/reduce-dimensionality src-dims))
 
   (def test-ast (global->local-ast reduced-dims))
@@ -601,8 +611,11 @@
 
   (def first-constructor (first (.getDeclaredConstructors class-obj)))
 
-  (def idx-obj (.newInstance first-constructor (reduced-dims->constructor-args
-                                                reduced-dims)))
+  (def cargs (reduced-dims->constructor-args reduced-dims))
+
+  (def idx-obj (.newInstance first-constructor cargs))
+
+
 
   ;;Due to striding, there is a discontinuity at index 1024
   (def indexes (map idx-obj (range 1020 1030)))

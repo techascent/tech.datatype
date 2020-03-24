@@ -1,180 +1,69 @@
 (ns tech.v2.tensor.dimensions.select
   "Selecting subsets from a larger set of dimensions leads to its own algebra."
-  (:require [tech.v2.tensor.dimensions.shape :as shape]
-            [tech.v2.tensor.utils :refer [when-not-error]]
-            [tech.v2.datatype :as dtype]
-            [tech.v2.datatype.typecast :as typecast])
-  (:import [tech.v2.datatype LongReader]))
+  (:require [tech.v2.datatype.index-algebra :as idx-alg]
+            [tech.v2.datatype.protocols :as dtype-proto])
+  (:import [tech.v2.datatype LongReader]
+           [java.util ArrayList List]
+           [it.unimi.dsi.fastutil.longs LongArrayList]))
 
 (set! *unchecked-math* :warn-on-boxed)
 (set! *warn-on-reflection* true)
 
 
 (defn- expand-dimension
-  [dim]
-  (cond (number? dim)
-        {:type :+
-         :min-item 0
-         :max-item (- (long dim) 1)}
-        (shape/classified-sequence? dim) dim
-        (or (sequential? dim)
-            (dtype/reader? dim)) (shape/classify-sequence dim)
-        :else
-        (throw (ex-info "Failed to recognize dimension type"
-                        {:dimension dim}))))
-
-
-(defn- expand-select-arg
-  [select-arg]
-  (cond
-    (number? select-arg)
-    (shape/classify-sequence select-arg)
-
-    (= :all select-arg)
-    select-arg
-    (= :lla select-arg)
-    select-arg
-
-    (shape/classified-sequence? select-arg)
-    select-arg
-
-    (instance? clojure.lang.LongRange select-arg)
-    (shape/classify-sequence select-arg)
-
-    (dtype/reader? select-arg)
-    select-arg
-
-
-    ;;else attempt to make it a reader
-    :else
-    (vec select-arg)))
+  ^LongReader [dim]
+  (idx-alg/dimension->reader dim))
 
 
 (defn apply-select-arg-to-dimension
   "Given a dimension and select argument, create a new dimension with
 the selection applied."
   [dim select-arg]
-  ;;Dim is now a map or a reader
-  (let [dim (expand-dimension dim)
-        ;;Select arg is now a map, a keyword, or a reader
-        select-arg (expand-select-arg select-arg)
-        dim-type (cond (shape/classified-sequence? dim)  :classified-sequence
-                       (dtype/reader? dim) :reader
-                       :else (throw (Exception. "Unrecognized dim type.")))
-        select-type (cond (shape/classified-sequence? select-arg) :classified-sequence
-                          (dtype/reader? select-arg) :reader
-                          (keyword? select-arg) :keyword
-                          :else (throw (Exception. "Unrecognized select type.")))]
-    (case select-type
-      :reader
-      (case dim-type
-        :reader (dtype/indexed-reader select-arg dim {:datatype :int64})
-        :classified-sequence
-        (if (and (= :+ (:type dim))
-                 (= 0 (long (:min-item dim))))
-          select-arg
-          (dtype/indexed-reader select-arg
-                                (shape/classified-sequence->reader dim)
-                                {:datatype :int64})))
-      :keyword
-      (case select-arg
-        :all dim
-        :lla (case dim-type
-               :reader (let [src-reader (typecast/datatype->reader :int64 dim)
-                             n-elems (.lsize src-reader)]
-                         (reify LongReader
-                           (lsize [rdr] n-elems)
-                           (read [rdr idx]
-                             (- n-elems idx 1))))
-               :classified-sequence (shape/reverse-classified-sequence dim)))
-      :classified-sequence
-      (case dim-type
-        :reader
-        (dtype/indexed-reader (shape/classified-sequence->reader select-arg)
-                              dim
-                              {:datatype :int64})
-        :classified-sequence
-        (shape/combine-classified-sequences dim select-arg)))))
+  (if (= select-arg :all)
+    dim
+    (idx-alg/select dim select-arg)))
 
 
-(defn dimensions->simpified-dimensions
-  "Given the dimensions post selection, produce a new dimension sequence combined with
-  an offset that lets us know how much we should offset the base storage type.
-  Simplification is important because it allows a backend to hit more fast paths.
-Returns:
-{:dimension-seq dimension-seq
-:offset offset}"
-  [dimension-seq stride-seq dim-offset-seq]
-  (let [[dimension-seq strides dim-offsets offset]
-        (reduce
-         (fn [[dimension-seq strides dim-offsets offset]
-              [dimension stride dim-offset]]
-           (let [dim-type (if (map? dimension)
-                            :classified-sequence
-                            :reader)
-                 [dim-type dimension]
-                 (if (and (= :reader dim-type)
-                          (= 1 (dtype/ecount dimension)))
-                   (let [dim-val (dtype/get-value dimension 0)]
-                     [:classified-sequence
-                      {:type :+ :min-item dim-val :max-item dim-val}])
-                   [dim-type dimension])]
-             (case dim-type
-               :reader
-               [(conj dimension-seq dimension)
-                (conj strides stride)
-                (conj dim-offsets dim-offset)
-                offset]
-               :classified-sequence
-               ;;Shift the sequence down and record the new offset.
-               (let [{:keys [type min-item max-item sequence
-                             scalar?]} dimension
-                     max-item (- (long max-item) (long min-item))
-                     new-offset (+ (long offset)
-                                   (* (long stride)
-                                      (long (:min-item dimension))))
-                     min-item 0
-                     dimension (cond-> (assoc dimension
-                                              :min-item min-item
-                                              :max-item max-item)
-                                 sequence
-                                 (assoc :sequence (mapv (fn [idx]
-                                                          (- (long idx)
-                                                             (long min-item)))
-                                                        sequence)))
-                     ;;Now simplify the dimension if possible
-                     dimension (cond
-                                 (= min-item max-item)
-                                 1
-                                 (= :+ type)
-                                 (+ 1 max-item)
-                                 sequence
-                                 (:sequence dimension)
-                                 :else
-                                 dimension)]
-                 ;;A scalar single select arg means drop the dimension.
-                 (if-not (and (= 1 dimension)
-                              scalar?
-                              (= 0 (int dim-offset)))
-                   [(conj dimension-seq dimension)
-                    (conj strides stride)
-                    (conj dim-offsets dim-offset)
-                    new-offset]
-                   ;;We keep track of offsetting but we don't add the
-                   ;;element to the return value.
-                   [dimension-seq strides dim-offsets new-offset]))
-               ;;Only readers and classified sequences allowed here.
-               (throw (ex-info "Bad dimension type"
-                               {:dimension dimension})))))
-         [[] [] [] 0]
-         (map vector dimension-seq stride-seq dim-offset-seq))
-        retval
-
-        {:dimension-seq dimension-seq
-         :strides strides
-         :offsets dim-offsets
-         :offset offset
-         :length (when (shape/direct-shape? dimension-seq)
-                   (apply + 1 (map * (map (comp dec shape/shape-entry->count)
-                                          dimension-seq) strides)))}]
-    retval))
+(defn select
+  "Apply a select seq to a dimension.
+  Return new shape, stride, offset array
+  along with new buffer offset and if it can be calculated a new
+  buffer length."
+  [select-seq shape-vec stride-vec]
+  (let [^List select-vec (vec select-seq)
+        ^List shape-vec shape-vec
+        ^List stride-vec stride-vec
+        result-shape (ArrayList.)
+        result-stride (LongArrayList.)
+        n-elems (.size select-vec)]
+    (when-not (== (.size select-vec)
+                  (.size shape-vec))
+      (throw (Exception. "Shape,select vecs do not match")))
+    (loop [idx 0
+           buffer-offset 0]
+      (if (< idx n-elems)
+        (let [new-shape-val (apply-select-arg-to-dimension
+                             (.get shape-vec idx)
+                             (.get select-vec idx))
+              ;;scalar means to evaluate the result immediately and do not
+              ;;add to result dims.
+              new-shape-scalar? (:select-scalar? (meta new-shape-val))
+              stride-val (long (.get stride-vec idx))
+              [cmin new-shape-val]
+              (if (and (not (number? new-shape-val))
+                       (dtype-proto/convertible-to-range? new-shape-val))
+                (let [cmin (long (dtype-proto/constant-time-min new-shape-val))]
+                  [cmin (-> (dtype-proto/range-offset new-shape-val (- cmin))
+                            (idx-alg/simplify-range->direct))])
+                [nil new-shape-val])
+              buffer-offset (long (if cmin
+                                    (+ buffer-offset
+                                       (* stride-val (long cmin)))
+                                    buffer-offset))]
+          (when-not new-shape-scalar?
+            (.add result-shape new-shape-val)
+            (.add result-stride stride-val))
+          (recur (unchecked-inc idx) buffer-offset))
+        {:shape result-shape
+         :strides result-stride
+         :offset buffer-offset}))))

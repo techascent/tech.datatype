@@ -5,212 +5,59 @@
   (:require [tech.v2.tensor.utils
              :refer [when-not-error reversev map-reversev]]
             [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.index-algebra :as idx-alg]
+            [tech.v2.datatype.bitmap :as bitmap]
             [tech.v2.datatype.readers.range :as rdr-range]
-            [tech.v2.datatype.functional :as dfn]))
+            [tech.v2.datatype.readers.indexed :as indexed-rdr]
+            [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.monotonic-range :as dtype-range]
+            [tech.v2.datatype.functional :as dfn]
+            [tech.v2.datatype.protocols :as dtype-proto]
+            [tech.v2.datatype.casting :as casting])
+  (:import [tech.v2.datatype LongReader]
+           [java.util Map]
+           [clojure.lang MapEntry]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
 (set! *warn-on-reflection* true)
 
 
-(def monotonic-operators
-  {:+ <
-   :- >})
-
-
-(defn classify-sequence
-  [item-seq]
-  ;;Normalize this to account for single digit numbers
-  (if (number? item-seq)
-    {:type :+
-     :min-item item-seq
-     :max-item item-seq
-     :scalar? true}
-    (let [n-elems (dtype/ecount item-seq)
-          [min-item max-item] (if (instance? clojure.lang.LongRange item-seq)
-                                [(first item-seq) (last item-seq)]
-                                ;;do it the hard way
-                                [(long (dfn/reduce-min item-seq))
-                                 (long (dfn/reduce-max item-seq))])
-          min-item (long min-item)
-          max-item (long max-item)
-          retval {:min-item min-item
-                  :max-item max-item}]
-      (if (= n-elems 1)
-        (assoc retval :type :+)
-        (let [mon-op (->> monotonic-operators
-                          (map (fn [[op-name op]]
-                                 (when (apply op item-seq)
-                                   op-name)))
-                          (remove nil?)
-                          first)]
-          (if (and (= n-elems
-                      (+ 1
-                         (- max-item
-                            min-item)))
-                   mon-op)
-            (assoc retval :type mon-op)
-            (assoc retval :sequence item-seq)))))))
-
-
-(def classified-sequence-keys #{:type :min-item :max-item :sequence})
-
-
-(defn classified-sequence?
-  [item]
-  (and (map? item)
-       (= 3 (->> (keys item)
-                 (filter classified-sequence-keys)
-                 count))))
-
-
-(defn classified-sequence->count
-  ^long [{:keys [type min-item max-item sequence]}]
-  (if type
-    (+ 1 (- (long max-item) (long min-item)))
-    (count sequence)))
-
-
-(defn classified-sequence->sequence
-  [{:keys [min-item max-item type sequence]}]
-  (if sequence
-    sequence
-    (case type
-      :+ (rdr-range/reader-range :int64 min-item (inc (long max-item)))
-      :- (rdr-range/reader-range :int64 max-item (dec (long min-item)) -1))))
-
-(defn classified-sequence->reader
-  [cseq]
-  (let [data (classified-sequence->sequence cseq)]
-    (if (dtype/reader? data)
-      data
-      (vec data))))
-
-
-(defn classified-sequence-max
-  ^long [{:keys [max-item]}]
-  (long max-item))
-
-
-(defn combine-classified-sequences
-  "Room for optimization here.  But simplest way is easiest to get correct."
-  [source-sequence select-sequence]
-  (let [last-valid-index (if (:type source-sequence)
-                           (- (long (:max-item source-sequence))
-                              (long (:min-item source-sequence)))
-                           (- (count (:sequence source-sequence))
-                              1))]
-    (when (> (long (:max-item select-sequence))
-             last-valid-index)
-      (throw (ex-info "Select argument out of range" {:dimension source-sequence
-                                                      :select-arg select-sequence}))))
-  (let [{src-min :min-item
-         src-type :type} source-sequence
-        {sel-min :min-item
-         sel-max :max-item
-         sel-type :type} select-sequence
-        src-min (long src-min)
-        sel-min (long sel-min)
-        sel-max (long sel-max)]
-    (cond
-      ;;Both source and select are monotonically increasing or decreasing
-      ;;Select selects within the source range.
-      (and src-type sel-type)
-      (let [min-item (+ src-min sel-min)
-            max-item (+ min-item (- (long sel-max) (long sel-min)))
-            src-type-inc (long (if (= :+ src-type) 1 -1))
-            sel-type-inc (long (if (= :+ sel-type) 1 -1))]
-        {:min-item min-item
-         :max-item max-item
-         :type (if (= 1 (* src-type-inc sel-type-inc))
-                 :+
-                 :-)
-         :scalar? (:scalar? select-sequence)})
-      :else
-      (let [source-sequence (classified-sequence->sequence source-sequence)
-            retval
-            (->> (classified-sequence->sequence select-sequence)
-                 (map #(dtype/get-value source-sequence (long %)))
-                 classify-sequence)]
-        (if (:scalar? select-sequence)
-          (assoc retval :scalar? true)
-          retval))
-      )))
-
-
-(defn reverse-classified-sequence
-  [{:keys [type sequence] :as item}]
-  (if sequence
-    (assoc item :sequence
-           (reversev sequence))
-    (assoc item :type
-           (if (= type :+)
-             :-
-             :+))))
-
-
-(defn classified-sequence->elem-idx
-  ^long [{:keys [type min-item max-item _sequence] :as dim} ^long shape-idx]
-  (let [min-item (long min-item)
-        max-item (long max-item)
-        last-idx (- max-item min-item)]
-    (when (> shape-idx last-idx)
-      (throw (ex-info "Element access out of range"
-                      {:shape-idx shape-idx
-                       :dimension dim})))
-    (if (= :+ type)
-      (+ min-item shape-idx)
-      (- max-item shape-idx))))
-
-
-(defn classified-sequence->global-addr
-  "Inverse of above"
-  ^long [{:keys [type min-item max-item _sequence] :as dim} ^long shape-idx]
-  (let [min-item (long min-item)
-        max-item (long max-item)
-        last-idx (- max-item min-item)]
-    (when (> shape-idx last-idx)
-      (throw (ex-info "Element access out of range"
-                      {:shape-idx shape-idx
-                       :dimension dim})))
-    (if (= :+ type)
-      (- shape-idx min-item)
-      (+ shape-idx max-item))))
-
-
 (defn shape-entry->count
   "Return a vector of counts of each shape."
   ^long [shape-entry]
-  (cond
-    (number? shape-entry)
+  (if (number? shape-entry)
     (long shape-entry)
-    (classified-sequence? shape-entry)
-    (classified-sequence->count shape-entry)
-    :else
     (dtype/ecount shape-entry)))
 
 
 (defn shape->count-vec
-  [shape-vec]
+  ^longs [shape-vec]
   (mapv shape-entry->count shape-vec))
 
 
 (defn direct-shape?
   [shape]
-  (every? number? shape))
+  (every? idx-alg/direct? shape))
+
 
 (defn indirect-shape?
   [shape]
-  (not (direct-shape? shape)))
+  (boolean (some (complement idx-alg/direct?) shape)))
 
-(defn reverse-shape
-  [shape-vec]
-  (map-reversev shape-entry->count shape-vec))
 
 (defn ecount
   "Return the element count indicated by the dimension map"
   ^long [shape]
-  (long (apply * (shape->count-vec shape))))
+  (let [count-vec (shape->count-vec shape)
+        n-items (count count-vec)]
+    (loop [idx 0
+           sum 1]
+      (if (< idx n-items)
+        (recur (unchecked-inc idx)
+               (* (long (count-vec idx))
+                  sum))
+        sum))))
 
 
 (defn- ensure-direct

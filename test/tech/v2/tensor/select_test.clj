@@ -84,5 +84,7 @@
   (select :typed-buffer :float32))
 
 
-(deftest sparse-select
-  (select :sparse :float32))
+(comment
+  ;;sparse is disabled for now.
+  (deftest sparse-select
+    (select :sparse :float32)))

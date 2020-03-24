@@ -1,73 +1,26 @@
 (ns tech.v2.tensor.dimensions.analytics
-  (:require [tech.v2.tensor.dimensions.shape :as shape]
-            [tech.v2.datatype :as dtype]
-            [tech.v2.datatype.functional :as dtype-fn]
+  (:require [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.index-algebra :as idx-alg]
+            [tech.v2.datatype.protocols :as dtype-proto]
+            [tech.v2.tensor.dimensions.shape :as shape]
             [primitive-math :as pmath])
-  (:import [tech.v2.datatype LongReader]))
+  (:import [tech.v2.datatype LongReader]
+           [java.util List]
+           [it.unimi.dsi.fastutil.longs LongList LongArrayList]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
 (set! *warn-on-reflection* true)
 
 
-(defn buffer-ecount
-  "What is the necessary ecount for a given buffer"
-  ^long [{:keys [shape strides]}]
-  ;;In this case the length of strides is so small as to make the general
-  ;;method fast to just use object methods.
-  (let [stride-idx (dtype-fn/argmax {:datatype :object} strides)
-        stride-val (dtype/get-value strides stride-idx)
-        shape-val (dtype/get-value shape stride-idx)
-        shape-val (long
-                   (cond
-                     (number? shape-val)
-                     shape-val
-                     (shape/classified-sequence? shape-val)
-                     (shape/classified-sequence-max shape-val)
-                     :else
-                     (apply max (dtype/->reader
-                                 shape-val :int32))))]
-    (* shape-val (long stride-val))))
-
-
 (defn any-offsets?
-  [{:keys [offsets]}]
-  (not (every? #(== 0 (long %)) offsets)))
-
-
-(defn dims->shape-data
-  [{:keys [shape strides max-shape] :as dims}]
-  (let [direct? (shape/direct-shape? shape)
-        shape-ecount (long (apply * max-shape))
-        offsets? (any-offsets? dims)
-        dense? (if direct?
-                 (= shape-ecount
-                    (buffer-ecount dims))
-                 false)
-        increasing? (if direct?
-                      (and (apply >= strides)
-                           (not offsets?))
-                      false)
-        vec-shape (shape/shape->count-vec shape)
-        broadcast? (not= vec-shape max-shape)]
-    {:direct? direct?
-     :dense? dense?
-     :increasing? increasing?
-     :broadcast? broadcast?
-     :offsets? offsets?
-     :n-dims (count shape)
-     :shape-ecount shape-ecount
-     :vec-shape vec-shape}))
-
-
-(defn shape-data->signature
-  [shape-data]
-  (dissoc shape-data :shape-ecount :vec-shape))
+  [{:keys [shape]}]
+  (boolean (some idx-alg/offset? shape)))
 
 
 (defn shape-ary->strides
-  "Strides assuming everything is increasing and packed"
-  ^longs [^longs shape-vec]
+  "Strides assuming everything is increasing and packed."
+  ^LongList [^List shape-vec]
   (let [retval (long-array (count shape-vec))
         n-elems (alength retval)
         n-elems-dec (dec n-elems)]
@@ -77,10 +30,10 @@
         (let [next-stride (* last-stride
                              (if (== idx n-elems-dec)
                                1
-                               (aget shape-vec (inc idx))))]
+                               (long (.get shape-vec (inc idx)))))]
           (aset retval idx next-stride)
           (recur (dec idx) next-stride))
-        retval))))
+        (LongArrayList/wrap retval)))))
 
 
 (defn find-breaks
@@ -88,9 +41,8 @@
   change its elementwise global->local definition.  This is done because
   the running time of elementwise global->local is heavily dependent upon the
   number of dimensions in the shape."
-  ([^objects shape ^longs strides
-    ^longs max-shape ^longs offsets]
-   (let [n-elems (alength shape)
+  ([^List shape ^List strides ^List shape-ecounts]
+   (let [n-elems (count shape)
          n-elems-dec (dec n-elems)]
      (loop [idx n-elems-dec
             last-stride 1
@@ -99,107 +51,184 @@
        (if (>= idx 0)
          (let [last-shape-entry (if (== idx n-elems-dec)
                                   nil
-                                  (aget shape (inc idx)))
-               last-entry-number? (number? last-shape-entry)
+                                  (.get shape (inc idx)))
+               last-entry-bcast? (when last-shape-entry
+                                   (idx-alg/broadcast? last-shape-entry))
+               last-entry-number? (when last-shape-entry
+                                    (or (number? last-shape-entry)
+                                        (number? (idx-alg/get-reader
+                                                  last-shape-entry))))
                next-stride (pmath/* last-stride
                                     (if (== idx n-elems-dec)
                                       1
                                       (if last-entry-number?
-                                        (long last-shape-entry)
+                                        (long (idx-alg/get-reader last-shape-entry))
                                         -1)))
-               current-offset (aget offsets idx)
-               last-offset (if (== idx n-elems-dec)
-                             current-offset
-                             (aget offsets (inc idx)))
-               shape-entry (aget shape idx)
-               shape-entry-number? (number? shape-entry)
+               shape-entry (.get shape idx)
+               shape-entry-number? (or (number? shape-entry)
+                                       (number? (idx-alg/get-reader shape-entry)))
+               current-offset? (idx-alg/offset? shape-entry)
+               last-offset? (if last-shape-entry
+                              (idx-alg/offset? last-shape-entry)
+                              current-offset?)
+               stride-val (long (.get strides idx))
                next-break
-               (if (and (pmath/== (aget strides idx)
-                                  next-stride)
+               (if (and (pmath/== stride-val next-stride)
                         shape-entry-number?
-                        (and last-entry-number?
-                             (pmath/== (long last-shape-entry)
-                                       (aget max-shape (inc idx))))
-                        (== current-offset last-offset)
-                        (== last-offset 0))
+                        (and last-entry-number? (not last-entry-bcast?))
+                        (not current-offset?)
+                        (not last-offset?))
                  last-break
                  (inc idx))
                breaks (if (== next-break last-break)
                         breaks
                         (conj breaks (range next-break last-break)))]
-           (recur (dec idx) (aget strides idx) next-break breaks))
+           (recur (dec idx) stride-val next-break breaks))
          (conj breaks (range 0 last-break))))))
-  ([{:keys [shape strides offsets max-shape] :as dims}]
-   (find-breaks (object-array shape)
-                (long-array strides)
-                (long-array max-shape)
-                (long-array offsets))))
+  ([{:keys [shape strides shape-ecounts]}]
+   (find-breaks shape strides shape-ecounts)))
 
 
-(defn- shape-entry->long-or-reader
-  "Shapes contain either long objects or readers at this point."
-  [shape-entry]
-  (cond
-    (number? shape-entry)
-    (long shape-entry)
-    (shape/classified-sequence? shape-entry)
-    (shape/classified-sequence->reader shape-entry)
-    :else
-    (dtype/->reader shape-entry :int64)))
+(defn- ensure-number-or-reader
+  [item]
+  (let [item (idx-alg/get-reader item)]
+    (if (number? item)
+      item
+      (dtype/->reader item :int64))))
 
 
 (defn reduce-dimensionality
   "Make a smaller equivalent shape in terms of row-major addressing
   from the given shape."
-  ([{:keys [shape strides offsets max-shape] :as dims}
+  ([{:keys [shape strides
+            shape-ecounts
+            shape-ecount-strides]}
     offsets?]
-   (let [shape (object-array shape)
-         strides (long-array strides)
-         offsets (long-array offsets)
-         max-shape (long-array max-shape)
-         breaks (find-breaks shape strides max-shape offsets)
-         max-shape (long-array (map
-                                #(reduce * (map (fn [idx] (aget max-shape (long idx)))
-                                                %))
-                                breaks))]
-     {:shape (object-array (map #(if (== 1 (count %))
-                                   (->
-                                    (aget shape (long (first %)))
-                                    (shape-entry->long-or-reader))
-                                   (apply * (map (fn [idx]
-                                                   (aget shape (long idx)))
-                                                 %)))
-                                breaks))
-      :strides (long-array (map
-                            #(reduce min (map (fn [idx] (aget strides (long idx)))
-                                            %))
-                            breaks))
-      :offsets (when offsets?
-                 (long-array (map
-                              #(reduce + (map (fn [idx] (aget offsets (long idx)))
-                                              %))
-                              breaks)))
-      :max-shape max-shape
-      :max-shape-strides (shape-ary->strides max-shape)}))
-  ([{:keys [shape strides offsets max-shape] :as dims}]
+   ;;Make sure shape only contains long objects as numbers
+   (if (== 1 (count shape))
+     {:shape [(ensure-number-or-reader (.get ^List shape 0))]
+      :strides strides
+      :offsets (mapv idx-alg/get-offset shape)
+      :shape-ecounts shape-ecounts
+      :shape-ecount-strides (or shape-ecount-strides
+                                (shape-ary->strides shape-ecounts))}
+     (let [^List processed-shape (mapv ensure-number-or-reader shape)
+           ^List strides strides
+           ^List shape-ecounts shape-ecounts
+           breaks (find-breaks shape strides shape-ecounts)
+           shape-ecounts (mapv
+                          #(reduce * (map (fn [idx] (.get shape-ecounts (long idx)))
+                                          %))
+                          breaks)]
+       {:shape (mapv #(if (== 1 (count %))
+                        (.get processed-shape (first %))
+                        (apply * (map (fn [idx]
+                                        (.get processed-shape (long idx)))
+                                      %)))
+                     breaks)
+        :strides (mapv
+                  #(apply min Long/MAX_VALUE
+                          (map (fn [idx]
+                                 (.get strides (long idx)))
+                               %))
+                  breaks)
+        :offsets (mapv
+                  #(apply +
+                          (map (fn [idx]
+                                 (idx-alg/get-offset
+                                  (.get ^List shape (long idx))))
+                               %))
+                  breaks)
+        :shape-ecounts shape-ecounts
+        :shape-ecount-strides (shape-ary->strides shape-ecounts)})))
+  ([dims]
    (reduce-dimensionality dims (any-offsets? dims))))
+
+
+(defn simple-direct-reduced-dims
+  "Create the simplest case of reduced dimensions."
+  [^long n-elems]
+  {:shape [n-elems]
+   :strides [1]
+   :offsets [0]
+   :shape-ecounts [n-elems]
+   :shape-ecount-strides [1]})
+
+
+(defn dims->reduced-dims
+  [dims]
+  (or (:reduced-dims dims) (reduce-dimensionality dims)))
+
+
+(defn are-reduced-dims-bcast?
+  "Fast version of broadcasting check for when we know the types
+  the types of shapes and max-shape"
+  [{:keys [^List shape ^List shape-ecounts] :as _reduced-dims}]
+  (let [n-shape (count shape)
+        broadcast? (loop [bcast? false
+                          idx 0]
+                     (if (and (not bcast?)
+                              (< idx n-shape))
+                       (recur (or bcast?
+                                  (not= (shape/shape-entry->count (.get shape idx))
+                                        (long (.get shape-ecounts idx))))
+                              (inc idx))
+                       bcast?))]
+    broadcast?))
 
 
 (defn are-dims-bcast?
   "Fast version of broadcasting check for when we know the types
-  the types of shapes and max-shape"
+  the types of shapes and max-shape.  Reduced dimensions may have a
+  simplified definition of the shape element during broadcasting."
   [reduced-dims]
-  (let [^objects shape (:shape reduced-dims)
-        ^longs max-shape (:max-shape reduced-dims)
-        n-elems (alength shape)]
+  (boolean (some idx-alg/broadcast? (:shape reduced-dims))))
+
+
+(defn buffer-ecount
+  "Return a minimum buffer element count of possible."
+  [shape strides]
+  (let [n-dims (count shape)
+        ^List shape shape
+        ^List strides strides]
     (loop [idx 0
-           bcast? false]
-      (if (and (< idx n-elems)
-               (not bcast?))
-        (let [shape-entry (aget shape idx)
-              shape-ecount (if (number? shape-entry)
-                             (long shape-entry)
-                             (.lsize ^LongReader shape-entry))]
-          (recur (pmath/inc idx)
-                 (not (pmath/== shape-ecount (aget max-shape idx)))))
-        bcast?))))
+           buffer-length (Long. 1)]
+      (if (< idx n-dims)
+        (let [new-shape-val (.get shape idx)
+              stride-val (long (.get strides idx))
+              [cmin cmax :as mmax]
+              (cond
+                (number? new-shape-val)
+                [0 (dec (long new-shape-val))]
+                (dtype-proto/has-constant-time-min-max? new-shape-val)
+                [(long (dtype-proto/constant-time-min new-shape-val))
+                 (long (dtype-proto/constant-time-max new-shape-val))])
+              buffer-length (when (and buffer-length mmax)
+                              (+ (long buffer-length)
+                                 (* stride-val
+                                    (- (long cmax) (long cmin)))))]
+          (recur (unchecked-inc idx) buffer-length))
+        buffer-length))))
+
+
+(defn left-extend-shape
+  [shape ^long n-new-shape]
+  (if (== (count shape) n-new-shape)
+    shape
+    (vec (concat (repeat 1 (- n-new-shape (count shape)))
+                 shape))))
+
+
+(defn left-extend-strides
+  [strides ^long n-new-strides]
+  (if (== (count strides) n-new-strides)
+    strides
+    (vec (concat (repeat (first strides) (- n-new-strides (count strides)))
+                 strides))))
+
+
+(comment
+  (reduce-dimensionality {:shape [4 4 4]
+                          :strides [16 4 1]
+                          :shape-ecounts [4 4 4]})
+  )

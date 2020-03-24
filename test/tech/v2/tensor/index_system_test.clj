@@ -1,10 +1,12 @@
 (ns tech.v2.tensor.index-system-test
   (:require [tech.v2.datatype :as dtype]
             [tech.v2.tensor.dimensions :as dims]
+            [tech.v2.tensor.dimensions.analytics :as dims-analytics]
             [tech.v2.tensor.dimensions.shape :as shape]
             [tech.v2.datatype.reader :as reader]
             [tech.v2.datatype.readers.const :as const-reader]
             [tech.v2.datatype.functional :as dtype-fn]
+            [tech.v2.datatype.protocols :as dtype-proto]
             [clojure.pprint :as pp]
             [clojure.test :refer :all])
   (:import [tech.v2.tensor IntTensorReader]))
@@ -29,20 +31,22 @@
    (let [max-stride-idx (int (dtype-fn/argmax {:datatype :int32} strides))
          n-src-buffer-elems
          (* (reader/typed-read :int32 strides max-stride-idx)
-            (reader/typed-read :int32 (mapv (fn [shape-entry]
-                                              (cond
-                                                (number? shape-entry)
-                                                (long shape-entry)
-                                                (shape/classified-sequence? shape-entry)
-                                                (+ 1 (:max shape-entry))
-                                                :else
-                                                (+ 1 (apply max (dtype/->iterable shape-entry)))))
-                                            shape)
-                               max-stride-idx))
+            (reader/typed-read
+             :int32 (mapv (fn [shape-entry]
+                            (cond
+                              (number? shape-entry)
+                              (long shape-entry)
+                              (dtype-proto/has-constant-time-min-max? shape-entry)
+                              (inc (long (dtype-proto/constant-time-max shape-entry)))
+                              :else
+                              (+ 1 (apply max (dtype/->iterable shape-entry)))))
+                          shape)
+             max-stride-idx))
          n-elems (shape/ecount max-shape)
-         dimensions (dims/dimensions shape :strides strides :offsets
-                                     offsets :max-shape max-shape)
-         max-strides (dims/extend-strides max-shape)
+         dimensions (-> (dims/dimensions shape strides)
+                        (dims/rotate offsets)
+                        (dims/broadcast max-shape))
+         max-strides (dims-analytics/shape-ary->strides max-shape)
          forward (dims/->global->local dimensions)
          backward (dims/->local->global dimensions)
          forward-full-elems
@@ -157,4 +161,5 @@
   ;;Channels first and broadcast
   (base-index-system-test [3 4 4] [1 12 3] [12 4 4])
 
-  (base-index-system-test [3 [1 2]] [1 3] [3 2]))
+  (base-index-system-test [3 [1 2]] [1 3] [3 2])
+  )

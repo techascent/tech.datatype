@@ -11,6 +11,7 @@
 
 (set! *warn-on-reflection* true)
 
+
 (defprotocol PDatatype
   (get-datatype [item]))
 
@@ -314,6 +315,33 @@ Note that this makes no mention of indianness; buffers are in the format of the 
     (as-nio-buffer item)))
 
 
+(defprotocol PConstantTimeMinMax
+  (has-constant-time-min-max? [item])
+  (constant-time-min [item])
+  (constant-time-max [item]))
+
+
+(defprotocol PRangeConvertible
+  (convertible-to-range? [item])
+  (->range [item options]
+    "Convert to something that implements the PRange protocols"))
+
+
+(defprotocol PRange
+  (range-select [lhs rhs]
+    "Select the lhs range using the rhs range as an indexer.  Returns
+  a new range as if the elements of lhs were indexed by rhs.")
+  (range-start [item])
+  (range-increment [item])
+  (range-min [item])
+  (range-max [item])
+  (range-offset [item offset]
+    "Offset this range by this offset.  Returns")
+  (range->reverse-map [item]
+    "Return a map whose keys are the values of the range
+and whose values are the indexes that produce those values in the reader."))
+
+
 (declare make-container)
 
 
@@ -409,9 +437,16 @@ Note that this makes no mention of indianness; buffers are in the format of the 
   PToBinaryBooleanOp
   (convertible-to-binary-boolean-op? [item] false)
 
-  PToBitmap
-  (convertible-to-bitmap? [item] false))
+  PRangeConvertible
+  (convertible-to-range? [item] false)
 
+  PToBitmap
+  (convertible-to-bitmap? [item] false)
+
+  PConstantTimeMinMax
+  (has-constant-time-min-max? [item] (convertible-to-range? item))
+  (constant-time-min [item] (constant-time-min (->range item {})))
+  (constant-time-max [item] (constant-time-max (->range item {}))))
 
 (defmulti make-container
   (fn [container-type _datatype _elem-seq-or-count _options]

@@ -59,12 +59,12 @@ import java.util.Locale;
 public class PackedLocalDate {
 
   /** The number of days in a 400 year cycle. */
-  private static final int DAYS_PER_CYCLE = 146097;
+  public static final int DAYS_PER_CYCLE = 146097;
   /**
    * The number of days from year zero to year 1970. There are five 400 year cycles from year zero
    * to 2000. There are 7 leap years from 1970 to 2000.
    */
-  private static final long DAYS_0000_TO_1970 = (DAYS_PER_CYCLE * 5L) - (30L * 365L + 7L);
+  public static final long DAYS_0000_TO_1970 = (DAYS_PER_CYCLE * 5L) - (30L * 365L + 7L);
 
   public static byte getDayOfMonth(int date) {
     return (byte) date; // last byte
@@ -415,7 +415,7 @@ public class PackedLocalDate {
     return (isLeapYear(packedDate) ? 366 : 365);
   }
 
-  private static int resolvePreviousValid(int year, int month, int day) {
+  public static int resolvePreviousValid(int year, int month, int day) {
     int dayResult = day;
     switch (month) {
       case 2:
@@ -440,7 +440,7 @@ public class PackedLocalDate {
     return date.get(woy);
   }
 
-  private static int ofEpochDay(long epochDay) {
+  public static int ofEpochDay(long epochDay) {
     EPOCH_DAY.checkValidValue(epochDay);
     long zeroDay = epochDay + DAYS_0000_TO_1970;
     // find the march-based year
@@ -511,7 +511,7 @@ public class PackedLocalDate {
     return monthsUntil(packedDateEnd, packedDateStart) / 12;
   }
 
-  private static int getMonthInternal(int packedDate) {
+  public static int getMonthInternal(int packedDate) {
     return (getYear(packedDate) * 12 + getMonthValue(packedDate) - 1);
   }
 }

@@ -61,7 +61,7 @@ public class PackedInstant {
     return LocalDateTime.of(d, t).toInstant(ZoneOffset.UTC);
   }
 
-  protected static long pack(LocalDate date, LocalTime time) {
+  public static long pack(LocalDate date, LocalTime time) {
     int d = PackedLocalDate.pack(date);
     int t = PackedLocalTime.pack(time);
     return (((long) d) << 32) | (t & 0xffffffffL);

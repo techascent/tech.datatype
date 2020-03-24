@@ -54,7 +54,7 @@ import java.util.Locale;
  */
 public class PackedLocalDateTime extends PackedInstant {
 
-  private PackedLocalDateTime() {}
+  protected PackedLocalDateTime() {}
 
   public static byte getDayOfMonth(long date) {
     return (byte) date(date); // last byte
@@ -312,7 +312,7 @@ public class PackedLocalDateTime extends PackedInstant {
     return monthsUntil(packedDateEnd, packedDateStart) / 12;
   }
 
-  private static int getMonthInternal(long packedDateTime) {
+  public static int getMonthInternal(long packedDateTime) {
     return (getYear(packedDateTime) * 12 + getMonthValue(packedDateTime) - 1);
   }
 }

@@ -36,20 +36,20 @@ import java.time.temporal.UnsupportedTemporalTypeException;
  */
 public class PackedLocalTime {
 
-  private static final int MIDNIGHT = pack(LocalTime.MIDNIGHT);
-  private static final int NOON = pack(LocalTime.NOON);
+  public static final int MIDNIGHT = pack(LocalTime.MIDNIGHT);
+  public static final int NOON = pack(LocalTime.NOON);
 
-  private static final int HOURS_PER_DAY = 24; 
-  private static final int MINUTES_PER_HOUR = 60;
-  private static final int MINUTES_PER_DAY = MINUTES_PER_HOUR * HOURS_PER_DAY;
-  private static final int SECONDS_PER_MINUTE = 60;
-  private static final int SECONDS_PER_HOUR = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;
-  private static final int SECONDS_PER_DAY = SECONDS_PER_HOUR * HOURS_PER_DAY;
-  private static final int MILLIS_PER_DAY = SECONDS_PER_DAY * 1000;
-  private static final long NANOS_PER_SECOND = 1000_000_000L;
-  private static final long NANOS_PER_MINUTE = NANOS_PER_SECOND * SECONDS_PER_MINUTE;
-  private static final long NANOS_PER_HOUR = NANOS_PER_MINUTE * MINUTES_PER_HOUR;
-  private static final long NANOS_PER_DAY = NANOS_PER_HOUR * HOURS_PER_DAY;
+  public static final int HOURS_PER_DAY = 24; 
+  public static final int MINUTES_PER_HOUR = 60;
+  public static final int MINUTES_PER_DAY = MINUTES_PER_HOUR * HOURS_PER_DAY;
+  public static final int SECONDS_PER_MINUTE = 60;
+  public static final int SECONDS_PER_HOUR = SECONDS_PER_MINUTE * MINUTES_PER_HOUR;
+  public static final int SECONDS_PER_DAY = SECONDS_PER_HOUR * HOURS_PER_DAY;
+  public static final int MILLIS_PER_DAY = SECONDS_PER_DAY * 1000;
+  public static final long NANOS_PER_SECOND = 1000_000_000L;
+  public static final long NANOS_PER_MINUTE = NANOS_PER_SECOND * SECONDS_PER_MINUTE;
+  public static final long NANOS_PER_HOUR = NANOS_PER_MINUTE * MINUTES_PER_HOUR;
+  public static final long NANOS_PER_DAY = NANOS_PER_HOUR * HOURS_PER_DAY;
 
   public static byte getHour(int time) {
     return (byte) (time >> 24);

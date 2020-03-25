@@ -6,7 +6,8 @@
             ObjectReader ObjectWriter]
            [com.sun.jna Pointer]
            [java.lang.reflect Method]
-           [java.util List]))
+           [java.util List]
+           [java.nio ByteOrder]))
 
 
 (set! *warn-on-reflection* true)
@@ -342,6 +343,20 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 and whose values are the indexes that produce those values in the reader."))
 
 
+(defprotocol PEndianness
+  (endianness [item]
+    "Either :little-endian or :big-endian"))
+
+
+(defprotocol PConvertibleToBinaryReader
+  (convertible-to-binary-reader? [item])
+  (->binary-reader [item options]))
+
+(defprotocol PConvertibleToBinaryWriter
+  (convertible-to-binary-writer? [item])
+  (->binary-writer [item options]))
+
+
 (declare make-container)
 
 
@@ -446,7 +461,18 @@ and whose values are the indexes that produce those values in the reader."))
   PConstantTimeMinMax
   (has-constant-time-min-max? [item] (convertible-to-range? item))
   (constant-time-min [item] (constant-time-min (->range item {})))
-  (constant-time-max [item] (constant-time-max (->range item {}))))
+  (constant-time-max [item] (constant-time-max (->range item {})))
+
+  PEndianness
+  (endianness [item]
+    (if (.. (ByteOrder/nativeOrder) (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  PConvertibleToBinaryReader
+  (convertible-to-binary-reader? [item] false)
+
+  PConvertibleToBinaryWriter
+  (convertible-to-binary-writer? [item] false))
 
 (defmulti make-container
   (fn [container-type _datatype _elem-seq-or-count _options]

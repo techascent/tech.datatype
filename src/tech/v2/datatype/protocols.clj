@@ -97,7 +97,8 @@
   represent the value of the item itself as the backing store may require
   element-by-element conversion to represent the value of the item."
   (convertible-to-nio-buffer? [item])
-  (->buffer-backing-store [item]))
+  (->buffer-backing-store [item])
+  )
 
 
 (extend-type Object

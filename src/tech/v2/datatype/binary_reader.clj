@@ -1,7 +1,6 @@
 (ns tech.v2.datatype.binary-reader
   (:require [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.casting :as casting])
+            [tech.v2.datatype.protocols :as dtype-proto])
   (:import [tech.v2.datatype BinaryReader ByteReader ByteConversions]
            [java.nio ByteBuffer Buffer ByteOrder]))
 
@@ -18,77 +17,106 @@
   [item]
   (or item :little-endian))
 
+(defmacro short-from-reader
+  [endianness reader offset]
+  (case endianness
+    :little-endian `(ByteConversions/shortFromReaderLE ~reader ~offset)
+    :big-endian `(ByteConversions/shortFromReaderBE ~reader ~offset)))
+
+(defmacro int-from-reader
+  [endianness reader offset]
+  (case endianness
+    :little-endian `(ByteConversions/intFromReaderLE ~reader ~offset)
+    :big-endian `(ByteConversions/intFromReaderBE ~reader ~offset)))
+
+(defmacro long-from-reader
+  [endianness reader offset]
+  (case endianness
+    :little-endian `(ByteConversions/longFromReaderLE ~reader ~offset)
+    :big-endian `(ByteConversions/longFromReaderBE ~reader ~offset)))
+
+
+(defmacro float-from-reader
+  [endianness reader offset]
+  (case endianness
+    :little-endian `(ByteConversions/floatFromReaderLE ~reader ~offset)
+    :big-endian `(ByteConversions/floatFromReaderBE ~reader ~offset)))
+
+
+(defmacro double-from-reader
+  [endianness reader offset]
+  (case endianness
+    :little-endian `(ByteConversions/doubleFromReaderLE ~reader ~offset)
+    :big-endian `(ByteConversions/doubleFromReaderBE ~reader ~offset)))
+
+
+(defmacro make-reader-binary-reader
+  [endianness buffer options]
+  `(let [buffer# ~buffer
+         reader# (typecast/datatype->reader :int8 buffer#)
+         lsize# (.lsize reader#)]
+     (reify
+       dtype-proto/PEndianness
+       (endianness [rdr#] ~endianness)
+       dtype-proto/PCountable
+       (ecount [rdr#] lsize#)
+       dtype-proto/PToReader
+       (convertible-to-reader? [rdr#] true)
+       (->reader [rdr# options#]
+         (dtype-proto/->reader buffer# options#))
+       dtype-proto/PBuffer
+       (sub-buffer [rdr# offset# len#]
+         (reader->binary-reader (dtype-proto/sub-buffer buffer# offset# len#)
+                                ~options))
+       dtype-proto/PToArray
+       (->sub-array [rdr#]
+         (dtype-proto/->sub-array buffer#))
+       (->array-copy [rdr#]
+         (dtype-proto/->array-copy buffer#))
+       dtype-proto/PToNioBuffer
+       (convertible-to-nio-buffer? [rdr#]
+         (dtype-proto/convertible-to-nio-buffer? buffer#))
+       (->buffer-backing-store [rdr#]
+         (dtype-proto/->buffer-backing-store buffer#))
+       dtype-proto/PToJNAPointer
+       (convertible-to-data-ptr? [rdr#]
+         (dtype-proto/convertible-to-data-ptr? buffer#))
+       (->jna-ptr [rdr#]
+         (dtype-proto/->jna-ptr buffer#))
+       dtype-proto/PConvertibleToBinaryReader
+       (convertible-to-binary-reader? [rdr#] true)
+       (->binary-reader [rdr# options#]
+         (if (= (default-endianness (:endianness options#))
+                ~endianness)
+           rdr#
+           (dtype-proto/->binary-reader buffer# options#)))
+       BinaryReader
+       (readBoolean [rdr# offset#]
+         (if (== 0 (.read reader# offset#))
+           false
+           true))
+       (readByte [rdr# offset#]
+         (.read reader# offset#))
+       (readShort [rdr# offset#]
+         (short-from-reader ~endianness reader# offset#))
+       (readInt [rdr# offset#]
+         (int-from-reader ~endianness reader# offset#))
+       (readLong [rdr# offset#]
+         (long-from-reader ~endianness reader# offset#))
+       (readFloat [rdr# offset#]
+         (float-from-reader ~endianness reader# offset#))
+       (readDouble [rdr# offset#]
+         (double-from-reader ~endianness reader# offset#)))))
+
 
 (defn reader->binary-reader
-  (^BinaryReader [reader {user-endianness :endianness :as options}]
+  (^BinaryReader [buffer {user-endianness :endianness :as options}]
    (let [user-endianness (default-endianness user-endianness)]
-     (if (instance? BinaryReader reader)
-       reader
-       (let [reader (typecast/datatype->reader :int8 reader)
-             lsize (.lsize reader)]
-         (case user-endianness
-           :little-endian
-           (reify
-             dtype-proto/PEndianness
-             (endianness [rdr] user-endianness)
-             dtype-proto/PCountable
-             (ecount [rdr] lsize)
-             dtype-proto/PToReader
-             (convertible-to-reader? [rdr] true)
-             (->reader [rdr options]
-               (dtype-proto/->reader reader options))
-             dtype-proto/PBuffer
-             (sub-buffer [item offset len]
-               (reader->binary-reader (dtype-proto/sub-buffer reader offset len)
-                                      options))
-             BinaryReader
-             (readBoolean [rdr offset]
-               (if (== 0 (.read reader offset))
-                 false
-                 true))
-             (readByte [rdr offset]
-               (.read reader offset))
-             (readShort [rdr offset]
-               (ByteConversions/shortFromReaderLE reader offset))
-             (readInt [rdr offset]
-               (ByteConversions/intFromReaderLE reader offset))
-             (readLong [rdr offset]
-               (ByteConversions/longFromReaderLE reader offset))
-             (readFloat [rdr offset]
-               (ByteConversions/floatFromReaderLE reader offset))
-             (readDouble [rdr offset]
-               (ByteConversions/doubleFromReaderLE reader offset)))
-           :big-endian
-           (reify
-             dtype-proto/PEndianness
-             (endianness [rdr] user-endianness)
-             dtype-proto/PCountable
-             (ecount [rdr] lsize)
-             dtype-proto/PToReader
-             (convertible-to-reader? [rdr] true)
-             (->reader [rdr options]
-               (dtype-proto/->reader reader options))
-             dtype-proto/PBuffer
-             (sub-buffer [item offset len]
-               (reader->binary-reader (dtype-proto/sub-buffer reader offset len)
-                                      options))
-             BinaryReader
-             (readBoolean [rdr offset]
-               (if (== 0 (.read reader offset))
-                 false
-                 true))
-             (readByte [rdr offset]
-               (.read reader offset))
-             (readShort [reader offset]
-               (ByteConversions/shortFromReaderBE reader offset))
-             (readInt [rdr offset]
-               (ByteConversions/intFromReaderBE reader offset))
-             (readLong [rdr offset]
-               (ByteConversions/longFromReaderBE reader offset))
-             (readFloat [rdr offset]
-               (ByteConversions/floatFromReaderBE reader offset))
-             (readDouble [rdr offset]
-               (ByteConversions/doubleFromReaderBE reader offset))))))))
+     (if (instance? BinaryReader buffer)
+       buffer
+       (case user-endianness
+         :little-endian (make-reader-binary-reader :little-endian buffer options)
+         :big-endian (make-reader-binary-reader :little-endian buffer options)))))
   (^BinaryReader [reader]
    (reader->binary-reader reader {})))
 
@@ -129,6 +157,23 @@
        (convertible-to-reader? [rdr] true)
        (->reader [rdr options]
          (dtype-proto/->reader nio-buf options))
+       dtype-proto/PToArray
+       (->sub-array [rdr]
+         (dtype-proto/->sub-array nio-buf))
+       (->array-copy [rdr]
+         (dtype-proto/->array-copy nio-buf))
+       dtype-proto/PToJNAPointer
+       (convertible-to-data-ptr? [rdr]
+         (dtype-proto/convertible-to-data-ptr? nio-buf))
+       (->jna-ptr [rdr]
+         (dtype-proto/->jna-ptr nio-buf))
+       dtype-proto/PConvertibleToBinaryReader
+       (convertible-to-binary-reader? [rdr] true)
+       (->binary-reader [rdr options]
+         (if (= (default-endianness (:endianness options))
+                user-endianness)
+           rdr
+           (dtype-proto/->binary-reader nio-buf options)))
        BinaryReader
        (readBoolean [rdr offset]
          (if (== 0 (.getByte nio-buf (unchecked-int offset)))
@@ -160,6 +205,7 @@
 
 
 (defn ->binary-reader
+  "Make a binary reader out of something.  May return nil."
   (^BinaryReader [item options]
    (when item
      (cond

@@ -39,7 +39,8 @@
 
 (defmacro make-buffer-reader-impl
   [reader-datatype intermediate-datatype buffer-datatype buffer-type
-   unchecked? src-item buffer buffer-pos]
+   unchecked? src-item buffer buffer-pos
+   advertised-datatype]
   `(let [src-item# ~src-item
          buffer# ~buffer
          buffer-pos# ~buffer-pos
@@ -48,7 +49,7 @@
      (if unchecked?#
        (reify
          ~(typecast/datatype->reader-type reader-datatype)
-         (getDatatype [reader#] ~intermediate-datatype)
+         (getDatatype [reader#] ~advertised-datatype)
          (lsize [reader#] n-elems#)
          (read [reader# idx#]
            (-> (cls-type->read-fn ~buffer-type ~buffer-datatype buffer#
@@ -92,6 +93,7 @@
                                       elem-count#)))
        (reify
          ~(typecast/datatype->reader-type reader-datatype)
+         (getDatatype [reader#] ~advertised-datatype)
          (lsize [reader#] n-elems#)
          (read [reader# idx#]
            (-> (cls-type->read-fn ~buffer-type ~buffer-datatype
@@ -144,7 +146,7 @@
                  (->> casting/buffer-access-table
                       (filter (comp casting/numeric-types :intermediate-datatype)))]
              [access-map
-              `(fn [src-item# buffer# unchecked?#]
+              `(fn [src-item# buffer# unchecked?# advertised-dtype#]
                  (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
                                                                   buffer#)
                        buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
@@ -154,13 +156,15 @@
                                               ~(typecast/datatype->buffer-type
                                                 buffer-datatype)
                                               unchecked?# src-item#
-                                              buffer# 0)
+                                              buffer# 0
+                                              advertised-dtype#)
                      (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
                                               ~buffer-datatype
                                               ~(typecast/datatype->buffer-type
                                                 buffer-datatype)
                                               unchecked?# src-item#
-                                              buffer# buffer-pos#))))])]
+                                              buffer# buffer-pos#
+                                              advertised-dtype#))))])]
         (into {})))
 
 
@@ -174,14 +178,16 @@
    & [unchecked?]]
   (let [nio-buffer (dtype-proto/->buffer-backing-store item)
         buffer-dtype (dtype-proto/get-datatype nio-buffer)
+        ;;There could be aliased datatypes passed into here
+        access-key-int-dtype (casting/flatten-datatype intermediate-datatype)
         access-map {:reader-datatype reader-datatype
-                    :intermediate-datatype intermediate-datatype
+                    :intermediate-datatype access-key-int-dtype
                     :buffer-datatype buffer-dtype}
         buffer-reader-fn (get buffer-reader-table access-map)]
     (when-not buffer-reader-fn
       (throw (ex-info "Failed to find nio reader creation function for buffer datatype"
                       access-map)))
-    (buffer-reader-fn item nio-buffer unchecked?)))
+    (buffer-reader-fn item nio-buffer unchecked? intermediate-datatype)))
 
 
 (defmacro make-list-reader-table
@@ -190,7 +196,7 @@
                          buffer-datatype
                          reader-datatype]
                   :as access-map} casting/buffer-access-table]
-             [access-map `(fn [src-item# buffer# unchecked?#]
+             [access-map `(fn [src-item# buffer# unchecked?# advertised-datatype#]
                             (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype
                                                                            buffer#)
                                   buffer-pos# 0]
@@ -198,7 +204,8 @@
                                                        ~buffer-datatype
                                                        ~(typecast/datatype->list-type buffer-datatype)
                                                        unchecked?# src-item#
-                                                       buffer# buffer-pos#)))])]
+                                                       buffer# buffer-pos#
+                                                       advertised-datatype#)))])]
         (into {})))
 
 
@@ -219,7 +226,7 @@
     (when-not list-reader-fn
       (throw (ex-info "Failed to find reader creation function for buffer datatype"
                       access-map)))
-    (list-reader-fn item list-buffer unchecked?)))
+    (list-reader-fn item list-buffer unchecked? intermediate-datatype)))
 
 
 (defmacro make-derived-reader

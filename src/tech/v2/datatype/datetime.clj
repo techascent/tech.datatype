@@ -3,16 +3,27 @@
   (:require [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.object-datatypes :as dtype-obj]
+            [tech.v2.datatype.argtypes :as argtypes]
+            [tech.v2.datatype.casting :as casting]
             [primitive-math :as pmath])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
             LocalDate LocalDateTime LocalTime
             OffsetTime]
-           [java.util Date]
-   [tech.v2.datatype
+           [java.util Date Iterator]
+           [it.unimi.dsi.fastutil.bytes ByteIterator]
+           [it.unimi.dsi.fastutil.shorts ShortIterator]
+           [it.unimi.dsi.fastutil.ints IntIterator]
+           [it.unimi.dsi.fastutil.longs LongIterator]
+           [it.unimi.dsi.fastutil.floats FloatIterator]
+           [it.unimi.dsi.fastutil.doubles DoubleIterator]
+           [tech.v2.datatype
             PackedInstant PackedLocalDate
             PackedLocalTime PackedLocalDateTime
-            ObjectReader LongReader IntReader]))
+            ObjectReader LongReader IntReader
+            IterHelpers$LongIterConverter
+            IterHelpers$IntIterConverter
+            IterHelpers$ObjectIterConverter]))
 
 
 (set! *warn-on-reflection* true)
@@ -247,6 +258,11 @@
 (dtype-obj/add-object-datatype LocalDate :local-date local-date)
 (dtype-obj/add-object-datatype LocalDateTime :local-date-time local-date-time)
 (dtype-obj/add-object-datatype LocalTime :local-time local-time)
+(dtype-obj/add-object-datatype OffsetDateTime :offset-date-time offset-date-time)
+(dtype-obj/add-object-datatype ZonedDateTime :zoned-date-time zoned-date-time)
+(dtype-obj/add-object-datatype OffsetDateTime :offset-date-time offset-date-time)
+(dtype-obj/add-object-datatype OffsetTime :offset-time offset-time)
+
 
 
 (defn as-instant ^Instant [item] item)
@@ -286,48 +302,7 @@
     :instant `(PackedInstant/asInstant (pmath/long ~item))
     :local-time `(PackedLocalTime/asLocalTime (pmath/int ~item))
     :local-date `(PackedLocalDate/asLocalDate (pmath/int ~item))
-    :local-date-time `(PackedLocalDateTime/asLocalDateTime ~item)))
-
-
-(defn instant->packed-instant
-  ^long [^Instant inst]
-  (compile-time-pack inst :instant))
-
-
-(defn packed-instant
-  ^Instant [^long inst]
-  (compile-time-unpack inst :instant))
-
-
-(defn local-date->packed-local-date
-  "This long can be represented by an integer safely with unchecked-int."
-  ^long [^LocalDate ld]
-  (compile-time-pack ld :local-date))
-
-
-(defn packed-local-date->local-date
-  ^LocalDate [^long pld]
-  (compile-time-unpack pld :local-date))
-
-
-(defn local-time->packed-local-time
-  ^long [^LocalTime lt]
-  (compile-time-pack lt :local-time))
-
-
-(defn packed-local-time->local-time
-  ^LocalTime [^PackedLocalTime plt]
-  (compile-time-unpack plt :local-time))
-
-
-(defn local-date-time->packed-local-date-time
-  ^long [^LocalDateTime ld]
-  (compile-time-pack ld :local-date-time))
-
-
-(defn packed-local-date-time->local-date-time
-  ^LocalDateTime [^long pld]
-  (compile-time-unpack pld :local-date-time))
+    :local-date-time `(PackedLocalDateTime/asLocalDateTime (pmath/long ~item))))
 
 
 (def packable-datatypes
@@ -340,81 +315,93 @@
    :local-date-time :int64
    :instant :int64})
 
-
-(defn instant-reader->packed-instant-reader
-  ^LongReader [reader]
-  (let [reader (typecast/datatype->reader :object reader)]
-    (reify LongReader
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-pack :instant))))))
+;;As our packed types are really primitive aliases we tell the datatype system about this
+;;so that other machinery can get to the base datatype.
+(->> packable-datatype->primitive-datatype
+     (mapv (fn [[k v]]
+             (casting/alias-datatype! (keyword (str "packed-" (name k))) v))))
 
 
-(defn packed-instant-reader->instant-reader
-  ^ObjectReader [reader]
-  (let [reader (typecast/datatype->reader :int64 reader)]
-    (reify ObjectReader
-      (getDatatype [rdr] :instant)
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-unpack :instant))))))
+(defmacro define-packing-operations
+  [packed-dtype]
+  (let [prim-dtype (get packable-datatype->primitive-datatype packed-dtype)
+        packed-name (name packed-dtype)
+        packed-name-kwd (keyword (str "packed-" packed-name))
+        iter->pack-sym (symbol (format "%s-iterable->packed-%s-iterable"
+                                       packed-name packed-name))
+        reader->pack-sym (symbol (format "%s-reader->packed-%s-reader"
+                                         packed-name packed-name))
+        iter->unpack-sym (symbol (format "packed-%s-iterable->%s-iterable"
+                                         packed-name packed-name))
+        reader->unpack-sym (symbol (format "packed-%s-reader->%s-reader"
+                                           packed-name packed-name))]
+    `(do
+       (defn ~iter->pack-sym
+         [^Iterable iterable#]
+         (reify
+           dtype-proto/PDatatype
+           (get-datatype [itr#] ~packed-name-kwd)
+           Iterable
+           (iterator [itr#]
+             (let [^Iterator src-iter# (.iterator iterable#)]
+               (typecast/datatype->iter-helper
+                ~prim-dtype
+                (reify
+                  ~(typecast/datatype->fastutil-iter-type prim-dtype)
+                  (hasNext [itr] (.hasNext src-iter#))
+                  (~(typecast/datatype->iter-next-fn-name prim-dtype) [itr]
+                   (compile-time-pack (.next src-iter#) ~packed-dtype)))
+                ~packed-name-kwd)))))
+
+       (defn ~reader->pack-sym
+         ^LongReader [reader#]
+         (let [reader# (typecast/datatype->reader :object reader#)]
+           (reify ~(typecast/datatype->reader-type prim-dtype)
+             (getDatatype [rdr#] ~packed-name-kwd)
+             (lsize [rdr#] (.lsize reader#))
+             (read [rdr# idx#] (-> (.read reader# idx#)
+                                   (compile-time-pack ~packed-dtype))))))
+
+       (defn ~(symbol (format "pack-%s" packed-name))
+         [item#]
+         (let [argtype# (argtypes/arg->arg-type item#)]
+           (case argtype#
+             :scalar (compile-time-pack item# ~packed-dtype)
+             :iterable (~iter->pack-sym item#)
+             :reader (~reader->pack-sym item#))))
+
+       (defn ~iter->unpack-sym
+         ^Iterable [^Iterable packed-inst-iterable#]
+         (reify
+           dtype-proto/PDatatype
+           (get-datatype [itr] ~packed-dtype)
+           Iterable
+           (iterator [tr]
+             (let [^Iterator src-iter# (.iterator ^Iterable packed-inst-iterable#)]
+               (-> (reify Iterator
+                     (hasNext [iter] (.hasNext src-iter#))
+                     (next [iter] (compile-time-unpack (.next src-iter#) :instant)))
+                   (IterHelpers$ObjectIterConverter. :instant))))))
+
+       (defn ~reader->unpack-sym
+         ^ObjectReader [reader#]
+         (let [reader# (typecast/datatype->reader :int64 reader#)]
+           (reify ObjectReader
+             (getDatatype [rdr#] ~packed-dtype)
+             (lsize [rdr#] (.lsize reader#))
+             (read [rdr# idx#] (-> (.read reader# idx#)
+                                   (compile-time-unpack ~packed-dtype))))))
+
+       (defn ~(symbol (format "unpack-%s" packed-name))
+         [item#]
+         (let [argtype# (argtypes/arg->arg-type item#)]
+           (case argtype#
+             :scalar (compile-time-unpack item# ~packed-dtype)
+             :iterable (~iter->unpack-sym item#)
+             :reader (~reader->unpack-sym item#)))))))
 
 
-(defn local-date-time-reader->packed-local-date-time-reader
-  ^LongReader [reader]
-  (let [reader (typecast/datatype->reader :object reader)]
-    (reify LongReader
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-pack :local-date-time))))))
-
-
-
-(defn packed-local-date-time-reader->local-date-time-reader
-  ^ObjectReader [reader]
-  (let [reader (typecast/datatype->reader :int64 reader)]
-    (reify ObjectReader
-      (getDatatype [rdr] :local-date-time)
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-unpack :local-date-time))))))
-
-
-(defn local-date-reader->packed-local-date-reader
-  ^IntReader [reader]
-  (let [reader (typecast/datatype->reader :object reader)]
-    (reify IntReader
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-pack :local-date))))))
-
-
-
-(defn packed-local-date-reader->local-date-reader
-  ^ObjectReader [reader]
-  (let [reader (typecast/datatype->reader :int32 reader)]
-    (reify ObjectReader
-      (getDatatype [rdr] :local-date)
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-unpack :local-date))))))
-
-
-(defn local-time-reader->packed-local-time-reader
-  ^IntReader [reader]
-  (let [reader (typecast/datatype->reader :object reader)]
-    (reify IntReader
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-pack :local-time))))))
-
-
-
-(defn packed-local-time-reader->local-time-reader
-  ^ObjectReader [reader]
-  (let [reader (typecast/datatype->reader :int32 reader)]
-    (reify ObjectReader
-      (getDatatype [rdr] :local-time)
-      (lsize [rdr] (.lsize reader))
-      (read [rdr idx] (-> (.read reader idx)
-                          (compile-time-unpack :local-time))))))
+(define-packing-operations :instant)
+(define-packing-operations :local-date)
+(define-packing-operations :local-time)
+(define-packing-operations :local-date-time)

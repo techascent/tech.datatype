@@ -39,7 +39,7 @@ public class PackedLocalTime {
   public static final int MIDNIGHT = pack(LocalTime.MIDNIGHT);
   public static final int NOON = pack(LocalTime.NOON);
 
-  public static final int HOURS_PER_DAY = 24; 
+  public static final int HOURS_PER_DAY = 24;
   public static final int MINUTES_PER_HOUR = 60;
   public static final int MINUTES_PER_DAY = MINUTES_PER_HOUR * HOURS_PER_DAY;
   public static final int SECONDS_PER_MINUTE = 60;
@@ -283,8 +283,8 @@ public class PackedLocalTime {
 
     byte hourByte = (byte) (time >> 24);
     byte minuteByte = (byte) (time >> 16);
-    byte millisecondByte1 = (byte) (time >> 8);
-    byte millisecondByte2 = (byte) time;
+    int millisecondByte1 = ((time >> 8) & 0xFF);
+    int millisecondByte2 = time & 0xFF;
     int millis = (int) ((millisecondByte1 << 8) | (millisecondByte2 & 0xFF));
     int second = millis / 1000;
     int nanoOfSecond = (millis % 1000) * 1_000_000;

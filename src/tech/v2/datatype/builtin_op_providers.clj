@@ -108,17 +108,19 @@
 
 (defn widest-datatype
   [lhs-dtype rhs-dtype]
-  (if (= lhs-dtype rhs-dtype)
-    lhs-dtype
-    (let [lhs-rank (long (datatype-width lhs-dtype))
-          rhs-rank (long (datatype-width rhs-dtype))]
-      (cond
-        (< lhs-rank rhs-rank)
-        lhs-dtype
-        (= lhs-rank rhs-rank)
-        (next-integer-type lhs-dtype rhs-dtype)
-        :else
-        rhs-dtype))))
+  (let [lhs-dtype (casting/flatten-datatype lhs-dtype)
+        rhs-dtype (casting/flatten-datatype rhs-dtype)]
+    (if (= lhs-dtype rhs-dtype)
+      lhs-dtype
+      (let [lhs-rank (long (datatype-width lhs-dtype))
+            rhs-rank (long (datatype-width rhs-dtype))]
+        (cond
+          (< lhs-rank rhs-rank)
+          lhs-dtype
+          (= lhs-rank rhs-rank)
+          (next-integer-type lhs-dtype rhs-dtype)
+          :else
+          rhs-dtype)))))
 
 
 (defn op-argtype

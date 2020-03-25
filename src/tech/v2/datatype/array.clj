@@ -241,7 +241,8 @@
   ([datatype elem-count-or-seq options]
    (if (instance? Class datatype)
      (make-object-array-of-type datatype elem-count-or-seq options)
-     (if-let [cons-fn (get @*array-constructors* datatype)]
+     (if-let [cons-fn (get @*array-constructors* (casting/datatype->host-type
+                                                  datatype))]
        (cons-fn elem-count-or-seq options)
        (make-object-array-of-type Object elem-count-or-seq options))))
   ([datatype elem-count-or-seq]

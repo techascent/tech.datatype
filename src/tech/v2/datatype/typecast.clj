@@ -9,19 +9,26 @@
             LongWriter LongReader LongMutable LongReaderIter LongIter
             FloatWriter FloatReader FloatMutable FloatReaderIter FloatIter
             DoubleWriter DoubleReader DoubleMutable DoubleReaderIter DoubleIter
-            BooleanWriter BooleanReader BooleanMutable BooleanReaderIter BooleanIter]
+            BooleanWriter BooleanReader BooleanMutable BooleanReaderIter BooleanIter
+            IterHelpers$ByteIterConverter
+            IterHelpers$ShortIterConverter
+            IterHelpers$IntIterConverter
+            IterHelpers$LongIterConverter
+            IterHelpers$FloatIterConverter
+            IterHelpers$DoubleIterConverter
+            IterHelpers$ObjectIterConverter]
            [java.util Iterator List]
            [com.sun.jna Pointer]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
-           [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
-           [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
-           [it.unimi.dsi.fastutil.ints IntList IntArrayList]
-           [it.unimi.dsi.fastutil.longs LongList LongArrayList]
-           [it.unimi.dsi.fastutil.floats FloatList FloatArrayList]
-           [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList]
-           [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList]
-           [it.unimi.dsi.fastutil.chars CharList CharArrayList]
+           [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList ByteIterator]
+           [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList ShortIterator]
+           [it.unimi.dsi.fastutil.ints IntList IntArrayList IntIterator]
+           [it.unimi.dsi.fastutil.longs LongList LongArrayList LongIterator]
+           [it.unimi.dsi.fastutil.floats FloatList FloatArrayList FloatIterator]
+           [it.unimi.dsi.fastutil.doubles DoubleList DoubleArrayList DoubleIterator]
+           [it.unimi.dsi.fastutil.booleans BooleanList BooleanArrayList BooleanIterator]
+           [it.unimi.dsi.fastutil.chars CharList CharArrayList CharIterator]
            [it.unimi.dsi.fastutil.objects ObjectList ObjectArrayList]))
 
 
@@ -175,6 +182,30 @@
     :float64 'tech.v2.datatype.DoubleIter
     :boolean 'tech.v2.datatype.BooleanIter
     :object 'tech.v2.datatype.ObjectIter))
+
+(defn datatype->fastutil-iter-type
+  [datatype]
+  (case datatype
+    :int8 'it.unimi.dsi.fastutil.bytes.ByteIterator
+    :int16 'it.unimi.dsi.fastutil.shorts.ShortIterator
+    :int32 'it.unimi.dsi.fastutil.ints.IntIterator
+    :int64 'it.unimi.dsi.fastutil.longs.LongIterator
+    :float32 'it.unimi.dsi.fastutil.floats.FloatIterator
+    :float64 'it.unimi.dsi.fastutil.doubles.DoubleIterator
+    :boolean 'it.unimi.dsi.fastutil.booleans.BooleanIterator
+    :object 'java.util.Iterator))
+
+
+(defmacro datatype->iter-helper
+  [datatype src-iter dst-kwd]
+  (case datatype
+    :int8 `(IterHelpers$ByteIterConverter. ~src-iter ~dst-kwd)
+    :int16 `(IterHelpers$ShortIterConverter. ~src-iter ~dst-kwd)
+    :int32 `(IterHelpers$IntIterConverter. ~src-iter ~dst-kwd)
+    :int64 `(IterHelpers$LongIterConverter. ~src-iter ~dst-kwd)
+    :float32 `(IterHelpers$FloatIterConverter. ~src-iter ~dst-kwd)
+    :float64 `(IterHelpers$DoubleIterConverter. ~src-iter ~dst-kwd)
+    :object `(IterHelpers$ObjectIterConverter. ~src-iter ~dst-kwd)))
 
 
 (defmacro implement-iter-cast

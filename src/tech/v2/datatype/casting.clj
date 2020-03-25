@@ -2,8 +2,11 @@
   (:refer-clojure :exclude [cast])
   (:require [clojure.set :as c-set]
             [primitive-math :as pmath])
-  (:import [tech.v2.datatype DateUtility]))
+  (:import [tech.v2.datatype DateUtility]
+           [java.util Map]
+           [java.util.concurrent ConcurrentHashMap]))
 
+(set! *warn-on-reflection* true)
 
 (def signed-unsigned
   {:int8 :uint8
@@ -442,25 +445,40 @@
   (not= :out-of-family (timeinterval-family-class item)))
 
 
+(defonce aliased-datatypes (ConcurrentHashMap.))
+
+(defn alias-datatype!
+  "Alias a new datatype to a base datatype.  Only useful for primitive datatypes"
+  [new-dtype old-dtype]
+  (.put ^Map aliased-datatypes new-dtype old-dtype))
+
+
+(defn un-alias-datatype
+  [dtype]
+  (.getOrDefault ^Map aliased-datatypes dtype dtype))
+
+
 (defn composite-datatype?
   [dtype]
   (and (instance? java.util.Map dtype)
-       (contains? dtype :datatype)))
+       (.get ^java.util.Map dtype :base-datatype)
+       (.containsKey ^Map aliased-datatypes dtype)))
+
 
 (defn composite-datatype->base-datatype
   "If this is a composite datatype, return the base datatype.  Else return
   input unchanged."
-  [datatype]
-  (if (composite-datatype? datatype)
-    (:base-datatype datatype)
-    datatype))
+  [dtype]
+  (if (instance? java.util.Map dtype)
+    (.get ^Map dtype :base-datatype)
+    (.getOrDefault ^Map aliased-datatypes dtype dtype)))
 
 
 (defn datatype->host-type
   "Get the signed analog of an unsigned type or return datatype unchanged."
   [datatype]
   (let [datatype (composite-datatype->base-datatype datatype)]
-    (get unsigned-signed  datatype datatype)))
+    (get unsigned-signed datatype datatype)))
 
 
 (defn jvm-cast
@@ -471,12 +489,13 @@
 (defn datatype->safe-host-type
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
-  (case (composite-datatype->base-datatype dtype)
-    :uint8 :int16
-    :uint16 :int32
-    :uint32 :int64
-    :uint64 :int64
-    dtype))
+  (let [base-dtype (composite-datatype->base-datatype dtype)]
+    (case base-dtype
+        :uint8 :int16
+        :uint16 :int32
+        :uint32 :int64
+        :uint64 :int64
+        base-dtype)))
 
 (defmacro datatype->host-cast-fn
   [src-dtype dst-dtype val]
@@ -494,17 +513,11 @@
       (datatype->unchecked-cast-fn ~src-dtype ~dst-dtype ~val))))
 
 
-(defn unwrap-datatype
-  [dtype]
-  (if (map? dtype)
-    (:datatype dtype)
-    dtype))
-
 
 (defn flatten-datatype
   "Move a datatype into the canonical set"
   [dtype]
-  (let [dtype (unwrap-datatype dtype)]
+  (let [dtype (composite-datatype->base-datatype dtype)]
     (if (base-datatypes dtype)
       dtype
       :object)))
@@ -520,6 +533,7 @@
 (defn host-flatten
   [dtype]
   (-> dtype
+      composite-datatype->base-datatype
       datatype->host-datatype
       flatten-datatype))
 

@@ -269,6 +269,12 @@ Calls clojure.core.matrix/ecount."
    (base/copy! src 0 dst 0 (ecount src) {})))
 
 
+(defn copy-opt!
+  "Pass in just src, dst, options"
+  [src dst options]
+  (copy! src 0 dst 0 (ecount src) options))
+
+
 (defn copy-raw->item!
   "Copy a non-datatype sequence of data into a datatype library container.
   [dtype-container result-offset-after-copy]"

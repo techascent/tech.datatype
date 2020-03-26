@@ -7,7 +7,9 @@
            [com.sun.jna Pointer]
            [java.lang.reflect Method]
            [java.util List]
-           [java.nio ByteOrder]))
+           [java.nio ByteOrder
+            ByteBuffer ShortBuffer IntBuffer LongBuffer
+            FloatBuffer DoubleBuffer CharBuffer]))
 
 
 (set! *warn-on-reflection* true)
@@ -347,6 +349,49 @@ and whose values are the indexes that produce those values in the reader."))
 (defprotocol PEndianness
   (endianness [item]
     "Either :little-endian or :big-endian"))
+
+
+(extend-protocol PEndianness
+  ByteBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  ShortBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  IntBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  LongBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  FloatBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  DoubleBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  CharBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian)))
+
+
+(defn default-endianness
+  [item]
+  (or item :little-endian))
 
 
 (defprotocol PConvertibleToBinaryReader

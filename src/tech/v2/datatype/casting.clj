@@ -40,7 +40,8 @@
 
 (defn int-width
   ^long [dtype]
-  (long (get {:int8 8
+  (long (get {:boolean 8 ;;unfortunately, this is what C decided
+              :int8 8
               :uint8 8
               :int16 16
               :uint16 16

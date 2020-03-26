@@ -90,7 +90,12 @@
          (set-constant! [item# offset# value# elem-count#]
            (dtype-proto/set-constant! src-item# offset#
                                       (casting/cast value# ~intermediate-datatype)
-                                      elem-count#)))
+                                      elem-count#))
+         dtype-proto/PConvertibleToBinaryReader
+         (convertible-to-binary-reader? [rdr#]
+           (dtype-proto/convertible-to-binary-reader? buffer#))
+         (->binary-reader [rdr# options#]
+           (dtype-proto/->binary-reader buffer# options#)))
        (reify
          ~(typecast/datatype->reader-type reader-datatype)
          (getDatatype [reader#] ~advertised-datatype)
@@ -134,7 +139,12 @@
          (set-constant! [reader# offset# value# elem-count#]
            (dtype-proto/set-constant! src-item# offset#
                                       (casting/cast value# ~intermediate-datatype)
-                                      elem-count#))))))
+                                      elem-count#))
+         dtype-proto/PConvertibleToBinaryReader
+         (convertible-to-binary-reader? [rdr#]
+           (dtype-proto/convertible-to-binary-reader? buffer#))
+         (->binary-reader [rdr# options#]
+           (dtype-proto/->binary-reader buffer# options#))))))
 
 
 (defmacro make-buffer-reader-table

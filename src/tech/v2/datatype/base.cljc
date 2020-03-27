@@ -419,7 +419,8 @@
                         "clone"
                         ^"[Ljava.lang.Class;" (into-array Class []))]
         (.invoke method item (object-array 0)))
-      (copy! item (dtype-proto/from-prototype item datatype
+      (copy! item (dtype-proto/from-prototype item
+                                              (get-datatype item)
                                               (shape item))))))
 
 

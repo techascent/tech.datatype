@@ -312,7 +312,7 @@
         (dtype-proto/sub-buffer offset len)))
   dtype-proto/PClone
   (clone [item]
-    (PackedIntUbyteBuffer. (dtype-proto/clone int-buffer datatype)
+    (PackedIntUbyteBuffer. (dtype-proto/clone int-buffer)
                            n-elems
                            shape
                            n-channels

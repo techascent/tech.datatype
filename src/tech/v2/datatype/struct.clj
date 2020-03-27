@@ -285,7 +285,9 @@
                       elem-size)]
       (Struct. struct-def sub-buffer
                (->binary-reader sub-buffer options)
-               (->binary-writer sub-buffer options)))))
+               (->binary-writer sub-buffer options))))
+  ObjectWriter
+  (write [wtr idx value]))
 
 
 (defn inplace-new-array-of-structs
@@ -327,7 +329,10 @@
   (get-datatype [item] datatype)
   dtype-proto/PCountable
   (ecount [item] n-elems)
-
+  dtype-proto/PClone
+  (clone [item]
+    (if (struct-datatype? datatype)
+      ))
   )
 
 

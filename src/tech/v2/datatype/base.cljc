@@ -100,14 +100,16 @@
 
 
 (defn sub-buffer
-  [item off len]
-  (when-not (<= (+ (int off) (int len))
-                (ecount item))
-    (throw (ex-info "Sub buffer out of range." {})))
-  (if (and (= (int off) 0)
-           (= (int len) (ecount item)))
-    item
-    (dtype-proto/sub-buffer item off len)))
+  ([item off len]
+   (when-not (<= (+ (int off) (int len))
+                 (ecount item))
+     (throw (ex-info "Sub buffer out of range." {})))
+   (if (and (= (int off) 0)
+            (= (int len) (ecount item)))
+     item
+     (dtype-proto/sub-buffer item off len)))
+  ([item off]
+   (sub-buffer item off (- (ecount item) (long off)))))
 
 (defn- requires-sub-buffer
   [item off len]

@@ -250,20 +250,6 @@
   (swap! *unchecked-cast-table* assoc datatype cast-fn))
 
 
-(defn cast
-  [value datatype]
-  (if-let [cast-fn (@*cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No cast available" {:datatype datatype}))))
-
-
-(defn unchecked-cast
-  [value datatype]
-  (if-let [cast-fn (@*unchecked-cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))
-
-
 (defmacro add-all-cast-fns
   []
   `(do
@@ -537,6 +523,26 @@
       composite-datatype->base-datatype
       datatype->host-datatype
       flatten-datatype))
+
+
+(defn cast
+  [value datatype]
+  (let [datatype (flatten-datatype datatype)]
+    (if (= datatype :object)
+      value
+      (if-let [cast-fn (@*cast-table* datatype)]
+        (cast-fn value)
+        (throw (ex-info "No cast available" {:datatype datatype}))))))
+
+
+(defn unchecked-cast
+  [value datatype]
+  (let [datatype (flatten-datatype datatype)]
+    (if (= datatype :object)
+      value
+      (if-let [cast-fn (@*unchecked-cast-table* datatype)]
+        (cast-fn value)
+        (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))))
 
 
 (defmacro datatype->sparse-value

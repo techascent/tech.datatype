@@ -10,6 +10,7 @@
             [tech.v2.datatype.binary-reader :refer [->binary-reader]]
             [tech.v2.datatype.binary-writer :refer [->binary-writer]]
             [tech.v2.datatype.monotonic-range :as dtype-range]
+            [tech.v2.datatype.typecast :as typecast]
             [primitive-math :as pmath])
   (:import [tech.v2.datatype BinaryReader BinaryWriter ObjectReader ObjectWriter]
            [java.util.concurrent ConcurrentHashMap]
@@ -50,7 +51,7 @@
 
 (defn struct-datatype?
   [datatype]
-  (.contains ^ConcurrentHashMap struct-datatypes datatype))
+  (.containsKey ^ConcurrentHashMap struct-datatypes datatype))
 
 
 (defn layout-datatypes
@@ -169,6 +170,8 @@
       (inplace-new-struct (:datatype-name struct-def) new-buffer
                           {:endianness
                            (dtype-proto/endianness reader)})))
+  dtype-proto/PBufferType
+  (buffer-type [item] :struct)
   Map
   (size [m] (count (:data-layout struct-def)))
   (containsKey [m k] (.containsKey ^Map (:layout-map struct-def) k))
@@ -230,6 +233,19 @@
                                  (dtype-proto/get-datatype m)) k)))))
 
 
+(defmethod dtype-proto/copy! [:struct :struct]
+  [dst src _options]
+  (let [^Struct src src
+        ^Struct dst dst]
+    (when-not (= (dtype-proto/get-datatype src)
+                 (dtype-proto/get-datatype dst))
+      (throw (Exception. (format "src datatype %s and dst datatype %s do not match"
+                                 (dtype-proto/get-datatype src)
+                                 (dtype-proto/get-datatype dst)))))
+    (dtype-base/copy! (.buffer src) (.buffer dst))
+    dst))
+
+
 (defn inplace-new-struct
   ([datatype backing-store options]
    (let [struct-def (get-struct-def datatype)]
@@ -270,24 +286,62 @@
   (.writer struct))
 
 
+(declare inplace-new-array-of-structs)
+
+
+(defn- assign-struct!
+  [value struct-def dst-buf]
+  (let [value-type (dtype-proto/get-datatype value)
+        array-type (:datatype-name struct-def)]
+    (when-not (= value-type (:datatype-name struct-def))
+      (throw (Exception. (format "Array %s/value %s mismatch"
+                                 array-type value-type))))
+    (when-not (instance? Struct value)
+      (throw (Exception. (format "Value does not appear to be a struct: %s" (type value)))))
+    (let [^Struct value value]
+      (dtype-base/copy! (.buffer value) dst-buf))))
+
+
 (deftype ArrayOfStructs [struct-def
                          ^long elem-size
                          ^long n-elems
                          buffer
                          options]
+  dtype-proto/PEndianness
+  (endianness [ary] (dtype-proto/default-endianness
+                     (:endianness options)))
+  dtype-proto/PClone
+  (clone [ary]
+    (inplace-new-array-of-structs (:datatype-name struct-def)
+                                  (dtype-proto/clone buffer)
+                                  options))
+  dtype-proto/PBufferType
+  (buffer-type [item] :array-of-structs)
+  dtype-proto/PBuffer
+  (sub-buffer [ary offset len]
+    (let [offset (* (long offset) elem-size)
+          len (long len)
+          byte-len (* len elem-size)]
+      (if (and (== 0 offset)
+               (== len n-elems))
+        ary
+        (inplace-new-array-of-structs (:datatype-name struct-def)
+                                      (dtype-proto/sub-buffer buffer offset byte-len)
+                                      options))))
   ObjectReader
-  (getDatatype [rdr] (:datatype-name struct-def))
-  (lsize [rdr] n-elems)
-  (read [rdr idx]
+  (getDatatype [ary] (:datatype-name struct-def))
+  (lsize [ary] n-elems)
+  (read [ary idx]
     (let [sub-buffer (dtype-proto/sub-buffer
                       buffer
                       (* idx elem-size)
                       elem-size)]
-      (Struct. struct-def sub-buffer
-               (->binary-reader sub-buffer options)
-               (->binary-writer sub-buffer options))))
+      (inplace-new-struct (:datatype-name struct-def) sub-buffer options)))
   ObjectWriter
-  (write [wtr idx value]))
+  (write [ary idx value]
+    (assign-struct! value struct-def (dtype-proto/sub-buffer buffer
+                                                             (* idx elem-size)
+                                                             elem-size))))
 
 
 (defn inplace-new-array-of-structs
@@ -321,10 +375,94 @@
    (new-array-of-structs datatype n-elems {})))
 
 
+(defmethod dtype-proto/copy! [:array-of-structs :array-of-structs]
+  [dst src _options]
+  (let [^ArrayOfStructs src src
+        ^ArrayOfStructs dst dst]
+    (when-not (= (dtype-proto/get-datatype src)
+                 (dtype-proto/get-datatype dst))
+      (throw (Exception. (format "src datatype %s and dst datatype %s do not match"
+                                 (dtype-proto/get-datatype src)
+                                 (dtype-proto/get-datatype dst)))))
+    (dtype-base/copy! (.buffer src) (.buffer dst))
+    dst))
+
+
+(defn- as-binary-reader
+  ^BinaryReader [item] item)
+
+
+(defmacro binary-read
+  [datatype reader offset]
+  (case datatype
+    :boolean `(.readBoolean ~reader ~offset)
+    :int8 `(.readByte ~reader ~offset)
+    :int16 `(.readShort ~reader ~offset)
+    :int32 `(.readInt ~reader ~offset)
+    :int64 `(.readLong ~reader ~offset)
+    :float32 `(.readFloat ~reader ~offset)
+    :float64 `(.readDouble ~reader ~offset)))
+
+
+(defmacro make-primitive-column-reader
+  [datatype binary-reader n-elems stride]
+  (let [host-dtype (casting/datatype->host-type datatype)]
+    `(let [~'reader (as-binary-reader ~binary-reader)
+           n-elems# (long ~n-elems)
+           stride# (long ~stride)]
+       (reify ~(typecast/datatype->reader-type (casting/safe-flatten datatype))
+         (getDatatype [rdr#] ~datatype)
+         (lsize [rdr#] n-elems#)
+         (read [rdr# idx#]
+           (casting/datatype->unchecked-cast-fn
+            ~host-dtype
+            ~datatype
+            (binary-read ~host-dtype ~binary-reader (* idx# stride#))))))))
+
+
+(defn- as-binary-writer
+  ^BinaryWriter [item] item)
+
+
+(defmacro binary-write
+  [datatype writer value offset]
+  (case datatype
+    :boolean `(.writeBoolean ~writer ~value ~offset)
+    :int8 `(.writeByte ~writer ~value ~offset)
+    :int16 `(.writeShort ~writer ~value ~offset)
+    :int32 `(.writeInt ~writer ~value ~offset)
+    :int64 `(.writeLong ~writer ~value ~offset)
+    :float32 `(.writeFloat ~writer ~value ~offset)
+    :float64 `(.writeDouble ~writer ~value ~offset)))
+
+
+(defmacro make-primitive-column-writer
+  [datatype binary-writer n-elems stride]
+  (let [host-dtype (casting/datatype->host-type datatype)]
+    `(let [~'writer (as-binary-writer ~binary-writer)
+           n-elems# (long ~n-elems)
+           stride# (long ~stride)]
+       (reify ~(typecast/datatype->writer-type (casting/safe-flatten datatype))
+         (getDatatype [rdr#] ~datatype)
+         (lsize [rdr#] n-elems#)
+         (write [rdr# idx# val#]
+           (binary-write ~host-dtype ~binary-writer
+                         (casting/datatype->unchecked-cast-fn
+                          ~datatype
+                          ~host-dtype
+                          val#)
+                         (* idx# stride#)))))))
+
+
 (deftype StructColumnBuffer [datatype
                              ^long n-elems
+                             ^long stride
                              ^long elem-size
-                             buffer]
+                             buffer
+                             options]
+  dtype-proto/PEndianness
+  (endianness [ary] (dtype-proto/default-endianness
+                     (:endianness options)))
   dtype-proto/PDatatype
   (get-datatype [item] datatype)
   dtype-proto/PCountable
@@ -332,22 +470,152 @@
   dtype-proto/PClone
   (clone [item]
     (if (struct-datatype? datatype)
-      ))
-  )
+      (let [new-structs (new-array-of-structs datatype n-elems options)]
+        (dtype-base/copy! item new-structs))
+      (let [new-buffer (dtype-base/make-container :typed-buffer :datatype n-elems)]
+        (dtype-base/copy! item new-buffer))))
+  dtype-proto/PBuffer
+  (sub-buffer [item offset len]
+    (let [offset (long offset)
+          len (long len)]
+      (if (and (== 0 offset)
+               (== n-elems len))
+        item
+        (StructColumnBuffer. datatype len stride elem-size
+                             (dtype-proto/sub-buffer buffer
+                                                     (* offset stride)
+                                                     (+ elem-size
+                                                        (* stride (dec len))))
+                             options))))
+  dtype-proto/PToReader
+  (convertible-to-reader? [item] true)
+  (->reader [item options]
+    (->
+     (if (struct-datatype? datatype)
+       (reify ObjectReader
+         (getDatatype [rdr] datatype)
+         (lsize [rdr] n-elems)
+         (read [rdr idx]
+           (inplace-new-struct  datatype
+                                (dtype-proto/sub-buffer
+                                 buffer (* idx stride) elem-size)
+                                options)))
+       (let [^BinaryReader binary-reader (dtype-proto/->binary-reader buffer options)]
+         (case (casting/datatype->host-type datatype)
+           :boolean (make-primitive-column-reader :boolean binary-reader n-elems stride)
+           :int8 (make-primitive-column-reader :int8 binary-reader n-elems stride)
+           :uint8 (make-primitive-column-reader :uint8 binary-reader n-elems stride)
+           :int16 (make-primitive-column-reader :int16 binary-reader n-elems stride)
+           :uint16 (make-primitive-column-reader :uint16 binary-reader n-elems stride)
+           :int32 (make-primitive-column-reader :int32 binary-reader n-elems stride)
+           :uint32 (make-primitive-column-reader :uint32 binary-reader n-elems stride)
+           :int64 (make-primitive-column-reader :int64 binary-reader n-elems stride)
+           :uint64 (make-primitive-column-reader :uint64 binary-reader n-elems stride)
+           :float32 (make-primitive-column-reader :float32 binary-reader n-elems stride)
+           :float64 (make-primitive-column-reader :float64 binary-reader n-elems stride))))
+     (dtype-proto/->reader options)))
+  dtype-proto/PToWriter
+  (convertible-to-writer? [item] true)
+  (->writer [item options]
+    (-> (if (struct-datatype? datatype)
+          (let [struct-def (get-struct-def datatype)]
+            (reify ObjectWriter
+              (getDatatype [rdr] datatype)
+              (lsize [rdr] n-elems)
+              (write [rdr idx value]
+                (assign-struct! value struct-def
+                                (dtype-proto/sub-buffer
+                                 buffer (* idx stride) elem-size)))))
+          (let [^BinaryWriter binary-writer (dtype-proto/->binary-writer buffer options)]
+            (case (casting/datatype->host-type datatype)
+              :boolean (make-primitive-column-writer :boolean binary-writer n-elems stride)
+              :int8 (make-primitive-column-writer :int8 binary-writer n-elems stride)
+              :uint8 (make-primitive-column-writer :uint8 binary-writer n-elems stride)
+              :int16 (make-primitive-column-writer :int16 binary-writer n-elems stride)
+              :uint16 (make-primitive-column-writer :uint16 binary-writer n-elems stride)
+              :int32 (make-primitive-column-writer :int32 binary-writer n-elems stride)
+              :uint32 (make-primitive-column-writer :uint32 binary-writer n-elems stride)
+              :int64 (make-primitive-column-writer :int64 binary-writer n-elems stride)
+              :uint64 (make-primitive-column-writer :uint64 binary-writer n-elems stride)
+              :float32 (make-primitive-column-writer :float32 binary-writer n-elems stride)
+              :float64 (make-primitive-column-writer :float64 binary-writer n-elems stride))))
+        (dtype-proto/->writer options))))
+
+
+(defn- datatype-elem-size
+  ^long [datatype]
+  (long (if (struct-datatype? datatype)
+          (:datatype-size (get-struct-def datatype))
+          (casting/numeric-byte-width datatype))))
+
+
+(defn explode-datatype
+  [datatype buffer original-offset name-stem n-structs elem-size struct-opts]
+  (let [struct-def (get-struct-def datatype)]
+    (->> (:data-layout struct-def)
+         (mapcat
+          (fn [{:keys [name datatype offset n-elems]}]
+            (let [new-name (keyword (format "%s-%s"
+                                            (clojure.core/name name-stem)
+                                            (clojure.core/name name)))
+                  offset (+ (long offset) (long original-offset))]
+              (if (struct-datatype? datatype)
+                (explode-datatype datatype buffer offset new-name
+                                  n-structs elem-size struct-opts)
+                [{:name new-name
+                  :data (StructColumnBuffer. datatype n-structs elem-size
+                                             (datatype-elem-size datatype)
+                                             (dtype-base/sub-buffer buffer offset)
+                                             struct-opts)}])))))))
 
 
 (defn array-of-structs->columns
-  [^ArrayOfStructs structs]
-  (let [struct-def (.struct-def structs)
-        n-elems (.n-elems structs)
-        elem-size (long (:datatype-size struct-def))
-        data-buffer (.buffer structs)]
-
-    )
-  )
-
-
-
+  "Given an array of structs create an sequence of 'columns' {:name :data}
+  where the names patch the property names and the column values are a reader
+  of field variables."
+  ([^ArrayOfStructs structs {:keys [scalar-columns?]
+                             :or {scalar-columns? false}}]
+   (let [struct-def (.struct-def structs)
+         n-structs (.n-elems structs)
+         elem-size (long (:datatype-size struct-def))
+         data-buffer (.buffer structs)
+         struct-opts (.options structs)]
+     (->> (:data-layout struct-def)
+          (mapcat
+           (fn [{:keys [name datatype offset n-elems]}]
+             (let [offset (long offset)
+                   n-elems (long n-elems)]
+               (if (and (== (long n-elems) 1))
+                 (if (or (not scalar-columns?)
+                         (not (struct-datatype? datatype)))
+                   [{:name name
+                     :data (StructColumnBuffer. datatype n-structs elem-size
+                                                (datatype-elem-size datatype)
+                                                (dtype-base/sub-buffer data-buffer
+                                                                       offset)
+                                                struct-opts)}]
+                   (explode-datatype datatype data-buffer offset name
+                                     n-structs elem-size struct-opts))
+                 (let [e-size (datatype-elem-size datatype)]
+                   (->> (range n-elems)
+                        (mapcat (fn [elem-idx]
+                                  (let [name (keyword (format "%s-%d"
+                                                             (clojure.core/name name)
+                                                             elem-idx))]
+                                    (if (or (not scalar-columns?)
+                                            (not (struct-datatype? datatype)))
+                                      [{:name name
+                                        :data (StructColumnBuffer.
+                                               datatype n-structs elem-size
+                                               e-size
+                                               (dtype-base/sub-buffer
+                                                data-buffer
+                                                (+ offset (* e-size (long elem-idx))))
+                                               struct-opts)}]
+                                      (explode-datatype datatype data-buffer offset name
+                                                        n-structs elem-size struct-opts))))))))))))))
+  ([^ArrayOfStructs structs]
+   (array-of-structs->columns structs {})))
 
 
 (comment
@@ -358,6 +626,13 @@
 
   (define-datatype! :segment [{:name :begin :datatype :vec3}
                               {:name :end :datatype :vec3}])
+  (require '[tech.v2.datatype.datetime :as datetime])
+  (define-datatype! :date-thing [{:name :date :datatype :packed-local-date}
+                                 {:name :amount :datatype :uint32}])
+
+  (define-datatype! :vec3-uint8 [{:name :x :datatype :uint8}
+                                 {:name :y :datatype :uint8}
+                                 {:name :z :datatype :uint8}])
 
   (def test-vec3 (new-struct :vec3))
   (.put test-vec3 :x 3.0)
@@ -368,4 +643,5 @@
   (.put line-segment :end test-vec3)
   (.get line-segment [:end :x])
   (.get line-segment [:end 0])
+
   )

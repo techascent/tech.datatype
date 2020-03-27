@@ -9,8 +9,9 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.binary-reader :refer [->binary-reader]]
             [tech.v2.datatype.binary-writer :refer [->binary-writer]]
+            [tech.v2.datatype.monotonic-range :as dtype-range]
             [primitive-math :as pmath])
-  (:import [tech.v2.datatype BinaryReader BinaryWriter]
+  (:import [tech.v2.datatype BinaryReader BinaryWriter ObjectReader ObjectWriter]
            [java.util.concurrent ConcurrentHashMap]
            [java.util RandomAccess List Map LinkedHashSet Collection]
            [clojure.lang MapEntry]))
@@ -66,11 +67,10 @@
                              dtype-width (min 8 dtype-width)
                              current-offset (long current-offset)
                              widest-datatype (max (long widest-datatype) dtype-width)
-                             leftover-size (rem current-offset
-                                                dtype-width)
                              current-offset (widen-offset current-offset dtype-width)]
                          (when-not name
-                           (throw (Exception. "Datatypes must all be named at this point.")))
+                           (throw (Exception.
+                                   "Datatypes must all be named at this point.")))
                          [(conj datatype-seq (assoc entry
                                                     :offset current-offset
                                                     :n-elems n-elems))
@@ -124,17 +124,16 @@
                      (get-datatype prop-datatype)
                      0
                      prop-datatype])
-                  (do
-                    (when-not (<= n-prop-elems 1)
-                      (throw (Exception. "Must provide explicit indexing when more than elements")))
-                    (if-let [data-val (get-in struct-def [:layout-map next-val])]
-                      [(+ offset (long (:offset data-val)))
-                       (get-datatype (:datatype data-val))
-                       (long (:n-elems data-val))
-                       (:datatype data-val)]
-                      (throw (Exception. (format "Could not find property %s in %s"
-                                                 next-val (:datatype-name struct-def)))))))]
-            (recur (inc idx) (long n-prop-elems) prop-datatype struct-def (long offset)))
+                  (if-let [data-val (get-in struct-def [:layout-map next-val])]
+                    [(+ offset (long (:offset data-val)))
+                     (get-datatype (:datatype data-val))
+                     (long (:n-elems data-val))
+                     (:datatype data-val)]
+                    (throw (Exception.
+                            (format "Could not find property %s in %s"
+                                    next-val (:datatype-name struct-def))))))]
+            (recur (inc idx) (long n-prop-elems) prop-datatype
+                   struct-def (long offset)))
           [offset prop-datatype])))))
 
 
@@ -146,7 +145,7 @@
     new-datatype))
 
 
-(declare inpace-new-struct)
+(declare inplace-new-struct)
 
 
 (deftype Struct [struct-def
@@ -165,12 +164,6 @@
       (inplace-new-struct (:datatype-name struct-def) new-buffer
                           {:endianness
                            (dtype-proto/endianness reader)})))
-  dtype-proto/PToReader
-  (convertible-to-reader? [m] (dtype-proto/convertible-to-reader? buffer))
-  (->reader [m options] (dtype-proto/->reader buffer options))
-  dtype-proto/PToWriter
-  (convertible-to-writer? [m] (dtype-proto/convertible-to-writer? buffer))
-  (->writer [m options] (dtype-proto/->writer buffer options))
   Map
   (size [m] (count (:data-layout struct-def)))
   (containsKey [m k] (.containsKey ^Map (:layout-map struct-def) k))
@@ -182,7 +175,7 @@
       (LinkedHashSet. ^Collection map-entry-data)))
   (keySet [m] (.keySet ^Map (:layout-map struct-def)))
   (get [m k]
-    (when-let [[offset dtype :as data-vec] (offset-of struct-def k)]
+    (when-let [[offset dtype :as _data-vec] (offset-of struct-def k)]
       (if-let [struct-def (.get ^ConcurrentHashMap struct-datatypes dtype)]
         (let [new-buffer (dtype-proto/sub-buffer
                           buffer
@@ -207,15 +200,17 @@
   (put [m k v]
     (when-not writer
       (throw (Exception. "Item is immutable")))
-    (if-let [[offset dtype :as data-vec] (offset-of struct-def k)]
+    (if-let [[offset dtype :as _data-vec] (offset-of struct-def k)]
       (if-let [struct-def (.get ^ConcurrentHashMap struct-datatypes dtype)]
-        (let [_ (when-not (and (instance? v Struct)
+        (let [_ (when-not (and (instance? Struct v)
                                (= dtype (dtype-proto/get-datatype v)))
+
                   (throw (Exception. (format "non-struct or datatype mismatch: %s %s"
                                              dtype (dtype-proto/get-datatype v)))))]
           (dtype-base/copy! (.buffer ^Struct v)
                             (dtype-proto/sub-buffer buffer offset
-                                                    (:datatype-size struct-def))))
+                                                    (:datatype-size struct-def)))
+          nil)
         (let [v (casting/cast v dtype)
               host-dtype (casting/host-flatten dtype)]
           (case host-dtype
@@ -257,3 +252,92 @@
               (->binary-writer backing-data options))))
   ([datatype]
    (new-struct datatype {})))
+
+
+(defn struct->buffer
+  [^Struct struct]
+  (.buffer struct))
+
+
+(defn struct->binary-reader
+  ^BinaryReader [^Struct struct]
+  (.reader struct))
+
+
+(defn struct->binary-writer
+  ^BinaryWriter [^Struct struct]
+  (.writer struct))
+
+
+(deftype ArrayOfStructs [struct-def
+                         ^long elem-size
+                         ^long n-elems
+                         buffer
+                         options]
+  ObjectReader
+  (getDatatype [rdr] (:datatype-name struct-def))
+  (lsize [rdr] n-elems)
+  (read [rdr idx]
+    (let [sub-buffer (dtype-proto/sub-buffer
+                      buffer
+                      (* idx elem-size)
+                      elem-size)]
+      (Struct. struct-def sub-buffer
+               (->binary-reader sub-buffer {:endianness endianness})
+               (->binary-writer sub-buffer {:endianness endianness})))))
+
+
+(defn inplace-new-array-of-structs
+  ([datatype buffer options]
+   (let [struct-def (.get ^ConcurrentHashMap struct-datatypes datatype)
+         _ (when-not struct-def
+             (throw (Exception. (format "Failed to find datatype %s"
+                                        datatype))))
+         elem-size (long (:datatype-size struct-def))
+         buf-size (dtype-base/ecount buffer)
+         _ (when-not (== 0 (rem buf-size elem-size))
+             (throw (Exception. "Buffer size is not an even multiple of dtype size.")))
+         n-elems (quot buf-size elem-size)]
+     (ArrayOfStructs. struct-def
+                      elem-size
+                      n-elems
+                      buffer
+                      options)))
+  ([datatype buffer]
+   (inplace-new-array-of-structs datatype buffer {})))
+
+
+(defn new-array-of-structs
+  [datatype n-elems options]
+
+  )
+
+
+(defn array-of-structs->columns
+  [^ArrayOfStructs structs]
+
+  )
+
+
+
+
+
+(comment
+  (require '[tech.v2.datatype :as dtype])
+  (define-datatype! :vec3 [{:name :x :datatype :float32}
+                           {:name :y :datatype :float32}
+                           {:name :z :datatype :float32}])
+
+  (define-datatype! :segment [{:name :begin :datatype :vec3}
+                              {:name :end :datatype :vec3}])
+
+  (def test-vec3 (new-struct :vec3))
+  (.put test-vec3 :x 3.0)
+  test-vec3
+  (def line-segment (new-struct :segment))
+  (.put line-segment [:begin :x] 6.0)
+  line-segment
+  (.put line-segment :end test-vec3)
+  (.get line-segment [:end :x])
+  (.get line-segment [:end 0])
+  )

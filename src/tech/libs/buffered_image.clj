@@ -244,14 +244,10 @@
                                  BufferedImage/TYPE_INT_ARGB))))
 
   dtype-proto/PClone
-  (clone [item datatype]
-    (if (= datatype (dtype/get-datatype item))
-      (dtype/copy! item
-                   (BufferedImage. (.getWidth item) (.getHeight item)
-                                   (.getType item)))
-      (draw-image! item (dtype-proto/from-prototype item datatype
-                                                    (dtype/shape
-                                                     (as-ubyte-tensor item))))))
+  (clone [item]
+    (dtype/copy! item
+                 (BufferedImage. (.getWidth item) (.getHeight item)
+                                 (.getType item))))
   dtype-proto/PToNioBuffer
   (convertible-to-nio-buffer? [item]
     (dtype-proto/convertible-to-nio-buffer?
@@ -315,9 +311,7 @@
                                 (dtype-proto/->writer item {}))
         (dtype-proto/sub-buffer offset len)))
   dtype-proto/PClone
-  (clone [item datatype]
-    (when-not (= datatype :uint8)
-      (throw (Exception. "Cannot create packed buffer for arbitrary datatypes")))
+  (clone [item]
     (PackedIntUbyteBuffer. (dtype-proto/clone int-buffer datatype)
                            n-elems
                            shape

@@ -22,10 +22,7 @@
   dtype-proto/PCountable
   (ecount [rng] (.count rng))
   dtype-proto/PClone
-  (clone [rng datatype]
-    (when-not (= datatype (base/get-datatype rng))
-      (throw (Exception. "Ranges cannot be cloned to different datatypes")))
-    rng)
+  (clone [rng] rng)
   dtype-proto/PToReader
   (convertible-to-reader? [rng] true)
   (->reader [rng options]
@@ -66,10 +63,7 @@
   dtype-proto/PCountable
   (ecount [rng] (.count rng))
   dtype-proto/PClone
-  (clone [rng datatype]
-    (when-not (= datatype (base/get-datatype rng))
-      (throw (Exception. "Ranges cannot be cloned to different datatypes")))
-    rng)
+  (clone [rng] rng)
   dtype-proto/PToReader
   (convertible-to-reader? [rng] (contains?
                                  #{:int8 :int16 :int32 :int64

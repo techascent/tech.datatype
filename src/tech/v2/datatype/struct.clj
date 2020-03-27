@@ -88,6 +88,13 @@
                       (into {}))}))
 
 
+(defn get-struct-def
+  [datatype]
+  (if-let [retval (.get ^ConcurrentHashMap struct-datatypes datatype)]
+    retval
+    (throw (Exception. (format "Datatype %s is not a struct definition." datatype)))))
+
+
 (defn get-datatype
   [datatype-name]
   (.getOrDefault ^ConcurrentHashMap struct-datatypes
@@ -157,10 +164,8 @@
   dtype-proto/PEndianness
   (endianness [m] (dtype-proto/endianness reader))
   dtype-proto/PClone
-  (clone [m datatype]
-    (when-not (= datatype (:datatype-name struct-def))
-      (throw (Exception. "Invalid datatype")))
-    (let [new-buffer (dtype-proto/clone buffer (dtype-proto/get-datatype buffer))]
+  (clone [m]
+    (let [new-buffer (dtype-proto/clone buffer)]
       (inplace-new-struct (:datatype-name struct-def) new-buffer
                           {:endianness
                            (dtype-proto/endianness reader)})))
@@ -227,9 +232,7 @@
 
 (defn inplace-new-struct
   ([datatype backing-store options]
-   (let [struct-def (get-datatype datatype)
-         _ (when-not struct-def
-             (throw (Exception. (format "Unable to find struct %s" struct-def))))]
+   (let [struct-def (get-struct-def datatype)]
      (Struct. struct-def
               backing-store
               (->binary-reader backing-store options)
@@ -240,9 +243,7 @@
 
 (defn new-struct
   ([datatype options]
-   (let [struct-def (get-datatype datatype)
-         _ (when-not struct-def
-             (throw (Exception. (format "Unable to find struct %s" struct-def))))
+   (let [struct-def (get-struct-def datatype)
          ;;binary read/write to nio buffers is faster than our writer-wrapper
          backing-data (dtype-proto/->buffer-backing-store
                        (byte-array (long (:datatype-size struct-def))))]
@@ -283,16 +284,13 @@
                       (* idx elem-size)
                       elem-size)]
       (Struct. struct-def sub-buffer
-               (->binary-reader sub-buffer {:endianness endianness})
-               (->binary-writer sub-buffer {:endianness endianness})))))
+               (->binary-reader sub-buffer options)
+               (->binary-writer sub-buffer options)))))
 
 
 (defn inplace-new-array-of-structs
   ([datatype buffer options]
-   (let [struct-def (.get ^ConcurrentHashMap struct-datatypes datatype)
-         _ (when-not struct-def
-             (throw (Exception. (format "Failed to find datatype %s"
-                                        datatype))))
+   (let [struct-def (get-struct-def datatype)
          elem-size (long (:datatype-size struct-def))
          buf-size (dtype-base/ecount buffer)
          _ (when-not (== 0 (rem buf-size elem-size))
@@ -308,14 +306,39 @@
 
 
 (defn new-array-of-structs
-  [datatype n-elems options]
+  ([datatype n-elems options]
+   (let [struct-def (get-struct-def datatype)
+         n-elems (long n-elems)
+         elem-size (long (:datatype-size struct-def))
+         buf-size (* n-elems elem-size)
+         buffer (byte-array buf-size)]
+     (inplace-new-array-of-structs
+      datatype (dtype-proto/->buffer-backing-store buffer)
+      options)))
+  ([datatype n-elems]
+   (new-array-of-structs datatype n-elems {})))
+
+
+(deftype StructColumnBuffer [datatype
+                             ^long n-elems
+                             ^long elem-size
+                             buffer]
+  dtype-proto/PDatatype
+  (get-datatype [item] datatype)
+  dtype-proto/PCountable
+  (ecount [item] n-elems)
 
   )
 
 
 (defn array-of-structs->columns
   [^ArrayOfStructs structs]
+  (let [struct-def (.struct-def structs)
+        n-elems (.n-elems structs)
+        elem-size (long (:datatype-size struct-def))
+        data-buffer (.buffer structs)]
 
+    )
   )
 
 

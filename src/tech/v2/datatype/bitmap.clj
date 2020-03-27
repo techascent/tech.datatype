@@ -88,10 +88,7 @@
   (constant-time-min [bitmap] (.first bitmap))
   (constant-time-max [bitmap] (.last bitmap))
   dtype-proto/PClone
-  (clone [bitmap datatype]
-    (when-not (= datatype (dtype-base/get-datatype bitmap))
-      (throw (Exception. "Invalid datatype")))
-    (.clone bitmap))
+  (clone [bitmap] (.clone bitmap))
   dtype-proto/PToBitmap
   (convertible-to-bitmap? [item] true)
   (as-roaring-bitmap [item] item)
@@ -139,8 +136,7 @@
   (->reader [item options]
     (dtype-proto/->reader bitmap options))
   dtype-proto/PClone
-  (clone [item datatype]
-    (BitmapSet. (dtype-proto/clone bitmap datatype)))
+  (clone [item] (BitmapSet. (dtype-proto/clone bitmap)))
   dtype-proto/PConstantTimeMinMax
   (has-constant-time-min-max? [item] true)
   (constant-time-min [item] (.first bitmap))

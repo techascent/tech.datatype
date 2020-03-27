@@ -53,7 +53,7 @@
 
 (defprotocol PClone
   "Clone an object.  Implemented generically for all objects."
-  (clone [item datatype]))
+  (clone [item]))
 
 (defprotocol PBufferType ;;:sparse or :dense
   (buffer-type [item]))

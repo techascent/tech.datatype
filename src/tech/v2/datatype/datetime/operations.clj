@@ -1,5 +1,7 @@
 (ns tech.v2.datatype.datetime.operations
-  (:require [tech.v2.datatype.datetime :as dtype-dt]
+  (:require [tech.v2.datatype.datetime
+             :refer [collapse-date-datatype]
+             :as dtype-dt]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.readers.const :refer [make-const-reader]]
@@ -804,12 +806,12 @@
       (bin-op lhs rhs)
       :iterable
       (binary-op/binary-iterable-map
-       {}
+       {:datatype op-dtype}
        bin-op
        (promote-op-arg op-argtype lhs-argtype lhs rhs)
        (promote-op-arg op-argtype rhs-argtype rhs lhs))
       (binary-op/binary-reader-map
-       {}
+       {:datatype op-dtype}
        bin-op
        (promote-op-arg op-argtype lhs-argtype lhs rhs)
        (promote-op-arg op-argtype rhs-argtype rhs lhs)))))
@@ -974,12 +976,12 @@
         (binary-op lhs rhs)
         :iterable
         (binary-op/binary-iterable-map
-         {}
+         {:datatype lhs-dtype}
          binary-op
          (promote-op-arg op-argtype lhs-argtype lhs rhs)
          (promote-op-arg op-argtype rhs-argtype rhs lhs))
         (binary-op/binary-reader-map
-         {}
+         {:datatype lhs-dtype}
          binary-op
          (promote-op-arg op-argtype lhs-argtype lhs rhs)
          (promote-op-arg op-argtype rhs-argtype rhs lhs))))))

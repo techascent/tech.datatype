@@ -9,7 +9,8 @@
         org.apache.commons/commons-math3 {:mvn/version "3.6.1"}
         primitive-math                   {:mvn/version "0.1.6"}
         camel-snake-kebab                {:mvn/version "0.4.0"}
-        org.roaringbitmap/RoaringBitmap  {:mvn/version "0.8.13"}}
+        org.roaringbitmap/RoaringBitmap  {:mvn/version "0.8.13"}
+        cljc.java-time                   {:mvn/version "0.1.8"}}
  :aliases
  {:test {:extra-deps
          {org.bytedeco.javacpp-presets/opencv-platform {:mvn/version "4.0.1-1.4.4"}

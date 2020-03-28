@@ -212,13 +212,13 @@
 
 (defmacro make-binary-op-iterator
   [dtype]
-  `(fn [lhs# rhs# bin-op# unchecked?#]
+  `(fn [lhs# rhs# bin-op# unchecked?# datatype#]
      (let [lhs-iterable# (dtype-base/->iterable lhs#)
            rhs-iterable# (dtype-base/->iterable rhs#)
            src-dtype# (dtype-base/get-datatype lhs-iterable#)]
        (reify
          dtype-proto/PDatatype
-         (get-datatype [iter-item#] src-dtype#)
+         (get-datatype [iter-item#] datatype#)
          Iterable
          (iterator [iter-item#]
            (let [lhs-iter# (typecast/datatype->iter ~dtype
@@ -229,7 +229,7 @@
                                                     unchecked?#)
                  bin-op# (datatype->binary-op ~dtype bin-op# true)]
              (reify ~(typecast/datatype->iter-type dtype)
-               (getDatatype [item#] src-dtype#)
+               (getDatatype [item#] datatype#)
                (hasNext [item#] (and (.hasNext lhs-iter#)
                                      (.hasNext rhs-iter#)))
                (~(typecast/datatype->iter-next-fn-name dtype)
@@ -252,7 +252,7 @@
   [{:keys [datatype unchecked?]} bin-op lhs rhs]
   (let [dtype (or datatype (dtype-proto/get-datatype lhs))]
     (if-let [iter-fn (get binary-op-iter-table (casting/flatten-datatype dtype))]
-      (iter-fn lhs rhs bin-op unchecked?)
+      (iter-fn lhs rhs bin-op unchecked? dtype)
       (throw (ex-info (format "Cannot unary map datatype %s" dtype) {})))))
 
 
@@ -268,7 +268,7 @@
 
 (defmacro make-binary-op-reader-impl
   [dtype]
-  `(fn [lhs# rhs# bin-op# unchecked?#]
+  `(fn [lhs# rhs# bin-op# unchecked?# datatype#]
      (let [bin-op# (datatype->binary-op ~dtype bin-op# true)
            lhs-reader# (typecast/datatype->reader ~dtype
                                                   (dtype-base/->reader lhs#)
@@ -279,18 +279,18 @@
            n-elems# (min (.lsize lhs-reader#)
                          (.lsize rhs-reader#))
            src-dtype# (dtype-proto/get-datatype lhs-reader#)]
-       (-> (reify ~(typecast/datatype->reader-type dtype)
-             (getDatatype [item#] src-dtype#)
-             (lsize [item#] n-elems#)
-             (read [item# idx#]
-               (.op bin-op#
-                    (.read lhs-reader# idx#)
-                    (.read rhs-reader# idx#)))
+       (reify ~(typecast/datatype->reader-type dtype)
+         (getDatatype [item#] datatype#)
+         (lsize [item#] n-elems#)
+         (read [item# idx#]
+           (.op bin-op#
+                (.read lhs-reader# idx#)
+                (.read rhs-reader# idx#)))
 
-             dtype-proto/PToBackingStore
-             (->backing-store-seq  [item#]
-               (concat (dtype-proto/->backing-store-seq lhs-reader#)
-                       (dtype-proto/->backing-store-seq rhs-reader#))))))))
+         dtype-proto/PToBackingStore
+         (->backing-store-seq  [item#]
+           (concat (dtype-proto/->backing-store-seq lhs-reader#)
+                   (dtype-proto/->backing-store-seq rhs-reader#)))))))
 
 
 (def binary-op-reader-table (casting/make-base-datatype-table
@@ -301,7 +301,7 @@
   [{:keys [datatype unchecked?]} bin-op lhs rhs]
   (let [dtype (or datatype (dtype-proto/get-datatype lhs))]
     (if-let [reader-fn (get binary-op-reader-table (casting/flatten-datatype dtype))]
-      (reader-fn lhs rhs bin-op unchecked?)
+      (reader-fn lhs rhs bin-op unchecked? dtype)
       (throw (ex-info (format "Cannot binary map datatype %s" dtype) {})))))
 
 

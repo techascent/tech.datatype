@@ -5,6 +5,7 @@
             [tech.v2.datatype.object-datatypes :as dtype-obj]
             [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.casting :as casting]
+            [tech.v2.datatype.base :as dtype-base]
             [primitive-math :as pmath])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
@@ -28,6 +29,43 @@
 
 (set! *warn-on-reflection* true)
 
+(defn seconds-in-day
+  ^long []
+  PackedLocalTime/SECONDS_PER_DAY)
+
+(defn seconds-in-hour
+  ^long []
+  PackedLocalTime/SECONDS_PER_HOUR)
+
+(defn seconds-in-minute
+  ^long []
+  PackedLocalTime/SECONDS_PER_MINUTE)
+
+
+(defn nanoseconds-in-millisecond
+  ^long []
+  ;;(long 1e6)
+  1000000)
+
+(defn milliseconds-in-week
+  ^long []
+  60480000)
+
+(defn milliseconds-in-day
+  ^long []
+  86400000)
+
+(defn milliseconds-in-hour
+  ^long []
+  3600000)
+
+(defn milliseconds-in-minute
+  ^long []
+  60000)
+
+(defn milliseconds-in-second
+  ^long []
+  1000)
 
 (defn system-zone-id
   ^ZoneId []
@@ -112,6 +150,12 @@
   (.toInstant zid))
 
 
+(defn zoned-date-time->milliseconds-since-epoch
+  ^long [^ZonedDateTime zid]
+  (-> (zoned-date-time->instant zid)
+      (instant->milliseconds-since-epoch)))
+
+
 (defn zoned-date-time
   ^ZonedDateTime []
   (ZonedDateTime/now))
@@ -129,6 +173,12 @@
 (defn offset-date-time->instant
   ^Instant [^OffsetDateTime of]
   (.toInstant of))
+
+
+(defn offset-date-time->milliseconds-since-epoch
+  ^long [^OffsetDateTime of]
+  (-> (offset-date-time->instant of)
+      (instant->milliseconds-since-epoch)))
 
 
 (defn offset-date-time
@@ -196,6 +246,28 @@
        (local-date-time->instant))))
 
 
+(defn local-time->seconds
+  ^long [^LocalTime lt]
+  (long (.toSecondOfDay lt)))
+
+
+(defn local-time->milliseconds
+  ^long [^LocalTime lt]
+  (quot (.toNanoOfDay lt)
+        (nanoseconds-in-millisecond)))
+
+
+(defn seconds->local-time
+  ^LocalTime [^long seconds]
+  (LocalTime/ofSecondOfDay seconds))
+
+
+(defn milliseconds->local-time
+  ^LocalTime [^long milliseconds]
+  (LocalTime/ofNanoOfDay (* milliseconds
+                            (nanoseconds-in-millisecond))))
+
+
 (defn local-date
   (^LocalDate []
    (LocalDate/now))
@@ -228,6 +300,15 @@
   (^Instant [^LocalDate ld]
    (-> (local-date->local-date-time ld)
        (local-date-time->instant))))
+
+
+(defn local-date->milliseconds-since-epoch
+  (^long [^LocalDate ld ^LocalTime lt]
+   (-> (local-date->local-date-time ld lt)
+       (local-date-time->milliseconds-since-epoch)))
+  (^long [^LocalDate ld]
+   (-> (local-date->local-date-time ld)
+       (local-date-time->milliseconds-since-epoch))))
 
 
 (defn local-date-time->local-time
@@ -380,8 +461,9 @@
              (let [^Iterator src-iter# (.iterator ^Iterable packed-inst-iterable#)]
                (-> (reify Iterator
                      (hasNext [iter] (.hasNext src-iter#))
-                     (next [iter] (compile-time-unpack (.next src-iter#) :instant)))
-                   (IterHelpers$ObjectIterConverter. :instant))))))
+                     (next [iter] (compile-time-unpack (.next src-iter#)
+                                                       ~packed-dtype)))
+                   (IterHelpers$ObjectIterConverter. ~packed-dtype))))))
 
        (defn ~reader->unpack-sym
          ^ObjectReader [reader#]
@@ -405,3 +487,93 @@
 (define-packing-operations :local-date)
 (define-packing-operations :local-time)
 (define-packing-operations :local-date-time)
+
+(defn packed-local-date-time->milliseconds-since-epoch
+  ^long [^long packed-date-time]
+  (-> (unpack-local-date-time)
+      (local-date-time->milliseconds-since-epoch)))
+
+
+(defn packed-local-date->milliseconds-since-epoch
+  ^long [^long packed-date]
+  (-> (unpack-local-date)
+      (local-date->milliseconds-since-epoch)))
+
+
+(defn packed-local-time->milliseconds
+  ^long [^long packed-time]
+  (-> (unpack-local-time)
+      (local-time->milliseconds)))
+
+
+(def packed-aliases (->> packable-datatypes
+                         (map (fn [name-kwd]
+                                (keyword (format "packed-%s"
+                                                 (name name-kwd)))))
+                         set))
+
+
+(defn collapse-date-datatype
+  [item]
+  (let [item-dtype (dtype-base/get-datatype item)]
+    (cond
+      ;;don't collapse packed-instant
+      (packed-aliases item-dtype) item-dtype
+      ;;But do collapse any other aliases.
+      (casting/numeric-type? (casting/safe-flatten item-dtype)) :number
+      :else
+      (if (= item-dtype :object)
+        (if-let [fitem (first item)]
+          (collapse-date-datatype fitem)
+          item-dtype)
+        item-dtype))))
+
+
+(defn pack
+  [item]
+  (case (collapse-date-datatype item)
+    :instant
+    (case (argtypes/arg->arg-type item)
+      :scalar (pack-instant item)
+      :iterable (instant-iterable->packed-instant-iterable item)
+      :reader (instant-reader->packed-instant-reader item))
+    :local-date-time
+    (case (argtypes/arg->arg-type item)
+      :scalar (pack-local-date-time item)
+      :iterable (local-date-time-iterable->packed-local-date-time-iterable item)
+      :reader (local-date-time-reader->packed-local-date-time-reader item))
+    :local-date
+    (case (argtypes/arg->arg-type item)
+      :scalar (pack-local-date item)
+      :iterable (local-date-iterable->packed-local-date-iterable item)
+      :reader (local-date-reader->packed-local-date-reader item))
+    :local-time
+    (case (argtypes/arg->arg-type item)
+      :scalar (pack-local-time item)
+      :iterable (local-time-iterable->packed-local-time-iterable item)
+      :reader (local-time-reader->packed-local-time-reader item))))
+
+
+(defn unpack
+  [item]
+  (case (collapse-date-datatype item)
+    :packed-instant
+    (case (argtypes/arg->arg-type item)
+      :scalar (unpack-instant item)
+      :iterable (packed-instant-iterable->instant-iterable item)
+      :reader (packed-instant-reader->instant-reader item))
+    :packed-local-date-time
+    (case (argtypes/arg->arg-type item)
+      :scalar (unpack-local-date-time item)
+      :iterable (packed-local-date-time-iterable->local-date-time-iterable item)
+      :reader (packed-local-date-time-reader->local-date-time-reader item))
+    :packed-local-date
+    (case (argtypes/arg->arg-type item)
+      :scalar (unpack-local-date item)
+      :iterable (packed-local-date-iterable->local-date-iterable item)
+      :reader (packed-local-date-reader->local-date-reader item))
+    :packed-local-time
+    (case (argtypes/arg->arg-type item)
+      :scalar (unpack-local-time item)
+      :iterable (packed-local-time-iterable->local-time-iterable item)
+      :reader (packed-local-time-reader->local-time-reader item))))

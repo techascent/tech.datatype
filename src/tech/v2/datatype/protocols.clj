@@ -33,38 +33,46 @@
   (operation-type [item]))
 
 
-
 (defprotocol PCountable
   (ecount [item]))
+
 
 (extend-type Countable
   PCountable
   (ecount [item] (.lsize item)))
 
+
 (defprotocol PShape
   (shape [item]))
+
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."
   (copy-raw->item! [raw-data ary-target target-offset options]))
 
+
 (defprotocol PPrototype
   (from-prototype [item datatype shape]))
+
 
 (defprotocol PClone
   "Clone an object.  Implemented generically for all objects."
   (clone [item datatype]))
 
+
 (defprotocol PBufferType ;;:sparse or :dense
   (buffer-type [item]))
+
 
 (extend-type Object
   PBufferType
   (buffer-type [item] :dense))
 
+
 (defn safe-buffer-type
   [item]
   (buffer-type item))
+
 
 (defprotocol PSetConstant
   (set-constant! [item offset value elem-count]))

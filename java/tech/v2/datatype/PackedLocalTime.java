@@ -248,9 +248,7 @@ public class PackedLocalTime {
   }
 
   public static int getMillisecondOfMinute(int time) {
-    byte byte1 = (byte) (time >> 8);
-    byte byte2 = (byte) time;
-    return (int) ((byte1 << 8) | (byte2 & 0xFF));
+    return time & 0xFFFF;
   }
 
   public static int getNano(int time) {

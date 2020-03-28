@@ -454,6 +454,15 @@
   (.put ^Map aliased-datatypes new-dtype old-dtype))
 
 
+(alias-datatype! :double :float64)
+(alias-datatype! :float :float32)
+(alias-datatype! :long :int64)
+(alias-datatype! :int :int32)
+(alias-datatype! :short :int16)
+(alias-datatype! :byte :int8)
+(alias-datatype! :bool :boolean)
+
+
 (defn un-alias-datatype
   [dtype]
   (.getOrDefault ^Map aliased-datatypes dtype dtype))

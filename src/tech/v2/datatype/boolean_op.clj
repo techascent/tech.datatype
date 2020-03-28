@@ -153,8 +153,8 @@
     "Make a boolean unary operator.  Inputs are named 'x' and 'y' respectively and
   output will be expected to be boolean."
   ([datatype body]
-   `(make-boolean-binary-op ~datatype :unnamed ~body))
-  ([datatype opname body]
+   `(make-boolean-binary-op :unnamed ~datatype ~body))
+  ([opname datatype body]
    (let [host-dtype (casting/safe-flatten datatype)]
      `(reify ~(datatype->boolean-binary-type host-dtype)
         (op [item# ~'x ~'y]
@@ -166,8 +166,8 @@
         IFn
         (invoke [item# x# y#]
           (.op item#
-               (casting/datatype->cast-fn :unknown ~datatype x#)
-               (casting/datatype->cast-fn :unknown ~datatype y#)))))))
+               (casting/datatype->cast-fn :unknown ~host-dtype x#)
+               (casting/datatype->cast-fn :unknown ~host-dtype y#)))))))
 
 
 (extend-type Object

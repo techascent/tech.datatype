@@ -62,9 +62,9 @@
   (let [test-buf (dtype-jna/make-typed-pointer :int64 5)]
     (dtype/set-constant! test-buf 0 1 (dtype/ecount test-buf))
     (is (= [1 1 1 1 1] (dtype/->vector test-buf)))
-    (is (= [1 1 1 1 1] (-> (dtype/clone test-buf :datatype :uint8)
+    (is (= [1 1 1 1 1] (-> (dtype/clone test-buf)
                            dtype/->vector)))
-    (is (not= 0 (-> (dtype/clone test-buf :datatype :uint8)
+    (is (not= 0 (-> (dtype/clone test-buf)
                     dtype/->jna-ptr
                     dtype-jna/pointer->address)))))
 

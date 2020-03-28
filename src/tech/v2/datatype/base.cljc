@@ -100,14 +100,16 @@
 
 
 (defn sub-buffer
-  [item off len]
-  (when-not (<= (+ (int off) (int len))
-                (ecount item))
-    (throw (ex-info "Sub buffer out of range." {})))
-  (if (and (= (int off) 0)
-           (= (int len) (ecount item)))
-    item
-    (dtype-proto/sub-buffer item off len)))
+  ([item off len]
+   (when-not (<= (+ (int off) (int len))
+                 (ecount item))
+     (throw (ex-info "Sub buffer out of range." {})))
+   (if (and (= (int off) 0)
+            (= (int len) (ecount item)))
+     item
+     (dtype-proto/sub-buffer item off len)))
+  ([item off]
+   (sub-buffer item off (- (ecount item) (long off)))))
 
 (defn- requires-sub-buffer
   [item off len]
@@ -411,18 +413,16 @@
     (dtype-io/read-indexes! item indexes values options))
 
   dtype-proto/PClone
-  (clone [item datatype]
+  (clone [item]
     (if (instance? java.lang.Cloneable item)
-      (do
-        (when-not (= datatype (get-datatype item))
-          (throw (Exception. "Generic objects cannot change types during clone.")))
-        (let [^Class item-cls (class item)
-              ^Method method
-              (.getMethod item-cls
-                          "clone"
-                          ^"[Ljava.lang.Class;" (into-array Class []))]
-          (.invoke method item (object-array 0))))
-      (copy! item (dtype-proto/from-prototype item datatype
+      (let [^Class item-cls (class item)
+            ^Method method
+            (.getMethod item-cls
+                        "clone"
+                        ^"[Ljava.lang.Class;" (into-array Class []))]
+        (.invoke method item (object-array 0)))
+      (copy! item (dtype-proto/from-prototype item
+                                              (get-datatype item)
                                               (shape item))))))
 
 
@@ -437,7 +437,4 @@
 
 (extend-type clojure.lang.PersistentVector
   dtype-proto/PClone
-  (clone [item datatype]
-    (when-not (= datatype :object)
-      (throw (Exception. "Cannot clone persistent vectors to no object store")))
-    item))
+  (clone [item] item))

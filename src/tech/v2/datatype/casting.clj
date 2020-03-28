@@ -250,20 +250,6 @@
   (swap! *unchecked-cast-table* assoc datatype cast-fn))
 
 
-(defn cast
-  [value datatype]
-  (if-let [cast-fn (@*cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No cast available" {:datatype datatype}))))
-
-
-(defn unchecked-cast
-  [value datatype]
-  (if-let [cast-fn (@*unchecked-cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))
-
-
 (defmacro add-all-cast-fns
   []
   `(do
@@ -491,11 +477,6 @@
     (get unsigned-signed datatype datatype)))
 
 
-(defn jvm-cast
-  [value datatype]
-  (unchecked-cast value (datatype->host-type datatype)))
-
-
 (defn datatype->safe-host-type
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
@@ -546,6 +527,31 @@
       composite-datatype->base-datatype
       datatype->host-datatype
       flatten-datatype))
+
+
+(defn cast
+  [value datatype]
+  (let [datatype (flatten-datatype datatype)]
+    (if (= datatype :object)
+      value
+      (if-let [cast-fn (@*cast-table* datatype)]
+        (cast-fn value)
+        (throw (ex-info "No cast available" {:datatype datatype}))))))
+
+
+(defn unchecked-cast
+  [value datatype]
+  (let [datatype (flatten-datatype datatype)]
+    (if (= datatype :object)
+      value
+      (if-let [cast-fn (@*unchecked-cast-table* datatype)]
+        (cast-fn value)
+        (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))))
+
+
+(defn jvm-cast
+  [value datatype]
+  (unchecked-cast value (datatype->host-type datatype)))
 
 
 (defmacro datatype->sparse-value

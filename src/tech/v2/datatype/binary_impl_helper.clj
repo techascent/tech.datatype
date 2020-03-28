@@ -16,8 +16,8 @@
        dtype-proto/PDatatype
        (get-datatype [rdr] :int8)
        dtype-proto/PClone
-       (clone [rdr _ignored-datatype]
-         (-> (dtype-proto/clone buffer# (dtype-proto/get-datatype buffer#))
+       (clone [rdr]
+         (-> (dtype-proto/clone buffer#)
              (~constructor-fn ~options)))
        dtype-proto/PBuffer
        (sub-buffer [rdr# offset# len#]
@@ -76,8 +76,8 @@
        dtype-proto/PDatatype
        (get-datatype [rdr] :int8)
        dtype-proto/PClone
-       (clone [rdr _ignored-datatype]
-         (-> (dtype-proto/clone buffer# (dtype-proto/get-datatype buffer#))
+       (clone [rdr]
+         (-> (dtype-proto/clone buffer#)
              (~constructor-fn ~options)))
        dtype-proto/PBuffer
        (sub-buffer [wtr# offset# len#]

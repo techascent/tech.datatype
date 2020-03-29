@@ -3,7 +3,8 @@
             [tech.v2.datatype.datetime :as dtype-dt]
             [tech.v2.datatype.datetime.operations :as dtype-dt-ops]
             [tech.v2.datatype.functional :as dfn]
-            [clojure.test :refer [deftest is]]))
+            [clojure.test :refer [deftest is]]
+            [clojure.pprint :as pp]))
 
 
 (deftest instant
@@ -76,3 +77,35 @@
                            (dtype-dt/pack)
                            (dtype-dt-ops/plus-days (range 5))
                            (dtype-dt/unpack)))))))
+
+
+(defn field-compatibility-matrix
+  []
+  (let [fieldnames (->> dtype-dt/keyword->temporal-field
+                        (map first)
+                        (concat [:epoch-milliseconds])
+                        sort)]
+    (for [[datatype ctor] (sort-by first dtype-dt/datatype->constructor-fn)]
+      (->>
+       (for [field-name fieldnames]
+         [field-name (try
+                     (let [accessor (get-in dtype-dt-ops/java-time-ops
+                                            [datatype :int64-getters field-name])]
+                       (accessor (ctor))
+                       true)
+                     (catch Throwable e false))]
+         )
+       (into {})
+       (merge {:datatype datatype})))))
+
+
+(defn print-field-compatibility-matrix
+  ([m]
+   (let [field-names (->> (keys (first m))
+                          (remove #(= :datatype %))
+                          sort)]
+     (pp/print-table (concat [:datatype] field-names) m))
+   nil)
+  ([]
+   (print-field-compatibility-matrix
+    (field-compatibility-matrix))))

@@ -719,3 +719,12 @@
   LocalDate
   (->milliseconds-since-epoch [arg]
     (local-date->milliseconds-since-epoch arg)))
+
+
+(def datatype->constructor-fn
+  {:instant instant
+   :zoned-date-time zoned-date-time
+   :offset-date-time offset-date-time
+   :local-date-time local-date-time
+   :local-date local-date
+   :local-time local-time})

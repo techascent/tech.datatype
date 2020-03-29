@@ -89,7 +89,7 @@
 
 (defmacro datatype->writer
   [datatype writer & [unchecked?]]
-  (case datatype
+  (case (casting/safe-flatten datatype)
     :int8 `(->int8-writer ~writer ~unchecked?)
     :int16 `(->int16-writer ~writer ~unchecked?)
     :int32 `(->int32-writer ~writer ~unchecked?)

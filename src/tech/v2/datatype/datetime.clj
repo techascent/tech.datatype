@@ -7,6 +7,7 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.pprint :as dtype-pp]
+            [tech.v2.datatype.unary-op :as unary-op]
             [primitive-math :as pmath])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
@@ -498,6 +499,9 @@
      (mapv (fn [[k v]]
              (casting/alias-datatype! (keyword (str "packed-" (name k))) v))))
 
+(casting/alias-datatype! :epoch-seconds :int64)
+(casting/alias-datatype! :epoch-milliseconds :int64)
+
 
 (defmacro define-packing-operations
   [packed-dtype]
@@ -696,6 +700,33 @@
 (defmethod dtype-pp/reader-printer :packed-local-time
   [rdr]
   (unpack rdr))
+
+(defmethod dtype-pp/reader-printer :epoch-seconds
+  [rdr]
+  (case (argtypes/arg->arg-type rdr)
+    :scalar (milliseconds-since-epoch->instant
+             (* 1000 (long rdr)))
+    :iterable (unary-op/unary-iterable-map
+               {:datatype :instant}
+               #(milliseconds-since-epoch->instant (* 1000 (long %)))
+               rdr)
+    :reader (unary-op/unary-reader-map
+               {:datatype :instant}
+               #(milliseconds-since-epoch->instant (* 1000 (long %)))
+               rdr)))
+
+(defmethod dtype-pp/reader-printer :epoch-milliseconds
+  [rdr]
+  (case (argtypes/arg->arg-type rdr)
+    :scalar (milliseconds-since-epoch->instant (long rdr))
+    :iterable (unary-op/unary-iterable-map
+               {:datatype :instant}
+               #(milliseconds-since-epoch->instant (long %))
+               rdr)
+    :reader (unary-op/unary-reader-map
+               {:datatype :instant}
+               #(milliseconds-since-epoch->instant (long %))
+               rdr)))
 
 
 (defprotocol PEpochMilliseconds

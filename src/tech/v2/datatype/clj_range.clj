@@ -29,7 +29,8 @@
     (let [start (long (first rng))
           step (long (.get ^Field lr-step-field rng))
           n-elems (.count rng)]
-      (-> (reify LongReader
+      (-> (reify
+            LongReader
             (lsize [rdr] n-elems)
             (read [rdr idx]
               (-> (* step idx)

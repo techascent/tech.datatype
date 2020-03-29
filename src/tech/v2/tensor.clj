@@ -50,6 +50,13 @@
   (tens-proto/buffer tens))
 
 
+(defn as-datatype
+  [tens new-dtype]
+  (impl/construct-tensor
+   (dtype/->reader tens new-dtype)
+   (dims/dimensions (dtype/shape tens))))
+
+
 (defn dimensions-dense?
   [tensor]
   (dims/dense? (tensor->dimensions tensor)))

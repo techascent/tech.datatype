@@ -71,7 +71,7 @@
 
 (defn parallel-slow-copy!
   [dst src & [unchecked?]]
-  (case (dtype-proto/get-datatype dst)
+  (case (casting/un-alias-datatype (dtype-proto/get-datatype dst))
     :int8 (parallel-slow-copy :int8 dst src unchecked?)
     :uint8 (parallel-slow-copy :uint8 dst src unchecked?)
     :int16 (parallel-slow-copy :int16 dst src unchecked?)

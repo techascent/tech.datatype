@@ -6,17 +6,64 @@
   (:import [java.util List]))
 
 
+(defmacro make-dual-reader-impl
+  [datatype]
+  `(fn [datatype# concat-args#]
+     (let [^List reader-args# (mapv #(dtype-proto/->reader % {:datatype datatype#})
+                                    concat-args#)
+           total-size# (long (apply + (map #(dtype-base/ecount %) reader-args#)))
+           first-arg# (first concat-args#)
+           second-arg# (second concat-args#)
+           first-reader# (.get reader-args# 0)
+           second-reader# (.get reader-args# 1)
+           initial-ecount# (dtype-base/ecount first-reader#)
+           has-min-max?# (and (dtype-proto/has-constant-time-min-max? first-arg#)
+                              (dtype-proto/has-constant-time-min-max? second-arg#))
+           [cmin# cmax#] (when has-min-max?#
+                           [(min (dtype-proto/constant-time-min first-arg#)
+                                 (dtype-proto/constant-time-min second-arg#))
+                            (max (dtype-proto/constant-time-max first-arg#)
+                                 (dtype-proto/constant-time-max second-arg#))])]
+       (reify
+         dtype-proto/PConstantTimeMinMax
+         (has-constant-time-min-max? [item#] has-min-max?#)
+         (constant-time-min [item#] cmin#)
+         (constant-time-max [item#] cmax#)
+         ~(typecast/datatype->reader-type datatype)
+         (getDatatype [rdr#] datatype#)
+         (lsize [rdr#] total-size#)
+         (read [rdr# idx#]
+           (if (< idx# initial-ecount#)
+             (.read first-reader# idx#)
+             (.read second-reader# (- idx# initial-ecount#))))))))
+
+
+(def dual-reader-table (casting/make-base-datatype-table make-dual-reader-impl))
+
+
 
 (defmacro make-concat-reader-impl
   [datatype]
   `(fn [datatype# concat-args#]
      (let [^List reader-args# (mapv #(dtype-proto/->reader % {:datatype datatype#})
                                     concat-args#)
-           total-size# (long (apply + (map #(dtype-base/ecount %) reader-args#)))]
+           total-size# (long (apply + (map #(dtype-base/ecount %) reader-args#)))
+           has-min-max?# (every? dtype-proto/has-constant-time-min-max? concat-args#)
+           first-arg# (first concat-args#)
+           [cmin# cmax#] (when has-min-max?#
+                           (reduce (fn [[cmin# cmax#] next-reader#]
+                                     [(min cmin# (dtype-proto/constant-time-min next-reader#))
+                                      (max cmax# (dtype-proto/constant-time-max next-reader#))])
+                                   [(dtype-proto/constant-time-min first-arg#)
+                                    (dtype-proto/constant-time-max first-arg#)]
+                                   (rest concat-args#)))]
        (reify
-         dtype-proto/PDatatype
-         (get-datatype [item#] datatype#)
+         dtype-proto/PConstantTimeMinMax
+         (has-constant-time-min-max? [item#] has-min-max?#)
+         (constant-time-min [item#] cmin#)
+         (constant-time-max [item#] cmax#)
          ~(typecast/datatype->reader-type datatype)
+         (getDatatype [rdr#] datatype#)
          (lsize [rdr#] total-size#)
          (read [rdr# idx#]
            (loop [rdr-idx# 0
@@ -34,8 +81,15 @@
 
 (defn concat-readers
   ([options readers]
-   (let [datatype (or (:datatype options) (dtype-base/get-datatype (first readers)))
-         reader-fn (get concat-reader-table (casting/safe-flatten datatype))]
-     (reader-fn datatype readers)))
+   (let [n-readers (count readers)
+         datatype (or (:datatype options) (dtype-base/get-datatype (first readers)))]
+     (cond
+       (== 1 n-readers) (first readers)
+       (== 2 n-readers)
+       (let [reader-fn (get dual-reader-table (casting/safe-flatten datatype))]
+         (reader-fn datatype readers))
+       :else
+       (let [reader-fn (get concat-reader-table (casting/safe-flatten datatype))]
+         (reader-fn datatype readers)))))
   ([readers]
    (concat-readers {} readers)))

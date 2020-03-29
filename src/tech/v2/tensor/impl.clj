@@ -694,7 +694,9 @@
 (defn explicit-make-tensor
   [data {:keys [datatype container-type] :as options}]
   (let [data-shape (dtype/shape data)
-        datatype (default-datatype datatype)
+        datatype (if (or datatype (= :object (dtype/get-datatype data)))
+                   (default-datatype datatype)
+                   (dtype/get-datatype data))
         container-type (default-container-type container-type)
         n-elems (apply * 1 data-shape)]
     (when (= container-type :sparse)

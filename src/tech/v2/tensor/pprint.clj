@@ -142,8 +142,8 @@
                               item-shape elipsis-vec)
                          (apply tens-impl/select tens))
                ;;Format all entries in our reshaped tens.
-               tens (-> (unary/unary-reader :object (formatter x) tens)
-                        (tens-impl/tensor-force))
+               tens (->> (dtype-pprint/reader-printer tens)
+                         (unary/unary-reader :object (formatter x)))
                prefix (or prefix "")
                sb (StringBuilder.)
                column-lengths (column-lengths tens)]

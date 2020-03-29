@@ -321,7 +321,9 @@
                            target-offset options)
 
       :else
-      (throw (ex-info "Raw copy not supported on object" {})))))
+      (do
+        (set-value! ary-target target-offset raw-data)
+        [ary-target (+ target-offset 1)]))))
 
 
 (extend-protocol dtype-proto/PBuffer

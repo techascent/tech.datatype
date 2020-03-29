@@ -81,6 +81,11 @@
          (->array-copy [reader#]
            (dtype-proto/->array-copy src-item#))
 
+         dtype-proto/PClone
+         (clone [reader#]
+           (-> (dtype-proto/clone buffer#)
+               (dtype-proto/->reader {:datatype ~intermediate-datatype
+                                      :unchecked? unchecked?#})))
          dtype-proto/PBuffer
          (sub-buffer [buffer# offset# length#]
            (-> (dtype-proto/sub-buffer src-item# offset# length#)
@@ -316,32 +321,16 @@
 
 (defn make-marshalling-reader
   [src-reader options]
-  (let [src-dtype (casting/safe-flatten
-                   (dtype-proto/get-datatype src-reader))
-        dest-final-dtype  (or (:datatype options)
-                              (dtype-proto/get-datatype src-reader))
-        dest-dtype (casting/safe-flatten dest-final-dtype)]
-    (if (= src-dtype dest-dtype)
-      (if (or (= (dtype-proto/get-datatype src-reader)
-                 dest-final-dtype)
-              (not= :object dest-dtype))
-        src-reader
-        (make-object-wrapper src-reader dest-final-dtype {:unchecked? true}))
+  (let [src-dtype (dtype-proto/get-datatype src-reader)
+        dst-dtype (or (:datatype options)
+                      (dtype-proto/get-datatype src-reader))]
 
-      (let [retval-reader
-            (let [reader-fn (get marshalling-reader-table
-                                 [src-dtype dest-dtype])]
-              (when-not reader-fn
-                (throw (ex-info (format "Failed to find marshalling reader %s->%s"
-                                        src-dtype dest-dtype)
-                                {})))
-              (reader-fn src-reader dest-final-dtype
-                         {:unchecked? (:unchecked? options)}))
-            retval-dtype (dtype-proto/get-datatype retval-reader)]
-        (if (and (not= retval-dtype dest-dtype)
-                 (= :object dest-dtype))
-          (make-object-wrapper retval-reader dest-dtype {:unchecked? true})
-          retval-reader)))))
+    (if (= src-dtype dst-dtype)
+      src-reader
+      (let [reader-fn (get marshalling-reader-table
+                           [(casting/safe-flatten src-dtype)
+                            (casting/safe-flatten dst-dtype)])]
+        (reader-fn src-reader dst-dtype options)))))
 
 
 (defmacro extend-reader-type
@@ -358,6 +347,13 @@
       :->reader
       (fn [item# options#]
         (make-marshalling-reader item# options#))}
+     dtype-proto/PClone
+     {:clone
+      (fn [item#]
+        (let [item-dtype# (dtype-proto/get-datatype item#)]
+          (if (= ~datatype item-dtype#)
+            (dtype-proto/make-container :java-array ~datatype item# {})
+            (dtype-proto/make-container :typed-buffer item-dtype# item# {}))))}
      dtype-proto/PBuffer
      {:sub-buffer (fn [item# offset# length#]
                     (let [src-reader# (typecast/datatype->reader ~datatype item# true)

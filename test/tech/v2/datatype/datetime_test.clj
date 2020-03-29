@@ -19,10 +19,11 @@
                                      iterable-res
                                      reader-res])))
     (is (dfn/reduce-and (dtype-dt-ops/== iterable-res reader-res)))
-    (is (dfn/reduce-and
-         (dtype-dt-ops/== iterable-res
-                          (->> (dtype-dt/pack iterable-res)
-                               (dtype-dt/unpack)))))
+    (is (every? #(< (long %) 100)
+                (dtype-dt-ops/difference-milliseconds
+                 iterable-res
+                 (->> (dtype-dt/pack iterable-res)
+                      (dtype-dt/unpack)))))
     (is (= :packed-instant (dtype/get-datatype (dtype-dt/pack iterable-res))))
     (is (every? #(< (long %) 100)
                 (dtype-dt-ops/difference-milliseconds
@@ -55,9 +56,10 @@
                                      iterable-res
                                      reader-res])))
     (is (dfn/reduce-and (dtype-dt-ops/== iterable-res reader-res)))
-    (is (dfn/reduce-and (dtype-dt-ops/== iterable-res
-                                         (->> (dtype-dt/pack iterable-res)
-                                              (dtype-dt/unpack)))))
+    (is (every? #(< (long %) 100)
+                (dtype-dt-ops/difference-milliseconds iterable-res
+                                                      (->> (dtype-dt/pack iterable-res)
+                                                           (dtype-dt/unpack)))))
     (is (= :packed-local-date-time (dtype/get-datatype (dtype-dt/pack iterable-res))))
     (is (every? #(< (long %) 100)
                 (dtype-dt-ops/difference-milliseconds

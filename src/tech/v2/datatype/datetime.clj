@@ -6,12 +6,15 @@
             [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.base :as dtype-base]
+            [tech.v2.datatype.pprint :as dtype-pp]
             [primitive-math :as pmath])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
             LocalDate LocalDateTime LocalTime
             OffsetTime]
-           [java.util Date Iterator]
+           [java.time.temporal ChronoUnit Temporal ChronoField
+            WeekFields]
+           [java.util Date Iterator Locale]
            [it.unimi.dsi.fastutil.bytes ByteIterator]
            [it.unimi.dsi.fastutil.shorts ShortIterator]
            [it.unimi.dsi.fastutil.ints IntIterator]
@@ -29,13 +32,45 @@
 
 (set! *warn-on-reflection* true)
 
+
+(def keyword->chrono-unit
+  {:years ChronoUnit/YEARS
+   :months ChronoUnit/MONTHS
+   :weeks ChronoUnit/WEEKS
+   :days ChronoUnit/DAYS
+   :hours ChronoUnit/HOURS
+   :minuts ChronoUnit/MINUTES
+   :seconds ChronoUnit/SECONDS
+   :milliseconds ChronoUnit/MILLIS})
+
+
+(def keyword->temporal-field
+  {:years ChronoField/YEAR
+   :months ChronoField/MONTH_OF_YEAR
+   :days ChronoField/DAY_OF_MONTH
+   :day-of-year ChronoField/DAY_OF_YEAR
+   :day-of-week ChronoField/DAY_OF_WEEK
+   ;;Locale sensitive
+   :week-of-year (.. (WeekFields/of (Locale/getDefault)) weekOfWeekBasedYear)
+   :iso-week-of-year (.. (WeekFields/ISO) weekOfWeekBasedYear)
+   :iso-day-of-week (.. (WeekFields/ISO) dayOfWeek)
+   :epoch-days ChronoField/EPOCH_DAY
+   :hours ChronoField/HOUR_OF_DAY
+   :minutes ChronoField/MINUTE_OF_HOUR
+   :seconds ChronoField/SECOND_OF_MINUTE
+   :epoch-seconds ChronoField/INSTANT_SECONDS
+   :milliseconds ChronoField/MILLI_OF_SECOND})
+
+
 (defn seconds-in-day
   ^long []
   PackedLocalTime/SECONDS_PER_DAY)
 
+
 (defn seconds-in-hour
   ^long []
   PackedLocalTime/SECONDS_PER_HOUR)
+
 
 (defn seconds-in-minute
   ^long []
@@ -108,8 +143,8 @@
 
 
 (defn milliseconds-since-epoch->instant
-  (^Instant [milliseconds]
-   (Instant/ofEpochMilli (long milliseconds)))
+  (^Instant [arg]
+   (Instant/ofEpochMilli (long arg)))
   (^Instant []
    (Instant/now)))
 
@@ -122,9 +157,10 @@
 (defn instant
   (^Instant []
    (Instant/now))
-  (^Instant [epoch-millis]
-   (milliseconds-since-epoch->instant
-    epoch-millis)))
+  (^Instant [arg]
+   (if (instance? Instant arg)
+     arg
+     (milliseconds-since-epoch->instant arg))))
 
 
 (defn instant->milliseconds-since-epoch
@@ -157,8 +193,13 @@
 
 
 (defn zoned-date-time
-  ^ZonedDateTime []
-  (ZonedDateTime/now))
+  (^ZonedDateTime []
+   (ZonedDateTime/now))
+  (^ZonedDateTime [arg]
+   (if (instance? ZonedDateTime arg)
+     arg
+     (-> (milliseconds-since-epoch->instant)
+         (instant->zoned-date-time)))))
 
 
 (defn instant->offset-date-time
@@ -182,9 +223,13 @@
 
 
 (defn offset-date-time
-  ^OffsetDateTime []
-  (OffsetDateTime/now))
-
+  (^OffsetDateTime []
+   (OffsetDateTime/now))
+  (^OffsetDateTime [arg]
+   (if (instance? OffsetDateTime arg)
+     arg
+     (-> (milliseconds-since-epoch->instant arg)
+         (instant->offset-date-time)))))
 
 
 (defn instant->local-date-time
@@ -202,11 +247,13 @@
 
 
 (defn local-date-time
-  ([]
+  (^LocalDateTime []
    (LocalDateTime/now))
-  ([milliseconds-since-epoch]
-   (-> (instant milliseconds-since-epoch)
-       (instant->local-date-time))))
+  (^LocalDateTime [arg]
+   (if (instance? LocalDateTime arg)
+     arg
+     (-> (milliseconds-since-epoch->instant arg)
+         (instant->local-date-time)))))
 
 
 (defn milliseconds-since-epoch->local-date-time
@@ -227,9 +274,11 @@
 (defn local-time
   (^LocalTime []
    (LocalTime/now))
-  (^LocalTime [millis-since-epoch]
-   (-> (local-date-time millis-since-epoch)
-       (local-date-time->local-time))))
+  (^LocalTime [arg]
+   (if (instance? LocalTime arg)
+     arg
+     (-> (local-date-time arg)
+         (local-date-time->local-time)))))
 
 
 (defn milliseconds-since-epoch->local-time
@@ -271,9 +320,11 @@
 (defn local-date
   (^LocalDate []
    (LocalDate/now))
-  (^LocalDate [millis-since-epoch]
-   (-> (local-date-time millis-since-epoch)
-       (local-date-time->local-date))))
+  (^LocalDate [arg]
+   (if (instance? LocalDate arg)
+     arg
+     (-> (local-date-time arg)
+         (local-date-time->local-date)))))
 
 
 (defn milliseconds-since-epoch->local-date
@@ -335,14 +386,27 @@
    (.atTime ld (offset-time))))
 
 
-(dtype-obj/add-object-datatype Instant :instant instant)
-(dtype-obj/add-object-datatype LocalDate :local-date local-date)
-(dtype-obj/add-object-datatype LocalDateTime :local-date-time local-date-time)
-(dtype-obj/add-object-datatype LocalTime :local-time local-time)
-(dtype-obj/add-object-datatype OffsetDateTime :offset-date-time offset-date-time)
-(dtype-obj/add-object-datatype ZonedDateTime :zoned-date-time zoned-date-time)
-(dtype-obj/add-object-datatype OffsetDateTime :offset-date-time offset-date-time)
-(dtype-obj/add-object-datatype OffsetTime :offset-time offset-time)
+(defn- make-obj-constructor
+  [cons-fn]
+  (fn
+    ([] (cons-fn))
+    ([arg] (when arg (cons-fn arg)))))
+
+
+(dtype-obj/add-object-datatype Instant :instant (make-obj-constructor instant))
+(dtype-obj/add-object-datatype LocalDate :local-date (make-obj-constructor local-date))
+(dtype-obj/add-object-datatype LocalDateTime :local-date-time
+                               (make-obj-constructor local-date-time))
+(dtype-obj/add-object-datatype LocalTime :local-time
+                               (make-obj-constructor local-time))
+(dtype-obj/add-object-datatype OffsetDateTime :offset-date-time
+                               (make-obj-constructor offset-date-time))
+(dtype-obj/add-object-datatype ZonedDateTime :zoned-date-time
+                               (make-obj-constructor zoned-date-time))
+(dtype-obj/add-object-datatype OffsetDateTime :offset-date-time
+                               (make-obj-constructor offset-date-time))
+(dtype-obj/add-object-datatype OffsetTime :offset-time
+                               (make-obj-constructor offset-time))
 
 
 
@@ -396,8 +460,40 @@
    :local-date-time :int64
    :instant :int64})
 
-;;As our packed types are really primitive aliases we tell the datatype system about this
-;;so that other machinery can get to the base datatype.
+
+(defn packed-type->unpacked-type
+  [datatype]
+  (case datatype
+    :packed-instant :instant
+    :packed-local-date-time :local-date-time
+    :packed-local-date :local-date
+    :packed-local-time :local-time))
+
+
+(defn unpacked-type->packed-type
+  [datatype]
+  (case datatype
+    :instant :packed-instant
+    :local-date-time :packed-local-date-time
+    :local-date :packed-local-date
+    :local-time :packed-local-time))
+
+
+
+(def packed-datatypes
+  #{:packed-instant
+    :packed-local-date-time
+    :packed-local-date
+    :packed-local-time})
+
+
+(defn packed-datatype?
+  [datatype]
+  (boolean (packed-datatypes datatype)))
+
+
+;;As our packed types are really primitive aliases we tell the datatype system about
+;;this so that other machinery can get to the base datatype.
 (->> packable-datatype->primitive-datatype
      (mapv (fn [[k v]]
              (casting/alias-datatype! (keyword (str "packed-" (name k))) v))))
@@ -474,7 +570,8 @@
              (read [rdr# idx#] (-> (.read reader# idx#)
                                    (compile-time-unpack ~packed-dtype))))))
 
-       (defn ~(symbol (format "unpack-%s" packed-name))
+       (defn ~(with-meta (symbol (format "unpack-%s" packed-name))
+                {:tag Temporal})
          [item#]
          (let [argtype# (argtypes/arg->arg-type item#)]
            (case argtype#
@@ -498,6 +595,11 @@
   ^long [^long packed-date]
   (-> (unpack-local-date)
       (local-date->milliseconds-since-epoch)))
+
+(defn packed-instant->milliseconds-since-epoch
+  ^long [^long packed-instant]
+  (-> (unpack-instant)
+      (instant->milliseconds-since-epoch)))
 
 
 (defn packed-local-time->milliseconds
@@ -577,3 +679,43 @@
       :scalar (unpack-local-time item)
       :iterable (packed-local-time-iterable->local-time-iterable item)
       :reader (packed-local-time-reader->local-time-reader item))))
+
+
+(defmethod dtype-pp/reader-printer :packed-instant
+  [rdr]
+  (unpack rdr))
+
+(defmethod dtype-pp/reader-printer :packed-local-date-time
+  [rdr]
+  (unpack rdr))
+
+(defmethod dtype-pp/reader-printer :packed-local-date
+  [rdr]
+  (unpack rdr))
+
+(defmethod dtype-pp/reader-printer :packed-local-time
+  [rdr]
+  (unpack rdr))
+
+
+(defprotocol PEpochMilliseconds
+  (->milliseconds-since-epoch [arg]))
+
+
+(extend-protocol PEpochMilliseconds
+  Instant
+  (->milliseconds-since-epoch [arg]
+    (instant->milliseconds-since-epoch arg))
+  ZonedDateTime
+  (->milliseconds-since-epoch [arg]
+    (zoned-date-time->milliseconds-since-epoch arg))
+  OffsetDateTime
+  (->milliseconds-since-epoch [arg]
+    (offset-date-time->milliseconds-since-epoch arg))
+  ;;And here we cheat
+  LocalDateTime
+  (->milliseconds-since-epoch [arg]
+    (local-date-time->milliseconds-since-epoch arg))
+  LocalDate
+  (->milliseconds-since-epoch [arg]
+    (local-date->milliseconds-since-epoch arg)))

@@ -7,6 +7,7 @@
             [tech.v2.datatype.readers.const :refer [make-const-reader]]
             [tech.v2.datatype.iterable.const :refer [make-const-iterable]]
             [tech.v2.datatype.argtypes :refer [arg->arg-type]]
+            [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.boolean-op :as boolean-op]
             [tech.v2.datatype.reduce-op :as reduce-op]
@@ -17,19 +18,13 @@
             [cljc.java-time.local-time :as local-time]
             [cljc.java-time.instant :as instant]
             [cljc.java-time.zoned-date-time :as zoned-date-time]
-            [cljc.java-time.offset-date-time :as offset-date-time]
-
-            [tech.v2.datatype.datetime.packed-local-date-time
-             :as packed-local-date-time]
-            [tech.v2.datatype.datetime.packed-local-date
-             :as packed-local-date]
-            [tech.v2.datatype.datetime.packed-local-time
-             :as packed-local-time])
+            [cljc.java-time.offset-date-time :as offset-date-time])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
             LocalDate LocalDateTime LocalTime
             OffsetTime]
-           [java.time.temporal TemporalUnit ChronoUnit]
+           [java.time.temporal TemporalUnit ChronoUnit
+            Temporal ChronoField]
            [tech.v2.datatype
             PackedInstant PackedLocalDate
             PackedLocalTime PackedLocalDateTime
@@ -42,79 +37,142 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
+
+(defn- make-temporal-chrono-plus
+  [opname ^ChronoUnit chrono-unit]
+  (binary-op/make-binary-op
+   (keyword (format "temporal-add-%s" (name opname)))
+   :object
+   (when x
+     (.plus ^Temporal x
+            (long (Math/round
+                   (if y (double y) 0.0)))
+            chrono-unit))))
+
+
+(defn- make-temporal-chrono-minus
+  [opname ^ChronoUnit chrono-unit]
+  (binary-op/make-binary-op
+   (keyword (format "temporal-minus-%s" opname))
+   :object
+   (when x
+     (.minus ^Temporal x
+             (long (Math/round
+                    (if y (double y) 0.0)))
+             chrono-unit))))
+
+
+(def ^:private temporal-numeric-ops
+  (->> dtype-dt/keyword->chrono-unit
+       (mapcat (fn [[k v]]
+                 [[(keyword (str "plus-" (name k)))
+                   (make-temporal-chrono-plus k v)]
+                  [(keyword (str "minus-" (name k)))
+                   (make-temporal-chrono-minus k v)]]))
+       (into {})))
+
+
+(defn make-temporal-long-getter
+  [opname ^ChronoField temporal-field]
+  (unary-op/make-unary-op
+   (keyword (format "temporal-get-%s" opname))
+   :object
+   (when x
+     (.getLong ^Temporal x temporal-field))))
+
+
+(def ^:private temporal-getters
+  (merge (->> dtype-dt/keyword->temporal-field
+               (map (fn [[k v]]
+                      [k
+                       (make-temporal-long-getter k v)]))
+               (into {}))
+          {:epoch-milliseconds
+           (unary-op/make-unary-op
+            (keyword "temporal-get-epoch-milliseconds")
+            :object
+            (when x
+              (dtype-dt/->milliseconds-since-epoch x)))}))
+
+
+(defn- as-chrono-unit
+  ^ChronoUnit [item] item)
+
+
+(defmacro ^:private make-packed-chrono-plus
+  [datatype opname chrono-unit]
+  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
+    `(binary-op/make-binary-op
+      (keyword (format "%s-add-%s" (name ~datatype) (name ~opname)))
+      ~datatype
+      (casting/datatype->unchecked-cast-fn
+       :unknown
+       ~(casting/datatype->host-type datatype)
+       (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+           (.plus (long~'y) (as-chrono-unit ~chrono-unit))
+           (dtype-dt/compile-time-pack ~src-dtype))))))
+
+
+(defmacro ^:private make-packed-chrono-minus
+  [datatype opname chrono-unit]
+  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
+    `(binary-op/make-binary-op
+      (keyword (format "%s-add-%s" (name ~datatype) (name ~opname)))
+      ~datatype
+      (casting/datatype->unchecked-cast-fn
+       :unknown
+       ~(casting/datatype->host-type datatype)
+       (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+           (.minus (long~'y) (as-chrono-unit~chrono-unit))
+           (dtype-dt/compile-time-pack ~src-dtype))))))
+
+
+(defmacro ^:private make-packed-numeric-ops
+  [datatype]
+  `(->> dtype-dt/keyword->chrono-unit
+        (mapcat (fn [[k# v#]]
+                  [[(keyword (str "plus-" (name k#)))
+                    (make-packed-chrono-plus ~datatype k# v#)]
+                   [(keyword (str "minus-" (name k#)))
+                    (make-packed-chrono-minus ~datatype k# v#)]]))
+        (into {})))
+
+
+(defmacro ^:private make-packed-temporal-getter
+  [datatype opname temporal-field]
+  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
+    `(unary-op/make-unary-op
+      (keyword (format "%s-get-%s" (name ~datatype) (name ~opname)))
+      :int64
+      (casting/datatype->unchecked-cast-fn
+       :unknown
+       ~(casting/datatype->host-type datatype)
+       (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+           (.getLong ~temporal-field))))))
+
+
+(defmacro ^:private make-packed-getters
+  [datatype]
+  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
+    `(merge (->> dtype-dt/keyword->temporal-field
+                 (map (fn [[k# v#]]
+                        [k# (make-packed-temporal-getter ~datatype k# v#)]))
+                 (into {}))
+            {:epoch-milliseconds
+             (unary-op/make-unary-op
+              (keyword (format "%s-get-epoch-milliseconds" (name ~datatype)))
+              :int64
+              (casting/datatype->unchecked-cast-fn
+               :unknown
+               ~(casting/datatype->host-type datatype)
+               (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+                   (dtype-dt/->milliseconds-since-epoch))))})))
+
+
 (def java-time-ops
   {:instant
-   {:numeric-ops
-    {:add-years
-     (binary-op/make-binary-op
-      :instant-add-weeks :instant
-      (when x
-        (.plus ^Instant x
-               (* 7 (dtype-dt/seconds-in-day)
-                  (long (Math/round
-                         (if y (double y) 0.0))))
-               ChronoUnit/YEARS)))
-     :add-months
-     (binary-op/make-binary-op
-      :instant-add-weeks :instant
-      (when x
-        (.plus ^Instant x
-               (* 7 (dtype-dt/seconds-in-day)
-                  (long (Math/round
-                         (if y (double y) 0.0))))
-               ChronoUnit/MONTHS)))
-     :add-weeks
-     (binary-op/make-binary-op
-      :instant-add-weeks :instant
-      (when x
-        (instant/plus-seconds
-         x
-         (* 7 (dtype-dt/seconds-in-day)
-            (long (Math/round
-                   (if y (double y) 0.0)))))))
-     :add-days
-     (binary-op/make-binary-op
-      :instant-add-day :instant
-      (when x
-        (instant/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-day)))))))
-     :add-hours
-     (binary-op/make-binary-op
-      :instant-add-hour :instant
-      (when x
-        (instant/plus-millis
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/milliseconds-in-hour)))))))
-     :add-minutes
-     (binary-op/make-binary-op
-      :instant-add-minute :instant
-      (when x
-        (instant/plus-millis
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/milliseconds-in-minute)))))))
-     :add-seconds
-     (binary-op/make-binary-op
-      :instant-add-second :instant
-      (when x
-        (instant/plus-seconds
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-milliseconds
-     (binary-op/make-binary-op
-      :instant-add-millisecond :instant
-      (when x
-        (instant/plus-millis
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))}
+   {:numeric-ops temporal-numeric-ops
+    :int64-getters temporal-getters
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :instant-before :instant
@@ -148,75 +206,8 @@
          (dtype-dt/instant->milliseconds-since-epoch y)))}}
 
    :zoned-date-time
-   {:numeric-ops
-    {:add-years
-     (binary-op/make-binary-op
-      :zoned-date-time-add-day :zoned-date-time
-      (when x
-        (zoned-date-time/plus-years
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-months
-     (binary-op/make-binary-op
-      :zoned-date-time-add-day :zoned-date-time
-      (when x
-        (zoned-date-time/plus-months
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-weeks
-     (binary-op/make-binary-op
-      :zoned-date-time-add-day :zoned-date-time
-      (when x
-        (zoned-date-time/plus-weeks
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-days
-     (binary-op/make-binary-op
-      :zoned-date-time-add-day :zoned-date-time
-      (when x
-        (zoned-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-day)))))))
-     :add-hours
-     (binary-op/make-binary-op
-      :zoned-date-time-add-hour :zoned-date-time
-      (when x
-        (zoned-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-hour)))))))
-     :add-minutes
-     (binary-op/make-binary-op
-      :zoned-date-time-add-minute :zoned-date-time
-      (when x
-        (zoned-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-minute)))))))
-     :add-seconds
-     (binary-op/make-binary-op
-      :zoned-date-time-add-second :zoned-date-time
-      (when x
-        (zoned-date-time/plus-seconds
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-milliseconds
-     (binary-op/make-binary-op
-      :zoned-date-time-add-millisecond :zoned-date-time
-      (when x
-        (zoned-date-time/plus-nanos
-         x
-         (* (dtype-dt/nanoseconds-in-millisecond)
-            (long (Math/round
-                   (if y (double y) 0.0)))))))}
+   {:numeric-ops temporal-numeric-ops
+    :int64-getters temporal-getters
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :zoned-date-time-before :zoned-date-time
@@ -250,75 +241,8 @@
          (dtype-dt/zoned-date-time->milliseconds-since-epoch y)))}}
 
    :offset-date-time
-   {:numeric-ops
-    {:add-years
-     (binary-op/make-binary-op
-      :offset-date-time-add-day :offset-date-time
-      (when x
-        (offset-date-time/plus-years
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-months
-     (binary-op/make-binary-op
-      :offset-date-time-add-day :offset-date-time
-      (when x
-        (offset-date-time/plus-months
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-weeks
-     (binary-op/make-binary-op
-      :offset-date-time-add-day :offset-date-time
-      (when x
-        (offset-date-time/plus-weeks
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-days
-     (binary-op/make-binary-op
-      :offset-date-time-add-day :offset-date-time
-      (when x
-        (offset-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-day)))))))
-     :add-hours
-     (binary-op/make-binary-op
-      :offset-date-time-add-hour :offset-date-time
-      (when x
-        (offset-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-hour)))))))
-     :add-minutes
-     (binary-op/make-binary-op
-      :offset-date-time-add-minute :offset-date-time
-      (when x
-        (offset-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-minute)))))))
-     :add-seconds
-     (binary-op/make-binary-op
-      :offset-date-time-add-second :offset-date-time
-      (when x
-        (offset-date-time/plus-seconds
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-milliseconds
-     (binary-op/make-binary-op
-      :offset-date-time-add-millisecond :offset-date-time
-      (when x
-        (offset-date-time/plus-nanos
-         x
-         (* (dtype-dt/nanoseconds-in-millisecond)
-            (long (Math/round
-                   (if y (double y) 0.0)))))))}
+   {:numeric-ops temporal-numeric-ops
+    :int64-getters temporal-getters
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :offset-date-time-before :offset-date-time
@@ -352,75 +276,8 @@
          (dtype-dt/offset-date-time->milliseconds-since-epoch y)))}}
 
    :local-date-time
-   {:numeric-ops
-    {:add-years
-     (binary-op/make-binary-op
-      :local-date-time-add-day :local-date-time
-      (when x
-        (local-date-time/plus-years
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-months
-     (binary-op/make-binary-op
-      :local-date-time-add-day :local-date-time
-      (when x
-        (local-date-time/plus-months
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-weeks
-     (binary-op/make-binary-op
-      :local-date-time-add-day :local-date-time
-      (when x
-        (local-date-time/plus-weeks
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-days
-     (binary-op/make-binary-op
-      :local-date-time-add-day :local-date-time
-      (when x
-        (local-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-day)))))))
-     :add-hours
-     (binary-op/make-binary-op
-      :local-date-time-add-hour :local-date-time
-      (when x
-        (local-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-hour)))))))
-     :add-minutes
-     (binary-op/make-binary-op
-      :local-date-time-add-minute :local-date-time
-      (when x
-        (local-date-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-minute)))))))
-     :add-seconds
-     (binary-op/make-binary-op
-      :local-date-time-add-second :local-date-time
-      (when x
-        (local-date-time/plus-seconds
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-milliseconds
-     (binary-op/make-binary-op
-      :local-date-time-add-millisecond :local-date-time
-      (when x
-        (local-date-time/plus-nanos
-         x
-         (* (dtype-dt/nanoseconds-in-millisecond)
-            (long (Math/round
-                   (if y (double y) 0.0)))))))}
+   {:numeric-ops temporal-numeric-ops
+    :int64-getters temporal-getters
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :local-date-time-before :local-date-time
@@ -455,42 +312,8 @@
 
 
    :packed-local-date-time
-   {:numeric-ops
-    {:add-years
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-day :packed-local-date-time
-      (packed-local-date-time/plus-years x y))
-     :add-months
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-day :packed-local-date-time
-      (packed-local-date-time/plus-months x y))
-     :add-weeks
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-day :packed-local-date-time
-      (packed-local-date-time/plus-weeks x y))
-     :add-days
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-day :packed-local-date-time
-      (packed-local-date-time/plus-seconds x y))
-     :add-hours
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-hour :packed-local-date-time
-      (packed-local-date-time/plus-seconds x y))
-     :add-minutes
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-minute :packed-local-date-time
-      (packed-local-date-time/plus-seconds x y))
-     :add-seconds
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-second :packed-local-date-time
-      (packed-local-date-time/plus-seconds x y))
-     :add-milliseconds
-     (binary-op/make-binary-op
-      :packed-local-date-time-add-millisecond :packed-local-date-time
-      (packed-local-date-time/plus-nanos
-       x
-       (* (dtype-dt/nanoseconds-in-millisecond)
-          y)))}
+   {:numeric-ops (make-packed-numeric-ops :packed-local-date-time)
+    :int64-getters (make-packed-getters :packed-local-date-time)
     ;;Packed objects are built so the basic math ops work.
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
@@ -523,39 +346,8 @@
          (dtype-dt/packed-local-date-time->milliseconds-since-epoch y)))}}
 
    :local-date
-   {:numeric-ops
-    {:add-years
-     (binary-op/make-binary-op
-      :local-date-add-day :local-date
-      (when x
-        (local-date/plus-years
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-months
-     (binary-op/make-binary-op
-      :local-date-add-day :local-date
-      (when x
-        (local-date/plus-months
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-weeks
-     (binary-op/make-binary-op
-      :local-date-add-day :local-date
-      (when x
-        (local-date/plus-weeks
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-days
-     (binary-op/make-binary-op
-      :local-date-add-day :local-date
-      (when x
-        (local-date/plus-days
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))}
+   {:numeric-ops temporal-numeric-ops
+    :int64-getters temporal-getters
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :local-date-before :local-date
@@ -590,35 +382,8 @@
 
 
    :packed-local-date
-   {:numeric-ops
-    {:add-years
-     (binary-op/make-binary-op
-      :packed-local-date-add-day :packed-local-date
-      (int (packed-local-date/plus-years
-            x
-            (long (Math/round
-                   (if y (double y) 0.0))))))
-     :add-months
-     (binary-op/make-binary-op
-      :packed-local-date-add-day :packed-local-date
-      (int (packed-local-date/plus-months
-            x
-            (long (Math/round
-                   (if y (double y) 0.0))))))
-     :add-weeks
-     (binary-op/make-binary-op
-      :packed-local-date-add-day :packed-local-date
-      (int (packed-local-date/plus-weeks
-            x
-            (long (Math/round
-                   (if y (double y) 0.0))))))
-     :add-days
-     (binary-op/make-binary-op
-      :packed-local-date-add-day :packed-local-date
-      (int (packed-local-date/plus-days
-            x
-            (long (Math/round
-                   (if y (double y) 0.0))))))}
+   {:numeric-ops (make-packed-numeric-ops :packed-local-date)
+    :int64-getters (make-packed-getters :packed-local-date)
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :packed-local-date-before :packed-local-date
@@ -650,42 +415,8 @@
          (dtype-dt/packed-local-date->milliseconds-since-epoch y)))}}
 
    :local-time
-   {:numeric-ops
-    {:add-hours
-     (binary-op/make-binary-op
-      :local-time-add-hour :local-time
-      (when x
-        (local-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-hour)))))))
-     :add-minutes
-     (binary-op/make-binary-op
-      :local-time-add-minute :local-time
-      (when x
-        (local-time/plus-seconds
-         x
-         (long (Math/round
-                (* (if y (double y) 0.0)
-                   (dtype-dt/seconds-in-minute)))))))
-     :add-seconds
-     (binary-op/make-binary-op
-      :local-time-add-second :local-time
-      (when x
-        (local-time/plus-seconds
-         x
-         (long (Math/round
-                (if y (double y) 0.0))))))
-     :add-milliseconds
-     (binary-op/make-binary-op
-      :local-time-add-millisecond :local-time
-      (when x
-        (local-time/plus-nanos
-         x
-         (* (dtype-dt/nanoseconds-in-millisecond)
-            (long (Math/round
-                   (if y (double y) 0.0)))))))}
+   {:numeric-ops temporal-numeric-ops
+    :int64-getters temporal-getters
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :local-time-before :local-time
@@ -720,25 +451,8 @@
 
 
    :packed-local-time
-   {:numeric-ops
-    {:add-hours
-     (binary-op/make-binary-op
-      :packed-local-time-add-hour :packed-local-time
-      (int (packed-local-time/plus-seconds
-            x (* y  (dtype-dt/seconds-in-hour)))))
-     :add-minutes
-     (binary-op/make-binary-op
-      :packed-local-time-add-minute :packed-local-time
-      (int (packed-local-time/plus-seconds
-            x (* y (dtype-dt/seconds-in-minute)))))
-     :add-seconds
-     (binary-op/make-binary-op
-      :packed-local-time-add-second :packed-local-time
-      (int (packed-local-time/plus-seconds x y)))
-     :add-milliseconds
-     (binary-op/make-binary-op
-      :packed-local-time-add-millisecond :packed-local-time
-      (int (packed-local-time/plus-millis x y)))}
+   {:numeric-ops (make-packed-numeric-ops :packed-local-time)
+    :int64-getters (make-packed-getters :packed-local-time)
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :packed-local-time-before :packed-local-time
@@ -768,7 +482,39 @@
       :packed-local-time-difference-millis :object
       (- (dtype-dt/packed-local-time->milliseconds x)
          (dtype-dt/packed-local-time->milliseconds y)))}}
-   })
+
+   :packed-instant
+   {:numeric-ops (make-packed-numeric-ops :packed-instant)
+    :int64-getters (make-packed-getters :packed-instant)
+    :boolean-ops
+    {:< (boolean-op/make-boolean-binary-op
+         :packed-instant-before :packed-instant
+         (clojure.core/< x y))
+     :> (boolean-op/make-boolean-binary-op
+         :packed-instant-before :packed-instant
+         (clojure.core/> x y))
+     :<= (boolean-op/make-boolean-binary-op
+          :packed-instant-before :packed-instant
+          (clojure.core/<= x y))
+     :>= (boolean-op/make-boolean-binary-op
+          :packed-instant-before :packed-instant
+          (clojure.core/>= x y))
+     :== (boolean-op/make-boolean-binary-op
+          :packed-instant-== :packed-instant
+          (clojure.core/== x y))}
+    :binary-ops
+    {:min (binary-op/make-binary-op
+           :packed-instant-min :packed-instant
+           (if (clojure.core/< x y) x y))
+     :max (binary-op/make-binary-op
+           :packed-instant-max :packed-instant
+           (if (clojure.core/> x y) x y))}
+    :binary->int64-ops
+    {:difference-milliseconds
+     (binary-op/make-binary-op
+      :packed-instant-difference-millis :object
+      (- (dtype-dt/packed-instant->milliseconds-since-epoch x)
+         (dtype-dt/packed-instant->milliseconds-since-epoch y)))}}})
 
 
 (defn- argtypes->operation-type
@@ -796,6 +542,52 @@
     arg))
 
 
+(def date-datatypes #{:instant :local-date :local-date-time :local-time
+                      :packed-instant :packed-local-date :packed-local-date-time
+                      :packed-local-time :zoned-date-time :offset-date-time})
+
+(defn- date-datatype?
+  [dtype]
+  (boolean
+   (date-datatypes dtype)))
+
+
+(defn- make-iterable-of-type
+  [iterable datatype]
+  (if-not (= datatype (dtype-proto/get-datatype iterable))
+    (dtype-proto/->iterable iterable {:datatype datatype})
+    iterable))
+
+
+(defn- make-reader-of-type
+  [reader datatype]
+  (if-not (= datatype (dtype-proto/get-datatype reader))
+    (dtype-proto/->reader reader {:datatype datatype})
+    reader))
+
+
+(defn- perform-int64-getter
+  [lhs unary-op-name]
+  (let [lhs-argtype (arg->arg-type lhs)
+        lhs-dtype (collapse-date-datatype lhs)
+        lhs (if (dtype-dt/packed-datatype? lhs-dtype)
+              (dtype-proto/->reader lhs {:datatype :int64})
+              lhs)
+        unary-op (get-in java-time-ops [lhs-dtype :int64-getters
+                                        unary-op-name])]
+    (when-not unary-op
+      (throw (Exception. (format "Could not find getter: %s" unary-op-name) )))
+    (case lhs-argtype
+      :scalar
+      (unary-op lhs)
+      :iterable
+      (-> (unary-op/unary-iterable-map {} unary-op lhs)
+          (make-iterable-of-type :int64))
+      :reader
+      (-> (unary-op/unary-reader-map {} unary-op lhs)
+          (make-reader-of-type :int64)))))
+
+
 (defn- perform-time-op
   [lhs rhs op-dtype bin-op]
   (let [lhs-argtype (arg->arg-type lhs)
@@ -815,17 +607,6 @@
        bin-op
        (promote-op-arg op-argtype lhs-argtype lhs rhs)
        (promote-op-arg op-argtype rhs-argtype rhs lhs)))))
-
-
-(def date-datatypes #{:instant :local-date :local-date-time :local-time
-                      :packed-instant :packed-local-date :packed-local-date-time
-                      :packed-local-time :zoned-date-time :offset-date-time})
-
-(defn- date-datatype?
-  [dtype]
-  (boolean
-   (date-datatypes dtype)))
-
 
 (defn- perform-commutative-numeric-op
   [lhs rhs opname]
@@ -851,48 +632,32 @@
     (when-not num-op
       (throw (Exception. (format "Could not find numeric op %s for type %s"
                                  opname date-time-dtype))))
-
     (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
 
 
-(defn add-years
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-years))
-
-
-(defn add-months
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-months))
-
-
-(defn add-weeks
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-weeks))
-
-
-(defn add-days
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-days))
-
-
-(defn add-hours
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-hours))
-
-
-(defn add-minutes
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-minutes))
-
-
-(defn add-seconds
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-seconds))
-
-
-(defn add-milliseconds
-  [lhs rhs]
-  (perform-commutative-numeric-op lhs rhs :add-milliseconds))
+(defn- perform-non-commutative-numeric-op
+  "only the left side can be a datatype"
+  [lhs rhs opname]
+  (let [lhs-dtype (collapse-date-datatype lhs)
+        rhs-dtype (collapse-date-datatype rhs)
+        any-number? (= :number rhs-dtype)
+        any-date-datatype? (date-datatype? lhs-dtype)
+        _ (when-not any-number?
+            (throw (Exception. (format "Arguments must have numeric type: %s, %s"
+                                       lhs-dtype rhs-dtype))))
+        _ (when-not any-date-datatype?
+            (throw (Exception. (format "Arguments not datetime related: %s, %s"
+                                       lhs-dtype rhs-dtype))))
+        ;;There is an assumption that the arguments are commutative and the left
+        ;;hand side is the actual arg.
+        numeric-arg rhs
+        date-time-arg lhs
+        date-time-dtype lhs-dtype
+        num-op (get-in java-time-ops [date-time-dtype :numeric-ops opname])]
+    (when-not num-op
+      (throw (Exception. (format "Could not find numeric op %s for type %s"
+                                 opname date-time-dtype))))
+    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
 
 
 (defn- perform-boolean-op
@@ -930,28 +695,6 @@
          (promote-op-arg op-argtype rhs-argtype rhs lhs))))))
 
 
-
-(defn <
-  [lhs rhs]
-  (perform-boolean-op lhs rhs :<))
-
-(defn <=
-  [lhs rhs]
-  (perform-boolean-op lhs rhs :<=))
-
-(defn >
-  [lhs rhs]
-  (perform-boolean-op lhs rhs :>))
-
-(defn >=
-  [lhs rhs]
-  (perform-boolean-op lhs rhs :>=))
-
-(defn ==
-  [lhs rhs]
-  (perform-boolean-op lhs rhs :==))
-
-
 (defn- perform-binary-op
   [lhs rhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
@@ -987,16 +730,6 @@
          (promote-op-arg op-argtype rhs-argtype rhs lhs))))))
 
 
-(defn min
-  [lhs rhs]
-  (perform-binary-op lhs rhs :min))
-
-
-(defn max
-  [lhs rhs]
-  (perform-binary-op lhs rhs :max))
-
-
 (defn- perform-commutative-binary-reduction
   [lhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
@@ -1011,16 +744,6 @@
     (if (= :scalar (arg->arg-type lhs))
       lhs
       (reduce-op/commutative-reader-reduce {} binary-op lhs))))
-
-
-(defn reduce-min
-  [lhs]
-  (perform-commutative-binary-reduction lhs :min))
-
-
-(defn reduce-max
-  [lhs]
-  (perform-commutative-binary-reduction lhs :max))
 
 
 (defn- perform-binary->int64-op
@@ -1058,6 +781,85 @@
              (promote-op-arg op-argtype lhs-argtype lhs rhs)
              (promote-op-arg op-argtype rhs-argtype rhs lhs))
             (dtype-proto/->iterable {:datatype :int64}))))))
+
+
+(defmacro ^:private declare-int64-getters
+  []
+  `(do
+     ~@(->> dtype-dt/keyword->temporal-field
+            (map (fn [[k v]]
+                   `(defn ~(symbol (str "get-" (name k)))
+                      [~'item]
+                      (perform-int64-getter ~'item ~k)))))))
+
+
+(declare-int64-getters)
+
+
+(defn get-epoch-milliseconds
+  [item]
+  (perform-int64-getter item :epoch-milliseconds))
+
+
+
+(defmacro ^:private declare-plus-minus-ops
+  []
+  `(do
+     ~@(->> dtype-dt/keyword->chrono-unit
+            (mapcat (fn [[k v]]
+                      [`(defn ~(symbol (str "plus-" (name k)))
+                          [~'lhs ~'rhs]
+                          (perform-commutative-numeric-op
+                           ~'lhs ~'rhs ~(keyword (str "plus-" (name k)))))
+                       `(defn ~(symbol (str "minus-" (name k)))
+                          [~'lhs ~'rhs]
+                          (perform-non-commutative-numeric-op
+                           ~'lhs ~'rhs ~(keyword (str "minus-" (name k)))))])))))
+
+
+(declare-plus-minus-ops)
+
+
+(defn <
+  [lhs rhs]
+  (perform-boolean-op lhs rhs :<))
+
+(defn <=
+  [lhs rhs]
+  (perform-boolean-op lhs rhs :<=))
+
+(defn >
+  [lhs rhs]
+  (perform-boolean-op lhs rhs :>))
+
+(defn >=
+  [lhs rhs]
+  (perform-boolean-op lhs rhs :>=))
+
+(defn ==
+  [lhs rhs]
+  (perform-boolean-op lhs rhs :==))
+
+
+(defn min
+  [lhs rhs]
+  (perform-binary-op lhs rhs :min))
+
+
+(defn max
+  [lhs rhs]
+  (perform-binary-op lhs rhs :max))
+
+
+
+(defn reduce-min
+  [lhs]
+  (perform-commutative-binary-reduction lhs :min))
+
+
+(defn reduce-max
+  [lhs]
+  (perform-commutative-binary-reduction lhs :max))
 
 
 (defn difference-milliseconds

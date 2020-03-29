@@ -243,7 +243,7 @@
   (^Instant [^LocalDateTime ldt ^ZoneOffset offset]
    (.toInstant ldt offset))
   (^Instant [^LocalDateTime ldt]
-   (local-date-time->instant (system-zone-offset))))
+   (local-date-time->instant ldt (system-zone-offset))))
 
 
 (defn local-date-time

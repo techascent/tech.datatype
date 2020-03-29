@@ -12,9 +12,7 @@
         iterable-res (dtype-dt-ops/plus-days base-instant
                                             (apply list (range 5)))
         reader-res (dtype-dt-ops/plus-days base-instant
-                                           (range 5))
-        pack-unpack-res  (->> (dtype-dt/pack iterable-res)
-                              (dtype-dt/unpack))]
+                                           (range 5))]
     (is (= [:instant :instant :instant :instant]
            (mapv dtype/get-datatype [base-instant
                                      scalar-res
@@ -26,13 +24,14 @@
                           (->> (dtype-dt/pack iterable-res)
                                (dtype-dt/unpack)))))
     (is (= :packed-instant (dtype/get-datatype (dtype-dt/pack iterable-res))))
-    (is (dfn/reduce-and
-         (dtype-dt-ops/== pack-unpack-res
-                          (->> (repeat 5 base-instant)
-                               (dtype-dt/pack)
-                               (dtype-dt-ops/plus-days (range 5))
-                               (dtype-dt/unpack))))
-
+    (is (every? #(< (long %) 100)
+                (dtype-dt-ops/difference-milliseconds
+                 iterable-res
+                 ;;test math on packed types
+                 (->> (repeat 5 base-instant)
+                      (dtype-dt/pack)
+                      (dtype-dt-ops/plus-days (range 5))
+                      (dtype-dt/unpack))))
         (format "expected:%s\n     got:%s"
                 (mapv #(.toString ^Object %)
                       iterable-res)
@@ -49,9 +48,7 @@
         iterable-res (dtype-dt-ops/plus-days base-elem
                                             (apply list (range 5)))
         reader-res (dtype-dt-ops/plus-days base-elem
-                                           (range 5))
-        pack-unpack-res  (->> (dtype-dt/pack iterable-res)
-                              (dtype-dt/unpack))]
+                                           (range 5))]
     (is (= [:local-date-time :local-date-time :local-date-time :local-date-time]
            (mapv dtype/get-datatype [base-elem
                                      scalar-res
@@ -62,13 +59,13 @@
                                          (->> (dtype-dt/pack iterable-res)
                                               (dtype-dt/unpack)))))
     (is (= :packed-local-date-time (dtype/get-datatype (dtype-dt/pack iterable-res))))
-    (is (dfn/reduce-and
-         (dtype-dt-ops/== pack-unpack-res
-                          (->> (repeat 5 base-elem)
-                               (dtype-dt/pack)
-                               (dtype-dt-ops/plus-days (range 5))
-                               (dtype-dt/unpack))))
-
+    (is (every? #(< (long %) 100)
+                (dtype-dt-ops/difference-milliseconds
+                 iterable-res
+                 (->> (repeat 5 base-elem)
+                      (dtype-dt/pack)
+                      (dtype-dt-ops/plus-days (range 5))
+                      (dtype-dt/unpack))))
         (format "expected:%s\n     got:%s"
                 (mapv #(.toString ^Object %)
                       iterable-res)

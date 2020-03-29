@@ -39,7 +39,7 @@
    :weeks ChronoUnit/WEEKS
    :days ChronoUnit/DAYS
    :hours ChronoUnit/HOURS
-   :minuts ChronoUnit/MINUTES
+   :minutes ChronoUnit/MINUTES
    :seconds ChronoUnit/SECONDS
    :milliseconds ChronoUnit/MILLIS})
 

@@ -83,8 +83,7 @@
   []
   (let [fieldnames (->> dtype-dt/keyword->temporal-field
                         (map first)
-                        (concat [:epoch-milliseconds])
-                        sort)]
+                        (concat [:epoch-milliseconds]))]
     (for [[datatype ctor] (sort-by first dtype-dt/datatype->constructor-fn)]
       (->>
        (for [field-name fieldnames]
@@ -93,19 +92,45 @@
                                             [datatype :int64-getters field-name])]
                        (accessor (ctor))
                        true)
-                     (catch Throwable e false))]
-         )
+                     (catch Throwable e false))])
        (into {})
        (merge {:datatype datatype})))))
 
 
-(defn print-field-compatibility-matrix
+(defn print-compatibility-matrix
   ([m]
    (let [field-names (->> (keys (first m))
                           (remove #(= :datatype %))
                           sort)]
      (pp/print-table (concat [:datatype] field-names) m))
-   nil)
-  ([]
-   (print-field-compatibility-matrix
-    (field-compatibility-matrix))))
+   nil))
+
+(defn print-field-compatibility-matrix
+  []
+  (print-compatibility-matrix
+   (field-compatibility-matrix)))
+
+
+(defn plus-op-compatibility-matrix
+  []
+  (let [plus-ops (->> dtype-dt/keyword->chrono-unit
+                      (map (comp #(keyword (str "plus-" (name %))) first))
+                      sort)
+        datatypes (sort-by first dtype-dt/datatype->constructor-fn)]
+    (for [[datatype ctor] datatypes]
+      (->>
+       (for [plus-op plus-ops]
+         [plus-op (try
+                    (let [plus-op (get-in
+                                   dtype-dt-ops/java-time-ops
+                                   [datatype :numeric-ops plus-op])]
+                      (plus-op (ctor) 1)
+                      true)
+                    (catch Throwable e false))])
+       (into {})
+       (merge {:datatype datatype})))))
+
+(defn print-plus-op-compatibility-matrix
+  []
+  (print-compatibility-matrix
+   (plus-op-compatibility-matrix)))

@@ -40,7 +40,8 @@
 
 (defn int-width
   ^long [dtype]
-  (long (get {:int8 8
+  (long (get {:boolean 8 ;;unfortunately, this is what C decided
+              :int8 8
               :uint8 8
               :int16 16
               :uint16 16
@@ -249,20 +250,6 @@
   (swap! *unchecked-cast-table* assoc datatype cast-fn))
 
 
-(defn cast
-  [value datatype]
-  (if-let [cast-fn (@*cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No cast available" {:datatype datatype}))))
-
-
-(defn unchecked-cast
-  [value datatype]
-  (if-let [cast-fn (@*unchecked-cast-table* datatype)]
-    (cast-fn value)
-    (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))
-
-
 (defmacro add-all-cast-fns
   []
   `(do
@@ -453,6 +440,15 @@
   (.put ^Map aliased-datatypes new-dtype old-dtype))
 
 
+(alias-datatype! :double :float64)
+(alias-datatype! :float :float32)
+(alias-datatype! :long :int64)
+(alias-datatype! :int :int32)
+(alias-datatype! :short :int16)
+(alias-datatype! :byte :int8)
+(alias-datatype! :bool :boolean)
+
+
 (defn un-alias-datatype
   [dtype]
   (.getOrDefault ^Map aliased-datatypes dtype dtype))
@@ -479,11 +475,6 @@
   [datatype]
   (let [datatype (composite-datatype->base-datatype datatype)]
     (get unsigned-signed datatype datatype)))
-
-
-(defn jvm-cast
-  [value datatype]
-  (unchecked-cast value (datatype->host-type datatype)))
 
 
 (defn datatype->safe-host-type
@@ -536,6 +527,31 @@
       composite-datatype->base-datatype
       datatype->host-datatype
       flatten-datatype))
+
+
+(defn cast
+  [value datatype]
+  (let [datatype (flatten-datatype datatype)]
+    (if (= datatype :object)
+      value
+      (if-let [cast-fn (@*cast-table* datatype)]
+        (cast-fn value)
+        (throw (ex-info "No cast available" {:datatype datatype}))))))
+
+
+(defn unchecked-cast
+  [value datatype]
+  (let [datatype (flatten-datatype datatype)]
+    (if (= datatype :object)
+      value
+      (if-let [cast-fn (@*unchecked-cast-table* datatype)]
+        (cast-fn value)
+        (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))))
+
+
+(defn jvm-cast
+  [value datatype]
+  (unchecked-cast value (datatype->host-type datatype)))
 
 
 (defmacro datatype->sparse-value

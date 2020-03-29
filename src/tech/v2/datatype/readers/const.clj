@@ -7,13 +7,13 @@
 
 (defmacro make-const-reader-macro
   [datatype]
-  `(fn [item# num-elems#]
-     (let [num-elems# (int (or num-elems# Integer/MAX_VALUE))
+  `(fn [item# num-elems# datatype#]
+     (let [num-elems# (long (or num-elems# Long/MAX_VALUE))
            item# (casting/datatype->cast-fn
                   :unknown ~datatype item#)]
        (reify
          ~(typecast/datatype->reader-type datatype)
-         (getDatatype [reader#] ~datatype)
+         (getDatatype [reader#] datatype#)
          (lsize [reader#] num-elems#)
          (read [reader# idx#] item#)
          dtype-proto/PConstantTimeMinMax
@@ -36,5 +36,5 @@
 (defn make-const-reader
   [item datatype & [num-elems]]
   (if-let [reader-fn (get const-reader-table (casting/flatten-datatype datatype))]
-    (reader-fn item num-elems)
+    (reader-fn item num-elems datatype)
     (throw (ex-info (format "Failed to find reader for datatype %s" datatype) {}))))

@@ -92,6 +92,6 @@
       (is (= [254 255 1 2 3]
              (-> (dtype/clone sub-buf)
                  (dtype/->vector))))
-      (is (= :uint32
-             (-> (dtype/clone dst-buffer :datatype :uint32)
+      (is (= :uint8
+             (-> (dtype/clone dst-buffer)
                  (dtype/get-datatype)))))))

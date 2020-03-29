@@ -291,6 +291,42 @@
                                  lhs
                                  rhs)))
 
+
+
+
+(defn- perform-boolean-binary-op
+  [op lhs args]
+  (let [op-item (if-let [bool-op (get boolean-op/builtin-boolean-binary-ops
+                                      op)]
+                  bool-op
+                  (dtype-proto/->binary-op op {:datatype :boolean}))]
+    (reduce-op/commutative-reader-reduce (merge {:datatype :boolean} args)
+                                         op-item lhs)))
+
+
+(defmethod op-provider/reduce-op [:scalar :and]
+  [op lhs args]
+  lhs)
+(defmethod op-provider/reduce-op [:iterable :and]
+  [op lhs args]
+  (perform-boolean-binary-op op lhs args))
+(defmethod op-provider/reduce-op [:reader :and]
+  [op lhs args]
+  (perform-boolean-binary-op op lhs args))
+
+(defmethod op-provider/reduce-op [:scalar :or]
+  [op lhs args]
+  lhs)
+(defmethod op-provider/reduce-op [:iterable :or]
+  [op lhs args]
+  (perform-boolean-binary-op op lhs args))
+(defmethod op-provider/reduce-op [:reader :or]
+  [op lhs args]
+  (perform-boolean-binary-op op lhs args))
+
+
+
+
 (defmacro dtype->storage-constructor
   [datatype]
   (case datatype

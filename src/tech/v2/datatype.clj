@@ -202,8 +202,12 @@ Calls clojure.core.matrix/ecount."
 
 (defn clone
   "Create a new thing from the old thing and copy data into new thing."
-  [item & {:keys [datatype]}]
-  (dtype-proto/clone item (or datatype (get-datatype item))))
+  ([item]
+   (dtype-proto/clone item))
+  ([item datatype]
+   (when-not (= datatype (get-datatype item))
+     (throw (Exception. (format "Cloning to different datatypes is no longer supported."))))
+   (clone item)))
 
 
 (defn ->array

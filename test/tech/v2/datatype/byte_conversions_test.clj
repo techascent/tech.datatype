@@ -9,10 +9,10 @@
   (let [test-val Short/MAX_VALUE
         le-ary (byte-array 2)
         be-ary (byte-array 2)]
-    (ByteConversions/shortToWriterLE test-val (dtype/->writer le-ary))
-    (ByteConversions/shortToWriterBE test-val (dtype/->writer be-ary))
-    (is (== test-val (ByteConversions/shortFromReaderLE (dtype/->reader le-ary))))
-    (is (== test-val (ByteConversions/shortFromReaderBE (dtype/->reader be-ary))))
+    (ByteConversions/shortToWriterLE test-val (dtype/->writer le-ary) 0)
+    (ByteConversions/shortToWriterBE test-val (dtype/->writer be-ary) 0)
+    (is (== test-val (ByteConversions/shortFromReaderLE (dtype/->reader le-ary) 0)))
+    (is (== test-val (ByteConversions/shortFromReaderBE (dtype/->reader be-ary) 0)))
     (is (not= (vec le-ary) (vec be-ary)))))
 
 
@@ -20,10 +20,10 @@
   (let [test-val Integer/MAX_VALUE
         le-ary (byte-array 4)
         be-ary (byte-array 4)]
-    (ByteConversions/intToWriterLE test-val (dtype/->writer le-ary))
-    (ByteConversions/intToWriterBE test-val (dtype/->writer be-ary))
-    (is (== test-val (ByteConversions/intFromReaderLE (dtype/->reader le-ary))))
-    (is (== test-val (ByteConversions/intFromReaderBE (dtype/->reader be-ary))))
+    (ByteConversions/intToWriterLE test-val (dtype/->writer le-ary) 0)
+    (ByteConversions/intToWriterBE test-val (dtype/->writer be-ary) 0)
+    (is (== test-val (ByteConversions/intFromReaderLE (dtype/->reader le-ary) 0)))
+    (is (== test-val (ByteConversions/intFromReaderBE (dtype/->reader be-ary) 0)))
     (is (not= (vec le-ary) (vec be-ary)))))
 
 
@@ -31,10 +31,10 @@
   (let [test-val (float Integer/MAX_VALUE)
         le-ary (byte-array 4)
         be-ary (byte-array 4)]
-    (ByteConversions/floatToWriterLE test-val (dtype/->writer le-ary))
-    (ByteConversions/floatToWriterBE test-val (dtype/->writer be-ary))
-    (is (== test-val (ByteConversions/floatFromReaderLE (dtype/->reader le-ary))))
-    (is (== test-val (ByteConversions/floatFromReaderBE (dtype/->reader be-ary))))
+    (ByteConversions/floatToWriterLE test-val (dtype/->writer le-ary) 0)
+    (ByteConversions/floatToWriterBE test-val (dtype/->writer be-ary) 0)
+    (is (== test-val (ByteConversions/floatFromReaderLE (dtype/->reader le-ary) 0)))
+    (is (== test-val (ByteConversions/floatFromReaderBE (dtype/->reader be-ary) 0)))
     (is (not= (vec le-ary) (vec be-ary)))))
 
 
@@ -42,10 +42,10 @@
   (let [test-val Long/MAX_VALUE
         le-ary (byte-array 8)
         be-ary (byte-array 8)]
-    (ByteConversions/longToWriterLE test-val (dtype/->writer le-ary))
-    (ByteConversions/longToWriterBE test-val (dtype/->writer be-ary))
-    (is (== test-val (ByteConversions/longFromReaderLE (dtype/->reader le-ary))))
-    (is (== test-val (ByteConversions/longFromReaderBE (dtype/->reader be-ary))))
+    (ByteConversions/longToWriterLE test-val (dtype/->writer le-ary) 0)
+    (ByteConversions/longToWriterBE test-val (dtype/->writer be-ary) 0)
+    (is (== test-val (ByteConversions/longFromReaderLE (dtype/->reader le-ary) 0)))
+    (is (== test-val (ByteConversions/longFromReaderBE (dtype/->reader be-ary) 0)))
     (is (not= (vec le-ary) (vec be-ary)))))
 
 
@@ -53,8 +53,8 @@
   (let [test-val (double Long/MAX_VALUE)
         le-ary (byte-array 8)
         be-ary (byte-array 8)]
-    (ByteConversions/doubleToWriterLE test-val (dtype/->writer le-ary))
-    (ByteConversions/doubleToWriterBE test-val (dtype/->writer be-ary))
-    (is (== test-val (ByteConversions/doubleFromReaderLE (dtype/->reader le-ary))))
-    (is (== test-val (ByteConversions/doubleFromReaderBE (dtype/->reader be-ary))))
+    (ByteConversions/doubleToWriterLE test-val (dtype/->writer le-ary) 0)
+    (ByteConversions/doubleToWriterBE test-val (dtype/->writer be-ary) 0)
+    (is (== test-val (ByteConversions/doubleFromReaderLE (dtype/->reader le-ary) 0)))
+    (is (== test-val (ByteConversions/doubleFromReaderBE (dtype/->reader be-ary) 0)))
     (is (not= (vec le-ary) (vec be-ary)))))

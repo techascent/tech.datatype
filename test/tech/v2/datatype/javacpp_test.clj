@@ -54,4 +54,4 @@
     (let [base-ptr (jcpp-dtype/make-pointer-of-type :float32 (range 10))]
       (is (instance? org.bytedeco.javacpp.Pointer (dtype/clone base-ptr)))
       (is (= (dtype/->vector base-ptr)
-             (dtype/->vector (dtype/clone base-ptr :datatype :float32 )))))))
+             (dtype/->vector (dtype/clone base-ptr)))))))

@@ -46,7 +46,7 @@
   (convertible-to-range? [item] true)
   (->range [item options] item)
   dtype-proto/PClone
-  (clone [this datatype] (Int64Range. start increment n-elems metadata))
+  (clone [this] (Int64Range. start increment n-elems metadata))
   dtype-proto/PRange
   (range-select [lhs rhs]
     (let [r-start (long (dtype-proto/range-start rhs))

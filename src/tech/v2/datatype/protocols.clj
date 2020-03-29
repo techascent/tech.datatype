@@ -6,7 +6,10 @@
             ObjectReader ObjectWriter]
            [com.sun.jna Pointer]
            [java.lang.reflect Method]
-           [java.util List]))
+           [java.util List]
+           [java.nio ByteOrder
+            ByteBuffer ShortBuffer IntBuffer LongBuffer
+            FloatBuffer DoubleBuffer CharBuffer]))
 
 
 (set! *warn-on-reflection* true)
@@ -30,38 +33,46 @@
   (operation-type [item]))
 
 
-
 (defprotocol PCountable
   (ecount [item]))
+
 
 (extend-type Countable
   PCountable
   (ecount [item] (.lsize item)))
 
+
 (defprotocol PShape
   (shape [item]))
+
 
 (defprotocol PCopyRawData
   "Given a sequence of data copy it as fast as possible into a target item."
   (copy-raw->item! [raw-data ary-target target-offset options]))
 
+
 (defprotocol PPrototype
   (from-prototype [item datatype shape]))
 
+
 (defprotocol PClone
   "Clone an object.  Implemented generically for all objects."
-  (clone [item datatype]))
+  (clone [item]))
+
 
 (defprotocol PBufferType ;;:sparse or :dense
   (buffer-type [item]))
+
 
 (extend-type Object
   PBufferType
   (buffer-type [item] :dense))
 
+
 (defn safe-buffer-type
   [item]
   (buffer-type item))
+
 
 (defprotocol PSetConstant
   (set-constant! [item offset value elem-count]))
@@ -96,7 +107,8 @@
   represent the value of the item itself as the backing store may require
   element-by-element conversion to represent the value of the item."
   (convertible-to-nio-buffer? [item])
-  (->buffer-backing-store [item]))
+  (->buffer-backing-store [item])
+  )
 
 
 (extend-type Object
@@ -342,6 +354,63 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 and whose values are the indexes that produce those values in the reader."))
 
 
+(defprotocol PEndianness
+  (endianness [item]
+    "Either :little-endian or :big-endian"))
+
+
+(extend-protocol PEndianness
+  ByteBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  ShortBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  IntBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  LongBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  FloatBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  DoubleBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  CharBuffer
+  (endianness [item]
+    (if (.. item order (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian)))
+
+
+(defn default-endianness
+  [item]
+  (or item :little-endian))
+
+
+(defprotocol PConvertibleToBinaryReader
+  (convertible-to-binary-reader? [item])
+  (->binary-reader [item options]))
+
+(defprotocol PConvertibleToBinaryWriter
+  (convertible-to-binary-writer? [item])
+  (->binary-writer [item options]))
+
+
 (declare make-container)
 
 
@@ -446,7 +515,18 @@ and whose values are the indexes that produce those values in the reader."))
   PConstantTimeMinMax
   (has-constant-time-min-max? [item] (convertible-to-range? item))
   (constant-time-min [item] (constant-time-min (->range item {})))
-  (constant-time-max [item] (constant-time-max (->range item {}))))
+  (constant-time-max [item] (constant-time-max (->range item {})))
+
+  PEndianness
+  (endianness [item]
+    (if (.. (ByteOrder/nativeOrder) (equals ByteOrder/BIG_ENDIAN))
+      :big-endian
+      :little-endian))
+  PConvertibleToBinaryReader
+  (convertible-to-binary-reader? [item] false)
+
+  PConvertibleToBinaryWriter
+  (convertible-to-binary-writer? [item] false))
 
 (defmulti make-container
   (fn [container-type _datatype _elem-seq-or-count _options]

@@ -130,7 +130,18 @@
        (into {})
        (merge {:datatype datatype})))))
 
+
 (defn print-plus-op-compatibility-matrix
   []
   (print-compatibility-matrix
    (plus-op-compatibility-matrix)))
+
+
+(deftest epoch-seconds-and-millis-have-correct-datatype
+  (let [item-seq (repeat 5 (dtype-dt/instant))]
+    (is (= :epoch-milliseconds
+           (-> (dtype-dt-ops/get-epoch-milliseconds item-seq)
+               (dtype/get-datatype))))
+    (is (= :epoch-seconds
+           (-> (dtype-dt-ops/get-epoch-seconds item-seq)
+               (dtype/get-datatype))))))

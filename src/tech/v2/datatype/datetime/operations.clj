@@ -574,7 +574,10 @@
               (dtype-proto/->reader lhs {:datatype :int64})
               lhs)
         unary-op (get-in java-time-ops [lhs-dtype :int64-getters
-                                        unary-op-name])]
+                                        unary-op-name])
+        result-dtype (if (#{:epoch-seconds :epoch-milliseconds} unary-op-name)
+                       unary-op-name
+                       :int64)]
     (when-not unary-op
       (throw (Exception. (format "Could not find getter: %s" unary-op-name) )))
     (case lhs-argtype
@@ -582,10 +585,10 @@
       (unary-op lhs)
       :iterable
       (-> (unary-op/unary-iterable-map {} unary-op lhs)
-          (make-iterable-of-type :int64))
+          (make-iterable-of-type result-dtype))
       :reader
       (-> (unary-op/unary-reader-map {} unary-op lhs)
-          (make-reader-of-type :int64)))))
+          (make-reader-of-type result-dtype)))))
 
 
 (defn- perform-time-op
@@ -801,7 +804,6 @@
   (perform-int64-getter item :epoch-milliseconds))
 
 
-
 (defmacro ^:private declare-plus-minus-ops
   []
   `(do
@@ -840,32 +842,25 @@
   [lhs rhs]
   (perform-boolean-op lhs rhs :==))
 
-
 (defn min
   [lhs rhs]
   (perform-binary-op lhs rhs :min))
-
 
 (defn max
   [lhs rhs]
   (perform-binary-op lhs rhs :max))
 
-
-
 (defn reduce-min
   [lhs]
   (perform-commutative-binary-reduction lhs :min))
-
 
 (defn reduce-max
   [lhs]
   (perform-commutative-binary-reduction lhs :max))
 
-
 (defn difference-milliseconds
   [lhs rhs]
   (perform-binary->int64-op lhs rhs :difference-milliseconds))
-
 
 (defn difference-seconds
   [lhs rhs]
@@ -886,7 +881,6 @@
   [lhs rhs]
   (dfn/quot (difference-milliseconds lhs rhs)
             (dtype-dt/milliseconds-in-day)))
-
 
 (defn difference-weeks
   [lhs rhs]

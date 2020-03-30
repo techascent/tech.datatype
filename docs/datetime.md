@@ -246,7 +246,7 @@ user> (dtype-dt-ops/get-epoch-milliseconds ldt-data)
 ```
 
 
-### Plus,Minus Operator Table
+### Plus, Minus Operator Table
 
 ```clojure
 user> (dtype-dt-ops/print-plus-op-compatibility-matrix)

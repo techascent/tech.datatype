@@ -11,12 +11,13 @@ built out of these primitives.
 ## Base Datatypes
 
 
-We start with ten datatype divided into three groups.  The first group are absolute
-datatypes meaning they are fundamentally based on a time-since epoch model.  In all
-cases epoch is Jan 1, 1970.  We will refer to a canonical time, UTC, often.  This stands
-for Universal Time Coordinated.
+We start with ten datatype divided into three groups.
 
 ### Absolute Time Types
+
+Members of the group are absolute datatypes meaning they are fundamentally based on
+a time-since epoch model.  In all cases epoch is Jan 1, 1970.  We will refer to a
+canonical time, UTC, often.  This stands for Universal Time Coordinated.
 
 These types are:
 * `java.time.Instant` - An abstract representation of nanoseconds since epoch.  This
@@ -62,6 +63,11 @@ defined primitive size (32 or 64 bits):
 
 The main datatypes have a slightly lossy (no nanoseconds) conversion to the packed
 datatypes and back.
+
+
+## Construction, Conversion, and Packing
+
+Now we move to creating the types and converting between them.
 
 
 ### Construction And Type Conversion

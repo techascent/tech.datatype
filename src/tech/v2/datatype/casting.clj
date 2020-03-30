@@ -8,6 +8,20 @@
 
 (set! *warn-on-reflection* true)
 
+(defonce aliased-datatypes (ConcurrentHashMap.))
+
+
+(defn alias-datatype!
+  "Alias a new datatype to a base datatype.  Only useful for primitive datatypes"
+  [new-dtype old-dtype]
+  (.put ^Map aliased-datatypes new-dtype old-dtype))
+
+
+(defn un-alias-datatype
+  [dtype]
+  (.getOrDefault ^Map aliased-datatypes dtype dtype))
+
+
 (def signed-unsigned
   {:int8 :uint8
    :int16 :uint16
@@ -70,31 +84,38 @@
           (throw (ex-info (format "datatype is not numeric: %s" dtype)
                           {:datatype dtype})))))
 
+(declare un-alias-datatype)
+
 (defn numeric-type?
   [dtype]
-  (boolean
-   (or (int-types dtype)
-       (float-types dtype))))
+  (let [dtype (un-alias-datatype dtype)]
+    (boolean
+     (or (int-types dtype)
+         (float-types dtype)))))
 
 (defn float-type?
   [dtype]
-  (boolean
-   (float-types dtype)))
+  (let [dtype (un-alias-datatype dtype)]
+    (boolean
+     (float-types dtype))))
 
 
 (defn integer-type?
   [dtype]
-  (boolean (int-types dtype)))
+  (let [dtype (un-alias-datatype dtype)]
+    (boolean (int-types dtype))))
 
 
 (defn signed-integer-type?
   [dtype]
-  (boolean (contains? signed-unsigned dtype)))
+  (let [dtype (un-alias-datatype dtype)]
+    (boolean (contains? signed-unsigned dtype))))
 
 
 (defn unsigned-integer-type?
   [dtype]
-  (boolean (contains? unsigned-signed dtype)))
+  (let [dtype (un-alias-datatype dtype)]
+    (boolean (contains? unsigned-signed dtype))))
 
 
 (defn integer-datatype->float-datatype
@@ -106,17 +127,20 @@
 
 (defn is-host-numeric-datatype?
   [dtype]
-  (boolean (host-numeric-types dtype)))
+  (let [dtype (un-alias-datatype dtype)]
+    (boolean (host-numeric-types dtype))))
 
 
 (defn is-host-datatype?
   [dtype]
-  (boolean (base-datatypes dtype)))
+  (let [dtype (un-alias-datatype dtype)]
+    (boolean (base-datatypes dtype))))
 
 
 (defn datatype->host-datatype
   [dtype]
-  (get unsigned-signed dtype dtype))
+  (let [dtype (un-alias-datatype dtype)]
+    (get unsigned-signed dtype dtype)))
 
 
 (defmacro bool->number
@@ -270,176 +294,6 @@
                [:boolean :object])))
 
 
-(def date-denominators
-  {:milliseconds 1
-   :seconds 1000
-   :minutes DateUtility/minutesToMillis
-   :hours DateUtility/hoursToMillis
-   :days DateUtility/daysToStandardMillis})
-
-
-(def date-denominator-names (set (keys date-denominators)))
-
-
-(defn valid-date-denominator?
-  [denominator]
-  (contains? date-denominator-names denominator))
-
-
-(defn check-date-denominator
-  [denominator]
-  (if (number? denominator)
-    denominator
-    (do
-      (when-not (valid-date-denominator? denominator)
-        (throw (Exception. (format "Unrecognized date denominator: %s"
-                                   denominator))))
-      (get date-denominators denominator))))
-
-
-(defn date-denominator
-  ^long [denominator]
-  (if-let [retval (get date-denominators denominator)]
-    retval
-    (throw (Exception. (format "Unrecognized date denominator: %s"
-                               denominator)))))
-
-
-(def valid-datetime-base-datatypes
-  #{:int64})
-
-
-(defn valid-datetime-base-datatype?
-  [dtype]
-  (contains? valid-datetime-base-datatypes dtype))
-
-
-(defn check-date-base-datatype!
-  [dtype]
-  (when-not (valid-datetime-base-datatype? dtype)
-    (throw (Exception. "Invalid date base datatype: %s"
-                       dtype)))
-  dtype)
-
-
-(defn datetime-datatype
-  ([date-denominator utc-offset base-datatype]
-   {:datatype :datetime
-    :base-datatype (check-date-base-datatype! base-datatype)
-    :denominator (check-date-denominator date-denominator)
-    :utc-offset utc-offset})
-  ([date-denominator utc-offset]
-   (datetime-datatype date-denominator utc-offset :int64))
-  ([date-denominator]
-   (datetime-datatype date-denominator 0))
-  ([]
-   (datetime-datatype :milliseconds)))
-
-
-(defn datetime-datatype?
-  [item]
-  (= :datetime (:datatype item)))
-
-
-(defn datetime-object-family?
-  [item]
-  (or (= :instant item)
-      (= :local-date-time item)
-      (= :zoned-date-time item)))
-
-(defn datetime-family-class
-  [item]
-  (cond
-    (datetime-datatype? item) :concrete
-    (datetime-object-family? item) :object
-    :else :out-of-family))
-
-
-(defn datetime-family?
-  [item]
-  (not= :out-of-family (datetime-family-class item)))
-
-
-(def time-denominators
-  (->> (assoc date-denominators :nanoseconds 1E-6)
-       (map (fn [[k v]]
-              [k (double v)]))
-       (into {})))
-
-
-(def valid-time-denominators (set (keys time-denominators)))
-
-
-(defn valid-timeinterval-denominator?
-  [denominator]
-  (contains? valid-time-denominators denominator))
-
-
-(defn check-timeinterval-denominator!
-  [denominator]
-  (when-not (valid-timeinterval-denominator? denominator)
-    (throw (Exception. (format  "Invalid timeinterval denominator: %s" denominator))))
-  denominator)
-
-
-(def valid-timeinterval-datatypes
-  #{:int64})
-
-
-(defn valid-timeinterval-base-datatype?
-  [dtype]
-  (contains? valid-timeinterval-datatypes dtype))
-
-
-(defn check-timeinterval-base-datatype!
-  [dtype]
-  (when-not (valid-timeinterval-base-datatype? dtype)
-    (throw (Exception. (format "Invalid time interval datatype: %s"
-                               dtype))))
-  dtype)
-
-
-(defn timeinterval-datatype
-  ([denominator base-datatype]
-   {:datatype :timeinterval
-    :base-datatype (check-timeinterval-base-datatype! base-datatype)
-    :denominator (check-timeinterval-denominator! denominator)})
-  ([date-denominator]
-   (timeinterval-datatype date-denominator :int64))
-  ([]
-   (timeinterval-datatype :milliseconds)))
-
-
-(defn timeinterval-datatype?
-  [item]
-  (= :timeinterval (:datatype item)))
-
-
-(defn timeinterval-object-family?
-  [item]
-  (= :duration item))
-
-(defn timeinterval-family-class
-  [item]
-  (cond
-    (timeinterval-datatype? item) :concrete
-    (timeinterval-object-family? item) :object
-    :else :out-of-family))
-
-
-(defn timeinterval-family?
-  [item]
-  (not= :out-of-family (timeinterval-family-class item)))
-
-
-(defonce aliased-datatypes (ConcurrentHashMap.))
-
-(defn alias-datatype!
-  "Alias a new datatype to a base datatype.  Only useful for primitive datatypes"
-  [new-dtype old-dtype]
-  (.put ^Map aliased-datatypes new-dtype old-dtype))
-
-
 (alias-datatype! :double :float64)
 (alias-datatype! :float :float32)
 (alias-datatype! :long :int64)
@@ -449,38 +303,17 @@
 (alias-datatype! :bool :boolean)
 
 
-(defn un-alias-datatype
-  [dtype]
-  (.getOrDefault ^Map aliased-datatypes dtype dtype))
-
-
-(defn composite-datatype?
-  [dtype]
-  (and (instance? java.util.Map dtype)
-       (.get ^java.util.Map dtype :base-datatype)
-       (.containsKey ^Map aliased-datatypes dtype)))
-
-
-(defn composite-datatype->base-datatype
-  "If this is a composite datatype, return the base datatype.  Else return
-  input unchanged."
-  [dtype]
-  (if (instance? java.util.Map dtype)
-    (.get ^Map dtype :base-datatype)
-    (.getOrDefault ^Map aliased-datatypes dtype dtype)))
-
-
 (defn datatype->host-type
   "Get the signed analog of an unsigned type or return datatype unchanged."
   [datatype]
-  (let [datatype (composite-datatype->base-datatype datatype)]
+  (let [datatype (un-alias-datatype datatype)]
     (get unsigned-signed datatype datatype)))
 
 
 (defn datatype->safe-host-type
   "Get a jvm datatype wide enough to store all values of this datatype"
   [dtype]
-  (let [base-dtype (composite-datatype->base-datatype dtype)]
+  (let [base-dtype (un-alias-datatype dtype)]
     (case base-dtype
         :uint8 :int16
         :uint16 :int32
@@ -508,7 +341,7 @@
 (defn flatten-datatype
   "Move a datatype into the canonical set"
   [dtype]
-  (let [dtype (composite-datatype->base-datatype dtype)]
+  (let [dtype (un-alias-datatype dtype)]
     (if (base-datatypes dtype)
       dtype
       :object)))
@@ -524,7 +357,7 @@
 (defn host-flatten
   [dtype]
   (-> dtype
-      composite-datatype->base-datatype
+      un-alias-datatype
       datatype->host-datatype
       flatten-datatype))
 

@@ -118,7 +118,7 @@ user> (dtype-dt/local-date-time->milliseconds-since-epoch *2)
 1585608386515
 ```
 
-`LocalTime` objects do you have a conversion to `epoch-milliseconds`.
+`LocalTime` objects do not have a conversion to `epoch-milliseconds`.
 
 
 Likewise, we can create containers of the above types:

@@ -211,14 +211,16 @@
 
   dtype-proto/PToBufferDesc
   (convertible-to-buffer-desc? [item]
-    (when (= (casting/numeric-byte-width datatype)
-             (casting/numeric-byte-width (dtype-proto/get-datatype
-                                          backing-store)))
+    (when (and (casting/numeric-type? datatype)
+               (= (casting/numeric-byte-width datatype)
+                  (casting/numeric-byte-width (dtype-proto/get-datatype
+                                               backing-store))))
       (dtype-proto/convertible-to-buffer-desc? backing-store)))
   (->buffer-descriptor [item]
-    (when (= (casting/numeric-byte-width datatype)
-             (casting/numeric-byte-width (dtype-proto/get-datatype
-                                          backing-store)))
+    (when (and (casting/numeric-type? datatype)
+               (= (casting/numeric-byte-width datatype)
+                  (casting/numeric-byte-width (dtype-proto/get-datatype
+                                               backing-store))))
       (-> (dtype-proto/->buffer-descriptor backing-store)
           (assoc :datatype datatype))))
 

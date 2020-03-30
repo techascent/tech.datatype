@@ -18,7 +18,8 @@
             [cljc.java-time.local-time :as local-time]
             [cljc.java-time.instant :as instant]
             [cljc.java-time.zoned-date-time :as zoned-date-time]
-            [cljc.java-time.offset-date-time :as offset-date-time])
+            [cljc.java-time.offset-date-time :as offset-date-time]
+            [clojure.pprint :as pp])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
             LocalDate LocalDateTime LocalTime
@@ -804,6 +805,30 @@
   (perform-int64-getter item :epoch-milliseconds))
 
 
+(defn get-epoch-minutes
+  [item]
+  (dfn/quot (get-epoch-milliseconds item)
+            (dtype-dt/milliseconds-in-minute)))
+
+
+(defn get-epoch-hours
+  [item]
+  (dfn/quot (get-epoch-milliseconds item)
+            (dtype-dt/milliseconds-in-hour)))
+
+
+(defn get-epoch-days
+  [item]
+  (dfn/quot (get-epoch-milliseconds item)
+            (dtype-dt/milliseconds-in-day)))
+
+
+(defn get-epoch-weeks
+  [item]
+  (dfn/quot (get-epoch-milliseconds item)
+            (dtype-dt/milliseconds-in-week)))
+
+
 (defmacro ^:private declare-plus-minus-ops
   []
   `(do
@@ -886,3 +911,61 @@
   [lhs rhs]
   (dfn/quot (difference-milliseconds lhs rhs)
             (dtype-dt/milliseconds-in-week)))
+
+
+(defn field-compatibility-matrix
+  []
+  (let [fieldnames (->> dtype-dt/keyword->temporal-field
+                        (map first)
+                        (concat [:epoch-milliseconds]))]
+    (for [[datatype ctor] (sort-by first dtype-dt/datatype->constructor-fn)]
+      (->>
+       (for [field-name fieldnames]
+         [field-name (try
+                     (let [accessor (get-in java-time-ops
+                                            [datatype :int64-getters field-name])]
+                       (accessor (ctor))
+                       true)
+                     (catch Throwable e false))])
+       (into {})
+       (merge {:datatype datatype})))))
+
+
+(defn print-compatibility-matrix
+  ([m]
+   (let [field-names (->> (keys (first m))
+                          (remove #(= :datatype %))
+                          sort)]
+     (pp/print-table (concat [:datatype] field-names) m))
+   nil))
+
+(defn print-field-compatibility-matrix
+  []
+  (print-compatibility-matrix
+   (field-compatibility-matrix)))
+
+
+(defn plus-op-compatibility-matrix
+  []
+  (let [plus-ops (->> dtype-dt/keyword->chrono-unit
+                      (map (comp #(keyword (str "plus-" (name %))) first))
+                      sort)
+        datatypes (sort-by first dtype-dt/datatype->constructor-fn)]
+    (for [[datatype ctor] datatypes]
+      (->>
+       (for [plus-op plus-ops]
+         [plus-op (try
+                    (let [plus-op (get-in
+                                   java-time-ops
+                                   [datatype :numeric-ops plus-op])]
+                      (plus-op (ctor) 1)
+                      true)
+                    (catch Throwable e false))])
+       (into {})
+       (merge {:datatype datatype})))))
+
+
+(defn print-plus-op-compatibility-matrix
+  []
+  (print-compatibility-matrix
+   (plus-op-compatibility-matrix)))

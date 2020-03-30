@@ -85,7 +85,7 @@
 
 (defn milliseconds-in-week
   ^long []
-  60480000)
+  604800000)
 
 (defn milliseconds-in-day
   ^long []
@@ -107,10 +107,19 @@
   ^ZoneId []
   (ZoneId/systemDefault))
 
+(defn utc-zone-id
+  ^ZoneId []
+  (ZoneId/of "UTC"))
+
 
 (defn system-zone-offset
   ^ZoneOffset []
   (.. (OffsetDateTime/now) getOffset))
+
+
+(defn utc-zone-offset
+  ^ZoneOffset []
+  ZoneOffset/UTC)
 
 
 (defn zone-offset->seconds
@@ -193,6 +202,14 @@
       (instant->milliseconds-since-epoch)))
 
 
+(defn milliseconds-since-epoch->zoned-date-time
+  (^ZonedDateTime [^long millis ^ZoneId zid]
+   (-> (milliseconds-since-epoch->instant millis)
+       (instant->zoned-date-time zid)))
+  (^ZonedDateTime [^long millis]
+   (milliseconds-since-epoch->zoned-date-time millis (system-zone-id))))
+
+
 (defn zoned-date-time
   (^ZonedDateTime []
    (ZonedDateTime/now))
@@ -221,6 +238,16 @@
   ^long [^OffsetDateTime of]
   (-> (offset-date-time->instant of)
       (instant->milliseconds-since-epoch)))
+
+
+(defn milliseconds-since-epoch->offset-date-time
+  (^OffsetDateTime [^long millis ^ZoneOffset zid]
+   (-> (milliseconds-since-epoch->instant millis)
+       (instant->offset-date-time zid)))
+  (^OffsetDateTime [^long millis]
+   (milliseconds-since-epoch->offset-date-time
+    millis
+    (system-zone-offset))))
 
 
 (defn offset-date-time
@@ -685,23 +712,23 @@
       :reader (packed-local-time-reader->local-time-reader item))))
 
 
-(defmethod dtype-pp/reader-printer :packed-instant
+(defmethod dtype-pp/reader-converter :packed-instant
   [rdr]
   (unpack rdr))
 
-(defmethod dtype-pp/reader-printer :packed-local-date-time
+(defmethod dtype-pp/reader-converter :packed-local-date-time
   [rdr]
   (unpack rdr))
 
-(defmethod dtype-pp/reader-printer :packed-local-date
+(defmethod dtype-pp/reader-converter :packed-local-date
   [rdr]
   (unpack rdr))
 
-(defmethod dtype-pp/reader-printer :packed-local-time
+(defmethod dtype-pp/reader-converter :packed-local-time
   [rdr]
   (unpack rdr))
 
-(defmethod dtype-pp/reader-printer :epoch-seconds
+(defmethod dtype-pp/reader-converter :epoch-seconds
   [rdr]
   (case (argtypes/arg->arg-type rdr)
     :scalar (milliseconds-since-epoch->instant
@@ -715,7 +742,7 @@
                #(milliseconds-since-epoch->instant (* 1000 (long %)))
                rdr)))
 
-(defmethod dtype-pp/reader-printer :epoch-milliseconds
+(defmethod dtype-pp/reader-converter :epoch-milliseconds
   [rdr]
   (case (argtypes/arg->arg-type rdr)
     :scalar (milliseconds-since-epoch->instant (long rdr))
@@ -728,28 +755,38 @@
                #(milliseconds-since-epoch->instant (long %))
                rdr)))
 
-
 (defprotocol PEpochMilliseconds
-  (->milliseconds-since-epoch [arg]))
-
+  (->milliseconds-since-epoch [arg])
+  (of-epoch-milliseconds [arg millis]))
 
 (extend-protocol PEpochMilliseconds
   Instant
   (->milliseconds-since-epoch [arg]
     (instant->milliseconds-since-epoch arg))
+  (of-epoch-milliseconds [arg millis]
+    (milliseconds-since-epoch->instant millis))
   ZonedDateTime
   (->milliseconds-since-epoch [arg]
     (zoned-date-time->milliseconds-since-epoch arg))
+  (of-epoch-milliseconds [arg millis]
+    (milliseconds-since-epoch->zoned-date-time millis))
   OffsetDateTime
   (->milliseconds-since-epoch [arg]
     (offset-date-time->milliseconds-since-epoch arg))
+  (of-epoch-milliseconds [arg millis]
+    (milliseconds-since-epoch->offset-date-time millis))
   ;;And here we cheat
   LocalDateTime
   (->milliseconds-since-epoch [arg]
     (local-date-time->milliseconds-since-epoch arg))
+  (of-epoch-milliseconds [arg millis]
+    (milliseconds-since-epoch->local-date-time millis))
   LocalDate
   (->milliseconds-since-epoch [arg]
-    (local-date->milliseconds-since-epoch arg)))
+    (local-date->milliseconds-since-epoch arg))
+  (of-epoch-milliseconds [arg millis]
+    (milliseconds-since-epoch->local-date millis)))
+
 
 
 (def datatype->constructor-fn

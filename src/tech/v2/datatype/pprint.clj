@@ -1,6 +1,5 @@
 (ns tech.v2.datatype.pprint
-  (:require [tech.v2.datatype.protocols :as dtype-proto]
-            [tech.v2.datatype.argtypes :as argtypes]))
+  (:require [tech.v2.datatype.protocols :as dtype-proto]))
 
 
 ;; pretty-printing utilities for matrices
@@ -20,27 +19,28 @@
     (str x)))
 
 
-(defmulti reader-printer
+(defmulti reader-converter
+  "Given a item that is of a datatype that is unprintable or that prints incorrectly
+  return a new reader of a datatype that will print correctly (or just a reader of
+  strings is fine).  This is sometimes called for iterables also."
   (fn [item]
     (when item
       (dtype-proto/get-datatype item))))
 
 
-(defmethod reader-printer :default
+(defmethod reader-converter :default
   [item]
-  (let [argtype (argtypes/arg->arg-type item)]
-    (if (= argtype :reader)
-      (dtype-proto/->reader item {})
-      item)))
+  item)
 
 
 (defn print-reader-data
   [rdr & {:keys [formatter]
           :or {formatter format-object}}]
-  (->> (reader-printer rdr)
-       (reduce (fn [^StringBuilder builder val]
-                 (.append builder
-                          (formatter val))
-                 (.append builder ", "))
-               (StringBuilder.))
-       (.toString)))
+  (let [rdr (reader-converter rdr)]
+    (->> (dtype-proto/->reader rdr {})
+         (reduce (fn [^StringBuilder builder val]
+                   (.append builder
+                            (formatter val))
+                   (.append builder ", "))
+                 (StringBuilder.))
+         (.toString))))

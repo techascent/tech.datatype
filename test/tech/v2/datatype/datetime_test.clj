@@ -3,8 +3,9 @@
             [tech.v2.datatype.datetime :as dtype-dt]
             [tech.v2.datatype.datetime.operations :as dtype-dt-ops]
             [tech.v2.datatype.functional :as dfn]
-            [clojure.test :refer [deftest is]]
-            [clojure.pprint :as pp]))
+            [tech.v2.tensor :as dtt]
+            [clojure.test :refer [deftest is]])
+  (:import [java.time.temporal ChronoUnit]))
 
 
 (deftest instant
@@ -79,64 +80,6 @@
                            (dtype-dt/unpack)))))))
 
 
-(defn field-compatibility-matrix
-  []
-  (let [fieldnames (->> dtype-dt/keyword->temporal-field
-                        (map first)
-                        (concat [:epoch-milliseconds]))]
-    (for [[datatype ctor] (sort-by first dtype-dt/datatype->constructor-fn)]
-      (->>
-       (for [field-name fieldnames]
-         [field-name (try
-                     (let [accessor (get-in dtype-dt-ops/java-time-ops
-                                            [datatype :int64-getters field-name])]
-                       (accessor (ctor))
-                       true)
-                     (catch Throwable e false))])
-       (into {})
-       (merge {:datatype datatype})))))
-
-
-(defn print-compatibility-matrix
-  ([m]
-   (let [field-names (->> (keys (first m))
-                          (remove #(= :datatype %))
-                          sort)]
-     (pp/print-table (concat [:datatype] field-names) m))
-   nil))
-
-(defn print-field-compatibility-matrix
-  []
-  (print-compatibility-matrix
-   (field-compatibility-matrix)))
-
-
-(defn plus-op-compatibility-matrix
-  []
-  (let [plus-ops (->> dtype-dt/keyword->chrono-unit
-                      (map (comp #(keyword (str "plus-" (name %))) first))
-                      sort)
-        datatypes (sort-by first dtype-dt/datatype->constructor-fn)]
-    (for [[datatype ctor] datatypes]
-      (->>
-       (for [plus-op plus-ops]
-         [plus-op (try
-                    (let [plus-op (get-in
-                                   dtype-dt-ops/java-time-ops
-                                   [datatype :numeric-ops plus-op])]
-                      (plus-op (ctor) 1)
-                      true)
-                    (catch Throwable e false))])
-       (into {})
-       (merge {:datatype datatype})))))
-
-
-(defn print-plus-op-compatibility-matrix
-  []
-  (print-compatibility-matrix
-   (plus-op-compatibility-matrix)))
-
-
 (deftest epoch-seconds-and-millis-have-correct-datatype
   (let [item-seq (repeat 5 (dtype-dt/instant))]
     (is (= :epoch-milliseconds
@@ -145,3 +88,33 @@
     (is (= :epoch-seconds
            (-> (dtype-dt-ops/get-epoch-seconds item-seq)
                (dtype/get-datatype))))))
+
+
+(deftest epoch-times
+  (let [start-zdt (dtype-dt/milliseconds-since-epoch->zoned-date-time 0)
+        now-zdt (dtype-dt/zoned-date-time)]
+    (is (= (.between (ChronoUnit/MINUTES) start-zdt now-zdt)
+           (dtype-dt-ops/get-epoch-minutes now-zdt)))
+    (is (= (.between (ChronoUnit/HOURS) start-zdt now-zdt)
+           (dtype-dt-ops/get-epoch-hours now-zdt)))
+    (is (= (.between (ChronoUnit/DAYS) start-zdt now-zdt)
+           (dtype-dt-ops/get-epoch-days now-zdt)))
+    (is (= (.between (ChronoUnit/WEEKS) start-zdt now-zdt)
+           (dtype-dt-ops/get-epoch-weeks now-zdt)))))
+
+
+
+;;I really don't expect tensors to be used with date time objects but regardless
+;;the basic expectations of these things (like functions that take a tensor return
+;;a tensor) all need to be respected.
+
+
+(deftest simple-tensor-ops
+  (let [src-data (dtype/make-container
+                  :typed-buffer
+                  :instant
+                  9)
+        test-tens (dtt/reshape src-data [3 3])]
+    (is (= [3 3] (dtype/shape test-tens)))
+    ;;Also, it has to print without exception
+    (is (string? (.toString test-tens)))))

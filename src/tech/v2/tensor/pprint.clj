@@ -142,7 +142,7 @@
                               item-shape elipsis-vec)
                          (apply tens-impl/select tens))
                ;;Format all entries in our reshaped tens.
-               tens (->> (dtype-pprint/reader-printer tens)
+               tens (->> (dtype-pprint/reader-converter tens)
                          (unary/unary-reader :object (formatter x)))
                prefix (or prefix "")
                sb (StringBuilder.)

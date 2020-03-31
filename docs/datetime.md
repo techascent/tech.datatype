@@ -289,12 +289,6 @@ All datatype support `<. <=, ==, =>, >` assuming both types have the same dataty
 ```clojure
 user> (def ld-data (vec (repeat 5 (dtype-dt/local-date))))
 #'user/ld-data
-user> ld-data
-[#object[java.time.LocalDate 0x356e503e "2020-03-30"]
- #object[java.time.LocalDate 0x356e503e "2020-03-30"]
- #object[java.time.LocalDate 0x356e503e "2020-03-30"]
- #object[java.time.LocalDate 0x356e503e "2020-03-30"]
- #object[java.time.LocalDate 0x356e503e "2020-03-30"]]
 user> (dtype-dt-ops/plus-days ld-data (range 5))
 [#object[java.time.LocalDate 0x356e503e "2020-03-30"] #object[java.time.LocalDate 0x57fd4132 "2020-03-31"] #object[java.time.LocalDate 0x66c78e39 "2020-04-01"] #object[java.time.LocalDate 0x39536007 "2020-04-02"] #object[java.time.LocalDate 0x2ab63883 "2020-04-03"]]
 user> (def middle-day (dtype-dt-ops/plus-days (dtype-dt/local-date) 2))
@@ -316,23 +310,38 @@ their types match.
 ```clojure
 user> (def ld-data (dtype/make-container :java-array :offset-date-time 5))
 #'user/ld-data
-user> ld-data
-[#object[java.time.OffsetDateTime 0x5d0b2025 "2020-03-30T17:15:20.134-06:00"],
- #object[java.time.OffsetDateTime 0x3257d91 "2020-03-30T17:15:20.134-06:00"],
- #object[java.time.OffsetDateTime 0x6091af81 "2020-03-30T17:15:20.134-06:00"],
- #object[java.time.OffsetDateTime 0x5bb4fa9a "2020-03-30T17:15:20.134-06:00"],
- #object[java.time.OffsetDateTime 0x14e46045 "2020-03-30T17:15:20.134-06:00"]]
 user> (def ranged-data (dtype-dt-ops/plus-seconds ld-data (range 5)))
 #'user/ranged-data
 user> (dtype-dt-ops/difference-milliseconds ld-data ranged-data)
 [0 -1000 -2000 -3000 -4000]
-user> (dtype-dt-ops/get-epoch-seconds ranged-data)
-[1585610120 1585610121 1585610122 1585610123 1585610124]
-user> (dtype-dt-ops/get-epoch-seconds ld-data)
-[1585610120 1585610120 1585610120 1585610120 1585610120]
+user> (dtype-dt-ops/get-epoch-milliseconds ranged-data)
+[1585659035911 1585659036924 1585659037924 1585659038924 1585659039924]
+user> (dtype-dt-ops/get-epoch-milliseconds ld-data)
+[1585659035911 1585659035924 1585659035924 1585659035924 1585659035924]
 ```
 
+## Tensor Support
 
+We don't expect many people to use the dates and tensors but the support is there:
+
+```clojure
+user> (require '[tech.v2.tensor :as dtt])
+nil
+user> (-> (dtype/make-container :java-array :local-date 9)
+          (dtype-dt-ops/plus-days (range 9))
+          (dtt/reshape [3 3]))
+#tech.v2.tensor<local-date>[3 3]
+[[2020-03-31 2020-04-01 2020-04-02]
+ [2020-04-03 2020-04-04 2020-04-05]
+ [2020-04-06 2020-04-07 2020-04-08]]
+user> (def test-tens *1)
+#'user/test-tens
+user> (dtype-dt-ops/plus-weeks test-tens (range 9))
+#tech.v2.tensor<local-date>[3 3]
+[[2020-03-31 2020-04-08 2020-04-16]
+ [2020-04-24 2020-05-02 2020-05-10]
+ [2020-05-18 2020-05-26 2020-06-03]]
+```
 
 
 ## Enough for Now!

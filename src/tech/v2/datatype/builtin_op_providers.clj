@@ -363,9 +363,7 @@
                        (if (or (= ~partition-fn :identity)
                                (identical? ~partition-fn identity))
                          item-reader#
-                         (let [un-op# (if (keyword? ~partition-fn)
-                                        (get unary-op/builtin-unary-ops ~partition-fn)
-                                        ~partition-fn)]
+                         (let [un-op# ~partition-fn]
                            (->> (base/->reader item-reader# reader-dtype#)
                                 (unary-op/unary-map un-op#)))))
         list-fn# (reify

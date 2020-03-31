@@ -3,7 +3,8 @@
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.binary-op :as binary-op]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.protocols :as dtype-proto])
+            [tech.v2.datatype.protocols :as dtype-proto]
+            [tech.parallel.for :as parallel-for])
   (:import [tech.v2.datatype
             BinaryOperators$ByteBinary  BinaryOperators$ShortBinary
             BinaryOperators$IntBinary  BinaryOperators$LongBinary
@@ -99,37 +100,25 @@
   `(fn [reduce-op# iterable# unchecked?#]
      (let [reduce-op# (binary-op/datatype->binary-op ~datatype reduce-op# unchecked?#)
            reader# (typecast/datatype->reader ~datatype iterable# unchecked?#)
-           n-elems# (.lsize reader#)
-           n-cpus# (.availableProcessors
-                   (Runtime/getRuntime))
-           n-elems-per-group# (quot n-elems# n-cpus#)
-           n-groups# (+ n-cpus# 1)]
-       (->> (range n-groups#)
-            (pmap
-             (fn [group-idx#]
-               (let [group-idx# (long group-idx#)
-                     start-idx# (* group-idx# n-elems-per-group#)
-                     end-idx# (min n-elems#
-                                   (+ start-idx# n-elems-per-group#))
-                     n-loop-elems# (- end-idx# start-idx#)]
-                 (when (not (== start-idx# end-idx#))
-                   (loop [accum# (casting/datatype->sparse-value ~datatype)
-                          idx# 0]
-                     (if (< idx# n-loop-elems#)
-                       (recur
-                        (if (== idx# 0)
-                          (.read reader#
-                                 (+ idx# start-idx#))
-                          (.op reduce-op#
-                               accum#
-                               (.read reader#
-                                      (+ idx# start-idx#))))
-                        (inc idx#))
-                       accum#))))))
-            (remove nil?)
-            (reduce (fn [accum# next-elem#]
-                      (.op reduce-op# accum# next-elem#)))
-            (#(.finalize reduce-op# % n-elems#))))))
+           n-elems# (.lsize reader#)]
+       (->>
+        (parallel-for/indexed-map-reduce
+         n-elems#
+         (fn [^long start-idx# ^long len#]
+           (let [end-idx# (+ start-idx# len#)]
+             (if (== 0 len#)
+               nil
+               (loop [accum# (.read reader# start-idx#)
+                      idx# (unchecked-inc start-idx#)]
+                 (if (< idx# end-idx#)
+                   (recur (.op reduce-op# accum# (.read reader# idx#))
+                          (unchecked-inc idx#))
+                   accum#)))))
+         (fn [reduced-items#]
+           (reduce (fn [accum# next-elem#]
+                     (.op reduce-op# accum# next-elem#))
+                   reduced-items#)))
+        (#(.finalize reduce-op# % n-elems#))))))
 
 
 (def commutative-reader-reduce-table

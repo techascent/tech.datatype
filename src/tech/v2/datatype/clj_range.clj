@@ -34,7 +34,14 @@
             (lsize [rdr] n-elems)
             (read [rdr idx]
               (-> (* step idx)
-                  (+ start))))
+                  (+ start)))
+            dtype-proto/PRangeConvertible
+            (convertible-to-range? [item] true)
+            (->range [item options] (dtype-proto/->range rng options))
+            dtype-proto/PConstantTimeMinMax
+            (has-constant-time-min-max? [item] true)
+            (constant-time-min [item] (dtype-proto/constant-time-min rng))
+            (constant-time-max [item] (dtype-proto/constant-time-max rng)))
           (dtype-proto/->reader options)))))
 
 

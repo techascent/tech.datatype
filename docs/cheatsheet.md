@@ -228,6 +228,48 @@ user> (dtype-fn/fixed-rolling-window 3 #(apply + %) test-data)
 (44 42 39 36 33 30 27 24 21 19)
 ```
 
+## Dates & Times
+
+All of the constructors for the types are in `tech.v2.datatype.datetime`.  All your
+favorite `java.time` types are there.  If you are unfamiliar with these types
+please check out the [datetime docs](datetime.md).  Also in that namespace are
+scalar conversions between the types and pack/unpack operations if you want to
+store some of your types in data somewhere as integers.
+
+All of the operations you can do once you have one or more of these types are
+under `tech.v2.datatype.datetime.operations`.  You can do things like
+`get-day` and `plus-days` in both scalar and vectorized formats:
+
+```clojure
+user> (require '[tech.v2.datatype.datetime :as dtype-dt])
+nil
+user> (require '[tech.v2.datatype.datetime.operations :as dtype-dt-ops])
+nil
+user> (dtype-dt/zoned-date-time)
+
+#object[java.time.ZonedDateTime 0x1474b1 "2020-03-31T15:36:03.063-06:00[America/Denver]"]
+user> (dtype-dt/local-date)
+#object[java.time.LocalDate 0x72875089 "2020-03-31"]
+user> (def ld (dtype-dt/local-date))
+#'user/ld
+user> (dtype-dt-ops/plus-days ld 1)
+#object[java.time.LocalDate 0x5df0f8e4 "2020-04-01"]
+user> (dtype-dt-ops/>= *1 ld)
+true
+user> (dtype-dt-ops/plus-days ld (range 10))
+[#object[java.time.LocalDate 0x3a3eec48 "2020-03-31"] #object[java.time.LocalDate 0x4e09d01c "2020-04-01"] #object[java.time.LocalDate 0x5149b47 "2020-04-02"] #object[java.time.LocalDate 0x1ecd0a66 "2020-04-03"] #object[java.time.LocalDate 0x535ce95b "2020-04-04"] #object[java.time.LocalDate 0x53d55a1c "2020-04-05"] #object[java.time.LocalDate 0x72ba3d82 "2020-04-06"] #object[java.time.LocalDate 0x4d28789 "2020-04-07"] #object[java.time.LocalDate 0x3070a079 "2020-04-08"] #object[java.time.LocalDate 0x498c09d1 "2020-04-09"]]
+user> (dtype-dt-ops/get-day-of-week *1)
+[2 3 4 5 6 7 1 2 3 ]
+user> (dtype-dt-ops/get-epoch-milliseconds ld)
+1585690858819
+user> (dtype-dt-ops/get-epoch-milliseconds
+       (dtype-dt-ops/plus-days ld (range 10)))
+[1585690877710 1585777277710 1585863677711
+ 1585950077711 1586036477711 1586122877711
+ 1586209277711 1586295677711 1586382077711
+ 1586468477712]
+```
+
 
 ## Tensors
 

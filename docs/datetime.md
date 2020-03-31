@@ -65,7 +65,7 @@ The main datatypes have a slightly lossy (no nanoseconds) conversion to the pack
 datatypes and back.
 
 
-## Construction, Conversion, and Packing
+## Construction, Conversion And Packing
 
 Now we move to creating the types and converting between them.
 
@@ -141,7 +141,7 @@ user> (dtype/get-datatype *1)
 ```
 
 
-### Packing/UnPacking Types
+### Packing And Unpacking Types
 
 If a type is packable, we can call pack on an instant, an iterable, or a reader of that
 type.  If the call pack on an instance, we get back a base java primitive and have to
@@ -246,7 +246,7 @@ user> (dtype-dt-ops/get-epoch-milliseconds ldt-data)
 ```
 
 
-### Plus, Minus Operator Table
+### Plus (And Minus) Operator Table
 
 ```clojure
 user> (dtype-dt-ops/print-plus-op-compatibility-matrix)
@@ -262,7 +262,7 @@ user> (dtype-dt-ops/print-plus-op-compatibility-matrix)
 nil
 ```
 
-### Plus, Minus Operators
+### Plus And Minus Operators
 
 Given a datatype we can add or subtract a given time quantity from it to produce a new
 datatype.  Addition is commutative so for addition either the left or right hand side
@@ -282,7 +282,7 @@ user> (dtype-dt-ops/plus-days (dtype-dt/zoned-date-time) 5)
 ```
 
 
-### Comparison Operators
+### Boolean Comparison Operators
 
 All datatype support `<. <=, ==, =>, >` assuming both types have the same datatype.
 
@@ -327,7 +327,7 @@ We don't expect many people to use dates and tensors but the support is there:
 ```clojure
 user> (require '[tech.v2.tensor :as dtt])
 nil
-user> (-> (dtype/make-container :java-array :local-date 9)
+user> (-> (dtype-dt/local-date)
           (dtype-dt-ops/plus-days (range 9))
           (dtt/reshape [3 3]))
 #tech.v2.tensor<local-date>[3 3]
@@ -341,6 +341,9 @@ user> (dtype-dt-ops/plus-weeks test-tens (range 9))
 [[2020-03-31 2020-04-08 2020-04-16]
  [2020-04-24 2020-05-02 2020-05-10]
  [2020-05-18 2020-05-26 2020-06-03]]
+;;Below is a current bug.  Setting datatype makes tensor back into readers.
+user> (dtype-dt-ops/get-day-of-week *1)
+[2 3 4 5 6 7 1 2 3]
 ```
 
 

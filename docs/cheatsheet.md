@@ -246,7 +246,6 @@ nil
 user> (require '[tech.v2.datatype.datetime.operations :as dtype-dt-ops])
 nil
 user> (dtype-dt/zoned-date-time)
-
 #object[java.time.ZonedDateTime 0x1474b1 "2020-03-31T15:36:03.063-06:00[America/Denver]"]
 user> (dtype-dt/local-date)
 #object[java.time.LocalDate 0x72875089 "2020-03-31"]
@@ -268,6 +267,13 @@ user> (dtype-dt-ops/get-epoch-milliseconds
  1585950077711 1586036477711 1586122877711
  1586209277711 1586295677711 1586382077711
  1586468477712]
+;; You can also make containers of these objects
+user> (dtype/make-container :java-array :local-time 2)
+[#object[java.time.LocalTime 0x67a430c1 "15:50:30.971"],
+ #object[java.time.LocalTime 0x4498f90d "15:50:30.971"]]
+user> (dtype/make-container :java-array :instant 2)
+[#object[java.time.Instant 0xb9b429d "2020-03-31T21:50:36.517Z"],
+ #object[java.time.Instant 0x6e907408 "2020-03-31T21:50:36.517Z"]]
 ```
 
 

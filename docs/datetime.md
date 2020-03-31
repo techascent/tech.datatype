@@ -322,7 +322,7 @@ user> (dtype-dt-ops/get-epoch-milliseconds ld-data)
 
 ## Tensor Support
 
-We don't expect many people to use the dates and tensors but the support is there:
+We don't expect many people to use dates and tensors but the support is there:
 
 ```clojure
 user> (require '[tech.v2.tensor :as dtt])

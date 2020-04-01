@@ -77,9 +77,9 @@
                                   ;;Note from-prototype fails for reader chains.
                                   ;;So you have to copy or use an actual image.
                                   (dtype/from-prototype source-image)))]
-    ;;warmup a little.
-    (reader-composition)
-    (inline-fn)
+    ;;warm up and actually check that tostring works as expected
+    (is (string? (.toString ^Object (reader-composition))))
+    (is (string? (.toString ^Object (inline-fn))))
     (clojure.pprint/pprint
      {:reader-composition (with-out-str (time (dotimes [iter 10]
                                                 (reader-composition))))

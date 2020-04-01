@@ -17,8 +17,9 @@
             IterHelpers$FloatIterConverter
             IterHelpers$DoubleIterConverter
             IterHelpers$ObjectIterConverter]
-           [java.util Iterator List]
+           [java.util Iterator List Map]
            [com.sun.jna Pointer]
+           [org.roaringbitmap RoaringBitmap]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
            [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList ByteIterator]
@@ -612,3 +613,29 @@
                   [dtype `(~dtype-macro ~dtype)])
                 casting/host-numeric-types)]
         (into {})))
+
+
+(defn as-roaring-bitmap
+  ^RoaringBitmap [item]
+  (when (and item (dtype-proto/convertible-to-bitmap? item))
+    (dtype-proto/as-roaring-bitmap item)))
+
+(defn ->roaring-bitmap
+  ^RoaringBitmap [item]
+  (if-let [retval (as-roaring-bitmap item)]
+    retval
+    (throw (Exception. (format "Item type %s not convertible to bitmap"
+                               (type item))))))
+
+
+(defn as-java-map
+  ^Map [item]
+  (when (and item (instance? Map item))
+    item))
+
+
+(defn ->java-map
+  ^Map [item]
+  (if-let [jmap (as-java-map item)]
+    jmap
+    (throw (Exception. "Item is not a map: %s" item))))

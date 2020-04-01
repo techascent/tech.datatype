@@ -581,15 +581,15 @@
                        :int64)]
     (when-not unary-op
       (throw (Exception. (format "Could not find getter: %s" unary-op-name) )))
-    (case lhs-argtype
-      :scalar
-      (unary-op lhs)
-      :iterable
-      (-> (unary-op/unary-iterable-map {} unary-op lhs)
-          (make-iterable-of-type result-dtype))
-      :reader
-      (-> (unary-op/unary-reader-map {} unary-op lhs)
-          (make-reader-of-type result-dtype)))))
+    (->
+     (case lhs-argtype
+       :scalar
+       (unary-op lhs)
+       :iterable
+       (unary-op/unary-iterable-map {} unary-op lhs)
+       :reader
+       (unary-op/unary-reader-map {} unary-op lhs))
+     (dtype-proto/set-datatype result-dtype))))
 
 
 (defn- perform-time-op

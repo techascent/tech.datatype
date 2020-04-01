@@ -107,8 +107,6 @@
 ;;I really don't expect tensors to be used with date time objects but regardless
 ;;the basic expectations of these things (like functions that take a tensor return
 ;;a tensor) all need to be respected.
-
-
 (deftest simple-tensor-ops
   (let [src-data (dtype/make-container
                   :typed-buffer
@@ -117,4 +115,6 @@
         test-tens (dtt/reshape src-data [3 3])]
     (is (= [3 3] (dtype/shape test-tens)))
     ;;Also, it has to print without exception
-    (is (string? (.toString test-tens)))))
+    (is (string? (.toString test-tens)))
+    (let [epoch-tens (dtype-dt-ops/get-epoch-milliseconds test-tens)]
+      (is (= [3 3] (dtype/shape epoch-tens))))))

@@ -19,14 +19,13 @@
   (get-datatype [item]))
 
 
+(defprotocol PSetDatatype
+  (set-datatype [item new-dtype]))
+
+
 (extend-type Datatype
   PDatatype
   (get-datatype [item] (.getDatatype item)))
-
-
-(extend-type Object
-  PDatatype
-  (get-datatype [item] :object))
 
 
 (defprotocol POperationType
@@ -60,13 +59,8 @@
   (clone [item]))
 
 
-(defprotocol PBufferType ;;:sparse or :dense
+(defprotocol PBufferType ;;:sparse or :dense, :tensor, :array-of-structs
   (buffer-type [item]))
-
-
-(extend-type Object
-  PBufferType
-  (buffer-type [item] :dense))
 
 
 (defn safe-buffer-type
@@ -96,11 +90,6 @@
   (->backing-store-seq [item]))
 
 
-(extend-type Object
-  PToBackingStore
-  (->backing-store-seq [item] [item]))
-
-
 (defprotocol PToNioBuffer
   "Take a 'thing' and convert it to a nio buffer.  Only valid if the thing
   shares the backing store with the buffer.  Result may not exactly
@@ -111,19 +100,9 @@
   )
 
 
-(extend-type Object
-  PToNioBuffer
-  (convertible-to-nio-buffer? [item] false))
-
-
 (defprotocol PToJNAPointer
   (convertible-to-data-ptr? [item])
   (->jna-ptr [item]))
-
-(extend-type Object
-  PToJNAPointer
-  (convertible-to-data-ptr? [item] (jna/is-jna-ptr-convertible? item))
-  (->jna-ptr [item] (jna/as-ptr item)))
 
 
 (defn as-jna-ptr
@@ -178,11 +157,6 @@
   (->list-backing-store [item]))
 
 
-(extend-type Object
-  PToList
-  (convertible-to-fastutil-list? [item] false))
-
-
 (defn list-convertible?
   [item]
   (when (and item (convertible-to-fastutil-list? item))
@@ -208,12 +182,6 @@
 Note that this makes no mention of indianness; buffers are in the format of the host."))
 
 
-(extend-type Object
-  PToBufferDesc
-  (convertible-to-buffer-desc? [item] false)
-  (->buffer-descriptor [item] (throw (Exception. "item is not convertible"))))
-
-
 
 
 ;; Various other type conversions.  These happen quite a lot and we have found that
@@ -231,6 +199,10 @@ Note that this makes no mention of indianness; buffers are in the format of the 
 (defprotocol PToReader
   (convertible-to-reader? [item])
   (->reader [item options]))
+
+
+(defprotocol PReaderSparseUpdate
+  (reader-sparse-update [src-reader update-bitmap update-values]))
 
 (defn as-reader
   [item & [options]]
@@ -415,6 +387,31 @@ and whose values are the indexes that produce those values in the reader."))
 
 
 (extend-type Object
+  PDatatype
+  (get-datatype [item] :object)
+  PSetDatatype
+  (set-datatype [item new-dtype]
+    (cond
+      (convertible-to-reader? item)
+      (->reader item {:datatype new-dtype})
+      (convertible-to-iterable? item)
+      (->iterable item {:datatype new-dtype})
+      :else
+      (casting/cast item new-dtype)))
+  PBufferType
+  (buffer-type [item] :dense)
+  PToBackingStore
+  (->backing-store-seq [item] [item])
+  PToNioBuffer
+  (convertible-to-nio-buffer? [item] false)
+  PToJNAPointer
+  (convertible-to-data-ptr? [item] (jna/is-jna-ptr-convertible? item))
+  (->jna-ptr [item] (jna/as-ptr item))
+  PToList
+  (convertible-to-fastutil-list? [item] false)
+  PToBufferDesc
+  (convertible-to-buffer-desc? [item] false)
+  (->buffer-descriptor [item] (throw (Exception. "item is not convertible")))
   POperationType
   (operation-type [item]
     (cond

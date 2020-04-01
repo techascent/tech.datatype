@@ -331,19 +331,32 @@ user> (-> (dtype-dt/local-date)
           (dtype-dt-ops/plus-days (range 9))
           (dtt/reshape [3 3]))
 #tech.v2.tensor<local-date>[3 3]
-[[2020-03-31 2020-04-01 2020-04-02]
- [2020-04-03 2020-04-04 2020-04-05]
- [2020-04-06 2020-04-07 2020-04-08]]
-user> (def test-tens *1)
-#'user/test-tens
-user> (dtype-dt-ops/plus-weeks test-tens (range 9))
+[[2020-04-01 2020-04-02 2020-04-03]
+ [2020-04-04 2020-04-05 2020-04-06]
+ [2020-04-07 2020-04-08 2020-04-09]]
+
+user> (dtype-dt-ops/plus-weeks *1 (range 9))
 #tech.v2.tensor<local-date>[3 3]
-[[2020-03-31 2020-04-08 2020-04-16]
- [2020-04-24 2020-05-02 2020-05-10]
- [2020-05-18 2020-05-26 2020-06-03]]
-;;Below is a current bug.  Setting datatype makes tensor back into readers.
+[[2020-04-01 2020-04-09 2020-04-17]
+ [2020-04-25 2020-05-03 2020-05-11]
+ [2020-05-19 2020-05-27 2020-06-04]]
+
 user> (dtype-dt-ops/get-day-of-week *1)
-[2 3 4 5 6 7 1 2 3]
+#tech.v2.tensor<int64>[3 3]
+[[3 4 5]
+ [6 7 1]
+ [2 3 4]]
+
+ ;;Epoch milliseconds, when in a typed buffer or in a tensor print nicely.  They are
+ ;;still just int64 integers.
+user> (dtype-dt-ops/get-epoch-milliseconds *2)
+#tech.v2.tensor<epoch-milliseconds>[3 3]
+[[2020-04-01T19:43:28.718Z 2020-04-09T19:43:28.718Z 2020-04-17T19:43:28.718Z]
+ [2020-04-25T19:43:28.719Z 2020-05-03T19:43:28.719Z 2020-05-11T19:43:28.719Z]
+ [2020-05-19T19:43:28.719Z 2020-05-27T19:43:28.719Z 2020-06-04T19:43:28.720Z]]
+
+user> (dtt/tensor->buffer *1)
+[1585770398151 1586461598151 1587152798151 1587843998151 1588535198151 1589226398151 1589917598151 1590608798151 1591299998151]
 ```
 
 

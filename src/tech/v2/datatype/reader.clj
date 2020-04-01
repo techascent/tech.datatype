@@ -324,7 +324,6 @@
   (let [src-dtype (dtype-proto/get-datatype src-reader)
         dst-dtype (or (:datatype options)
                       (dtype-proto/get-datatype src-reader))]
-
     (if (= src-dtype dst-dtype)
       src-reader
       (let [reader-fn (get marshalling-reader-table

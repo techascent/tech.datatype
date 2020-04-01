@@ -23,7 +23,8 @@
             ;;Support for base container types
             [tech.v2.datatype.bitmap :as bitmap]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
-            [tech.v2.datatype.functional])
+            [tech.v2.datatype.functional]
+            [tech.v2.datatype.index-algebra :as idx-alg])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
            [java.util Iterator List RandomAccess]
            [org.roaringbitmap RoaringBitmap]
@@ -38,6 +39,12 @@
 (defn get-datatype
   [item]
   (base/get-datatype item))
+
+
+(defn set-datatype
+  [item dtype]
+  (when item
+    (dtype-proto/set-datatype item dtype)))
 
 
 (defn operation-type
@@ -481,8 +488,19 @@ Calls clojure.core.matrix/ecount."
   "Create an indexed reader that readers values from specific indexes.  The options
   map can contain at least :datatype and :unchecked? to control the datatype
   and casting correctness checks of the resulting reader."
-  [indexes values & [options]]
-  (indexed-rdr/make-indexed-reader indexes values options))
+  ([indexes values options]
+   (indexed-rdr/make-indexed-reader indexes values options))
+  ([indexed values]
+   (indexed-reader indexed values {})))
+
+
+(defn reader-select
+  "Select indexes out of a reader.  This applies the selection to the existing reader
+  in an opaque fashion by using an indexed reader.  A much more efficient version of
+  select when doing compositions of select operations is provided for tensors."
+  [reader select-arg]
+  (-> (idx-alg/select (ecount reader) select-arg)
+      (indexed-reader reader)))
 
 
 ;;Sparse is gone for a bit.

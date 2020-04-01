@@ -365,6 +365,12 @@
    (get-datatype [item] (dtype-base/get-datatype buffer))
 
 
+   dtype-proto/PSetDatatype
+   (set-datatype [item new-dtype]
+     (construct-tensor (dtype-proto/set-datatype buffer new-dtype)
+                       dimensions))
+
+
    dtype-proto/PCountable
    (ecount [item] (dims/ecount dimensions))
 
@@ -428,9 +434,16 @@
 
    dtype-proto/PBuffer
    (sub-buffer [item offset length]
-     (if (simple-dimensions? dimensions)
+     (cond
+       (simple-dimensions? dimensions)
        (dtype-proto/sub-buffer buffer offset length)
-       (throw (ex-info "Cannot sub-buffer tensors with complex addressing" {}))))
+       (and (== 0 (long offset))
+            (== (dtype/ecount item) (long length)))
+       item
+       :else
+         (let [buf-rdr (-> (dims/->global->local dimensions)
+                           (dtype-proto/sub-buffer offset length))]
+           (dtype/indexed-reader buf-rdr buffer))))
 
 
    dtype-proto/PSetConstant
@@ -520,7 +533,8 @@
    (convertible-to-tensor-reader? [item]
      (dtype-proto/convertible-to-reader? buffer))
    (->tensor-reader [item options]
-     (let [{:keys [datatype]} options]
+     (let [{:keys [datatype]} options
+           datatype (or datatype (dtype/get-datatype item))]
        (if (and (simple-dimensions? dimensions)
                 (instance? (resolve (tens-typecast/datatype->tensor-reader-type
                                      datatype))
@@ -814,10 +828,15 @@
         {buf-offset :elem-offset
          buf-len :buffer-ecount
          :as new-dims}
-        (apply dims/select (tens-proto/dimensions tens) args)]
-    (construct-tensor (-> (tensor->buffer tens)
-                          (dtype/sub-buffer buf-offset buf-len))
-                      new-dims)))
+        (apply dims/select (tens-proto/dimensions tens) args)
+        buf-offset (long buf-offset)
+        buffer (tensor->buffer tens)
+        new-buffer (if-not (and (== buf-offset 0)
+                                (or (not buf-len)
+                                    (== (dtype/ecount buffer) (long buf-len))))
+                     (dtype/sub-buffer buffer buf-offset buf-len)
+                     buffer)]
+    (construct-tensor new-buffer new-dims)))
 
 
 (defn broadcast

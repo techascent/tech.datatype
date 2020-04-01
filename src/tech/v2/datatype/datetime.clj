@@ -369,7 +369,7 @@
   (^LocalDateTime [^LocalDate ld ^LocalTime time]
    (.atTime ld ^LocalTime time))
   (^LocalDateTime [^LocalDate ld]
-   (local-date->local-date-time ld (LocalTime/now))))
+   (local-date->local-date-time ld (LocalTime/MIN))))
 
 
 (defn local-date->instant

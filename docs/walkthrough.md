@@ -25,6 +25,10 @@
  - list (more detail below)
  - fastcopying & times
 
+# extending the set of datatypes
+ - datatype extensions to support more object datatypes
+ - aliased datatypes & custom printing of types
+
 # scalars, iterables, and readers
  - querying conversions and converting to readers.
  - changing datatypes.
@@ -78,15 +82,17 @@
  - select, rotate, broadcast, slice
  - indexing bytecode generation
  - subrect copying optimization
+ - difference (and partial isomorphism) between tensors and readers.
 
 # datetimes
  * covered in separate document
- * datatype extensions to support more object datatypes.
- * aliased datatypes & custom printing
  * operators extend above.
+ * function list
+ * operator function list.
 
 # buffered-images
- * covered in separate document
+ * covered more thoroughly in separate document
+ * function list
 
 # Appendix
 ```clojure

@@ -24,29 +24,35 @@
  - native-buffer
  - list (more detail below)
  - fastcopying & times
+ - clone
+ - from-protocol
+ - interchangeable buffer types and protocol methods (java array, nio buffer)
 
 # extending the set of datatypes
  - datatype extensions to support more object datatypes
- - aliased datatypes & custom printing of types
+ - aliased datatypes & custom printing of new types
 
 # scalars, iterables, and readers
- - querying conversions and converting to readers.
- - changing datatypes.
+ - querying conversions and converting to readers
+ - changing datatypes
 
 # outline of tech.v2.datatype.functional - this is where cheatsheet is just too minimal
- * lazy reader/iterable function application.
- * Table of all functions aside from purely index space functions grouped by utility.
+ * lazy reader/iterable function application
+ * Table of all functions aside from purely index space functions grouped by utility
 
 # outline of statistics package
+ * function list
+ * descriptive stats
 
 # discussion of working in index space - arg* functions
- - By simply generating indexes we can create datasets that are infeasibly large with existing tech.
- - arggroup-by is one of the stars here.  It has excellent performance.
+ - By simply generating indexes we can create datasets that are infeasibly large with existing tech
+ - arggroup-by is one of the stars here - it has excellent performance.
 
 # discussion of efficient indexed parallelization primitives
  - why pmap is insufficient
- - why chunking needs to be done in userspace no the library.
+ - why chunking needs to be done in userspace no the library
  - [indexed-map-reduce](https://github.com/techascent/tech.parallel/blob/master/src/tech/parallel/for.clj#L10)
+   - one important corallary - ordered output in index space
 
 # index algebra
  * 'native' mapping (increment of exactly 1)
@@ -66,8 +72,8 @@
  - Very efficient for building up large datasets
  - Efficient conversion to tuple of array,offset,len
 
-# bitmaps
- - bitmaps are specialized designed structures that work extremely well in index space
+# bitmap sets
+ - bitmap sets are specialized designed structures that work extremely well in index space
  - [RoaringBitmap](https://roaringbitmap.org/) is a real gem here
  - protocol bitmapset functions
  - interaction with index algebra
@@ -75,20 +81,21 @@
 # ranges + range algebra
  - monotonic-range namespace
  - protocol methods around range algebra
+ - interaction with index algebra
 
 # tensors
- - dimensions, dimension analysis
+ - dimensions, dimension analysis, index algebra
  - row-major discussion, native hardware mapping for ranges
  - select, rotate, broadcast, slice
  - indexing bytecode generation
  - subrect copying optimization
- - difference (and partial isomorphism) between tensors and readers.
+ - difference (and partial isomorphism) between tensors and readers
 
 # datetimes
  * covered in separate document
- * operators extend above.
+ * operators extend above
  * function list
- * operator function list.
+ * operator function list
 
 # buffered-images
  * covered more thoroughly in separate document

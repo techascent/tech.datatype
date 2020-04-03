@@ -59,13 +59,14 @@
  * update - use a sparse map to replace just some of the values in a reader
 
 # Fastutil Lists
- - Very efficient for building up large datasets.
- - Efficient conversion to tuple of array,offset,len.
+ - Very efficient for building up large datasets
+ - Efficient conversion to tuple of array,offset,len
 
 # bitmaps
- - bitmaps are specialized designed structures that work extremely well in index space.
- - [RoaringBitmap](https://roaringbitmap.org/) is a real gem here.
- - protocol range functions
+ - bitmaps are specialized designed structures that work extremely well in index space
+ - [RoaringBitmap](https://roaringbitmap.org/) is a real gem here
+ - protocol bitmapset functions
+ - interaction with index algebra
 
 # ranges + range algebra
  - monotonic-range namespace

@@ -14,4 +14,5 @@
  :aliases
  {:test {:extra-deps
          {org.bytedeco.javacpp-presets/opencv-platform {:mvn/version "4.0.1-1.4.4"}
-          criterium {:mvn/version "0.4.5"}}}}}
+          criterium {:mvn/version "0.4.5"}
+          com.clojure-goes-fast/clj-memory-meter {:mvn/version "0.1.0"}}}}}

@@ -145,11 +145,8 @@
     `(unary-op/make-unary-op
       (keyword (format "%s-get-%s" (name ~datatype) (name ~opname)))
       :int64
-      (casting/datatype->unchecked-cast-fn
-       :unknown
-       ~(casting/datatype->host-type datatype)
-       (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-           (.getLong ~temporal-field))))))
+      (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+          (.getLong ~temporal-field)))))
 
 
 (defmacro ^:private make-packed-getters
@@ -163,11 +160,8 @@
              (unary-op/make-unary-op
               (keyword (format "%s-get-epoch-milliseconds" (name ~datatype)))
               :int64
-              (casting/datatype->unchecked-cast-fn
-               :unknown
-               ~(casting/datatype->host-type datatype)
-               (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-                   (dtype-dt/->milliseconds-since-epoch))))})))
+              (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+                  (dtype-dt/->milliseconds-since-epoch)))})))
 
 
 (def java-time-ops

@@ -2,10 +2,9 @@
     (:require [tech.v2.datatype.protocols :as dtype-proto]
               [tech.v2.datatype.base :as dtype-base]
               [tech.v2.datatype.casting :as casting]
-              [tech.v2.datatype.sparse.protocols :as sparse-proto]
-              [tech.v2.datatype.sparse.reader :as sparse-reader]
+              ;; [tech.v2.datatype.sparse.protocols :as sparse-proto]
+              ;; [tech.v2.datatype.sparse.reader :as sparse-reader]
               [tech.v2.tensor.dimensions :as dims]
-              [tech.v2.tensor.dimensions.analytics :as dims-analytics]
               [tech.v2.tensor.dimensions.shape :as shape]
               [tech.v2.datatype.readers.indexed :as indexed-reader]
               [tech.v2.datatype.writers.indexed :as indexed-writer]
@@ -20,7 +19,6 @@
               [tech.v2.tensor.typecast :as tens-typecast]
               [tech.v2.tensor.protocols :as tens-proto]
               [tech.v2.libs.blas :as blas]
-              [tech.parallel.for :as parallel-for]
               [tech.jna :as jna])
     (:import [tech.v2.datatype
               IndexingSystem$Backward
@@ -29,7 +27,8 @@
              [com.sun.jna Pointer]
              [java.io Writer]
              [java.util List]
-             [clojure.lang Indexed Counted]))
+             [clojure.lang Indexed Counted
+              IObj IPersistentMap]))
 
 
 (set! *unchecked-math* :warn-on-boxed)
@@ -93,7 +92,7 @@
            global-strides)))
 
 
-(defn- sparse-reader->index-seq
+#_(defn- sparse-reader->index-seq
   [sparse-reader shape & [strides]]
   (let [strides (or strides (dims-analytics/shape-ary->strides shape))]
     (->> (when sparse-reader
@@ -360,7 +359,7 @@
 
 (declare slice construct-tensor select)
 
-(deftype Tensor [buffer dimensions buffer-type]
+(deftype Tensor [buffer dimensions buffer-type ^IPersistentMap metadata]
    dtype-proto/PDatatype
    (get-datatype [item] (dtype-base/get-datatype buffer))
 
@@ -441,9 +440,9 @@
             (== (dtype/ecount item) (long length)))
        item
        :else
-         (let [buf-rdr (-> (dims/->global->local dimensions)
-                           (dtype-proto/sub-buffer offset length))]
-           (dtype/indexed-reader buf-rdr buffer))))
+       (let [buf-rdr (-> (dims/->global->local dimensions)
+                         (dtype-proto/sub-buffer offset length))]
+         (dtype/indexed-reader buf-rdr buffer))))
 
 
    dtype-proto/PSetConstant
@@ -451,15 +450,17 @@
      (if (simple-dimensions? dimensions)
        (dtype-proto/set-constant! buffer offset value elem-count)
        (if (= :sparse (dtype/buffer-type buffer))
-         (dtype-proto/write-indexes! buffer
-                                     (-> (dimensions->index-reader dimensions)
-                                         (dtype-base/sub-buffer offset elem-count))
-                                     (sparse-reader/const-sparse-reader
-                                      value
-                                      (dtype-base/get-datatype item)
-                                      elem-count)
-                                     {:indexes-in-order?
-                                      (dims/access-increasing? dimensions)})
+         (do
+           (throw (Exception. "disabled for now"))
+           #_(dtype-proto/write-indexes! buffer
+                                       (-> (dimensions->index-reader dimensions)
+                                           (dtype-base/sub-buffer offset elem-count))
+                                       (sparse-reader/const-sparse-reader
+                                        value
+                                        (dtype-base/get-datatype item)
+                                        elem-count)
+                                       {:indexes-in-order?
+                                        (dims/access-increasing? dimensions)}))
          (dtype-proto/set-constant! (indexed-writer/make-indexed-writer
                                      (dimensions->index-reader dimensions)
                                      buffer
@@ -624,13 +625,17 @@
    (nth [item idx]
      (if (= 1 (count (:shape dimensions)))
        (.read (typecast/datatype->reader :object (dtype/->reader item :object)) idx)
-       (apply select item idx (repeat (dec (count (:shape dimensions)))
-                                      :all))))
+       (.read ^ObjectReader (slice item 1) idx)))
    (nth [item idx def-val]
     (let [shape (dims/shape dimensions)]
       (if (< idx (long (first shape)))
         (nth item idx)
         def-val)))
+
+   IObj
+   (meta [item] metadata)
+   (withMeta [item new-meta]
+     (Tensor. buffer dimensions buffer-type new-meta))
 
    Object
    (toString [item]
@@ -640,10 +645,27 @@
      (tens-proto/print-tensor item)))
 
 
+(defn- ensure-persistent-map
+  [metadata]
+  (when (instance? IPersistentMap metadata)
+    metadata
+    (into {} metadata)))
+
+
 (defn construct-tensor
-  [buffer dimensions & [buffer-type]]
-  (let [buffer-type (or buffer-type :tensor)]
-    (Tensor. buffer dimensions buffer-type)))
+  (^Tensor [buffer dimensions buffer-type metadata]
+   (let [buffer-type (or buffer-type :tensor)]
+     (Tensor. buffer dimensions buffer-type
+              (ensure-persistent-map metadata))))
+  (^Tensor [buffer dimensions buffer-type]
+   (construct-tensor buffer dimensions buffer-type {}))
+  (^Tensor [buffer dimensions]
+   (construct-tensor buffer dimensions nil {}))
+  (^Tensor [buffer]
+   (if (instance? Tensor buffer)
+     buffer
+     (construct-tensor buffer (dims/dimensions (dtype/shape buffer))
+                       nil {}))))
 
 
 (defn tensor?
@@ -767,9 +789,11 @@
   [tens]
   (let [buffer-type (dtype/buffer-type (tens-proto/buffer tens))
         new-tens (if (= :sparse buffer-type)
-                   (construct-tensor
-                    (sparse-proto/as-sparse tens)
-                    (dims/dimensions (dtype/shape tens)))
+                   (do
+                     (throw (Exception. "Disabled for now"))
+                     #_(construct-tensor
+                      (sparse-proto/as-sparse tens)
+                      (dims/dimensions (dtype/shape tens))))
                    ;;force a potentially deep reader chain.
                    (if (or (not (simple-dimensions? (tens-proto/dimensions tens)))
                            ;;In the case of a reader chain, we will no longer
@@ -804,6 +828,17 @@
 (defn reshape
   [tens new-shape]
   (let [tens (ensure-tensor tens)
+        ;;Reshape only works on tensors with simple dimensions.  So if we detect
+        ;;complex dimensions then we have to reform our underlying buffer and create
+        ;;a new tensor that we can then actually call reshape on.
+        tens-dims (tensor->dimensions tens)
+        tens (if-not (dims/native? tens-dims)
+               (let [buf-rdr (dims/->global->local tens-dims)
+                     new-buffer (indexed-reader/make-indexed-reader
+                                 buf-rdr (tensor->buffer tens))]
+                 (construct-tensor new-buffer (dims/dimensions
+                                               (dims/shape tens-dims))))
+               tens)
         new-dims (dims/in-place-reshape (tens-proto/dimensions tens)
                                         new-shape)
         buffer-ecount (dims/buffer-ecount new-dims)
@@ -1327,7 +1362,8 @@
 
 (defmethod matrix-matrix-dispatch [:sparse :sparse :* :+]
   [alpha lhs rhs bin-op _reduce-op options]
-  (let [op-datatype (or (:datatype options)
+  (throw (Exception. "Sparse is disabled for now"))
+  #_(let [op-datatype (or (:datatype options)
                         (dtype/get-datatype lhs))
         [lhs-shape rhs-shape] (mmul-check lhs rhs)
         ;;Simplify as much as possible.

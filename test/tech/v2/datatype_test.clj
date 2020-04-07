@@ -490,3 +490,8 @@
 
 (deftest persistent-vectors-are-not-writers
   (is (not (dtype/writer? [1 2 3]))))
+
+
+(deftest is-mathematical-integer?
+  (is (= [true false true true false]
+         (vec (dfn/is-mathematical-integer? [1.0 1.1 1000 1.26e4 1.26e-3])))))

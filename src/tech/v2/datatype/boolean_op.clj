@@ -7,7 +7,8 @@
             [tech.v2.datatype.unary-op :as dtype-unary]
             [tech.v2.datatype.binary-op :as dtype-binary]
             [tech.v2.datatype.base :as dtype-base]
-            [tech.v2.datatype.iterable.masked :as masked-iterable])
+            [tech.v2.datatype.iterable.masked :as masked-iterable]
+            [tech.v2.datatype.double-ops :as double-ops])
   (:import [tech.v2.datatype
             BooleanOp$ByteBinary
             BooleanOp$ShortBinary
@@ -823,7 +824,7 @@
   ([opcode]
    `(make-float-double-boolean-unary-op ~opcode :unnamed)))
 
-9.
+
 (def builtin-boolean-unary-ops
   {:not (make-boolean-unary-op :boolean (not x))
    :nan?
@@ -866,6 +867,46 @@
      (invoke [item x]
        (Double/isInfinite (double x))))
 
+   :is-finite?
+   (reify
+     dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [_] true)
+     (->binary-boolean-op [item options]
+       (let [{datatype :datatype} options
+             host-dtype (casting/safe-flatten datatype)]
+         (-> (case host-dtype
+               :int8 (make-boolean-binary-op :int8 true)
+               :int16 (make-boolean-binary-op :int16 true)
+               :int32 (make-boolean-binary-op :int32 true)
+               :int64 (make-boolean-binary-op :int64 true)
+               :float32 (make-boolean-binary-op :float32 (Float/isFinite x))
+               :float64 (make-boolean-binary-op :float64 (double-ops/is-finite? x))
+               :object (make-boolean-binary-op :object (double-ops/is-finite?
+                                                        (double x))))
+             (dtype-proto/->binary-boolean-op options))))
+     IFn
+     (invoke [item x]
+       (double-ops/is-finite? (double x))))
+
+   :is-mathematical-integer?
+   (reify
+     dtype-proto/PToBinaryBooleanOp
+     (convertible-to-binary-boolean-op? [_] true)
+     (->binary-boolean-op [item options]
+       (let [{datatype :datatype} options
+             host-dtype (casting/safe-flatten datatype)]
+         (-> (case host-dtype
+               :int8 (make-boolean-binary-op :int8 true)
+               :int16 (make-boolean-binary-op :int16 true)
+               :int32 (make-boolean-binary-op :int32 true)
+               :int64 (make-boolean-binary-op :int64 true)
+               :float32 (make-boolean-binary-op :float32 (double-ops/is-mathematical-integer? (double x)))
+               :float64 (make-boolean-binary-op :float64 (double-ops/is-mathematical-integer? x))
+               :object (make-boolean-binary-op :object (double-ops/is-mathematical-integer? (double x))))
+             (dtype-proto/->binary-boolean-op options))))
+     IFn
+     (invoke [item x]
+       (double-ops/is-mathematical-integer? (double x))))
    :invalid?
    (reify
      dtype-proto/PToBinaryBooleanOp

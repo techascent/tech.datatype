@@ -4,7 +4,8 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.nio-access :as nio-access]
-            [tech.v2.datatype.reader :as reader])
+            [tech.v2.datatype.reader :as reader]
+            [tech.v2.datatype.double-ops :refer [get-significand]])
   (:import [tech.v2.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
@@ -467,6 +468,7 @@
         (make-double-unary-op :ceil (Math/ceil x))
         (make-double-unary-op :round (unchecked-double (Math/round (double x))))
         (make-double-unary-op :rint (Math/rint x))
+        (make-double-unary-op :get-significand (unchecked-double (get-significand x)))
         (make-numeric-object-unary-op :- (- x))
         (make-float-double-unary-op :logistic
                                     (/ 1.0

@@ -451,6 +451,8 @@
          (subList [this start-offset end-offset]
            (make-typed-list (.subList src-list start-offset end-offset)
                             dst-dtype))
+         (toArray [this]
+           (.toArray src-list))
          RandomAccess
          Iterable
          (iterator [this]

@@ -59,7 +59,9 @@
    :hours ChronoField/HOUR_OF_DAY
    :minutes ChronoField/MINUTE_OF_HOUR
    :seconds ChronoField/SECOND_OF_MINUTE
-   :epoch-seconds ChronoField/INSTANT_SECONDS
+   ;;This isn't as useful because logical things (like instances) don't support
+   ;;this field but do support epoch milliseconds.
+   ;; :epoch-seconds ChronoField/INSTANT_SECONDS
    :milliseconds ChronoField/MILLI_OF_SECOND})
 
 

@@ -90,6 +90,41 @@
                (dtype/get-datatype))))))
 
 
+(deftest epoch-seconds-and-millis-work-on-local-date-time-and-local-date
+  (let [item-seq (repeat 5 (dtype-dt/local-date-time))
+        packed-seq (dtype-dt/pack item-seq)]
+    (is (= :epoch-milliseconds
+           (-> (dtype-dt-ops/get-epoch-milliseconds item-seq)
+               (dtype/get-datatype))))
+    (is (= :epoch-seconds
+           (-> (dtype-dt-ops/get-epoch-seconds item-seq)
+               (dtype/get-datatype))))
+    (is (every? number? (dtype-dt-ops/get-epoch-milliseconds item-seq)))
+    (is (= :epoch-milliseconds
+           (-> (dtype-dt-ops/get-epoch-milliseconds packed-seq)
+               (dtype/get-datatype))))
+    (is (every? number? (dtype-dt-ops/get-epoch-milliseconds packed-seq)))
+    (is (= :epoch-seconds
+           (-> (dtype-dt-ops/get-epoch-seconds packed-seq)
+               (dtype/get-datatype)))))
+  (let [item-seq (repeat 5 (dtype-dt/local-date))
+        packed-seq (dtype-dt/pack item-seq)]
+    (is (= :epoch-milliseconds
+           (-> (dtype-dt-ops/get-epoch-milliseconds item-seq)
+               (dtype/get-datatype))))
+    (is (= :epoch-seconds
+           (-> (dtype-dt-ops/get-epoch-seconds item-seq)
+               (dtype/get-datatype))))
+    (is (every? number? (dtype-dt-ops/get-epoch-seconds item-seq)))
+    (is (= :epoch-milliseconds
+           (-> (dtype-dt-ops/get-epoch-milliseconds packed-seq)
+               (dtype/get-datatype))))
+    (is (= :epoch-seconds
+           (-> (dtype-dt-ops/get-epoch-seconds packed-seq)
+               (dtype/get-datatype))))
+    (is (every? number? (dtype-dt-ops/get-epoch-seconds packed-seq)))))
+
+
 (deftest epoch-times
   (let [start-zdt (dtype-dt/milliseconds-since-epoch->zoned-date-time 0)
         now-zdt (dtype-dt/zoned-date-time)]

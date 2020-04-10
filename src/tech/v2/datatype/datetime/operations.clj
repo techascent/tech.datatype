@@ -566,11 +566,11 @@
   (let [lhs-argtype (arg->arg-type lhs)
         lhs-dtype (collapse-date-datatype lhs)
         lhs (if (dtype-dt/packed-datatype? lhs-dtype)
-              (dtype-proto/->reader lhs {:datatype :int64})
+              (dtype-proto/set-datatype lhs :int64)
               lhs)
         unary-op (get-in java-time-ops [lhs-dtype :int64-getters
                                         unary-op-name])
-        result-dtype (if (#{:epoch-seconds :epoch-milliseconds} unary-op-name)
+        result-dtype (if (= unary-op-name :epoch-milliseconds)
                        unary-op-name
                        :int64)]
     (when-not unary-op
@@ -797,6 +797,14 @@
 (defn get-epoch-milliseconds
   [item]
   (perform-int64-getter item :epoch-milliseconds))
+
+
+(defn get-epoch-seconds
+  [item]
+  (-> (dfn/quot
+       (perform-int64-getter item :epoch-milliseconds)
+       (dtype-dt/milliseconds-in-second))
+      (dtype-proto/set-datatype :epoch-seconds)))
 
 
 (defn get-epoch-minutes

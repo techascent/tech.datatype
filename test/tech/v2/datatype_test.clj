@@ -54,7 +54,7 @@
       (throw e))))
 
 
-(def create-functions [:typed-buffer :native-buffer :list :sparse])
+(def create-functions [:typed-buffer :native-buffer :list])
 
 
 (deftest generalized-copy-test

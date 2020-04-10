@@ -41,12 +41,13 @@
   [reader-datatype intermediate-datatype buffer-datatype buffer-type
    unchecked? src-item buffer buffer-pos
    advertised-datatype]
-  `(let [src-item# ~src-item
-         buffer# ~buffer
-         buffer-pos# ~buffer-pos
-         n-elems# (ecount src-item#)
-         unchecked?# ~unchecked?]
-     (if unchecked?#
+  (let [cast-fn (if unchecked?
+                  'unchecked-full-cast
+                  'checked-full-write-cast)]
+    `(let [src-item# ~src-item
+           buffer# ~buffer
+           buffer-pos# ~buffer-pos
+           n-elems# (ecount src-item#)]
        (reify
          ~(typecast/datatype->reader-type reader-datatype)
          (getDatatype [reader#] ~advertised-datatype)
@@ -54,8 +55,8 @@
          (read [reader# idx#]
            (-> (cls-type->read-fn ~buffer-type ~buffer-datatype buffer#
                                   idx# buffer-pos#)
-               (unchecked-full-cast ~buffer-datatype ~intermediate-datatype
-                                    ~reader-datatype)))
+               (~cast-fn ~buffer-datatype ~intermediate-datatype
+                ~reader-datatype)))
          dtype-proto/PToBackingStore
          (->backing-store-seq [reader#]
            (dtype-proto/->backing-store-seq src-item#))
@@ -84,64 +85,15 @@
          dtype-proto/PClone
          (clone [reader#]
            (-> (dtype-proto/clone buffer#)
-               (dtype-proto/->reader {:datatype ~intermediate-datatype
-                                      :unchecked? unchecked?#})))
+               (dtype-proto/->reader {:datatype ~advertised-datatype
+                                      :unchecked? ~unchecked?})))
          dtype-proto/PBuffer
          (sub-buffer [buffer# offset# length#]
            (-> (dtype-proto/sub-buffer src-item# offset# length#)
-               (dtype-proto/->reader {:datatype ~intermediate-datatype
-                                      :unchecked? unchecked?#})))
+               (dtype-proto/->reader {:datatype ~advertised-datatype
+                                      :unchecked? ~unchecked?})))
          dtype-proto/PSetConstant
          (set-constant! [item# offset# value# elem-count#]
-           (dtype-proto/set-constant! src-item# offset#
-                                      (casting/cast value# ~intermediate-datatype)
-                                      elem-count#))
-         dtype-proto/PConvertibleToBinaryReader
-         (convertible-to-binary-reader? [rdr#]
-           (dtype-proto/convertible-to-binary-reader? buffer#))
-         (->binary-reader [rdr# options#]
-           (dtype-proto/->binary-reader buffer# options#)))
-       (reify
-         ~(typecast/datatype->reader-type reader-datatype)
-         (getDatatype [reader#] ~advertised-datatype)
-         (lsize [reader#] n-elems#)
-         (read [reader# idx#]
-           (-> (cls-type->read-fn ~buffer-type ~buffer-datatype
-                                  buffer# idx# buffer-pos#)
-               (checked-full-write-cast ~buffer-datatype ~intermediate-datatype
-                                        ~reader-datatype)))
-         dtype-proto/PToBackingStore
-         (->backing-store-seq [reader#]
-           (dtype-proto/->backing-store-seq src-item#))
-         dtype-proto/PToNioBuffer
-         (convertible-to-nio-buffer? [reader#]
-           (dtype-proto/nio-convertible? src-item#))
-         (->buffer-backing-store [reader#]
-           (dtype-proto/as-nio-buffer src-item#))
-         dtype-proto/PToList
-         (convertible-to-fastutil-list? [reader#]
-           (dtype-proto/list-convertible? src-item#))
-         (->list-backing-store [reader#]
-           (dtype-proto/as-list src-item#))
-         dtype-proto/PToJNAPointer
-         (convertible-to-data-ptr? [reader#]
-           (dtype-proto/convertible-to-data-ptr? src-item#))
-         (->jna-ptr [reader#]
-           (dtype-proto/->jna-ptr src-item#))
-
-         dtype-proto/PToArray
-         (->sub-array [reader#]
-           (dtype-proto/->sub-array src-item#))
-         (->array-copy [reader#]
-           (dtype-proto/->array-copy src-item#))
-
-         dtype-proto/PBuffer
-         (sub-buffer [reader# offset# length#]
-           (-> (dtype-proto/sub-buffer src-item# offset# length#)
-               (dtype-proto/->reader {:datatype ~intermediate-datatype
-                                      :unchecked? unchecked?#})))
-         dtype-proto/PSetConstant
-         (set-constant! [reader# offset# value# elem-count#]
            (dtype-proto/set-constant! src-item# offset#
                                       (casting/cast value# ~intermediate-datatype)
                                       elem-count#))
@@ -165,19 +117,19 @@
                  (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
                                                                   buffer#)
                        buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
-                   (if (== 0 buffer-pos#)
+                   (if unchecked?#
                      (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
                                               ~buffer-datatype
                                               ~(typecast/datatype->buffer-type
                                                 buffer-datatype)
-                                              unchecked?# src-item#
-                                              buffer# 0
+                                              true src-item#
+                                              buffer# buffer-pos#
                                               advertised-dtype#)
                      (make-buffer-reader-impl ~reader-datatype ~intermediate-datatype
                                               ~buffer-datatype
                                               ~(typecast/datatype->buffer-type
                                                 buffer-datatype)
-                                              unchecked?# src-item#
+                                              false src-item#
                                               buffer# buffer-pos#
                                               advertised-dtype#))))])]
         (into {})))
@@ -234,7 +186,7 @@
    & [unchecked?]]
   (let [list-buffer (dtype-proto/->list-backing-store item)
         buffer-dtype (dtype-proto/get-datatype list-buffer)
-        access-map {:reader-datatype reader-datatype
+        access-map {:reader-datatype (casting/flatten-datatype reader-datatype)
                     :intermediate-datatype (casting/flatten-datatype intermediate-datatype)
                     :buffer-datatype buffer-dtype}
         list-reader-fn (get list-reader-table access-map)]

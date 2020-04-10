@@ -38,55 +38,18 @@
    unchecked?
    src-item
    advertised-datatype]
-  `(if ~unchecked?
-     (reify
+  (let [cast-fn (if unchecked?
+                  'unchecked-full-cast
+                  'checked-full-write-cast)]
+    `(reify
        ~writer-type
        (getDatatype [writer#] ~advertised-datatype)
        (lsize [writer#] (dtype-shape/ecount ~src-item))
        (write [writer# idx# value#]
          (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
-          (unchecked-full-cast value# ~writer-datatype
-                               ~intermediate-datatype
-                               ~buffer-datatype)))
-       dtype-proto/PToNioBuffer
-       (convertible-to-nio-buffer? [writer#]
-         (dtype-proto/nio-convertible? ~src-item))
-       (->buffer-backing-store [writer#]
-         (dtype-proto/as-nio-buffer ~src-item))
-       dtype-proto/PToList
-       (convertible-to-fastutil-list? [writer#]
-         (dtype-proto/list-convertible? ~src-item))
-       (->list-backing-store [writer#]
-         (dtype-proto/as-list ~src-item))
-       dtype-proto/PToJNAPointer
-         (convertible-to-data-ptr? [writer#]
-           (dtype-proto/convertible-to-data-ptr? ~src-item))
-         (->jna-ptr [writer#]
-           (dtype-proto/->jna-ptr ~src-item))
-       dtype-proto/PToArray
-       (->sub-array [reader#]
-         (dtype-proto/->sub-array ~src-item))
-       (->array-copy [reader#]
-         (dtype-proto/->array-copy ~src-item))
-
-       dtype-proto/PBuffer
-       (sub-buffer [buffer# offset# length#]
-         (-> (dtype-proto/sub-buffer ~src-item offset# length#)
-             (dtype-proto/->writer {:datatype ~intermediate-datatype
-                                    :unchecked? ~unchecked?})))
-       dtype-proto/PSetConstant
-       (set-constant! [item# offset# value# elem-count#]
-         (dtype-proto/set-constant! ~src-item offset#
-                                    (casting/cast value# ~intermediate-datatype)
-                                    elem-count#)))
-     (reify ~writer-type
-       (getDatatype [writer#] ~advertised-datatype)
-       (lsize [writer#] (dtype-shape/ecount ~src-item))
-       (write [writer# idx# value#]
-         (cls-type->write-fn ~buffer-type ~buffer idx# ~buffer-pos
-                             (checked-full-write-cast value# ~writer-datatype
-                                                      ~intermediate-datatype
-                                                      ~buffer-datatype)))
+                             (~cast-fn value# ~writer-datatype
+                              ~intermediate-datatype
+                              ~buffer-datatype)))
        dtype-proto/PToNioBuffer
        (convertible-to-nio-buffer? [writer#]
          (dtype-proto/nio-convertible? ~src-item))
@@ -99,10 +62,9 @@
          (dtype-proto/as-list ~src-item))
        dtype-proto/PToJNAPointer
        (convertible-to-data-ptr? [writer#]
-           (dtype-proto/convertible-to-data-ptr? ~src-item))
+         (dtype-proto/convertible-to-data-ptr? ~src-item))
        (->jna-ptr [writer#]
          (dtype-proto/->jna-ptr ~src-item))
-
        dtype-proto/PToArray
        (->sub-array [reader#]
          (dtype-proto/->sub-array ~src-item))
@@ -112,12 +74,12 @@
        dtype-proto/PBuffer
        (sub-buffer [buffer# offset# length#]
          (-> (dtype-proto/sub-buffer ~src-item offset# length#)
-             (dtype-proto/->writer {:datatype ~intermediate-datatype
+             (dtype-proto/->writer {:datatype ~advertised-datatype
                                     :unchecked? ~unchecked?})))
        dtype-proto/PSetConstant
        (set-constant! [item# offset# value# elem-count#]
          (dtype-proto/set-constant! ~src-item offset#
-                                    (casting/cast value# ~intermediate-datatype)
+                                    (casting/cast value# ~advertised-datatype)
                                     elem-count#)))))
 
 
@@ -136,16 +98,27 @@
                    (let [buffer# (typecast/datatype->buffer-cast-fn
                                   ~buffer-datatype buffer#)
                          buffer-pos# (datatype->pos-fn ~buffer-datatype buffer#)]
-                     (make-buffer-writer-impl
-                      ~(typecast/datatype->writer-type writer-datatype)
-                      ~(typecast/datatype->buffer-type buffer-datatype)
-                      buffer# buffer-pos#
-                      ~writer-datatype
-                      ~intermediate-datatype
-                      ~buffer-datatype
-                      unchecked?#
-                      src-item#
-                      datatype#)))]))]
+                     (if unchecked?#
+                       (make-buffer-writer-impl
+                        ~(typecast/datatype->writer-type writer-datatype)
+                        ~(typecast/datatype->buffer-type buffer-datatype)
+                        buffer# buffer-pos#
+                        ~writer-datatype
+                        ~intermediate-datatype
+                        ~buffer-datatype
+                        true
+                        src-item#
+                        datatype#)
+                       (make-buffer-writer-impl
+                        ~(typecast/datatype->writer-type writer-datatype)
+                        ~(typecast/datatype->buffer-type buffer-datatype)
+                        buffer# buffer-pos#
+                        ~writer-datatype
+                        ~intermediate-datatype
+                        ~buffer-datatype
+                        false
+                        src-item#
+                        datatype#))))]))]
         (into {})))
 
 

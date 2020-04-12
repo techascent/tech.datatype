@@ -25,7 +25,7 @@
             LocalDate LocalDateTime LocalTime
             OffsetTime]
            [java.time.temporal TemporalUnit ChronoUnit
-            Temporal ChronoField]
+            Temporal TemporalAmount ChronoField]
            [tech.v2.datatype
             PackedInstant PackedLocalDate
             PackedLocalTime PackedLocalDateTime
@@ -70,7 +70,22 @@
                    (make-temporal-chrono-plus k v)]
                   [(keyword (str "minus-" (name k)))
                    (make-temporal-chrono-minus k v)]]))
-       (into {})))
+       (into {} )))
+
+
+(def ^:private temporal-amount-ops
+  {:plus-temporal-amount
+   (binary-op/make-binary-op
+    :plus-temporal-amount
+    :object
+    (when x
+      (.plus ^Temporal x ^TemporalAmount y)))
+   :minus-temporal-amount
+   (binary-op/make-binary-op
+    :minus-temporal-amount
+    :object
+    (when x
+      (.minus ^Temporal x ^TemporalAmount y)))})
 
 
 (defn make-temporal-long-getter
@@ -139,6 +154,31 @@
         (into {})))
 
 
+(defmacro ^:private make-packed-temporal-numeric-ops
+  [datatype]
+  (let [src-dtype (dtype-dt/packed-type->unpacked-type)]
+    {:plus-temporal-amount
+     `(binary-op/make-binary-op
+       :plus-temporal-amount
+       ~datatype
+       (casting/datatype->unchecked-cast-fn
+        :unknown
+        ~(casting/datatype->host-type datatype)
+        (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+            (.plus (dtype-dt/as-temporal-amount ~'y))
+            (dtype-dt/compile-time-pack ~src-dtype))))
+     :minus-temporal-amount
+     `(binary-op/make-binary-op
+       :minus-temporal-amount
+       ~datatype
+       (casting/datatype->unchecked-cast-fn
+        :unknown
+        ~(casting/datatype->host-type datatype)
+        (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+            (.minus (dtype-dt/as-temporal-amount ~'y))
+            (dtype-dt/compile-time-pack ~src-dtype))))}))
+
+
 (defmacro ^:private make-packed-temporal-getter
   [datatype opname temporal-field]
   (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
@@ -168,6 +208,7 @@
   {:instant
    {:numeric-ops temporal-numeric-ops
     :int64-getters temporal-getters
+    :temporal-amount-ops temporal-amount-ops
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :instant-before :instant
@@ -203,6 +244,7 @@
    :zoned-date-time
    {:numeric-ops temporal-numeric-ops
     :int64-getters temporal-getters
+    :temporal-amount-ops temporal-amount-ops
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :zoned-date-time-before :zoned-date-time
@@ -238,6 +280,7 @@
    :offset-date-time
    {:numeric-ops temporal-numeric-ops
     :int64-getters temporal-getters
+    :temporal-amount-ops temporal-amount-ops
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :offset-date-time-before :offset-date-time
@@ -273,6 +316,7 @@
    :local-date-time
    {:numeric-ops temporal-numeric-ops
     :int64-getters temporal-getters
+    :temporal-amount-ops temporal-amount-ops
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :local-date-time-before :local-date-time
@@ -539,7 +583,8 @@
 
 (def date-datatypes #{:instant :local-date :local-date-time :local-time
                       :packed-instant :packed-local-date :packed-local-date-time
-                      :packed-local-time :zoned-date-time :offset-date-time})
+                      :packed-local-time :zoned-date-time :offset-date-time
+                      :duration})
 
 (defn- date-datatype?
   [dtype]
@@ -643,6 +688,65 @@
         _ (when-not any-number?
             (throw (Exception. (format "Arguments must have numeric type: %s, %s"
                                        lhs-dtype rhs-dtype))))
+        _ (when-not any-date-datatype?
+            (throw (Exception. (format "Arguments not datetime related: %s, %s"
+                                       lhs-dtype rhs-dtype))))
+        ;;There is an assumption that the arguments are commutative and the left
+        ;;hand side is the actual arg.
+        numeric-arg rhs
+        date-time-arg lhs
+        date-time-dtype lhs-dtype
+        num-op (get-in java-time-ops [date-time-dtype :numeric-ops opname])]
+    (when-not num-op
+      (throw (Exception. (format "Could not find numeric op %s for type %s"
+                                 opname date-time-dtype))))
+    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+
+
+(defn temporal-amount-datatype?
+  [dtype]
+  (= dtype :duration))
+
+
+(defn- perform-commutative-temporal-amount-op
+  [lhs rhs opname]
+  (let [lhs-dtype (collapse-date-datatype lhs)
+        rhs-dtype (collapse-date-datatype rhs)
+        any-number? (or (temporal-amount-datatype? lhs-dtype)
+                        (temporal-amount-datatype? rhs-dtype))
+        any-date-datatype? (or (date-datatype? lhs-dtype)
+                               (date-datatype? rhs-dtype))
+        _ (when-not any-number?
+            (throw (Exception. (format
+                                "Arguments must have temporal amount type: %s, %s"
+                                lhs-dtype rhs-dtype))))
+        _ (when-not any-date-datatype?
+            (throw (Exception. (format "Arguments not datetime related: %s, %s"
+                                       lhs-dtype rhs-dtype))))
+        ;;There is an assumption that the arguments are commutative and the left
+        ;;hand side is the actual arg.
+        lhs-num? (temporal-amount-datatype? lhs-dtype)
+        numeric-arg (if lhs-num? lhs rhs)
+        date-time-arg (if lhs-num? rhs lhs)
+        date-time-dtype (if lhs-num? rhs-dtype lhs-dtype)
+        num-op (get-in java-time-ops [date-time-dtype :numeric-ops opname])]
+    (when-not num-op
+      (throw (Exception. (format "Could not find numeric op %s for type %s"
+                                 opname date-time-dtype))))
+    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+
+
+(defn- perform-non-commutative-temporal-amount-op
+  "only the left side can be a datatype"
+  [lhs rhs opname]
+  (let [lhs-dtype (collapse-date-datatype lhs)
+        rhs-dtype (collapse-date-datatype rhs)
+        any-number? (temporal-amount-datatype? rhs-dtype)
+        any-date-datatype? (date-datatype? lhs-dtype)
+        _ (when-not any-number?
+            (throw (Exception. (format
+                                "Arguments must have temporal amount type: %s, %s"
+                                lhs-dtype rhs-dtype))))
         _ (when-not any-date-datatype?
             (throw (Exception. (format "Arguments not datetime related: %s, %s"
                                        lhs-dtype rhs-dtype))))
@@ -847,6 +951,16 @@
 
 
 (declare-plus-minus-ops)
+
+
+(defn plus-duration
+  [lhs rhs]
+  (perform-commutative-temporal-amount-op lhs rhs :plus-duration))
+
+
+(defn minus-duration
+  [lhs rhs]
+  (perform-non-commutative-temporal-amount-op lhs rhs :plus-duration))
 
 
 (defn <

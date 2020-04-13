@@ -708,10 +708,8 @@
   (-> (unpack-duration)
       (duration->nanoseconds)))
 
-(def packed-aliases (->> packable-datatypes
-                         (map (fn [name-kwd]
-                                (keyword (format "packed-%s"
-                                                 (name name-kwd)))))
+(def packable-datatypes (set (keys unpacked-type->packed-type-table)))
+(def packed-aliases (->> (vals unpacked-type->packed-type-table)
                          set))
 
 

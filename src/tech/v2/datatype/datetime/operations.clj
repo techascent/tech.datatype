@@ -495,7 +495,7 @@
               (pmath/< x y)))
      :>= (boolean-op/make-boolean-binary-op
           :gte :packed-duration
-          (or (== x y)
+          (or (pmath/== x y)
               (pmath/> x y)))
      :== (boolean-op/make-boolean-binary-op
           :instant-== :packed-duration
@@ -603,10 +603,10 @@
     arg))
 
 
-(def date-datatypes #{:instant :local-date :local-date-time :local-time
-                      :packed-instant :packed-local-date :packed-local-date-time
-                      :packed-local-time :zoned-date-time :offset-date-time
-                      :duration})
+(def date-datatypes (set
+                     (concat
+                      (flatten (seq dtype-dt/packed-type->unpacked-type-table))
+                      [:zoned-date-time :offset-date-time])))
 
 (defn- date-datatype?
   [dtype]
@@ -727,7 +727,9 @@
 
 (defn temporal-amount-datatype?
   [dtype]
-  (= dtype :duration))
+  (or
+   (= dtype :duration)
+   (= dtype :packed-duration)))
 
 
 (defn- perform-commutative-temporal-amount-op
@@ -749,6 +751,10 @@
         ;;hand side is the actual arg.
         lhs-num? (temporal-amount-datatype? lhs-dtype)
         numeric-arg (if lhs-num? lhs rhs)
+        numeric-arg (if (dtype-dt/packed-datatype?
+                         (dtype-base/get-datatype numeric-arg))
+                      (dtype-dt/unpack numeric-arg)
+                      numeric-arg)
         date-time-arg (if lhs-num? rhs lhs)
         date-time-dtype (if lhs-num? rhs-dtype lhs-dtype)
         num-op (get-in java-time-ops [date-time-dtype :temporal-amount-ops opname])]
@@ -775,6 +781,10 @@
         ;;There is an assumption that the arguments are commutative and the left
         ;;hand side is the actual arg.
         numeric-arg rhs
+        numeric-arg (if (dtype-dt/packed-datatype?
+                         (dtype-base/get-datatype numeric-arg))
+                      (dtype-dt/unpack numeric-arg)
+                      numeric-arg)
         date-time-arg lhs
         date-time-dtype lhs-dtype
         num-op (get-in java-time-ops [date-time-dtype :temporal-amount-ops opname])]
@@ -788,16 +798,16 @@
   [lhs rhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
         rhs-dtype (collapse-date-datatype rhs)
-        _ (when-not (and (= :duration lhs-dtype)
-                         (= :duration rhs-dtype))
+        _ (when-not (and (temporal-amount-datatype? lhs-dtype)
+                         (temporal-amount-datatype? rhs-dtype))
             (throw (Exception. (format
                                 "Arguments must have duration type: %s, %s"
                                 lhs-dtype rhs-dtype))))
-        num-op (get-in java-time-ops [:duration :numeric-ops opname])]
+        num-op (get-in java-time-ops [lhs-dtype :numeric-ops opname])]
     (when-not num-op
       (throw (Exception. (format "Could not find numeric op %s for type %s"
                                  opname lhs-dtype))))
-    (perform-time-op lhs rhs :duration num-op)))
+    (perform-time-op lhs rhs lhs-dtype num-op)))
 
 
 (defn- perform-boolean-op
@@ -1015,15 +1025,31 @@
 
 (defn plus-duration
   [lhs rhs]
-  (if (= :duration (dtype/get-datatype lhs))
+  (cond
+    (= :duration (dtype-base/get-datatype lhs))
     (perform-duration-numeric-op lhs rhs :duration-plus-duration)
+    (= :packed-duration (dtype-base/get-datatype lhs))
+    (if (= :packed-duration (dtype-base/get-datatype rhs))
+      (perform-duration-numeric-op lhs rhs :plus-nanoseconds)
+      (dtype-dt/pack (plus-duration (dtype-dt/unpack lhs)) rhs))
+    (= :packed-duration dtype-base/get-datatype rhs)
+    (plus-temporal-amount lhs (dtype-dt/unpack rhs))
+    :else
     (plus-temporal-amount lhs rhs)))
 
 
 (defn minus-duration
   [lhs rhs]
-  (if (= :duration (dtype/get-datatype lhs))
+  (cond
+    (= :duration (dtype-base/get-datatype lhs))
     (perform-duration-numeric-op lhs rhs :duration-minus-duration)
+    (= :packed-duration (dtype-base/get-datatype lhs))
+    (if (= :packed-duration (dtype-base/get-datatype rhs))
+      (perform-duration-numeric-op lhs rhs :minus-nanoseconds)
+      (dtype-dt/pack (plus-duration (dtype-dt/unpack lhs)) rhs))
+    (= :packed-duration dtype-base/get-datatype rhs)
+    (minus-temporal-amount lhs (dtype-dt/unpack rhs))
+    :else
     (minus-temporal-amount lhs rhs)))
 
 

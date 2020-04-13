@@ -8,7 +8,8 @@
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.pprint :as dtype-pp]
             [tech.v2.datatype.unary-op :as unary-op]
-            [primitive-math :as pmath])
+            [primitive-math :as pmath]
+            [clojure.set :as set])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
             LocalDate LocalDateTime LocalTime
@@ -84,6 +85,26 @@
   ^long []
   ;;(long 1e6)
   1000000)
+
+(defn nanoseconds-in-second
+  ^long []
+  1000000000)
+
+(defn nanoseconds-in-minute
+  ^long []
+  60000000000)
+
+(defn nanoseconds-in-hour
+  ^long []
+  3600000000000)
+
+(defn nanoseconds-in-day
+  ^long []
+  86400000000000)
+
+(defn nanoseconds-in-week
+  ^long []
+  604800000000000)
 
 (defn milliseconds-in-week
   ^long []
@@ -515,10 +536,6 @@
     :duration `(nanoseconds->duration (pmath/long ~item))))
 
 
-(def packable-datatypes
-  [:local-date :local-time :instant :local-date-time :duration])
-
-
 (def packable-datatype->primitive-datatype
   {:local-date :int32
    :local-time :int32
@@ -527,33 +544,33 @@
    :duration :int64})
 
 
+(def unpacked-type->packed-type-table
+  {:instant :packed-instant
+   :local-date-time :packed-local-date-time
+   :local-date :packed-local-date
+   :local-time :packed-local-time
+   :duration :packed-duration})
+
+
+(def packed-type->unpacked-type-table
+  (set/map-invert unpacked-type->packed-type-table))
+
+
 (defn packed-type->unpacked-type
   [datatype]
-  (case datatype
-    :packed-instant :instant
-    :packed-local-date-time :local-date-time
-    :packed-local-date :local-date
-    :packed-local-time :local-time
-    :packed-duration :duration))
+  (if-let [retval (packed-type->unpacked-type-table datatype)]
+    retval
+    (throw (Exception. (format "No unpacked type for datatype %s" datatype)))))
 
 
 (defn unpacked-type->packed-type
   [datatype]
-  (case datatype
-    :instant :packed-instant
-    :local-date-time :packed-local-date-time
-    :local-date :packed-local-date
-    :local-time :packed-local-time
-    :duration :packed-duration))
+  (if-let [retval (unpacked-type->packed-type-table datatype)]
+    retval
+    (throw (Exception. (format "No packed type for datatype %s" datatype)))))
 
 
-
-(def packed-datatypes
-  #{:packed-instant
-    :packed-local-date-time
-    :packed-local-date
-    :packed-local-time
-    :duration})
+(def packed-datatypes (set (keys packed-type->unpacked-type-table)))
 
 
 (defn packed-datatype?
@@ -566,6 +583,7 @@
 (->> packable-datatype->primitive-datatype
      (mapv (fn [[k v]]
              (casting/alias-datatype! (keyword (str "packed-" (name k))) v))))
+
 
 (casting/alias-datatype! :epoch-seconds :int64)
 (casting/alias-datatype! :epoch-milliseconds :int64)
@@ -743,12 +761,22 @@
 (implement-pack)
 
 
-(defn- macro-unpack
-  [dtype item scalar-unpack iterable-unpack reader-unpack]
+(defn- unpack-item
+  [item scalar-unpack iterable-unpack reader-unpack]
   (case (argtypes/arg->arg-type item)
     :scalar (scalar-unpack item)
     :iterable (iterable-unpack item)
     :reader (reader-unpack item)))
+
+(defmacro macro-unpack
+  [dtype item]
+  (let [dtype-name (name dtype)]
+    `(unpack-item ~item
+                  ~(symbol (str "unpack-" dtype-name))
+                  ~(symbol (format "packed-%s-iterable->%s-iterable"
+                                   dtype-name dtype-name))
+                  ~(symbol (format "packed-%s-reader->%s-reader"
+                                   dtype-name dtype-name)))))
 
 
 (defmacro implement-unpack
@@ -758,7 +786,10 @@
      (case (collapse-date-datatype ~'item)
        ~@(->> packable-datatypes
               (mapcat (fn [dtype]
-                        [dtype `(macro-unpack ~dtype ~'item)]))))))
+                        [(unpacked-type->packed-type dtype) `(macro-unpack ~dtype ~'item)]))))))
+
+
+(implement-unpack)
 
 
 (defmethod dtype-pp/reader-converter :packed-instant

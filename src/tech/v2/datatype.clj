@@ -23,6 +23,7 @@
             ;;Support for base container types
             [tech.v2.datatype.bitmap :as bitmap]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
+            [tech.v2.datatype.readers.const :as const-rdr]
             [tech.v2.datatype.functional]
             [tech.v2.datatype.index-algebra :as idx-alg])
   (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
@@ -492,6 +493,16 @@ Calls clojure.core.matrix/ecount."
    (indexed-rdr/make-indexed-reader indexes values options))
   ([indexed values]
    (indexed-reader indexed values {})))
+
+
+(defn const-reader
+  "Create an indexed reader that readers values from specific indexes.  The options
+  map can contain at least :datatype and :unchecked? to control the datatype
+  and casting correctness checks of the resulting reader."
+  ([value n-elems options]
+   (const-rdr/make-const-reader value (:datatype options) n-elems))
+  ([value n-elems]
+   (const-reader value n-elems {})))
 
 
 (defn reader-select

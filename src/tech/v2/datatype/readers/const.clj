@@ -35,6 +35,9 @@
 
 (defn make-const-reader
   [item datatype & [num-elems]]
-  (if-let [reader-fn (get const-reader-table (casting/flatten-datatype datatype))]
-    (reader-fn item num-elems datatype)
-    (throw (ex-info (format "Failed to find reader for datatype %s" datatype) {}))))
+  (let [datatype (or datatype
+                     (when item (dtype-proto/get-datatype item))
+                     :object)]
+    (if-let [reader-fn (get const-reader-table (casting/flatten-datatype datatype))]
+      (reader-fn item num-elems datatype)
+      (throw (ex-info (format "Failed to find reader for datatype %s" datatype) {})))))

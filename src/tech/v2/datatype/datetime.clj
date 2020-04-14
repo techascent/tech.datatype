@@ -35,6 +35,51 @@
 (set! *warn-on-reflection* true)
 
 
+(def packable-datatype->primitive-datatype
+  {:local-date :int32
+   :local-time :int32
+   :local-date-time :int64
+   :instant :int64
+   :duration :int64})
+
+
+(def unpacked-type->packed-type-table
+  {:instant :packed-instant
+   :local-date-time :packed-local-date-time
+   :local-date :packed-local-date
+   :local-time :packed-local-time
+   :duration :packed-duration})
+
+
+(def packed-type->unpacked-type-table
+  (set/map-invert unpacked-type->packed-type-table))
+
+
+(def datetime-datatypes
+  (set (concat (flatten (seq unpacked-type->packed-type-table))
+               [:zoned-date-time :offset-date-time])))
+
+
+(defn datetime-datatype?
+  [dtype]
+  (boolean (datetime-datatypes dtype)))
+
+
+(defn duration-datatype?
+  [dtype]
+  (or (= dtype :duration)
+      (= dtype :packed-duration)))
+
+
+(def millis-datatypes #{:local-time :packed-local-time
+                        :duration :packed-duration})
+
+
+(def epoch-millis-datatypes (set/difference
+                             datetime-datatypes
+                             millis-datatypes))
+
+
 (def keyword->chrono-unit
   {:years ChronoUnit/YEARS
    :months ChronoUnit/MONTHS
@@ -536,26 +581,6 @@
     :duration `(nanoseconds->duration (pmath/long ~item))))
 
 
-(def packable-datatype->primitive-datatype
-  {:local-date :int32
-   :local-time :int32
-   :local-date-time :int64
-   :instant :int64
-   :duration :int64})
-
-
-(def unpacked-type->packed-type-table
-  {:instant :packed-instant
-   :local-date-time :packed-local-date-time
-   :local-date :packed-local-date
-   :local-time :packed-local-time
-   :duration :packed-duration})
-
-
-(def packed-type->unpacked-type-table
-  (set/map-invert unpacked-type->packed-type-table))
-
-
 (defn packed-type->unpacked-type
   [datatype]
   (if-let [retval (packed-type->unpacked-type-table datatype)]
@@ -879,3 +904,74 @@
    :local-date local-date
    :local-time local-time
    :duration duration})
+
+(defn milliseconds-since-epoch->packed-local-date-time
+  [millis]
+  (pack-local-date-time (milliseconds-since-epoch->local-date-time millis)))
+
+(defn milliseconds-since-epoch->packed-local-date
+  [millis]
+  (pack-local-date (milliseconds-since-epoch->local-date millis)))
+
+(defn milliseconds-since-epoch->packed-local-time
+  [millis]
+  (pack-local-time (milliseconds-since-epoch->local-time millis)))
+
+
+(defn milliseconds-since-epoch->packed-instant
+  [millis]
+  (pack-instant (milliseconds-since-epoch->instant millis)))
+
+
+(defn milliseconds->packed-local-time
+  [millis]
+  (pack-local-time (milliseconds->local-time millis)))
+
+
+(defn milliseconds->packed-duration
+  [millis]
+  (pack-duration (milliseconds->duration millis)))
+
+
+
+(defmacro ^:private make-to-millis
+  [datatype item]
+  `(case ~datatype
+     ~@(->> datetime-datatypes
+            (mapcat
+             (fn [dtype-name]
+               (let [sym-name
+                     (symbol (if (millis-datatypes dtype-name)
+                               (str (name dtype-name) "->milliseconds")
+                               (str (name dtype-name) "->milliseconds-since-epoch")))]
+                 [dtype-name
+                  `(~sym-name ~'item)]))))))
+
+
+(defn to-milliseconds
+  "Convert an item to either epoch milliseconds or to milliseconds, whichever is
+  appropriate for the datatype."
+  [item datatype]
+  (make-to-millis datatype item))
+
+
+(defmacro ^:private make-from-millis
+  [datatype double-val]
+  `(let [~'long-val (Math/round (double ~double-val))]
+     (case ~datatype
+       ~@(->> datetime-datatypes
+              (mapcat
+               (fn [dtype-name]
+                 (let [sym-name
+                       (symbol (if (millis-datatypes dtype-name)
+                                 (str "milliseconds->" (name dtype-name))
+                                 (str "milliseconds-since-epoch->"
+                                      (name dtype-name))))]
+                   [dtype-name
+                    `(~sym-name ~'long-val)])))))))
+
+
+(defn from-milliseconds
+  "Given milliseconds and a datatype return a thing.  Inverse of to-milliseconds."
+  [milliseconds datatype]
+  (make-from-millis datatype milliseconds))

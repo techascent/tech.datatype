@@ -177,3 +177,42 @@
                 (map vector updated-dt updated-dt-2)))
     (is (every? #(not (.equals ^Object (first %) (second %)))
                 (map vector (rest updated-dt) (rest updated-dt-3))))))
+
+
+
+(deftest descriptive-stats-instant
+  (let [{:keys [min max mean]}
+        (-> (dtype-dt/instant)
+            (dtype-dt-ops/plus-days (range 5))
+            (dtype-dt/pack)
+            (dtype-dt-ops/millisecond-descriptive-stats))]
+    (is (and (dtype-dt-ops/< min mean)
+             (dtype-dt-ops/< mean max)))
+    (is (every? dtype-dt/datetime-datatype?
+                (map dtype/get-datatype
+                     [min mean max])))))
+
+
+(deftest descriptive-stats-zoned-date-time
+  (let [{:keys [min max mean]}
+        (-> (dtype-dt/zoned-date-time)
+            (dtype-dt-ops/plus-days (range 5))
+            (dtype-dt-ops/millisecond-descriptive-stats))]
+    (is (and (dtype-dt-ops/< min mean)
+             (dtype-dt-ops/< mean max)))
+    (is (every? dtype-dt/datetime-datatype?
+                (map dtype/get-datatype
+                     [min mean max])))))
+
+
+(deftest descriptive-stats-duration
+  (let [{:keys [min max mean standard-deviation]}
+        (-> (dtype-dt/duration)
+            (dtype-dt-ops/plus-days (range 5))
+            (dtype-dt/pack)
+            (dtype-dt-ops/millisecond-descriptive-stats))]
+    (is (and (dtype-dt-ops/< min mean)
+             (dtype-dt-ops/< mean max)))
+    (is (every? dtype-dt/datetime-datatype?
+                (map dtype/get-datatype
+                     [min mean max standard-deviation])))))

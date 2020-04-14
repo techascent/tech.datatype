@@ -13,12 +13,6 @@
             [tech.v2.datatype.reduce-op :as reduce-op]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.functional :as dfn]
-            [cljc.java-time.local-date :as local-date]
-            [cljc.java-time.local-date-time :as local-date-time]
-            [cljc.java-time.local-time :as local-time]
-            [cljc.java-time.instant :as instant]
-            [cljc.java-time.zoned-date-time :as zoned-date-time]
-            [cljc.java-time.offset-date-time :as offset-date-time]
             [clojure.pprint :as pp]
             [primitive-math :as pmath])
   (:import [java.time ZoneId ZoneOffset
@@ -603,17 +597,6 @@
     arg))
 
 
-(def date-datatypes (set
-                     (concat
-                      (flatten (seq dtype-dt/packed-type->unpacked-type-table))
-                      [:zoned-date-time :offset-date-time])))
-
-(defn- date-datatype?
-  [dtype]
-  (boolean
-   (date-datatypes dtype)))
-
-
 (defn- make-iterable-of-type
   [iterable datatype]
   (if-not (= datatype (dtype-proto/get-datatype iterable))
@@ -679,8 +662,8 @@
         rhs-dtype (collapse-date-datatype rhs)
         any-number? (or (= :number lhs-dtype)
                         (= :number rhs-dtype))
-        any-date-datatype? (or (date-datatype? lhs-dtype)
-                               (date-datatype? rhs-dtype))
+        any-date-datatype? (or (dtype-dt/datetime-datatype? lhs-dtype)
+                               (dtype-dt/datetime-datatype? rhs-dtype))
         _ (when-not any-number?
             (throw (Exception. (format "Arguments must have numeric type: %s, %s"
                                        lhs-dtype rhs-dtype))))
@@ -706,7 +689,7 @@
   (let [lhs-dtype (collapse-date-datatype lhs)
         rhs-dtype (collapse-date-datatype rhs)
         any-number? (= :number rhs-dtype)
-        any-date-datatype? (date-datatype? lhs-dtype)
+        any-date-datatype? (dtype-dt/datetime-datatype? lhs-dtype)
         _ (when-not any-number?
             (throw (Exception. (format "Arguments must have numeric type: %s, %s"
                                        lhs-dtype rhs-dtype))))
@@ -738,8 +721,8 @@
         rhs-dtype (collapse-date-datatype rhs)
         any-number? (or (temporal-amount-datatype? lhs-dtype)
                         (temporal-amount-datatype? rhs-dtype))
-        any-date-datatype? (or (date-datatype? lhs-dtype)
-                               (date-datatype? rhs-dtype))
+        any-date-datatype? (or (dtype-dt/datetime-datatype? lhs-dtype)
+                               (dtype-dt/datetime-datatype? rhs-dtype))
         _ (when-not any-number?
             (throw (Exception. (format
                                 "Arguments must have temporal amount type: %s, %s"
@@ -770,7 +753,7 @@
   (let [lhs-dtype (collapse-date-datatype lhs)
         rhs-dtype (collapse-date-datatype rhs)
         any-number? (temporal-amount-datatype? rhs-dtype)
-        any-date-datatype? (date-datatype? lhs-dtype)
+        any-date-datatype? (dtype-dt/datetime-datatype? lhs-dtype)
         _ (when-not any-number?
             (throw (Exception. (format
                                 "Arguments must have temporal amount type: %s, %s"
@@ -814,8 +797,8 @@
   [lhs rhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
         rhs-dtype (collapse-date-datatype rhs)
-        any-date-datatype? (or (date-datatype? lhs-dtype)
-                               (date-datatype? rhs-dtype))
+        any-date-datatype? (or (dtype-dt/datetime-datatype? lhs-dtype)
+                               (dtype-dt/datetime-datatype? rhs-dtype))
         _ (when-not any-date-datatype?
             (throw (Exception. (format "Arguments not datetime related: %s, %s"
                                        lhs-dtype rhs-dtype))))
@@ -849,8 +832,8 @@
   [lhs rhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
         rhs-dtype (collapse-date-datatype rhs)
-        any-date-datatype? (or (date-datatype? lhs-dtype)
-                               (date-datatype? rhs-dtype))
+        any-date-datatype? (or (dtype-dt/datetime-datatype? lhs-dtype)
+                               (dtype-dt/datetime-datatype? rhs-dtype))
         _ (when-not any-date-datatype?
             (throw (Exception. (format "Arguments not datetime related: %s, %s"
                                        lhs-dtype rhs-dtype))))
@@ -883,7 +866,7 @@
 (defn- perform-commutative-binary-reduction
   [lhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
-        any-date-datatype? (date-datatype? lhs-dtype)
+        any-date-datatype? (dtype-dt/datetime-datatype? lhs-dtype)
         _ (when-not any-date-datatype?
             (throw (Exception. (format "Argument not datetime related: %s"
                                        lhs-dtype))))
@@ -900,8 +883,8 @@
   [lhs rhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
         rhs-dtype (collapse-date-datatype rhs)
-        any-date-datatype? (or (date-datatype? lhs-dtype)
-                               (date-datatype? rhs-dtype))
+        any-date-datatype? (or (dtype-dt/datetime-datatype? lhs-dtype)
+                               (dtype-dt/datetime-datatype? rhs-dtype))
         _ (when-not any-date-datatype?
             (throw (Exception. (format "Arguments not datetime related: %s, %s"
                                        lhs-dtype rhs-dtype))))
@@ -1117,6 +1100,40 @@
   [lhs rhs]
   (dfn/quot (difference-milliseconds lhs rhs)
             (dtype-dt/milliseconds-in-week)))
+
+
+(defn millisecond-descriptive-stats
+  "Get the descriptive stats.  Stats are calulated in milliseconds and
+  then min, mean, max are returned as objects of the unpacked datetime
+  datatype.  Any other stats values are returned in milliseconds unless
+  the input is a duration or packed duration type in which case standard
+  deviation is also a duration datatype."
+  ([data stats-seq]
+   (let [stats-set (set stats-seq)
+         datatype (dtype-base/get-datatype data)
+         _ (when-not (dtype-dt/datetime-datatype? datatype)
+             (throw (Exception. (format "%s is not a datetime datatype"
+                                        datatype))))
+         numeric-data (if (dtype-dt/millis-datatypes datatype)
+                        (get-milliseconds data)
+                        (get-epoch-milliseconds data))
+         unpacked-datatype (get dtype-dt/packed-type->unpacked-type-table
+                                datatype datatype)
+         value-stats (if (dtype-dt/duration-datatype? datatype)
+                       #{:min :max :mean :standard-deviation}
+                       #{:min :max :mean})
+         stats-data (dfn/descriptive-stats numeric-data stats-set)]
+     (->> stats-data
+          (map (fn [[k v]]
+                 [k
+                  (if (value-stats k)
+                    (dtype-dt/from-milliseconds v unpacked-datatype)
+                    v)]))
+          (into {}))))
+  ([data]
+   (if (dtype-dt/duration-datatype? (dtype-base/get-datatype data))
+     (millisecond-descriptive-stats data #{:min :mean :max :standard-deviation})
+     (millisecond-descriptive-stats data #{:min :mean :max}))))
 
 
 (defn field-compatibility-matrix

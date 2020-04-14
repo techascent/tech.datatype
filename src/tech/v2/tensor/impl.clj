@@ -367,6 +367,7 @@
    dtype-proto/PRichDatatype
    (get-rich-datatype [item]
      {:container-type :tensor
+      :buffer (dtype-proto/get-rich-datatype buffer)
       :shape (dtype/shape item)
       :datatype (dtype-proto/get-datatype item)})
 

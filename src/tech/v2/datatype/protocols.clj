@@ -19,6 +19,10 @@
   (get-datatype [item]))
 
 
+(defprotocol PRichDatatype
+  (get-rich-datatype [item]))
+
+
 (defprotocol PSetDatatype
   (set-datatype [item new-dtype]))
 

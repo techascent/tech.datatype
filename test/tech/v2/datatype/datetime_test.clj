@@ -153,3 +153,27 @@
     (is (string? (.toString test-tens)))
     (let [epoch-tens (dtype-dt-ops/get-epoch-milliseconds test-tens)]
       (is (= [3 3] (dtype/shape epoch-tens))))))
+
+
+
+(deftest durations
+  (let [src-data (dtype/make-container
+                  :typed-buffer
+                  :duration
+                  5)
+        hours-up (dtype-dt-ops/plus-hours src-data (range 5))
+        dur-diff (dtype-dt-ops/minus-duration hours-up src-data)
+        zoned-dt (dtype/make-container
+                  :typed-buffer
+                  :zoned-date-time
+                  5)
+        updated-dt (dtype-dt-ops/plus-duration zoned-dt hours-up)
+        packed-src (dtype-dt/pack src-data)
+        packed-hours-up (dtype-dt-ops/plus-hours packed-src (range 5))
+        updated-dt-2 (dtype-dt-ops/plus-duration zoned-dt packed-hours-up)
+        double-packed (dtype-dt-ops/plus-duration packed-hours-up packed-hours-up)
+        updated-dt-3 (dtype-dt-ops/plus-duration zoned-dt double-packed)]
+    (is (every? #(.equals ^Object (first %) (second %))
+                (map vector updated-dt updated-dt-2)))
+    (is (every? #(not (.equals ^Object (first %) (second %)))
+                (map vector (rest updated-dt) (rest updated-dt-3))))))

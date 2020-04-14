@@ -364,6 +364,13 @@
    (get-datatype [item] (dtype-base/get-datatype buffer))
 
 
+   dtype-proto/PRichDatatype
+   (get-rich-datatype [item]
+     {:container-type :tensor
+      :buffer (dtype-proto/get-rich-datatype buffer)
+      :shape (dtype/shape item)
+      :datatype (dtype-proto/get-datatype item)})
+
    dtype-proto/PSetDatatype
    (set-datatype [item new-dtype]
      (construct-tensor (dtype-proto/set-datatype buffer new-dtype)

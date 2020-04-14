@@ -7,6 +7,7 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.shape :as dtype-shape]
+            [tech.v2.datatype.argtypes :as argtypes]
             [tech.v2.datatype.io :as dtype-io]
             [tech.parallel.for :as parallel-for])
   (:import [tech.v2.datatype ObjectReader ObjectWriter
@@ -425,7 +426,17 @@
         (.invoke method item (object-array 0)))
       (copy! item (dtype-proto/from-prototype item
                                               (get-datatype item)
-                                              (shape item))))))
+                                              (shape item)))))
+  dtype-proto/PRichDatatype
+  (get-rich-datatype [item]
+    (let [item-dtype (dtype-proto/get-datatype item)]
+      (case (argtypes/arg->arg-type item)
+        :scalar item-dtype
+        :iterable {:container-type :iterable
+                   :datatype item-dtype}
+        :reader {:container-type :reader
+                 :shape (shape item)
+                 :datatype item-dtype}))))
 
 
 (defn item-inclusive-range

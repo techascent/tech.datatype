@@ -19,13 +19,14 @@
             [cljc.java-time.instant :as instant]
             [cljc.java-time.zoned-date-time :as zoned-date-time]
             [cljc.java-time.offset-date-time :as offset-date-time]
-            [clojure.pprint :as pp])
+            [clojure.pprint :as pp]
+            [primitive-math :as pmath])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
             LocalDate LocalDateTime LocalTime
-            OffsetTime]
+            OffsetTime Duration]
            [java.time.temporal TemporalUnit ChronoUnit
-            Temporal ChronoField]
+            Temporal TemporalAmount ChronoField]
            [tech.v2.datatype
             PackedInstant PackedLocalDate
             PackedLocalTime PackedLocalDateTime
@@ -70,7 +71,22 @@
                    (make-temporal-chrono-plus k v)]
                   [(keyword (str "minus-" (name k)))
                    (make-temporal-chrono-minus k v)]]))
-       (into {})))
+       (into {} )))
+
+
+(def ^:private temporal-amount-ops
+  {:plus-temporal-amount
+   (binary-op/make-binary-op
+    :plus-temporal-amount
+    :object
+    (when x
+      (.plus ^Temporal x ^TemporalAmount y)))
+   :minus-temporal-amount
+   (binary-op/make-binary-op
+    :minus-temporal-amount
+    :object
+    (when x
+      (.minus ^Temporal x ^TemporalAmount y)))})
 
 
 (defn make-temporal-long-getter
@@ -139,6 +155,31 @@
         (into {})))
 
 
+(defmacro ^:private make-packed-temporal-numeric-ops
+  [datatype]
+  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
+    {:plus-temporal-amount
+     `(binary-op/make-binary-op
+       :plus-temporal-amount
+       ~datatype
+       (casting/datatype->unchecked-cast-fn
+        :unknown
+        ~(casting/datatype->host-type datatype)
+        (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+            (.plus (dtype-dt/as-temporal-amount ~'y))
+            (dtype-dt/compile-time-pack ~src-dtype))))
+     :minus-temporal-amount
+     `(binary-op/make-binary-op
+       :minus-temporal-amount
+       ~datatype
+       (casting/datatype->unchecked-cast-fn
+        :unknown
+        ~(casting/datatype->host-type datatype)
+        (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
+            (.minus (dtype-dt/as-temporal-amount ~'y))
+            (dtype-dt/compile-time-pack ~src-dtype))))}))
+
+
 (defmacro ^:private make-packed-temporal-getter
   [datatype opname temporal-field]
   (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
@@ -164,352 +205,377 @@
                   (dtype-dt/->milliseconds-since-epoch)))})))
 
 
-(def java-time-ops
-  {:instant
-   {:numeric-ops temporal-numeric-ops
-    :int64-getters temporal-getters
+(defn temporal-time-op-table
+  [datatype before-fn after-fn millis-fn]
+  {:numeric-ops temporal-numeric-ops
+   :int64-getters temporal-getters
+   :temporal-amount-ops temporal-amount-ops
+   :boolean-ops
+   {:< (boolean-op/make-boolean-binary-op
+        :lt datatype
+        (before-fn x y))
+    :> (boolean-op/make-boolean-binary-op
+        :gt datatype
+        (after-fn x y))
+    :<= (boolean-op/make-boolean-binary-op
+         :lte datatype
+         (or (.equals ^Object x y)
+             (before-fn x y)))
+    :>= (boolean-op/make-boolean-binary-op
+         :gte datatype
+         (or (.equals ^Object x y)
+             (after-fn x y)))
+    :== (boolean-op/make-boolean-binary-op
+         :instant-== :instant
+         (.equals ^Object x y))}
+   :binary-ops
+   {:min (binary-op/make-binary-op
+          :min datatype
+          (if (before-fn x y) x y))
+    :max (binary-op/make-binary-op
+          :max datatype
+          (if (after-fn x y) x y))}
+   :binary->int64-ops
+   {:difference-milliseconds
+    (binary-op/make-binary-op
+     :difference-millis :object
+     (- (long (millis-fn x))
+        (long (millis-fn y))))}})
+
+
+(defmacro packed-temporal-time-op-table
+  [datatype millis-fn]
+  `{:numeric-ops (make-packed-numeric-ops ~datatype)
+    :int64-getters (make-packed-getters ~datatype)
+    :temporal-amount-ops (make-packed-temporal-numeric-ops ~datatype)
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
-         :instant-before :instant
-         (instant/is-before x y))
+         :lt ~datatype
+         (clojure.core/< ~'x ~'y))
      :> (boolean-op/make-boolean-binary-op
-         :instant-before :instant
-         (instant/is-before x y))
+         :gt ~datatype
+         (clojure.core/> ~'x ~'y))
      :<= (boolean-op/make-boolean-binary-op
-          :instant-before :instant
-          (or (instant/equals x y) (instant/is-before x y)))
+          :lte ~datatype
+          (clojure.core/<= ~'x ~'y))
      :>= (boolean-op/make-boolean-binary-op
-          :instant-before :instant
-          (or (instant/equals x y) (instant/is-after x y)))
+          :gte ~datatype
+          (clojure.core/>= ~'x ~'y))
+     :== (boolean-op/make-boolean-binary-op
+          :== ~datatype
+          (clojure.core/== ~'x ~'y))}
+    :binary-ops
+    {:min (binary-op/make-binary-op
+           :min ~datatype
+           (if (clojure.core/< ~'x ~'y) ~'x ~'y))
+     :max (binary-op/make-binary-op
+           :max ~datatype
+           (if (clojure.core/> ~'x ~'y) ~'x ~'y))}
+    :binary->int64-ops
+    {:difference-milliseconds
+     (binary-op/make-binary-op
+      :difference-millis :object
+      (- (~millis-fn ~'x)
+         (~millis-fn ~'y)))}})
+
+
+
+(defn- make-duration-chrono-plus
+  [opname ^ChronoUnit chrono-unit]
+  (binary-op/make-binary-op
+   (keyword (format "duration-add-%s" (name opname)))
+   :object
+   (when x
+     (.plus ^Duration x
+            (long (Math/round
+                   (if y (double y) 0.0)))
+            chrono-unit))))
+
+
+(defn- make-duration-chrono-minus
+  [opname ^ChronoUnit chrono-unit]
+  (binary-op/make-binary-op
+   (keyword (format "duration-minus-%s" opname))
+   :object
+   (when x
+     (.minus ^Duration x
+             (long (Math/round
+                    (if y (double y) 0.0)))
+             chrono-unit))))
+
+
+(def ^:private duration-numeric-ops
+  (->> dtype-dt/keyword->chrono-unit
+       (mapcat (fn [[k v]]
+                 [[(keyword (str "plus-" (name k)))
+                   (make-duration-chrono-plus k v)]
+                  [(keyword (str "minus-" (name k)))
+                   (make-duration-chrono-minus k v)]]))
+       (into
+        {:duration-plus-duration
+         (binary-op/make-binary-op
+          :duration-add-duration
+          :object
+          (when x
+            (.plus ^Duration x ^Duration y)))
+         :duration-minus-duration
+         (binary-op/make-binary-op
+          :duration-minus-duration
+          :object
+          (when x
+            (.minus ^Duration x ^Duration y)))})))
+
+
+(defn make-duration-long-getter
+  [opname ^ChronoUnit temporal-unit]
+  (unary-op/make-unary-op
+   (keyword (format "duration-get-%s" opname))
+   :object
+   (when x
+     (.get ^Duration x temporal-unit))))
+
+
+(def ^:private duration-getters
+  {:nanoseconds
+   (unary-op/make-unary-op
+    :duration-get-nanoseconds
+    :object
+    (when x
+      (dtype-dt/duration->nanoseconds x)))
+   :milliseconds
+   (unary-op/make-unary-op
+    :duration-get-milliseconds
+    :object
+    (when x
+      (dtype-dt/duration->milliseconds x)))
+   :seconds
+   (unary-op/make-unary-op
+    :duration-get-seconds
+    :object
+    (when x
+      (.getSeconds ^Duration x)))
+   :minutes
+   (unary-op/make-unary-op
+    :duration-get-minutes
+    :object
+    (when x
+      (.toMinutes ^Duration x)))
+   :hours
+   (unary-op/make-unary-op
+    :duration-get-hours
+    :object
+    (when x
+      (.toHours ^Duration x)))
+   :days
+   (unary-op/make-unary-op
+    :duration-get-hours
+    :object
+    (when x
+      (.toDays ^Duration x)))})
+
+
+(defn- duration-before
+  [lhs rhs]
+  (clojure.core/< (.compareTo ^Duration lhs ^Duration rhs) 0))
+
+
+(defn- duration-after
+  [lhs rhs]
+  (clojure.core/> (.compareTo ^Duration lhs ^Duration rhs) 0))
+
+
+(def ^:private duration-time-ops
+   {:numeric-ops duration-numeric-ops
+    :int64-getters duration-getters
+    :boolean-ops
+    {:< (boolean-op/make-boolean-binary-op
+        :lt :duration
+        (duration-before x y))
+     :> (boolean-op/make-boolean-binary-op
+         :gt :duration
+         (duration-after x y))
+     :<= (boolean-op/make-boolean-binary-op
+          :lte :duration
+          (or (.equals ^Object x y)
+              (duration-before x y)))
+     :>= (boolean-op/make-boolean-binary-op
+          :gte :duration
+          (or (.equals ^Object x y)
+              (duration-after x y)))
      :== (boolean-op/make-boolean-binary-op
           :instant-== :instant
-          (instant/equals x y))}
+          (.equals ^Object x y))}
     :binary-ops
-    {:min (binary-op/make-binary-op
-           :instant-min :instant
-           (if (and x y)
-             (if (instant/is-before x y) x y)))
-     :max (binary-op/make-binary-op
-           :instant-max :instant
-           (if (and x y)
-             (if (instant/is-after x y) x y)))}
+   {:min (binary-op/make-binary-op
+          :min :duration
+          (if (duration-before x y) x y))
+    :max (binary-op/make-binary-op
+          :max :duration
+          (if (duration-after x y) x y))}
     :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :instant-difference-millis :object
-      (- (dtype-dt/instant->milliseconds-since-epoch x)
-         (dtype-dt/instant->milliseconds-since-epoch y)))}}
+   {:difference-milliseconds
+    (binary-op/make-binary-op
+     :duration-difference-millis :object
+     (- (long (dtype-dt/duration->milliseconds x))
+        (long (dtype-dt/duration->milliseconds y))))
+    :difference-nanoseconds
+    (binary-op/make-binary-op
+     :duration-difference-nanos :object
+     (- (long (dtype-dt/duration->milliseconds x))
+        (long (dtype-dt/duration->milliseconds y))))
+    :difference-duration
+    (binary-op/make-binary-op
+     :duration-difference-duration :object
+     (.minus ^Duration x ^Duration y))}})
+
+(def packed-duration-conversions
+  [:nanoseconds :milliseconds
+   :seconds :minutes :hours
+   :days :weeks])
+
+
+(defmacro ^:private packed-duration-conversion-table
+  [datatype]
+  (case datatype
+    :nanoseconds 1
+    :milliseconds `(dtype-dt/nanoseconds-in-millisecond)
+    :seconds `(dtype-dt/nanoseconds-in-second)
+    :minutes `(dtype-dt/nanoseconds-in-minute)
+    :hours `(dtype-dt/nanoseconds-in-hour)
+    :days `(dtype-dt/nanoseconds-in-day)
+    :weeks `(dtype-dt/nanoseconds-in-week)))
+
+
+(defmacro ^:private packed-duration-numeric-ops
+  []
+  (->> packed-duration-conversions
+       (mapcat (fn [conv-name]
+                 (let [plus-name (keyword (str "plus-" (name conv-name)))
+                       minus-name (keyword (str "minus-" (name conv-name)))]
+                   [[plus-name
+                     `(binary-op/make-binary-op
+                       ~plus-name :int64
+                       (pmath/+ ~'x (pmath/* ~'y (packed-duration-conversion-table
+                                                  ~conv-name))))]
+                    [minus-name
+                     `(binary-op/make-binary-op
+                       ~minus-name :int64
+                       (pmath/+ ~'x (pmath/* ~'y (packed-duration-conversion-table
+                                                  ~conv-name))))]])))
+       (into {})))
+
+
+(defmacro ^:private packed-duration-getters
+  []
+  (->> packed-duration-conversions
+       (mapcat (fn [conv-name]
+                 [[conv-name
+                   `(unary-op/make-unary-op
+                     ~conv-name :int64
+                     (pmath/+ (quot ~'x
+                                    (packed-duration-conversion-table
+                                     ~conv-name)
+                                    )))]]))
+       (into {})))
+
+
+(def packed-duration-time-ops
+  {:numeric-ops (packed-duration-numeric-ops)
+   :int64-getters (packed-duration-getters)
+   :boolean-ops
+    {:< (boolean-op/make-boolean-binary-op
+        :lt :packed-duration
+        (pmath/< x y))
+     :> (boolean-op/make-boolean-binary-op
+         :gt :packed-duration
+         (pmath/> x y))
+     :<= (boolean-op/make-boolean-binary-op
+          :lte :packed-duration
+          (or (pmath/== x y)
+              (pmath/< x y)))
+     :>= (boolean-op/make-boolean-binary-op
+          :gte :packed-duration
+          (or (pmath/== x y)
+              (pmath/> x y)))
+     :== (boolean-op/make-boolean-binary-op
+          :instant-== :packed-duration
+          (pmath/== x y))}
+    :binary-ops
+   {:min (binary-op/make-binary-op
+          :min :packed-duration
+          (pmath/min x y))
+    :max (binary-op/make-binary-op
+          :max :packed-duration
+          (pmath/max x y))}
+    :binary->int64-ops
+   {:difference-milliseconds
+    (binary-op/make-binary-op
+     :packed-duration-difference-millis :packed-duration
+     (quot (pmath/- x y)
+           (dtype-dt/nanoseconds-in-millisecond)))
+    :difference-nanoseconds
+    (binary-op/make-binary-op
+     :packed-duration-difference-nanos :packed-duration
+     (pmath/- x y))}})
+
+
+(def java-time-ops
+  {:duration duration-time-ops
+   :packed-duration packed-duration-time-ops
+   :instant
+   (temporal-time-op-table :instant
+                           #(.isBefore ^Instant %1 ^Instant %2)
+                           #(.isAfter ^Instant %1 ^Instant %2)
+                           dtype-dt/instant->milliseconds-since-epoch)
+   :packed-instant
+   (packed-temporal-time-op-table
+    :packed-instant
+    dtype-dt/packed-instant->milliseconds-since-epoch)
 
    :zoned-date-time
-   {:numeric-ops temporal-numeric-ops
-    :int64-getters temporal-getters
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :zoned-date-time-before :zoned-date-time
-         (zoned-date-time/is-before x y))
-     :> (boolean-op/make-boolean-binary-op
-         :zoned-date-time-before :zoned-date-time
-         (zoned-date-time/is-before x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :zoned-date-time-before :zoned-date-time
-          (or (zoned-date-time/equals x y) (zoned-date-time/is-before x y)))
-     :>= (boolean-op/make-boolean-binary-op
-          :zoned-date-time-before :zoned-date-time
-          (or (zoned-date-time/equals x y) (zoned-date-time/is-after x y)))
-     :== (boolean-op/make-boolean-binary-op
-          :zoned-date-time-== :zoned-date-time
-          (zoned-date-time/equals x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :zoned-date-time-min :zoned-date-time
-           (if (and x y)
-             (if (zoned-date-time/is-before x y) x y)))
-     :max (binary-op/make-binary-op
-           :zoned-date-time-max :zoned-date-time
-           (if (and x y)
-             (if (zoned-date-time/is-after x y) x y)))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :zoned-date-time-difference-millis :object
-      (- (dtype-dt/zoned-date-time->milliseconds-since-epoch x)
-         (dtype-dt/zoned-date-time->milliseconds-since-epoch y)))}}
+   (temporal-time-op-table :zoned-date-time
+                           #(.isBefore ^ZonedDateTime %1 ^ZonedDateTime %2)
+                           #(.isAfter ^ZonedDateTime %1 ^ZonedDateTime %2)
+                           dtype-dt/zoned-date-time->milliseconds-since-epoch)
 
    :offset-date-time
-   {:numeric-ops temporal-numeric-ops
-    :int64-getters temporal-getters
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :offset-date-time-before :offset-date-time
-         (offset-date-time/is-before x y))
-     :> (boolean-op/make-boolean-binary-op
-         :offset-date-time-before :offset-date-time
-         (offset-date-time/is-before x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :offset-date-time-before :offset-date-time
-          (or (offset-date-time/equals x y) (offset-date-time/is-before x y)))
-     :>= (boolean-op/make-boolean-binary-op
-          :offset-date-time-before :offset-date-time
-          (or (offset-date-time/equals x y) (offset-date-time/is-after x y)))
-     :== (boolean-op/make-boolean-binary-op
-          :offset-date-time-== :offset-date-time
-          (offset-date-time/equals x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :offset-date-time-min :offset-date-time
-           (if (and x y)
-             (if (offset-date-time/is-before x y) x y)))
-     :max (binary-op/make-binary-op
-           :offset-date-time-max :offset-date-time
-           (if (and x y)
-             (if (offset-date-time/is-after x y) x y)))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :offset-date-time-difference-millis :object
-      (- (dtype-dt/offset-date-time->milliseconds-since-epoch x)
-         (dtype-dt/offset-date-time->milliseconds-since-epoch y)))}}
+   (temporal-time-op-table :offset-date-time
+                           #(.isBefore ^OffsetDateTime %1 ^OffsetDateTime %2)
+                           #(.isAfter ^OffsetDateTime %1 ^OffsetDateTime %2)
+                           dtype-dt/offset-date-time->milliseconds-since-epoch)
 
    :local-date-time
-   {:numeric-ops temporal-numeric-ops
-    :int64-getters temporal-getters
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :local-date-time-before :local-date-time
-         (local-date-time/is-before x y))
-     :> (boolean-op/make-boolean-binary-op
-         :local-date-time-before :local-date-time
-         (local-date-time/is-before x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :local-date-time-before :local-date-time
-          (or (local-date-time/equals x y) (local-date-time/is-before x y)))
-     :>= (boolean-op/make-boolean-binary-op
-          :local-date-time-before :local-date-time
-          (or (local-date-time/equals x y) (local-date-time/is-after x y)))
-     :== (boolean-op/make-boolean-binary-op
-          :local-date-time-== :local-date-time
-          (local-date-time/equals x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :local-date-time-min :local-date-time
-           (if (and x y)
-             (if (local-date-time/is-before x y) x y)))
-     :max (binary-op/make-binary-op
-           :local-date-time-max :local-date-time
-           (if (and x y)
-             (if (local-date-time/is-after x y) x y)))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :local-date-time-difference-millis :object
-      (- (dtype-dt/local-date-time->milliseconds-since-epoch x)
-         (dtype-dt/local-date-time->milliseconds-since-epoch y)))}}
-
-
+   (temporal-time-op-table :local-date-time
+                           #(.isBefore ^LocalDateTime %1 ^LocalDateTime %2)
+                           #(.isAfter ^LocalDateTime %1 ^LocalDateTime %2)
+                           dtype-dt/local-date-time->milliseconds-since-epoch)
    :packed-local-date-time
-   {:numeric-ops (make-packed-numeric-ops :packed-local-date-time)
-    :int64-getters (make-packed-getters :packed-local-date-time)
-    ;;Packed objects are built so the basic math ops work.
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :packed-local-date-time-before :packed-local-date-time
-         (clojure.core/< x y))
-     :> (boolean-op/make-boolean-binary-op
-         :packed-local-date-time-before :packed-local-date-time
-         (clojure.core/> x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :packed-local-date-time-before :packed-local-date-time
-          (clojure.core/<= x y))
-     :>= (boolean-op/make-boolean-binary-op
-          :packed-local-date-time-before :packed-local-date-time
-          (clojure.core/>= x y))
-     :== (boolean-op/make-boolean-binary-op
-          :packed-local-date-time-== :packed-local-date-time
-          (clojure.core/== x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :packed-local-date-time-min :packed-local-date-time
-           (if (clojure.core/< x y) x y))
-     :max (binary-op/make-binary-op
-           :packed-local-date-time-max :packed-local-date-time
-           (if (clojure.core/> x y) x y))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :packed-local-date-time-difference-millis :int64
-      (- (dtype-dt/packed-local-date-time->milliseconds-since-epoch x)
-         (dtype-dt/packed-local-date-time->milliseconds-since-epoch y)))}}
+   (packed-temporal-time-op-table
+    :packed-local-date-time
+    dtype-dt/packed-local-date-time->milliseconds-since-epoch)
+
 
    :local-date
-   {:numeric-ops temporal-numeric-ops
-    :int64-getters temporal-getters
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :local-date-before :local-date
-         (local-date/is-before x y))
-     :> (boolean-op/make-boolean-binary-op
-         :local-date-before :local-date
-         (local-date/is-before x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :local-date-before :local-date
-          (or (local-date/equals x y) (local-date/is-before x y)))
-     :>= (boolean-op/make-boolean-binary-op
-          :local-date-before :local-date
-          (or (local-date/equals x y) (local-date/is-after x y)))
-     :== (boolean-op/make-boolean-binary-op
-          :local-date-== :local-date
-          (local-date/equals x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :local-date-min :local-date
-           (if (and x y)
-             (if (local-date/is-before x y) x y)))
-     :max (binary-op/make-binary-op
-           :local-date-max :local-date
-           (if (and x y)
-             (if (local-date/is-after x y) x y)))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :local-date-difference-millis :object
-      (- (dtype-dt/local-date->milliseconds-since-epoch x)
-         (dtype-dt/local-date->milliseconds-since-epoch y)))}}
-
-
+   (temporal-time-op-table :local-date
+                           #(.isBefore ^LocalDate %1 ^LocalDate %2)
+                           #(.isAfter ^LocalDate %1 ^LocalDate %2)
+                           dtype-dt/local-date->milliseconds-since-epoch)
    :packed-local-date
-   {:numeric-ops (make-packed-numeric-ops :packed-local-date)
-    :int64-getters (make-packed-getters :packed-local-date)
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :packed-local-date-before :packed-local-date
-         (clojure.core/< x y))
-     :> (boolean-op/make-boolean-binary-op
-         :packed-local-date-before :packed-local-date
-         (clojure.core/> x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :packed-local-date-before :packed-local-date
-          (clojure.core/<= x y))
-     :>= (boolean-op/make-boolean-binary-op
-          :packed-local-date-before :packed-local-date
-          (clojure.core/>= x y))
-     :== (boolean-op/make-boolean-binary-op
-          :packed-local-date-== :packed-local-date
-          (clojure.core/== x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :packed-local-date-min :packed-local-date
-           (if (clojure.core/< x y) x y))
-     :max (binary-op/make-binary-op
-           :packed-local-date-max :packed-local-date
-           (if (clojure.core/> x y) x y))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :packed-local-date-difference-millis :object
-      (- (dtype-dt/packed-local-date->milliseconds-since-epoch x)
-         (dtype-dt/packed-local-date->milliseconds-since-epoch y)))}}
+   (packed-temporal-time-op-table
+    :packed-local-date
+    dtype-dt/packed-local-date->milliseconds-since-epoch)
 
    :local-time
-   {:numeric-ops temporal-numeric-ops
-    :int64-getters temporal-getters
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :local-time-before :local-time
-         (local-time/is-before x y))
-     :> (boolean-op/make-boolean-binary-op
-         :local-time-before :local-time
-         (local-time/is-before x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :local-time-before :local-time
-          (or (local-time/equals x y) (local-time/is-before x y)))
-     :>= (boolean-op/make-boolean-binary-op
-          :local-time-before :local-time
-          (or (local-time/equals x y) (local-time/is-after x y)))
-     :== (boolean-op/make-boolean-binary-op
-          :local-time-== :local-time
-          (local-time/equals x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :local-time-min :local-time
-           (if (and x y)
-             (if (local-time/is-before x y) x y)))
-     :max (binary-op/make-binary-op
-           :local-time-max :local-time
-           (if (and x y)
-             (if (local-time/is-after x y) x y)))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :local-time-difference-millis :object
-      (- (dtype-dt/local-time->milliseconds x)
-         (dtype-dt/local-time->milliseconds y)))}}
-
+   (temporal-time-op-table :local-time
+                           #(.isBefore ^LocalTime %1 ^LocalTime %2)
+                           #(.isAfter ^LocalTime %1 ^LocalTime %2)
+                           dtype-dt/local-time->milliseconds)
 
    :packed-local-time
-   {:numeric-ops (make-packed-numeric-ops :packed-local-time)
-    :int64-getters (make-packed-getters :packed-local-time)
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :packed-local-time-before :packed-local-time
-         (clojure.core/< x y))
-     :> (boolean-op/make-boolean-binary-op
-         :packed-local-time-before :packed-local-time
-         (clojure.core/> x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :packed-local-time-before :packed-local-time
-          (clojure.core/<= x y))
-     :>= (boolean-op/make-boolean-binary-op
-          :packed-local-time-before :packed-local-time
-          (clojure.core/>= x y))
-     :== (boolean-op/make-boolean-binary-op
-          :packed-local-time-== :packed-local-time
-          (clojure.core/== x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :packed-local-time-min :packed-local-time
-           (if (clojure.core/< x y) x y))
-     :max (binary-op/make-binary-op
-           :packed-local-time-max :packed-local-time
-           (if (clojure.core/> x y) x y))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :packed-local-time-difference-millis :object
-      (- (dtype-dt/packed-local-time->milliseconds x)
-         (dtype-dt/packed-local-time->milliseconds y)))}}
-
-   :packed-instant
-   {:numeric-ops (make-packed-numeric-ops :packed-instant)
-    :int64-getters (make-packed-getters :packed-instant)
-    :boolean-ops
-    {:< (boolean-op/make-boolean-binary-op
-         :packed-instant-before :packed-instant
-         (clojure.core/< x y))
-     :> (boolean-op/make-boolean-binary-op
-         :packed-instant-before :packed-instant
-         (clojure.core/> x y))
-     :<= (boolean-op/make-boolean-binary-op
-          :packed-instant-before :packed-instant
-          (clojure.core/<= x y))
-     :>= (boolean-op/make-boolean-binary-op
-          :packed-instant-before :packed-instant
-          (clojure.core/>= x y))
-     :== (boolean-op/make-boolean-binary-op
-          :packed-instant-== :packed-instant
-          (clojure.core/== x y))}
-    :binary-ops
-    {:min (binary-op/make-binary-op
-           :packed-instant-min :packed-instant
-           (if (clojure.core/< x y) x y))
-     :max (binary-op/make-binary-op
-           :packed-instant-max :packed-instant
-           (if (clojure.core/> x y) x y))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :packed-instant-difference-millis :object
-      (- (dtype-dt/packed-instant->milliseconds-since-epoch x)
-         (dtype-dt/packed-instant->milliseconds-since-epoch y)))}}})
+   (packed-temporal-time-op-table
+    :packed-local-time
+    dtype-dt/packed-local-time->milliseconds)
+})
 
 
 (defn- argtypes->operation-type
@@ -537,9 +603,10 @@
     arg))
 
 
-(def date-datatypes #{:instant :local-date :local-date-time :local-time
-                      :packed-instant :packed-local-date :packed-local-date-time
-                      :packed-local-time :zoned-date-time :offset-date-time})
+(def date-datatypes (set
+                     (concat
+                      (flatten (seq dtype-dt/packed-type->unpacked-type-table))
+                      [:zoned-date-time :offset-date-time])))
 
 (defn- date-datatype?
   [dtype]
@@ -656,6 +723,91 @@
       (throw (Exception. (format "Could not find numeric op %s for type %s"
                                  opname date-time-dtype))))
     (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+
+
+(defn temporal-amount-datatype?
+  [dtype]
+  (or
+   (= dtype :duration)
+   (= dtype :packed-duration)))
+
+
+(defn- perform-commutative-temporal-amount-op
+  [lhs rhs opname]
+  (let [lhs-dtype (collapse-date-datatype lhs)
+        rhs-dtype (collapse-date-datatype rhs)
+        any-number? (or (temporal-amount-datatype? lhs-dtype)
+                        (temporal-amount-datatype? rhs-dtype))
+        any-date-datatype? (or (date-datatype? lhs-dtype)
+                               (date-datatype? rhs-dtype))
+        _ (when-not any-number?
+            (throw (Exception. (format
+                                "Arguments must have temporal amount type: %s, %s"
+                                lhs-dtype rhs-dtype))))
+        _ (when-not any-date-datatype?
+            (throw (Exception. (format "Arguments not datetime related: %s, %s"
+                                       lhs-dtype rhs-dtype))))
+        ;;There is an assumption that the arguments are commutative and the left
+        ;;hand side is the actual arg.
+        lhs-num? (temporal-amount-datatype? lhs-dtype)
+        numeric-arg (if lhs-num? lhs rhs)
+        numeric-arg (if (dtype-dt/packed-datatype?
+                         (dtype-base/get-datatype numeric-arg))
+                      (dtype-dt/unpack numeric-arg)
+                      numeric-arg)
+        date-time-arg (if lhs-num? rhs lhs)
+        date-time-dtype (if lhs-num? rhs-dtype lhs-dtype)
+        num-op (get-in java-time-ops [date-time-dtype :temporal-amount-ops opname])]
+    (when-not num-op
+      (throw (Exception. (format "Could not find numeric op %s for type %s"
+                                 opname date-time-dtype))))
+    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+
+
+(defn- perform-non-commutative-temporal-amount-op
+  "only the left side can be a datatype"
+  [lhs rhs opname]
+  (let [lhs-dtype (collapse-date-datatype lhs)
+        rhs-dtype (collapse-date-datatype rhs)
+        any-number? (temporal-amount-datatype? rhs-dtype)
+        any-date-datatype? (date-datatype? lhs-dtype)
+        _ (when-not any-number?
+            (throw (Exception. (format
+                                "Arguments must have temporal amount type: %s, %s"
+                                lhs-dtype rhs-dtype))))
+        _ (when-not any-date-datatype?
+            (throw (Exception. (format "Arguments not datetime related: %s, %s"
+                                       lhs-dtype rhs-dtype))))
+        ;;There is an assumption that the arguments are commutative and the left
+        ;;hand side is the actual arg.
+        numeric-arg rhs
+        numeric-arg (if (dtype-dt/packed-datatype?
+                         (dtype-base/get-datatype numeric-arg))
+                      (dtype-dt/unpack numeric-arg)
+                      numeric-arg)
+        date-time-arg lhs
+        date-time-dtype lhs-dtype
+        num-op (get-in java-time-ops [date-time-dtype :temporal-amount-ops opname])]
+    (when-not num-op
+      (throw (Exception. (format "Could not find numeric op %s for type %s"
+                                 opname date-time-dtype))))
+    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+
+
+(defn- perform-duration-numeric-op ;;either plus or minus
+  [lhs rhs opname]
+  (let [lhs-dtype (collapse-date-datatype lhs)
+        rhs-dtype (collapse-date-datatype rhs)
+        _ (when-not (and (temporal-amount-datatype? lhs-dtype)
+                         (temporal-amount-datatype? rhs-dtype))
+            (throw (Exception. (format
+                                "Arguments must have duration type: %s, %s"
+                                lhs-dtype rhs-dtype))))
+        num-op (get-in java-time-ops [lhs-dtype :numeric-ops opname])]
+    (when-not num-op
+      (throw (Exception. (format "Could not find numeric op %s for type %s"
+                                 opname lhs-dtype))))
+    (perform-time-op lhs rhs lhs-dtype num-op)))
 
 
 (defn- perform-boolean-op
@@ -794,6 +946,16 @@
 (declare-int64-getters)
 
 
+(defn get-milliseconds
+  [item]
+  (perform-int64-getter item :milliseconds))
+
+
+(defn get-nanoseconds
+  [item]
+  (perform-int64-getter item :nanoseconds))
+
+
 (defn get-epoch-milliseconds
   [item]
   (perform-int64-getter item :epoch-milliseconds))
@@ -847,6 +1009,48 @@
 
 
 (declare-plus-minus-ops)
+
+
+(defn plus-temporal-amount
+  [lhs rhs]
+  (perform-commutative-temporal-amount-op
+   lhs rhs :plus-temporal-amount))
+
+
+(defn minus-temporal-amount
+  [lhs rhs]
+  (perform-non-commutative-temporal-amount-op
+   lhs rhs :minus-temporal-amount))
+
+
+(defn plus-duration
+  [lhs rhs]
+  (cond
+    (= :duration (dtype-base/get-datatype lhs))
+    (perform-duration-numeric-op lhs rhs :duration-plus-duration)
+    (= :packed-duration (dtype-base/get-datatype lhs))
+    (if (= :packed-duration (dtype-base/get-datatype rhs))
+      (perform-duration-numeric-op lhs rhs :plus-nanoseconds)
+      (dtype-dt/pack (plus-duration (dtype-dt/unpack lhs)) rhs))
+    (= :packed-duration dtype-base/get-datatype rhs)
+    (plus-temporal-amount lhs (dtype-dt/unpack rhs))
+    :else
+    (plus-temporal-amount lhs rhs)))
+
+
+(defn minus-duration
+  [lhs rhs]
+  (cond
+    (= :duration (dtype-base/get-datatype lhs))
+    (perform-duration-numeric-op lhs rhs :duration-minus-duration)
+    (= :packed-duration (dtype-base/get-datatype lhs))
+    (if (= :packed-duration (dtype-base/get-datatype rhs))
+      (perform-duration-numeric-op lhs rhs :minus-nanoseconds)
+      (dtype-dt/pack (plus-duration (dtype-dt/unpack lhs)) rhs))
+    (= :packed-duration dtype-base/get-datatype rhs)
+    (minus-temporal-amount lhs (dtype-dt/unpack rhs))
+    :else
+    (minus-temporal-amount lhs rhs)))
 
 
 (defn <

@@ -8,13 +8,14 @@
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.pprint :as dtype-pp]
             [tech.v2.datatype.unary-op :as unary-op]
-            [primitive-math :as pmath])
+            [primitive-math :as pmath]
+            [clojure.set :as set])
   (:import [java.time ZoneId ZoneOffset
             Instant ZonedDateTime OffsetDateTime
             LocalDate LocalDateTime LocalTime
-            OffsetTime]
+            OffsetTime Duration]
            [java.time.temporal ChronoUnit Temporal ChronoField
-            WeekFields]
+            WeekFields TemporalAmount]
            [java.util Date Iterator Locale]
            [it.unimi.dsi.fastutil.bytes ByteIterator]
            [it.unimi.dsi.fastutil.shorts ShortIterator]
@@ -84,6 +85,26 @@
   ^long []
   ;;(long 1e6)
   1000000)
+
+(defn nanoseconds-in-second
+  ^long []
+  1000000000)
+
+(defn nanoseconds-in-minute
+  ^long []
+  60000000000)
+
+(defn nanoseconds-in-hour
+  ^long []
+  3600000000000)
+
+(defn nanoseconds-in-day
+  ^long []
+  86400000000000)
+
+(defn nanoseconds-in-week
+  ^long []
+  604800000000000)
 
 (defn milliseconds-in-week
   ^long []
@@ -416,6 +437,36 @@
    (.atTime ld (offset-time))))
 
 
+(defn duration
+  ([]
+   (Duration/ofNanos 0))
+  ([arg]
+   (if (instance? Duration arg)
+     arg
+     (Duration/ofNanos (long arg)))))
+
+
+(defn duration->nanoseconds
+  ^long [^Duration duration]
+  (.toNanos duration))
+
+
+(defn nanoseconds->duration
+  ^Duration [^long nanos]
+  (Duration/ofNanos nanos))
+
+
+(defn duration->milliseconds
+  ^long [^Duration duration]
+  (quot (.toNanos duration)
+        (nanoseconds-in-millisecond)))
+
+
+(defn milliseconds->duration
+  ^Duration [^long millis]
+  (Duration/ofNanos (* millis (nanoseconds-in-millisecond))))
+
+
 (defn- make-obj-constructor
   [cons-fn]
   (fn
@@ -437,13 +488,16 @@
                                (make-obj-constructor offset-date-time))
 (dtype-obj/add-object-datatype OffsetTime :offset-time
                                (make-obj-constructor offset-time))
-
+(dtype-obj/add-object-datatype Duration :duration
+                               (make-obj-constructor duration))
 
 
 (defn as-instant ^Instant [item] item)
 (defn as-local-time ^LocalTime [item] item)
 (defn as-local-date ^LocalDate [item] item)
 (defn as-local-date-time ^LocalDateTime [item] item)
+(defn as-duration ^Duration [item] item)
+(defn as-temporal-amount ^TemporalAmount [item] item)
 
 
 (defmacro datatype->cast-fn
@@ -454,21 +508,22 @@
       :instant `(as-instant ~val)
       :local-time `(as-local-time ~val)
       :local-date `(as-local-date ~val)
-      :local-date-time `(as-local-date-time ~val))))
+      :local-date-time `(as-local-date-time ~val)
+      :duration `(as-duration ~val))))
 
 
 ;;datatypes are packed into dense integer objects.  There are static methods on
 ;;the packing objects to still do some manipulations while packed.  When done en mass,
 ;;these manipulations will be much faster than when converted to java types and
 ;;the manipulation done there.
-
 (defmacro compile-time-pack
   [item dtype]
   (case dtype
     :instant `(PackedInstant/pack ~item)
     :local-time `(PackedLocalTime/pack ~item)
     :local-date `(PackedLocalDate/pack ~item)
-    :local-date-time `(PackedLocalDateTime/pack (as-local-date-time ~item))))
+    :local-date-time `(PackedLocalDateTime/pack (as-local-date-time ~item))
+    :duration `(duration->nanoseconds ~item)))
 
 
 (defmacro compile-time-unpack
@@ -477,44 +532,45 @@
     :instant `(PackedInstant/asInstant (pmath/long ~item))
     :local-time `(PackedLocalTime/asLocalTime (pmath/int ~item))
     :local-date `(PackedLocalDate/asLocalDate (pmath/int ~item))
-    :local-date-time `(PackedLocalDateTime/asLocalDateTime (pmath/long ~item))))
-
-
-(def packable-datatypes
-  [:local-date :local-time :instant :local-date-time])
+    :local-date-time `(PackedLocalDateTime/asLocalDateTime (pmath/long ~item))
+    :duration `(nanoseconds->duration (pmath/long ~item))))
 
 
 (def packable-datatype->primitive-datatype
   {:local-date :int32
    :local-time :int32
    :local-date-time :int64
-   :instant :int64})
+   :instant :int64
+   :duration :int64})
+
+
+(def unpacked-type->packed-type-table
+  {:instant :packed-instant
+   :local-date-time :packed-local-date-time
+   :local-date :packed-local-date
+   :local-time :packed-local-time
+   :duration :packed-duration})
+
+
+(def packed-type->unpacked-type-table
+  (set/map-invert unpacked-type->packed-type-table))
 
 
 (defn packed-type->unpacked-type
   [datatype]
-  (case datatype
-    :packed-instant :instant
-    :packed-local-date-time :local-date-time
-    :packed-local-date :local-date
-    :packed-local-time :local-time))
+  (if-let [retval (packed-type->unpacked-type-table datatype)]
+    retval
+    (throw (Exception. (format "No unpacked type for datatype %s" datatype)))))
 
 
 (defn unpacked-type->packed-type
   [datatype]
-  (case datatype
-    :instant :packed-instant
-    :local-date-time :packed-local-date-time
-    :local-date :packed-local-date
-    :local-time :packed-local-time))
+  (if-let [retval (unpacked-type->packed-type-table datatype)]
+    retval
+    (throw (Exception. (format "No packed type for datatype %s" datatype)))))
 
 
-
-(def packed-datatypes
-  #{:packed-instant
-    :packed-local-date-time
-    :packed-local-date
-    :packed-local-time})
+(def packed-datatypes (set (keys packed-type->unpacked-type-table)))
 
 
 (defn packed-datatype?
@@ -527,6 +583,7 @@
 (->> packable-datatype->primitive-datatype
      (mapv (fn [[k v]]
              (casting/alias-datatype! (keyword (str "packed-" (name k))) v))))
+
 
 (casting/alias-datatype! :epoch-seconds :int64)
 (casting/alias-datatype! :epoch-milliseconds :int64)
@@ -617,6 +674,7 @@
 (define-packing-operations :local-date)
 (define-packing-operations :local-time)
 (define-packing-operations :local-date-time)
+(define-packing-operations :duration)
 
 (defn packed-local-date-time->milliseconds-since-epoch
   ^long [^long packed-date-time]
@@ -640,11 +698,18 @@
   (-> (unpack-local-time)
       (local-time->milliseconds)))
 
+(defn packed-duration->milliseconds
+  ^long [^long packed-time]
+  (-> (unpack-duration)
+      (duration->milliseconds)))
 
-(def packed-aliases (->> packable-datatypes
-                         (map (fn [name-kwd]
-                                (keyword (format "packed-%s"
-                                                 (name name-kwd)))))
+(defn packed-duration->nanoseconds
+  ^long [^long packed-time]
+  (-> (unpack-duration)
+      (duration->nanoseconds)))
+
+(def packable-datatypes (set (keys unpacked-type->packed-type-table)))
+(def packed-aliases (->> (vals unpacked-type->packed-type-table)
                          set))
 
 
@@ -663,55 +728,66 @@
           item-dtype)
         item-dtype))))
 
-
-(defn pack
-  [item]
-  (case (collapse-date-datatype item)
-    :instant
-    (case (argtypes/arg->arg-type item)
-      :scalar (pack-instant item)
-      :iterable (instant-iterable->packed-instant-iterable item)
-      :reader (instant-reader->packed-instant-reader item))
-    :local-date-time
-    (case (argtypes/arg->arg-type item)
-      :scalar (pack-local-date-time item)
-      :iterable (local-date-time-iterable->packed-local-date-time-iterable item)
-      :reader (local-date-time-reader->packed-local-date-time-reader item))
-    :local-date
-    (case (argtypes/arg->arg-type item)
-      :scalar (pack-local-date item)
-      :iterable (local-date-iterable->packed-local-date-iterable item)
-      :reader (local-date-reader->packed-local-date-reader item))
-    :local-time
-    (case (argtypes/arg->arg-type item)
-      :scalar (pack-local-time item)
-      :iterable (local-time-iterable->packed-local-time-iterable item)
-      :reader (local-time-reader->packed-local-time-reader item))))
+(defn- pack-item
+  [item scalar-pack iterable-pack reader-pack]
+  (case (argtypes/arg->arg-type item)
+    :scalar (scalar-pack item)
+    :iterable (iterable-pack item)
+    :reader (reader-pack item)))
 
 
-(defn unpack
-  [item]
-  (case (collapse-date-datatype item)
-    :packed-instant
-    (case (argtypes/arg->arg-type item)
-      :scalar (unpack-instant item)
-      :iterable (packed-instant-iterable->instant-iterable item)
-      :reader (packed-instant-reader->instant-reader item))
-    :packed-local-date-time
-    (case (argtypes/arg->arg-type item)
-      :scalar (unpack-local-date-time item)
-      :iterable (packed-local-date-time-iterable->local-date-time-iterable item)
-      :reader (packed-local-date-time-reader->local-date-time-reader item))
-    :packed-local-date
-    (case (argtypes/arg->arg-type item)
-      :scalar (unpack-local-date item)
-      :iterable (packed-local-date-iterable->local-date-iterable item)
-      :reader (packed-local-date-reader->local-date-reader item))
-    :packed-local-time
-    (case (argtypes/arg->arg-type item)
-      :scalar (unpack-local-time item)
-      :iterable (packed-local-time-iterable->local-time-iterable item)
-      :reader (packed-local-time-reader->local-time-reader item))))
+(defmacro macro-pack
+  [dtype item]
+  (let [dtype-name (name dtype)]
+    `(pack-item ~item
+                ~(symbol (str "pack-" dtype-name))
+                ~(symbol (format "%s-iterable->packed-%s-iterable"
+                                 dtype-name dtype-name))
+                ~(symbol (format "%s-reader->packed-%s-reader"
+                                 dtype-name dtype-name)))))
+
+
+(defmacro implement-pack
+  []
+  `(defn ~'pack
+     [~'item]
+     (case (collapse-date-datatype ~'item)
+       ~@(->> packable-datatypes
+              (mapcat (fn [dtype]
+                        [dtype `(macro-pack ~dtype ~'item)]))))))
+
+(implement-pack)
+
+
+(defn- unpack-item
+  [item scalar-unpack iterable-unpack reader-unpack]
+  (case (argtypes/arg->arg-type item)
+    :scalar (scalar-unpack item)
+    :iterable (iterable-unpack item)
+    :reader (reader-unpack item)))
+
+(defmacro macro-unpack
+  [dtype item]
+  (let [dtype-name (name dtype)]
+    `(unpack-item ~item
+                  ~(symbol (str "unpack-" dtype-name))
+                  ~(symbol (format "packed-%s-iterable->%s-iterable"
+                                   dtype-name dtype-name))
+                  ~(symbol (format "packed-%s-reader->%s-reader"
+                                   dtype-name dtype-name)))))
+
+
+(defmacro implement-unpack
+  []
+  `(defn ~'unpack
+     [~'item]
+     (case (collapse-date-datatype ~'item)
+       ~@(->> packable-datatypes
+              (mapcat (fn [dtype]
+                        [(unpacked-type->packed-type dtype) `(macro-unpack ~dtype ~'item)]))))))
+
+
+(implement-unpack)
 
 
 (defmethod dtype-pp/reader-converter :packed-instant
@@ -727,6 +803,10 @@
   (unpack rdr))
 
 (defmethod dtype-pp/reader-converter :packed-local-time
+  [rdr]
+  (unpack rdr))
+
+(defmethod dtype-pp/reader-converter :packed-duration
   [rdr]
   (unpack rdr))
 
@@ -797,4 +877,5 @@
    :offset-date-time offset-date-time
    :local-date-time local-date-time
    :local-date local-date
-   :local-time local-time})
+   :local-time local-time
+   :duration duration})

@@ -39,12 +39,16 @@ The supported local time types are:
 * `java.time.LocalDateTime` - A zoneless entity that can store both a date and a time.
 * `java.time.LocalDate` - A zoneless entity that can store only a date.  It has no time
    fields.
-* `java.time.LocalTime` - A zoneless entity that can only store time - hours, minutes,
+* `java.time.LocalTime` - A zoneless entity that can only store unsigned time - hours, minutes,
    seconds, milliseconds, and nanoseconds.
-
-
+   
 One way to look at `LocalDateTime` and `LocalDate` is that they have a conversion
 to `Instant` - they represent an epoch offset but have no zone related offset.
+   
+   
+### Temporal Amount Types
+
+Durations are types that store signed long nanoseconds.
 
 
 ### Packed Types
@@ -59,10 +63,11 @@ defined primitive size (32 or 64 bits):
 * `:packed-local-date-time` - 64 bit stored value similar to `:packed-instant`.
 * `:packed-local-date` - 32 bit entity capable of storing a `LocalDate`.
 * `:packed-local-time` - 32 bit entity capable of storing a `LocalTime`.
+* `:packed-duration` - 64 bit nanoseconds.
 
 
-The main datatypes have a slightly lossy (no nanoseconds) conversion to the packed
-datatypes and back.
+The main datatypes, aside from durations, have a slightly lossy (no nanoseconds) conversion 
+to the packed datatypes and back.
 
 
 ## Construction, Conversion And Packing

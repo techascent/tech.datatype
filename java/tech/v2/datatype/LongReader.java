@@ -11,7 +11,7 @@ import clojure.lang.RT;
 public interface LongReader extends IOBase, Iterable, IFn, List, RandomAccess
 {
   long read(long idx);
-  default Keyword getDatatype () { return Keyword.intern(null, "int64"); }
+  default Object getDatatype () { return Keyword.intern(null, "int64"); }
   default int size() { return RT.intCast(lsize()); }
   default Object get(int idx) { return read(idx); }
   default boolean isEmpty() { return lsize() == 0; }

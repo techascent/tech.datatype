@@ -13,7 +13,7 @@ public class LongBitmapIter implements LongIter
   {
     iter = _iter;
   }
-  public Keyword getDatatype() { return Keyword.intern(null, "uint32"); }
+  public Object getDatatype() { return Keyword.intern(null, "uint32"); }
   public boolean hasNext() { return iter.hasNext(); }
   public long nextLong() {
     currentValue = Integer.toUnsignedLong( iter.next() );

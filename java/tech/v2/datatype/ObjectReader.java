@@ -11,7 +11,7 @@ import clojure.lang.RT;
 public interface ObjectReader extends IOBase, Iterable, IFn, List, RandomAccess
 {
   Object read(long idx);
-  default Keyword getDatatype () { return Keyword.intern(null, "object"); }
+  default Object getDatatype () { return Keyword.intern(null, "object"); }
   default int size() { return RT.intCast(lsize()); }
   default Object get(int idx) { return read(idx); }
   default boolean isEmpty() { return lsize() == 0; }

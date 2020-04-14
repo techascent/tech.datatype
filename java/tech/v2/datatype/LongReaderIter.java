@@ -14,7 +14,7 @@ public class LongReaderIter implements IOBase, LongIter
     num_elems = _reader.lsize();
     reader = _reader;
   }
-  public Keyword getDatatype() { return reader.getDatatype(); }
+  public Object getDatatype() { return reader.getDatatype(); }
   public long lsize() { return num_elems - idx; }
   public boolean hasNext() { return idx < num_elems; }
   public long nextLong() {

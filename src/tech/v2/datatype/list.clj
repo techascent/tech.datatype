@@ -420,10 +420,13 @@
 (defn ensure-dtype-matches
   [item dtype]
   (when item
-    (when-not (= (dtype-proto/get-datatype item)
-                 dtype)
-      (throw (Exception. (format "List datatype (%s) and value datatype (%s) do not match"
-                                 dtype (dtype-proto/get-datatype item)))))))
+    (when-not (or (= (dtype-proto/get-datatype item)
+                     dtype)
+                  (= (dtype-proto/get-rich-datatype item)
+                     dtype))
+      (throw (Exception.
+              (format "List datatype (%s) and value datatype (%s) do not match"
+                      dtype (dtype-proto/get-datatype item)))))))
 
 
 (defn make-typed-list

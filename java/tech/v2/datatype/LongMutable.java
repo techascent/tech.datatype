@@ -4,7 +4,7 @@ import clojure.lang.Keyword;
 
 public interface LongMutable extends MutableRemove
 {
-  default Keyword getDatatype () { return Keyword.intern(null, "int64"); }
+  default Object getDatatype () { return Keyword.intern(null, "int64"); }
   void insert(long idx, long value);
   default void append(long value)
   {

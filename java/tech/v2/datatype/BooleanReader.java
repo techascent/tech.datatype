@@ -11,7 +11,7 @@ import clojure.lang.RT;
 public interface BooleanReader extends IOBase, Iterable, IFn, List, RandomAccess
 {
   boolean read(long idx);
-  default Keyword getDatatype () { return Keyword.intern(null, "boolean"); }
+  default Object getDatatype () { return Keyword.intern(null, "boolean"); }
   default int size() { return RT.intCast(lsize()); }
   default Object get(int idx) { return read(idx); }
   default boolean isEmpty() { return lsize() == 0; }

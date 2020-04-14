@@ -20,16 +20,16 @@ public class IteratorObjectIter implements ObjectIter
     if( has_next )
       current_object = iter.next();
   }
-  public Keyword getDatatype() { return dtype; }
+  public Object getDatatype() { return dtype; }
   public boolean hasNext() { return has_next; }
   public Object next() {
     //Force exception from base iterator.
     if (!has_next)
       iter.next();
-    
+
     Object retval = current_object;
     has_next = iter.hasNext();
-    if (has_next) {      
+    if (has_next) {
       current_object = iter.next();
     }
     else {

@@ -7,7 +7,7 @@ import clojure.lang.Keyword;
 
 public interface SimpleLongSet extends IOBase, LongSet
 {
-  default Keyword getDatatype () { return Keyword.intern(null, "int64"); }
+  default Object getDatatype () { return Keyword.intern(null, "int64"); }
   default int size() { return RT.intCast(lsize()); }
   default boolean contains(Long obj) { return lcontains(RT.longCast(obj)); }
   default boolean contains(long obj) { return lcontains(obj); }

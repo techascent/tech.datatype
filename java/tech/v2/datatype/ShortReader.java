@@ -11,7 +11,7 @@ import clojure.lang.RT;
 public interface ShortReader extends IOBase, Iterable, IFn, List, RandomAccess
 {
   short read(long idx);
-  default Keyword getDatatype () { return Keyword.intern(null, "int16"); }
+  default Object getDatatype () { return Keyword.intern(null, "int16"); }
   default int size() { return RT.intCast(lsize()); }
   default Object get(int idx) { return read(idx); }
   default boolean isEmpty() { return lsize() == 0; }

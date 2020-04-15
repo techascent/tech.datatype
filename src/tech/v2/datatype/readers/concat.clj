@@ -6,6 +6,9 @@
   (:import [java.util List]))
 
 
+(set! *warn-on-reflection* true)
+
+
 (defmacro make-dual-reader-impl
   [datatype]
   `(fn [datatype# concat-args#]
@@ -14,8 +17,8 @@
            total-size# (long (apply + (map #(dtype-base/ecount %) reader-args#)))
            first-arg# (first concat-args#)
            second-arg# (second concat-args#)
-           first-reader# (.get reader-args# 0)
-           second-reader# (.get reader-args# 1)
+           first-reader# (typecast/datatype->reader ~datatype (.get reader-args# 0))
+           second-reader# (typecast/datatype->reader ~datatype (.get reader-args# 1))
            initial-ecount# (dtype-base/ecount first-reader#)
            has-min-max?# (and (dtype-proto/has-constant-time-min-max? first-arg#)
                               (dtype-proto/has-constant-time-min-max? second-arg#))

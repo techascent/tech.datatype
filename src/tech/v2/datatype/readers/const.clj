@@ -5,6 +5,17 @@
             [tech.v2.datatype.monotonic-range :as dtype-range]))
 
 
+(set! *warn-on-reflection* true)
+
+
+(defmacro make-single-elem-range
+  [datatype elem]
+  (when (casting/integer-type? datatype)
+    `(dtype-range/make-range
+      (long ~elem)
+      (unchecked-inc (long ~elem)))))
+
+
 (defmacro make-const-reader-macro
   [datatype]
   `(fn [item# num-elems# datatype#]
@@ -26,7 +37,7 @@
                 (casting/integer-type? ~datatype)))
          (->range [this# options#]
            (when (== 1 num-elems#)
-             (dtype-range/make-range item# (unchecked-inc item#))))))))
+             (make-single-elem-range ~datatype item#)))))))
 
 
 (def const-reader-table (casting/make-base-datatype-table

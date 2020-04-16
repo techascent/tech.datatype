@@ -59,11 +59,11 @@
 
 (defn argsort
   [values {:keys [parallel?
-                  typed-comparator
+                  comparator
                   datatype
                   reverse?]
            :or {parallel? true}
            :as options}]
   (let [datatype (or datatype (dtype-base/get-datatype values))
         sort-fn (get argsort-table (casting/safe-flatten datatype))]
-    (sort-fn values parallel? reverse? typed-comparator)))
+    (sort-fn values parallel? reverse? comparator)))

@@ -7,7 +7,7 @@
 (defmacro make-indexed-reader-impl
   [datatype]
   `(fn [indexes# values# unchecked?#]
-     (let [idx-reader# (typecast/datatype->reader :int32 indexes# true)
+     (let [idx-reader# (typecast/datatype->reader :int64 indexes# true)
            values-dtype# (dtype-proto/get-datatype values#)
            values# (typecast/datatype->reader ~datatype values# unchecked?#)
            n-elems# (.lsize idx-reader#)]
@@ -36,7 +36,12 @@
   ([indexes values {:keys [datatype unchecked?] :as options}]
    (let [datatype (or datatype (dtype-proto/get-datatype values))
          values (dtype-proto/->reader values (assoc options :datatype datatype))
-         reader-fn (get indexed-reader-creators (casting/safe-flatten datatype))]
+         reader-fn (get indexed-reader-creators (casting/safe-flatten datatype))
+         indexes (typecast/datatype->reader
+                  :int64
+                  (if (dtype-proto/convertible-to-reader? indexes)
+                    indexes
+                    (long-array indexes)))]
      (reader-fn indexes values unchecked?)))
   ([indexes values]
    (make-indexed-reader indexes values {})))

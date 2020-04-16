@@ -115,7 +115,7 @@
 (defn argsort
   "Return a list of indexes in sorted-values order.  Values must be
   convertible to a reader.  Sorts least-to-greatest by default
-  unless either reverse? is specified or a correctly typed comparator
+  unless either reverse? is specified or a comparator
   is provided.
   Returns an int32 array or indexes."
   [values & {:keys [parallel?]

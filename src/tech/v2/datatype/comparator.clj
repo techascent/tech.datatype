@@ -1,5 +1,6 @@
 (ns tech.v2.datatype.comparator
-  (:require [tech.v2.datatype.protocols :as dtype-proto])
+  (:require [tech.v2.datatype.protocols :as dtype-proto]
+            [tech.v2.datatype.casting :as casting])
   (:import [it.unimi.dsi.fastutil.bytes ByteArrays ByteComparator]
            [it.unimi.dsi.fastutil.shorts ShortArrays ShortComparator]
            [it.unimi.dsi.fastutil.ints IntArrays IntComparator]
@@ -102,15 +103,20 @@
     :int64 `(Long/compare ~lhs ~rhs)
     :float32 `(Float/compare ~lhs ~rhs)
     :float64 `(Double/compare ~lhs ~rhs)
-    :object `(comparator <)))
+    :object `(compare ~lhs ~rhs)))
 
 
-(defmacro default-comparator
+(defn default-comparator
   [datatype]
-  (if (= datatype :object)
-    `(comparator <)
-    `(make-comparator ~datatype
-                      (default-compare-fn ~datatype ~'lhs ~'rhs))))
+  (let [datatype (casting/safe-flatten datatype)]
+    (case datatype
+      :object (make-comparator :object (default-compare-fn :object lhs rhs))
+      :int8 (make-comparator :int8 (default-compare-fn :int8 lhs rhs))
+      :int16 (make-comparator :int16 (default-compare-fn :int16 lhs rhs))
+      :int32 (make-comparator :int32 (default-compare-fn :int32 lhs rhs))
+      :int64 (make-comparator :int64 (default-compare-fn :int64 lhs rhs))
+      :float32 (make-comparator :float32 (default-compare-fn :float32 lhs rhs))
+      :float64 (make-comparator :float64 (default-compare-fn :float64 lhs rhs)))))
 
 
 (extend-protocol dtype-proto/PDatatype

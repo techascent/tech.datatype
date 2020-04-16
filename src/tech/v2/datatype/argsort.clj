@@ -18,7 +18,7 @@
             Comparator$LongComp
             Comparator$FloatComp
     Comparator$DoubleComp]
-   [java.util Comparator]))
+   [java.util Comparator Arrays]))
 
 
 (set! *warn-on-reflection* true)
@@ -33,7 +33,9 @@
            n-elems# (int (dtype-proto/ecount values#))]
        (if (= n-elems# 0)
          (int-array 0)
-         (let [index-array# (int-array (range n-elems#))
+         (let [^"[I" index-array# (dtype-proto/make-container :java-array :int32
+                                                              (range n-elems#)
+                                                              {:unchecked? true})
                values# (typecast/datatype->reader ~datatype values# true)
                value-comparator# (dtype-comp/datatype->comparator ~datatype comparator#)
                idx-comparator# (if reverse?#
@@ -45,12 +47,9 @@
                                   :int32 (.compare value-comparator#
                                                    (.read values# ~'lhs)
                                                    (.read values# ~'rhs))))]
-
            (if parallel?#
-             (IntArrays/parallelQuickSort index-array# (dtype-comp/int32-comparator
-                                                        idx-comparator#))
-             (IntArrays/quickSort index-array# (dtype-comp/int32-comparator
-                                                idx-comparator#)))
+             (IntArrays/parallelQuickSort index-array# ^IntComparator idx-comparator#)
+             (IntArrays/quickSort index-array# ^IntComparator idx-comparator#))
            index-array#)))))
 
 
@@ -63,7 +62,8 @@
                   typed-comparator
                   datatype
                   reverse?]
-           :or {parallel? true}}]
+           :or {parallel? true}
+           :as options}]
   (let [datatype (or datatype (dtype-base/get-datatype values))
         sort-fn (get argsort-table (casting/safe-flatten datatype))]
     (sort-fn values parallel? reverse? typed-comparator)))

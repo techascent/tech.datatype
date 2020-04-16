@@ -216,3 +216,10 @@
     (is (every? dtype-dt/datetime-datatype?
                 (map dtype/get-datatype
                      [min mean max standard-deviation])))))
+
+
+(deftest argsort-instants
+  (let [inst-data (-> (dtype/make-container :typed-buffer :instant 20)
+                      (dtype-dt-ops/plus-days (range 20)))
+        sorted-data (dfn/argsort inst-data)]
+    (is (apply < sorted-data))))

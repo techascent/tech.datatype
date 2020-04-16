@@ -620,7 +620,8 @@
               lhs)
         unary-op (get-in java-time-ops [lhs-dtype :int64-getters
                                         unary-op-name])
-        result-dtype (if (= unary-op-name :epoch-milliseconds)
+        result-dtype (if (or (= unary-op-name :epoch-milliseconds)
+                             (= unary-op-name :epoch-seconds))
                        unary-op-name
                        :int64)]
     (when-not unary-op

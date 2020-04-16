@@ -332,14 +332,14 @@
   (^LocalDateTime [^Instant inst ^ZoneId zone-id]
    (LocalDateTime/ofInstant inst zone-id))
   (^LocalDateTime [^Instant inst]
-   (LocalDateTime/ofInstant inst (ZoneId/systemDefault))))
+   (LocalDateTime/ofInstant inst (utc-zone-id))))
 
 
 (defn local-date-time->instant
   (^Instant [^LocalDateTime ldt ^ZoneOffset offset]
    (.toInstant ldt offset))
   (^Instant [^LocalDateTime ldt]
-   (local-date-time->instant ldt (system-zone-offset))))
+   (local-date-time->instant ldt (utc-zone-offset))))
 
 
 (defn local-date-time

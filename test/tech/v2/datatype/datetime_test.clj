@@ -223,3 +223,37 @@
                       (dtype-dt-ops/plus-days (range 20)))
         sorted-data (dfn/argsort inst-data)]
     (is (apply < sorted-data))))
+
+
+(deftest duration-days-are-doubles
+  (let [hour-range (range 0 96 12)
+        test-data (dtype-dt-ops/plus-hours (dtype-dt/duration) hour-range)]
+    (is (= (vec (dtype-dt-ops/get-days test-data))
+           (vec (map #(/ % 24.0) hour-range))))))
+
+
+(deftest add-duration-days-to-local-dates
+  (let [hour-range (range 0 96 12)
+        test-data (dtype-dt/pack (dtype-dt-ops/plus-hours
+                                  (dtype-dt/duration) hour-range))
+        test-local-date (dtype-dt/local-date)
+        date-data (dtype-dt/pack (dtype-dt-ops/plus-duration
+                                  (dtype-dt/local-date) test-data))]
+    (is (= (vec (dfn/- (dtype-dt-ops/get-days date-data)
+                       (dtype-dt-ops/get-days test-local-date)))
+           (vec (map #(Math/round (/ % 24.0)) hour-range))))))
+
+
+
+(deftest add-duration-days-to-instants
+  (let [hour-range (range 0 96 12)
+        test-data (dtype-dt/pack (dtype-dt-ops/plus-hours
+                                  (dtype-dt/duration) hour-range))
+        test-local-date (dtype-dt/instant)
+        date-data (dtype-dt/pack (dtype-dt-ops/plus-duration
+                                  (dtype-dt/instant) test-data))]
+    (is (= (vec (dfn//
+                 (dfn/- (dtype-dt-ops/get-epoch-milliseconds date-data)
+                        (dtype-dt-ops/get-epoch-milliseconds test-local-date))
+                 (double (dtype-dt/milliseconds-in-day))))
+           (vec (map #(/ % 24.0) hour-range))))))

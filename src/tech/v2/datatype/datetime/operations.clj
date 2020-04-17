@@ -347,25 +347,36 @@
     :duration-get-seconds
     :object
     (when x
-      (.getSeconds ^Duration x)))
+      (/ (dtype-dt/duration->milliseconds x)
+         1000.0)))
    :minutes
    (unary-op/make-unary-op
     :duration-get-minutes
     :object
     (when x
-      (.toMinutes ^Duration x)))
+      (/ (dtype-dt/duration->milliseconds x)
+         60000.0)))
    :hours
    (unary-op/make-unary-op
     :duration-get-hours
     :object
     (when x
-      (.toHours ^Duration x)))
+      (/ (dtype-dt/duration->milliseconds x)
+         3600000.0)))
    :days
    (unary-op/make-unary-op
     :duration-get-hours
     :object
     (when x
-      (.toDays ^Duration x)))})
+      (/ (dtype-dt/duration->milliseconds x)
+         86400000.0)))
+   :weeks
+   (unary-op/make-unary-op
+    :duration-get-weeks
+    :object
+    (when x
+      (/ (dtype-dt/duration->milliseconds x)
+         6.048E8)))})
 
 
 (defn- duration-before
@@ -380,7 +391,7 @@
 
 (def ^:private duration-time-ops
    {:numeric-ops duration-numeric-ops
-    :int64-getters duration-getters
+    :duration-getters duration-getters
     :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
         :lt :duration
@@ -464,18 +475,25 @@
   (->> packed-duration-conversions
        (mapcat (fn [conv-name]
                  [[conv-name
-                   `(unary-op/make-unary-op
-                     ~conv-name :int64
-                     (pmath/+ (quot ~'x
-                                    (packed-duration-conversion-table
-                                     ~conv-name)
-                                    )))]]))
+                   (if (#{:nanoseconds :milliseconds} conv-name)
+                     `(unary-op/make-unary-op
+                       ~conv-name :int64
+                       (pmath/+ (quot ~'x
+                                   (packed-duration-conversion-table
+                                    ~conv-name)
+                                   )))
+                     `(unary-op/make-unary-op
+                       ~conv-name :float64
+                       (pmath/+ (/ (double ~'x)
+                                   (packed-duration-conversion-table
+                                    ~conv-name)
+                                   ))))]]))
        (into {})))
 
 
 (def packed-duration-time-ops
   {:numeric-ops (packed-duration-numeric-ops)
-   :int64-getters (packed-duration-getters)
+   :duration-getters (packed-duration-getters)
    :boolean-ops
     {:< (boolean-op/make-boolean-binary-op
         :lt :packed-duration
@@ -635,6 +653,30 @@
        :reader
        (unary-op/unary-reader-map {} unary-op lhs))
      (dtype-proto/set-datatype result-dtype))))
+
+
+(defn- perform-duration-getter
+  [lhs unary-op-name]
+  (let [lhs-argtype (arg->arg-type lhs)
+        lhs-dtype (collapse-date-datatype lhs)
+        op-dtype (if (#{:nanoseconds :milliseconds} unary-op-name)
+                   :int64
+                   :float64)
+        lhs (if (dtype-dt/packed-datatype? lhs-dtype)
+              (dtype-proto/set-datatype lhs op-dtype)
+              lhs)
+        unary-op (get-in java-time-ops [lhs-dtype :duration-getters
+                                        unary-op-name])]
+    (when-not unary-op
+      (throw (Exception. (format "Could not find getter: %s" unary-op-name) )))
+    (-> (case lhs-argtype
+          :scalar
+          (unary-op lhs)
+          :iterable
+          (unary-op/unary-iterable-map {} unary-op lhs)
+          :reader
+          (unary-op/unary-reader-map {} unary-op lhs))
+        (dtype-proto/set-datatype op-dtype))))
 
 
 (defn- perform-time-op
@@ -917,27 +959,21 @@
             (dtype-proto/->iterable {:datatype :int64}))))))
 
 
-(defmacro ^:private declare-int64-getters
+(defmacro ^:private declare-getters
   []
   `(do
-     ~@(->> dtype-dt/keyword->temporal-field
-            (map (fn [[k v]]
+     ~@(->> (concat (keys dtype-dt/keyword->temporal-field)
+                    [:milliseconds :nanoseconds])
+            (map (fn [k]
                    `(defn ~(symbol (str "get-" (name k)))
                       [~'item]
-                      (perform-int64-getter ~'item ~k)))))))
+                      (if (dtype-dt/duration-datatype?
+                           (dtype-base/get-datatype ~'item))
+                        (perform-duration-getter ~'item ~k)
+                        (perform-int64-getter ~'item ~k))))))))
 
 
-(declare-int64-getters)
-
-
-(defn get-milliseconds
-  [item]
-  (perform-int64-getter item :milliseconds))
-
-
-(defn get-nanoseconds
-  [item]
-  (perform-int64-getter item :nanoseconds))
+(declare-getters)
 
 
 (defn get-epoch-milliseconds
@@ -995,10 +1031,22 @@
 (declare-plus-minus-ops)
 
 
+(defn- local-date-datatype?
+  [dtype]
+  (or (= dtype :local-date)
+      (= dtype :packed-local-date)))
+
+
 (defn plus-temporal-amount
   [lhs rhs]
-  (perform-commutative-temporal-amount-op
-   lhs rhs :plus-temporal-amount))
+  (cond
+    (local-date-datatype? (dtype-base/get-datatype lhs))
+    (plus-days lhs (dfn/round (get-days rhs)))
+    (local-date-datatype? (dtype-base/get-datatype rhs))
+    (plus-days rhs (dfn/round (get-days lhs)))
+    :else
+    (perform-commutative-temporal-amount-op
+     lhs rhs :plus-temporal-amount)))
 
 
 (defn minus-temporal-amount

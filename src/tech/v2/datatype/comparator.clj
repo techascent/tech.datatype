@@ -29,34 +29,6 @@
     :object 'java.util.Comparator))
 
 
-(defmacro datatype->comp-impl
-  [datatype comparator]
-  `(if (instance? ~(resolve (datatype->comparator-type datatype)) ~comparator)
-     ~comparator
-     (throw (ex-info (format "Comparator is not of correct type: %s" ~comparator) {}))))
-
-
-(defn int8-comparator ^ByteComparator [item] (datatype->comp-impl :int8 item))
-(defn int16-comparator ^ShortComparator [item] (datatype->comp-impl :int16 item))
-(defn int32-comparator ^IntComparator [item] (datatype->comp-impl :int32 item))
-(defn int64-comparator ^LongComparator [item] (datatype->comp-impl :int64 item))
-(defn float32-comparator ^FloatComparator [item] (datatype->comp-impl :float32 item))
-(defn float64-comparator ^DoubleComparator [item] (datatype->comp-impl :float64 item))
-(defn object-comparator ^Comparator [item] (datatype->comp-impl :object item))
-
-
-(defmacro datatype->comparator
-  [datatype comp-item]
-  (case datatype
-    :int8 `(int8-comparator ~comp-item)
-    :int16 `(int16-comparator ~comp-item)
-    :int32 `(int32-comparator ~comp-item)
-    :int64 `(int64-comparator ~comp-item)
-    :float32 `(float32-comparator ~comp-item)
-    :float64 `(float64-comparator ~comp-item)
-    :object `(object-comparator ~comp-item)))
-
-
 (defn datatype->tech-comparator-type
   [datatype]
   (case datatype
@@ -92,6 +64,38 @@
      (~(datatype->tech-comparator-fn-name datatype)
       [item# ~'lhs ~'rhs]
       ~comp-body)))
+
+
+(defmacro datatype->comp-impl
+  [datatype comparator]
+  `(if (instance? ~(resolve (datatype->comparator-type datatype)) ~comparator)
+     ~comparator
+     (if (instance? Comparator comparator)
+       (make-comparator ~datatype
+                        (.compare ^Comparator ~comparator ~'lhs ~'rhs))
+       (throw (ex-info (format "Comparator is not of correct type: %s"
+                               ~comparator) {})))))
+
+
+(defn int8-comparator ^ByteComparator [item] (datatype->comp-impl :int8 item))
+(defn int16-comparator ^ShortComparator [item] (datatype->comp-impl :int16 item))
+(defn int32-comparator ^IntComparator [item] (datatype->comp-impl :int32 item))
+(defn int64-comparator ^LongComparator [item] (datatype->comp-impl :int64 item))
+(defn float32-comparator ^FloatComparator [item] (datatype->comp-impl :float32 item))
+(defn float64-comparator ^DoubleComparator [item] (datatype->comp-impl :float64 item))
+(defn object-comparator ^Comparator [item] (datatype->comp-impl :object item))
+
+
+(defmacro datatype->comparator
+  [datatype comp-item]
+  (case datatype
+    :int8 `(int8-comparator ~comp-item)
+    :int16 `(int16-comparator ~comp-item)
+    :int32 `(int32-comparator ~comp-item)
+    :int64 `(int64-comparator ~comp-item)
+    :float32 `(float32-comparator ~comp-item)
+    :float64 `(float64-comparator ~comp-item)
+    :object `(object-comparator ~comp-item)))
 
 
 (defmacro default-compare-fn

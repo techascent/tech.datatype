@@ -495,3 +495,12 @@
 (deftest is-mathematical-integer?
   (is (= [true false true true false]
          (vec (dfn/is-mathematical-integer? [1.0 1.1 1000 1.26e4 1.26e-3])))))
+
+
+(deftest argsort-generic
+  (let [data (dtype/make-container :java-array :int16 (shuffle
+                                                       (range 10)))
+        indexes (dfn/argsort data :comparator (comparator >))
+        new-data (dtype/indexed-reader indexes data)]
+    (is (= (vec (reverse (range 10)))
+           (vec new-data)))))

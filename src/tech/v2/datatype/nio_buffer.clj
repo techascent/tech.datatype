@@ -125,7 +125,7 @@
         (let [item# (typecast/datatype->buffer-cast-fn ~datatype item#)
               offset# (int offset#)
               elem-count# (int elem-count#)
-              value# (casting/cast value# ~datatype)
+              value# (casting/datatype->unchecked-cast-fn :unknown ~datatype value#)
               zero-val# (casting/cast 0 ~datatype)]
           (if (or (= value# zero-val#)
                   (= ~datatype :int8))

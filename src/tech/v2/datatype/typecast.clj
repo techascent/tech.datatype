@@ -639,3 +639,16 @@
   (if-let [jmap (as-java-map item)]
     jmap
     (throw (Exception. "Item is not a map: %s" item))))
+
+(defmacro datatype->value
+  "Convert an item into a known value type"
+  [datatype item]
+  (case (casting/safe-flatten datatype)
+    :int8    `^byte   ~item
+    :int16   `^short  ~item
+    :int32   `^int    ~item
+    :int64   `^long   ~item
+    :float32 `^float  ~item
+    :float64 `^double ~item
+    :boolean `^bool   ~item
+    :object  `~item))

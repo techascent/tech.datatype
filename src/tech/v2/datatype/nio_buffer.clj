@@ -135,7 +135,7 @@
             (let [buf-pos# (.position item#)]
               (parallel-for/parallel-for
                idx# elem-count#
-               (buf-put item# (+ idx# offset#) buf-pos# value#))))))}
+               (buf-put item# (+ idx# offset#) buf-pos# (typecast/datatype->value ~datatype value#)))))))}
 
 
      dtype-proto/PBuffer

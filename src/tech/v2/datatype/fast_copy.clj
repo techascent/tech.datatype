@@ -5,7 +5,8 @@
             [tech.v2.datatype.casting :as casting]
             [tech.parallel.for :as parallel-for]
             [tech.v2.datatype.nio-access :refer [buf-put buf-get
-                                              datatype->list-read-fn]])
+                                                 datatype->list-read-fn]]
+            [tech.v2.datatype.direct-mapped :as direct-mapped])
   (:import  [com.sun.jna Pointer]
             [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
             [it.unimi.dsi.fastutil.shorts ShortList ShortArrayList]
@@ -23,7 +24,8 @@
              LongReader LongWriter
              FloatReader FloatWriter
              DoubleReader DoubleWriter
-             BooleanReader BooleanWriter]
+             BooleanReader BooleanWriter
+             DirectMappedOps]
             [tech.v2.datatype.protocols PToReader PToWriter]))
 
 
@@ -31,12 +33,14 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(jna/def-jna-fn (jna/c-library-name) memcpy
+(defn memcpy
   "Copy bytes from one object to another"
-  Pointer
-  [dst typecast/ensure-ptr-like]
-  [src typecast/ensure-ptr-like]
-  [n-bytes int])
+  ^Pointer [dst src n-bytes]
+  ;;Ensure functions are bound
+  @direct-mapped/direct-mapping
+  (DirectMappedOps/memcpy (typecast/ensure-ptr-like dst)
+                          (typecast/ensure-ptr-like src)
+                          (int n-bytes)))
 
 
 (defmacro parallel-slow-copy

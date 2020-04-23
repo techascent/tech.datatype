@@ -11,10 +11,12 @@
             [tech.v2.datatype.writer :as writer]
             [tech.v2.datatype.array]
             [tech.resource :as resource]
-            [tech.parallel.for :as parallel-for])
+            [tech.parallel.for :as parallel-for]
+            [tech.v2.datatype.direct-mapped :as direct-mapped])
   (:import [com.sun.jna Pointer Native]
            [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
+           [java.util Arrays]
            [tech.v2.datatype
             ObjectReader ObjectWriter ObjectMutable
             ByteReader ByteWriter ByteMutable
@@ -23,7 +25,8 @@
             LongReader LongWriter LongMutable
             FloatReader FloatWriter FloatMutable
             DoubleReader DoubleWriter DoubleMutable
-            BooleanReader BooleanWriter BooleanMutable]))
+            BooleanReader BooleanWriter BooleanMutable
+            DirectMappedOps]))
 
 
 (set! *warn-on-reflection* true)
@@ -61,13 +64,12 @@
            (< lhs-off (+ rhs-off rhs-len)))))
 
 
-(jna/def-jna-fn (jna/c-library-name) memset
-  "Set a block of memory to a value"
-  Pointer
-  [data typecast/ensure-ptr-like]
-  [val int]
-  [num-bytes int])
-
+(defn memset
+  "Copy bytes from one object to another"
+  ^Pointer [data val n-bytes]
+  ;;Ensure functions are bound
+  @direct-mapped/direct-mapping
+  (DirectMappedOps/memset data (int val) (int n-bytes)))
 
 
 (defmacro implement-buffer-type
@@ -127,11 +129,19 @@
               elem-count# (int elem-count#)
               value# (casting/datatype->unchecked-cast-fn :unknown ~datatype value#)
               zero-val# (casting/cast 0 ~datatype)]
-          (if (or (= value# zero-val#)
-                  (= ~datatype :int8))
-            (memset (dtype-proto/sub-buffer item# offset# elem-count#)
+          (cond
+            (not (.isDirect item#))
+            (let [java-array# (.array item#)
+                  offset# (.position item#)
+                  length# (unchecked-int (dtype-proto/ecount item#))]
+              (Arrays/fill java-array# offset# (unchecked-add offset# length#) value#))
+            (or (= value# zero-val#)
+                (= ~datatype :int8))
+            (memset (jna/->ptr-backing-store (dtype-proto/sub-buffer item# offset# elem-count#))
                     (int value#)
                     (* elem-count# (casting/numeric-byte-width ~datatype)))
+            ;;Slowest fallback
+            :else
             (let [buf-pos# (.position item#)]
               (parallel-for/parallel-for
                idx# elem-count#

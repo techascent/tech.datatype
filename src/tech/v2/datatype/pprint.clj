@@ -36,11 +36,12 @@
 (defn print-reader-data
   [rdr & {:keys [formatter]
           :or {formatter format-object}}]
-  (let [rdr (reader-converter rdr)]
-    (->> (dtype-proto/->reader rdr {})
-         (reduce (fn [^StringBuilder builder val]
-                   (.append builder
-                            (formatter val))
-                   (.append builder ", "))
-                 (StringBuilder.))
-         (.toString))))
+  (let [rdr (reader-converter rdr)
+        ^StringBuilder builder
+        (->> (dtype-proto/->reader rdr {})
+             (reduce (fn [^StringBuilder builder val]
+                       (.append builder
+                                (formatter val))
+                       (.append builder ", "))
+                     (StringBuilder.)))]
+    (.toString builder)))

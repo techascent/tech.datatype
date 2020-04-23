@@ -16,6 +16,8 @@
     Comparator$DoubleComp]
    [java.util Comparator]))
 
+(set! *warn-on-reflection* true)
+
 
 (defn datatype->comparator-type
   [datatype]
@@ -65,14 +67,17 @@
       [item# ~'lhs ~'rhs]
       ~comp-body)))
 
+(defn- as-comp ^Comparator [item] item)
+
 
 (defmacro datatype->comp-impl
   [datatype comparator]
   `(if (instance? ~(resolve (datatype->comparator-type datatype)) ~comparator)
      ~comparator
-     (if (instance? Comparator comparator)
-       (make-comparator ~datatype
-                        (.compare ^Comparator ~comparator ~'lhs ~'rhs))
+     (if (instance? Comparator ~comparator)
+       (let [base-comp# (as-comp ~comparator)]
+         (make-comparator ~datatype
+                          (.compare base-comp# ~'lhs ~'rhs)))
        (throw (ex-info (format "Comparator is not of correct type: %s"
                                ~comparator) {})))))
 

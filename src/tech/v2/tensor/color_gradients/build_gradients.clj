@@ -21,7 +21,7 @@
         _ (bufimg/save! img "PNG" "temp.png")
         sh-val (sh/sh "mogrify" "-trim" "temp.png")
         _ (when-not (= 0 (long (:exit sh-val)))
-            (throw (Exception. (:err sh-val))))
+            (throw (Exception. (str (:err sh-val)))))
         img (bufimg/load "temp.png")
         ;;Ensure we know the format of the image.
         dst-img (bufimg/new-image (.getWidth img) (.getHeight img) :byte-bgr)

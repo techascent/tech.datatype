@@ -8,7 +8,8 @@
             [tech.v2.datatype.binary-op :as dtype-binary]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.iterable.masked :as masked-iterable]
-            [tech.v2.datatype.double-ops :as double-ops])
+            [tech.v2.datatype.double-ops :as double-ops]
+            [tech.parallel.for :as parallel-for])
   (:import [tech.v2.datatype
             BooleanOp$ByteBinary
             BooleanOp$ShortBinary
@@ -26,7 +27,10 @@
             BooleanOp$DoubleUnary
             UnaryOperators$BooleanUnary
             BooleanOp$ObjectUnary]
-           [clojure.lang IFn]))
+           [clojure.lang IFn]
+           [it.unimi.dsi.fastutil.longs LongArrayList]
+           [it.unimi.dsi.fastutil.ints IntArrayList]
+           [org.roaringbitmap RoaringBitmap]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -612,34 +616,80 @@
     (boolean-unary-reader-map options bool-un-op item)
     (boolean-unary-iterable-map options bool-un-op item)))
 
+(defn- int64-list-combine
+  ^LongArrayList [^LongArrayList lhs ^LongArrayList rhs]
+  (.addAll lhs rhs)
+  lhs)
 
-(defn- bool-reader-indexes->long-array
+(defn- int32-list-combine
+  ^IntArrayList [^IntArrayList lhs ^IntArrayList rhs]
+  (.addAll lhs rhs)
+  lhs)
+
+(defn- bitmap-combine
+  ^RoaringBitmap [^RoaringBitmap lhs ^RoaringBitmap rhs]
+  (.or lhs rhs)
+  lhs)
+
+
+(defmacro bool-reader->storage
+  [storage-type options bool-item]
+  `(let [n-elems# (dtype-base/ecount ~bool-item)
+         reader# (typecast/datatype->reader :boolean ~bool-item)]
+     (parallel-for/indexed-map-reduce
+      n-elems#
+      (fn [start-idx# len#]
+        (let [start-idx# (long start-idx#)
+              len# (long len#)
+              idx-data# ~(case storage-type
+                           :int64-array `(LongArrayList.)
+                           :int32-array `(IntArrayList.)
+                           :bitmap `(RoaringBitmap.))]
+          (dotimes [iter# len#]
+            (let [iter-idx# (unchecked-add start-idx# iter#)]
+              (when (.read reader# iter-idx#)
+                (.add idx-data# (unchecked-add start-idx# iter#)))))
+          idx-data#))
+      (fn [idx-lists#]
+        (reduce ~(case storage-type
+                   :int64-array `int64-list-combine
+                   :int32-array `int32-list-combine
+                   :bitmap `bitmap-combine)
+                idx-lists#)))))
+
+
+(defn bool-reader-indexes->long-array
+  ^LongArrayList [options bool-item]
+  (bool-reader->storage :int64-array options bool-item))
+
+(defn bool-reader-indexes->int-array
+  ^IntArrayList [options bool-item]
+  (bool-reader->storage :int32-array options bool-item))
+
+(defn bool-reader-indexes->bitmap
+  ^RoaringBitmap [options bool-item]
+  (bool-reader->storage :bitmap options bool-item))
+
+
+(defn bool-reader-indexes->-array
   [options bool-item]
-  (let [n-cpus (.availableProcessors (Runtime/getRuntime))
-        n-elems (dtype-base/ecount bool-item)
-        block-size (inc (quot n-elems n-cpus))
-        index-datatype (or (:index-datatype options)
-                           :int64)
-        results
-        (->> (range n-cpus)
-             (pmap (fn [idx]
-                     (let [start-idx (* (long idx) block-size)
-                           end-elem (min n-elems (+ start-idx block-size))
-                           sub-rdr (dtype-base/sub-buffer bool-item start-idx
-                                                          (- end-elem start-idx))]
-                       (->> (masked-iterable/iterable-mask
-                             (assoc options :datatype index-datatype)
-                             sub-rdr (reader-range/reader-range
-                                      index-datatype start-idx end-elem))
-                            long-array)))))
-        n-results (long (apply + 0 (map dtype-base/ecount results)))]
-    (-> (dtype-proto/copy-raw->item! results
-                                     (dtype-base/make-container
-                                      :java-array
-                                      index-datatype
-                                      n-results) 0
-                                     {})
-        first)))
+  (let [n-elems (dtype-base/ecount bool-item)
+        reader (typecast/datatype->reader :boolean bool-item)]
+    (parallel-for/indexed-map-reduce
+     n-elems
+     (fn [start-idx len]
+       (let [start-idx (long start-idx)
+             len (long len)
+             idx-data (IntArrayList.)]
+         (dotimes [iter len]
+           (when (.read reader (unchecked-add start-idx iter))
+             (.add idx-data (unchecked-add start-idx iter))))
+         idx-data))
+     (fn [idx-lists]
+       (reduce (fn [^IntArrayList lhs ^IntArrayList rhs]
+                 (.addAll lhs rhs)
+                 lhs)
+               idx-lists)))))
 
 
 (defn unary-argfilter

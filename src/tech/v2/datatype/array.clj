@@ -7,6 +7,7 @@
             [tech.jna :as jna])
   (:import [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
+           [java.util Arrays]
            [java.lang.reflect Constructor]
            [tech.v2.datatype ObjectReader ObjectWriter]
            [it.unimi.dsi.fastutil.bytes ByteList ByteArrayList]
@@ -53,6 +54,13 @@
      {:from-prototype (fn [src-ary# datatype# shape#]
                         (make-array-of-type datatype# (base/shape->ecount shape#)))}
 
+     dtype-proto/PSetConstant
+     {:set-constant!
+      (fn [item# offset# value# elem-count#]
+        (dtype-proto/set-constant! (dtype-proto/->buffer-backing-store item#)
+                                   offset# value# elem-count#)
+        item#)}
+
      dtype-proto/PToNioBuffer
      {:convertible-to-nio-buffer? (fn [item#] true)
       :->buffer-backing-store (fn [item#] (datatype->buffer-creation ~datatype item#))}
@@ -93,6 +101,14 @@
   dtype-proto/PCopyRawData
   (copy-raw->item! [raw-data ary-target offset options]
     (base/raw-dtype-copy! raw-data ary-target offset options))
+
+  dtype-proto/PSetConstant
+  (set-constant! [item offset value elem-count]
+    (let [offset (int offset)
+          elem-count (int elem-count)
+          value (boolean (casting/cast value :boolean))]
+      (Arrays/fill ^booleans item offset (+ offset elem-count) value))
+    item)
 
   dtype-proto/PPrototype
   (from-prototype [src-ary datatype shape]

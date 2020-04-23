@@ -132,9 +132,8 @@
           (cond
             (not (.isDirect item#))
             (let [java-array# (.array item#)
-                  offset# (.position item#)
-                  length# (unchecked-int (dtype-proto/ecount item#))]
-              (Arrays/fill java-array# offset# (unchecked-add offset# length#) value#))
+                  offset# (.position item#)]
+              (Arrays/fill java-array# offset# (unchecked-add offset# elem-count#) value#))
             (or (= value# zero-val#)
                 (= ~datatype :int8))
             (memset (jna/->ptr-backing-store (dtype-proto/sub-buffer item# offset# elem-count#))

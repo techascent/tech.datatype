@@ -6,7 +6,9 @@
         insn                             {:mvn/version "0.4.0"}
         org.ow2.asm/asm                  {:mvn/version "7.1"}
         it.unimi.dsi/fastutil            {:mvn/version "8.2.1"}
-        kixi/stats                       {:mvn/version "0.5.2"}
+        kixi/stats                       {:mvn/version "0.5.2"
+                                          :excludes [org.cojure/test.check]}
+        org.clojure/math.combinatorics   {:mvn/version "0.1.6"}
         org.apache.commons/commons-math3 {:mvn/version "3.6.1"}
         primitive-math                   {:mvn/version "0.1.6"}
         camel-snake-kebab                {:mvn/version "0.4.0"}

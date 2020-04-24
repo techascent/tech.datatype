@@ -2,13 +2,14 @@
  :deps {org.clojure/clojure              {:mvn/version "1.10.1"}
         techascent/tech.jna              {:mvn/version "3.23"}
         techascent/tech.parallel         {:mvn/version "2.8"
-                                          :excludes [asm.ow2]}
+                                          :exclusions [asm.ow2]}
         insn                             {:mvn/version "0.4.0"}
         org.ow2.asm/asm                  {:mvn/version "7.1"}
         it.unimi.dsi/fastutil            {:mvn/version "8.2.1"}
         kixi/stats                       {:mvn/version "0.5.2"
-                                          :excludes [org.cojure/test.check]}
+                                          :exclusions [org.clojure/test.check]}
         org.clojure/math.combinatorics   {:mvn/version "0.1.6"}
+        org.clojure/test.check           {:mvn/version "1.0.0"}
         org.apache.commons/commons-math3 {:mvn/version "3.6.1"}
         primitive-math                   {:mvn/version "0.1.6"}
         camel-snake-kebab                {:mvn/version "0.4.0"}

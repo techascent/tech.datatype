@@ -4,6 +4,7 @@
         techascent/tech.parallel         {:mvn/version "2.8"
                                           :excludes [asm.ow2]}
         insn                             {:mvn/version "0.4.0"}
+        org.ow2.asm/asm                  {:mvn/version "7.1"}
         it.unimi.dsi/fastutil            {:mvn/version "8.2.1"}
         kixi/stats                       {:mvn/version "0.5.2"}
         org.apache.commons/commons-math3 {:mvn/version "3.6.1"}

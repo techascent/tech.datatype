@@ -62,8 +62,22 @@
     :object `(.get ~buffer ~idx)))
 
 
+(def ary-type-set (->> ["[B" "[S" "[I" "[J" "[F" "[D" "[C" "[Z"
+                        "[Ljava.lang.Object;"]
+                       (map #(Class/forName %))
+                       set))
 
-(def nio-type-set (set [ByteBuffer ShortBuffer IntBuffer LongBuffer FloatBuffer DoubleBuffer]))
+
+(defn array-type?
+  [item-type]
+  (or (ary-type-set item-type)
+      (and (instance? Class item-type)
+           (.isArray ^Class item-type))))
+
+
+
+(def nio-type-set (set [ByteBuffer ShortBuffer IntBuffer LongBuffer
+                        FloatBuffer DoubleBuffer]))
 
 
 (defn nio-type?
@@ -90,6 +104,8 @@
       `(buf-get ~item ~idx ~pos)
       (list-type? cls-type)
       `(datatype->list-read-fn ~item-datatype ~item ~idx)
+      (array-type? cls-type)
+      `(aget ~item (pmath/+ ~idx ~pos))
       :else
       (throw (ex-info (format "Failed to discern correct read function: %s" cls-type) {})))))
 

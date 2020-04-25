@@ -3,8 +3,7 @@
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :as typecast]
-            [tech.v2.datatype.typed-buffer :as typed-buffer]
-            [tech.jna :as jna])
+            [tech.v2.datatype.typed-buffer :as typed-buffer])
   (:import [java.nio Buffer ByteBuffer ShortBuffer
             IntBuffer LongBuffer FloatBuffer DoubleBuffer]
            [java.util Arrays]

@@ -36,6 +36,43 @@
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
+(defn as-boolean-array ^booleans [item] item)
+(defn as-byte-array ^bytes [item] item)
+(defn as-short-array ^shorts [item] item)
+(defn as-int-array ^ints [item] item)
+(defn as-long-array ^longs [item] item)
+(defn as-float-array ^floats [item] item)
+(defn as-double-array ^doubles [item] item)
+(defn as-char-array ^chars [item] item)
+(defn as-object-array ^objects [item] item)
+
+
+(defmacro datatype->array-cast-fn
+  [dtype buf]
+  (case dtype
+    :int8 `(as-byte-array ~buf)
+    :int16 `(as-short-array ~buf)
+    :int32 `(as-int-array ~buf)
+    :int64 `(as-long-array ~buf)
+    :float32 `(as-float-array ~buf)
+    :float64 `(as-double-array ~buf)
+    :boolean `(as-boolean-array ~buf)
+    `(as-object-array ~buf)))
+
+
+(defmacro datatype->array-type
+  [dtype]
+  (case (casting/flatten-datatype dtype)
+    :int8 `(Class/forName "[B")
+    :int16 `(Class/forName "[S")
+    :int32 `(Class/forName "[I")
+    :int64 `(Class/forName "[J")
+    :float32 `(Class/forName "[F")
+    :float64 `(Class/forName "[D")
+    :boolean `(Class/forName "[Z")
+    :charactor `(Class/forName "[C")
+    `(Class/forName "[Ljava.lang.Object;")))
+
 
 (defmacro writer-type->datatype
   [writer-type]
@@ -392,49 +429,6 @@
     :float64 `(->float64-mutable ~mutable ~unchecked?)
     :boolean `(->boolean-mutable ~mutable ~unchecked?)
     :object `(->object-mutable ~mutable ~unchecked?)))
-
-
-(defn as-byte-array
-  ^bytes [obj] obj)
-
-(defn as-short-array
-  ^shorts [obj] obj)
-
-(defn as-int-array
-  ^ints [obj] obj)
-
-(defn as-long-array
-  ^longs [obj] obj)
-
-(defn as-float-array
-  ^floats [obj] obj)
-
-(defn as-double-array
-  ^doubles [obj] obj)
-
-(defn as-boolean-array
-  ^"[Z" [obj] obj)
-
-(defn as-char-array
-  ^"[C" [obj] obj)
-
-(defn as-object-array
-  ^"[Ljava.lang.Object;"
-  [obj] obj)
-
-
-
-(defmacro datatype->array-cast-fn
-  [dtype buf]
-  (case dtype
-    :int8 `(as-byte-array ~buf)
-    :int16 `(as-short-array ~buf)
-    :int32 `(as-int-array ~buf)
-    :int64 `(as-long-array ~buf)
-    :float32 `(as-float-array ~buf)
-    :float64 `(as-double-array ~buf)
-    :boolean `(as-boolean-array ~buf)
-    `(as-object-array ~buf)))
 
 
 

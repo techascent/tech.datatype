@@ -84,11 +84,14 @@
 (define-scalar-boolean-unary-ops)
 
 
-(def datatype-width
-  (->> [:object :float64 [:int64 :uint64]
-        :float32 [:int32 :uint32]
+(def datatype-hierarchy
+  (->> [:object
+        :float64 :float32
+        [:int64 :uint64]
+        [:int32 :uint32]
         [:uint16 :int16]
-        [:int8 :uint8] :boolean]
+        [:int8 :uint8]
+        :boolean]
        (map-indexed vector)
        (mapcat (fn [[idx entry]]
                  (if (keyword? entry)
@@ -112,15 +115,19 @@
         rhs-dtype (casting/flatten-datatype rhs-dtype)]
     (if (= lhs-dtype rhs-dtype)
       lhs-dtype
-      (let [lhs-rank (long (datatype-width lhs-dtype))
-            rhs-rank (long (datatype-width rhs-dtype))]
+      (let [lhs-rank (long (datatype-hierarchy lhs-dtype))
+            rhs-rank (long (datatype-hierarchy rhs-dtype))
+            dtype-seq [lhs-dtype rhs-dtype]
+            floating? (some #{:float32 :float64} dtype-seq)
+            object? (some #{:object} dtype-seq)]
         (cond
-          (< lhs-rank rhs-rank)
-          lhs-dtype
-          (= lhs-rank rhs-rank)
-          (next-integer-type lhs-dtype rhs-dtype)
+          (and (not= lhs-rank rhs-rank)
+               floating?)
+          :float64
+          object?
+          :object
           :else
-          rhs-dtype)))))
+          (next-integer-type lhs-dtype rhs-dtype))))))
 
 
 (defn op-argtype

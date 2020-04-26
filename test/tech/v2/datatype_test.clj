@@ -450,6 +450,16 @@
                (dfn/pow 2)
                (dfn/reduce-+))))))
 
+
+(deftest float-long->double
+  (is (= :float64
+         (dtype/get-datatype
+          (dfn/+ (float-array 5) (long-array 5)))))
+  (is (= :float64
+         (dtype/get-datatype
+          (dfn/+ (long-array 5) (float-array 5))))))
+
+
 (deftest primitives-arent-readers
   (is (not (dtype/reader? 2))))
 

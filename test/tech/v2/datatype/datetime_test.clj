@@ -252,8 +252,9 @@
         test-local-date (dtype-dt/instant)
         date-data (dtype-dt/pack (dtype-dt-ops/plus-duration
                                   (dtype-dt/instant) test-data))]
-    (is (= (vec (dfn//
-                 (dfn/- (dtype-dt-ops/get-epoch-milliseconds date-data)
-                        (dtype-dt-ops/get-epoch-milliseconds test-local-date))
-                 (double (dtype-dt/milliseconds-in-day))))
-           (vec (map #(/ % 24.0) hour-range))))))
+    (is (dfn/equals
+         (vec (dfn//
+               (dfn/- (dtype-dt-ops/get-epoch-milliseconds date-data)
+                      (dtype-dt-ops/get-epoch-milliseconds test-local-date))
+               (double (dtype-dt/milliseconds-in-day))))
+         (vec (map #(/ % 24.0) hour-range))))))

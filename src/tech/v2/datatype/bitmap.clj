@@ -8,7 +8,7 @@
             [tech.v2.datatype.nio-buffer])
   (:import [it.unimi.dsi.fastutil.longs LongSet LongIterator]
            [org.roaringbitmap RoaringBitmap ImmutableBitmapDataProvider]
-           [tech.v2.datatype SimpleLongSet LongReader LongBitmapIter]
+           [tech.v2.datatype SimpleLongSet LongReader LongBitmapIter BitmapMap]
            [clojure.lang IFn LongRange]
            [tech.v2.datatype.typed_buffer TypedBuffer]
            [java.lang.reflect Field]))
@@ -112,6 +112,12 @@
     bitmap))
 
 
+(extend-type BitmapMap
+  dtype-proto/PToBitmap
+  (convertible-to-bitmap? [item] true)
+  (as-roaring-bitmap [item] (.-slots item)))
+
+
 (defmethod print-method RoaringBitmap
   [buf w]
   (let [^java.io.Writer w w]
@@ -201,7 +207,6 @@
    (RoaringBitmap.)))
 
 
-
 (defn bitmap->efficient-random-access-reader
   [bitmap]
   (when (dtype-proto/convertible-to-bitmap? bitmap)
@@ -222,3 +227,10 @@
         (has-constant-time-min-max? [item] true)
         (constant-time-min [item] cmin)
         (constant-time-max [item] cmax)))))
+
+
+(defn bitmap-value->bitmap-map
+  "Given a bitmap and a value return an efficient implementation of
+  clojure.lang.IPersistentMap that has the given value at the given indexes."
+  [bitmap value]
+  (BitmapMap. (->bitmap bitmap) value))

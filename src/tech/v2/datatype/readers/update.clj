@@ -3,7 +3,8 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.bitmap :as bitmap])
-  (:import [java.util List Map]))
+  (:import [java.util List Map]
+           [org.roaringbitmap RoaringBitmap]))
 
 
 (set! *warn-on-reflection* true)
@@ -16,7 +17,9 @@
            src-reader# (typecast/datatype->reader ~datatype src-reader#)
            n-elems# (.lsize src-reader#)
            ^Map update-map# (typecast/->java-map update-map#)
-           bitmap# (bitmap/->bitmap (keys update-map#))]
+           ^RoaringBitmap bitmap# (if (dtype-proto/convertible-to-bitmap? update-map#)
+                                    (dtype-proto/as-roaring-bitmap update-map#)
+                                    (bitmap/->bitmap (keys update-map#)))]
        (reify ~(typecast/datatype->reader-type datatype)
          (getDatatype [item#] dtype#)
          (lsize [item#] n-elems#)

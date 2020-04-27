@@ -9,6 +9,7 @@
         kixi/stats                       {:mvn/version "0.5.2"
                                           :exclusions [org.clojure/test.check]}
         org.clojure/math.combinatorics   {:mvn/version "0.1.6"}
+        org.clojure/math.numeric-tower   {:mvn/version "0.0.4"}
         org.clojure/test.check           {:mvn/version "1.0.0"}
         org.apache.commons/commons-math3 {:mvn/version "3.6.1"}
         primitive-math                   {:mvn/version "0.1.6"}

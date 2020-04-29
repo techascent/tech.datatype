@@ -435,7 +435,6 @@
          (vec (dfn/argpartition-by #(quot (long %) 5) (range 20))))))
 
 
-
 (deftest typed-buffer-destructure
   (let [[a b c] (dtype/make-container :typed-buffer :int64 [1 2 3])]
     (is (= [a b c]
@@ -514,3 +513,21 @@
         new-data (dtype/indexed-reader indexes data)]
     (is (= (vec (reverse (range 10)))
            (vec new-data)))))
+
+
+(deftest reader-as-persistent-vector-test
+  (let [src-data (range 20)
+        ldata (long-array src-data)
+        ;;Noncopying,in-place conversion
+        buffers (->> (range 4)
+                     (map #(dtype/sub-buffer ldata (* (long %) 5) 5))
+                     (map dtype/reader-as-persistent-vector))
+        ;;copying conversion
+        vectors (map (comp vec dtype/->reader) buffers)
+        map-fn (fn [item-seq]
+                 (->> item-seq
+                      (map-indexed (fn [idx item]
+                                     [item idx]))
+                      (into {})))]
+    (is (= (map-fn buffers)
+           (map-fn vectors)))))

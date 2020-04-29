@@ -26,7 +26,9 @@
             [tech.v2.datatype.readers.const :as const-rdr]
             [tech.v2.datatype.functional]
             [tech.v2.datatype.index-algebra :as idx-alg])
-  (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader]
+  (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader
+            ListPersistentVector]
+           [clojure.lang IPersistentVector]
            [java.util Iterator List RandomAccess]
            [org.roaringbitmap RoaringBitmap]
            [tech.v2.datatype.bitmap BitmapSet])
@@ -512,6 +514,17 @@ Calls clojure.core.matrix/ecount."
   [reader select-arg]
   (-> (idx-alg/select (ecount reader) select-arg)
       (indexed-reader reader)))
+
+
+(defn reader-as-persistent-vector
+  "In-place conversion of a reader to a persistent list that gives you Clojure
+  semantics (which are excellent) for equality and hashcode implementations.
+  Use this if you intend to use readers as keys in hashmaps.  Data is not copied
+  and modification is inefficient."
+  ^IPersistentVector [reader]
+  (when-not (reader? reader)
+    (throw (Exception. "Input has to be convertible to a reader.")))
+  (ListPersistentVector. (->reader reader)))
 
 
 ;;Sparse is gone for a bit.

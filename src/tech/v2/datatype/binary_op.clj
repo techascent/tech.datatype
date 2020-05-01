@@ -4,7 +4,8 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.base :as dtype-base]
             [tech.v2.datatype.nio-access :as nio-access]
-            [tech.v2.datatype.unary-op :as unary-op])
+            [tech.v2.datatype.unary-op :as unary-op]
+            [primitive-math :as pmath])
   (:import [tech.v2.datatype
             ByteIter ShortIter IntIter LongIter
             FloatIter DoubleIter BooleanIter ObjectIter
@@ -399,7 +400,7 @@
 
 
 (defmacro make-numeric-object-binary-op
-  [opname op-code]
+  [opname op-code untyped-op-code]
   `(reify
      dtype-proto/PToBinaryOp
      (convertible-to-binary-op? [item#] true)
@@ -414,14 +415,14 @@
            :int64 (make-binary-op ~opname :int64 (unchecked-long ~op-code))
            :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
            :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
-           :object (make-binary-op ~opname :object ~op-code))))
+           :object (make-binary-op ~opname :object ~untyped-op-code))))
      dtype-proto/POperator
      (op-name [item#] ~opname)
      dtype-proto/PDatatype
      (get-datatype [item#] :object)
      IFn
      (invoke [item# ~'x ~'y]
-       ~op-code)))
+       ~untyped-op-code)))
 
 
 (defmacro make-int-long-binary-op
@@ -459,25 +460,25 @@
 
 
 (def builtin-binary-ops
-  (->> [(make-numeric-object-binary-op :+ (+ x y))
-        (make-numeric-object-binary-op :- (- x y))
-        (make-numeric-object-binary-op :/ (/ x y))
-        (make-numeric-object-binary-op :* (* x y))
+  (->> [(make-numeric-object-binary-op :+ (pmath/+ x y) (+ x y))
+        (make-numeric-object-binary-op :- (pmath/- x y) (- x y))
+        (make-numeric-object-binary-op :/ (pmath// x y) (/ x y))
+        (make-numeric-object-binary-op :* (pmath/* x y) (* x y))
         (make-int-long-binary-op :rem (rem x y))
         (make-int-long-binary-op :quot (quot x y))
         (make-float-double-binary-op :pow (Math/pow x y))
-        (make-numeric-object-binary-op :max (if (> x y) x y))
-        (make-numeric-object-binary-op :min (if (> x y) y x))
-        (make-int-long-binary-op :bit-and (bit-and x y))
+        (make-numeric-object-binary-op :max (if (pmath/> x y) x y) (if (> x y) x y))
+        (make-numeric-object-binary-op :min (if (pmath/> x y) y x) (if (> x y) y x))
+        (make-int-long-binary-op :bit-and (pmath/bit-and x y))
         (make-int-long-binary-op :bit-and-not (bit-and-not x y))
-        (make-int-long-binary-op :bit-or (bit-or x y))
-        (make-int-long-binary-op :bit-xor (bit-xor x y))
+        (make-int-long-binary-op :bit-or (pmath/bit-or x y))
+        (make-int-long-binary-op :bit-xor (pmath/bit-xor x y))
         (make-int-long-binary-op :bit-clear (bit-clear x y))
         (make-int-long-binary-op :bit-flip (bit-flip x y))
         (make-int-long-binary-op :bit-test (bit-test x y))
         (make-int-long-binary-op :bit-set (bit-set x y))
-        (make-int-long-binary-op :bit-shift-left (bit-shift-left x y))
-        (make-int-long-binary-op :bit-shift-right (bit-shift-right x y))
+        (make-int-long-binary-op :bit-shift-left (pmath/bit-shift-left x y))
+        (make-int-long-binary-op :bit-shift-right (pmath/bit-shift-right x y))
         (make-int-long-binary-op :unsigned-bit-shift-right (unsigned-bit-shift-right x y))
         (make-float-double-binary-op :atan2 (Math/atan2 x y))
         (make-float-double-binary-op :hypot (Math/hypot x y))

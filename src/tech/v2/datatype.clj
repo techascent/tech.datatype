@@ -19,13 +19,13 @@
   (:require [tech.jna :as jna]
             [tech.v2.datatype.base :as base]
             [tech.v2.datatype.casting :as casting]
+            [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.protocols :as dtype-proto]
             ;;Support for base container types
             [tech.v2.datatype.bitmap :as bitmap]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
             [tech.v2.datatype.readers.const :as const-rdr]
-            [tech.v2.datatype.index-algebra :as idx-alg]
-            [primitive-math :as pmath])
+            [tech.v2.datatype.index-algebra :as idx-alg])
   (:import [tech.v2.datatype MutableRemove ObjectMutable
             ListPersistentVector
             ObjectReader BooleanReader ByteReader ShortReader
@@ -484,7 +484,9 @@ user> (dtype/get-datatype *1)
         :boolean `(reify BooleanReader
                     (getDatatype [rdr#] ~datatype)
                     (lsize [rdr#] ~'n-elems)
-                    (read [rdr# ~'idx] (boolean ~read-op)))
+                    (read [rdr# ~'idx]
+                      (casting/datatype->unchecked-cast
+                       :unknown :boolean ~read-op)))
         :int8 `(reify ByteReader
                  (getDatatype [rdr#] ~datatype)
                  (lsize [rdr#] ~'n-elems)
@@ -530,7 +532,8 @@ user> (dtype/get-datatype *1)
 
 
 (defn reader-map
-  "Map a function over several readers returning a new reader."
+  "Map a function over several readers returning a new reader.  Reader will always
+  have :object datatype."
   [map-fn reader & readers]
   (let [args (map #(->reader % :object) (concat [reader] readers))
         n-elems (->> args
@@ -549,6 +552,28 @@ user> (dtype/get-datatype *1)
       (object-reader n-elems
                      #(apply map-fn (map (fn [^ObjectReader reader]
                                            (.read reader %))))))))
+
+
+(defmacro ->typed-reader
+  "Do a typecast to transform obj into a reader with a defined type.  Object must
+  have an implementation of tech.v2.datatype.protocols/PToReader or be an
+  implementation of one of the existing readers.  This allows typed .read calls
+  on the appropriate reader type.
+
+  Use unchecked? if you do not want the reader conversion to check the data.  This
+  only applies if you are changing datatypes from the base object datatype."
+  ([obj datatype unchecked?]
+   (case (casting/safe-flatten datatype)
+     :boolean `(typecast/datatype->reader :boolean ~obj ~unchecked?)
+     :int8 `(typecast/datatype->reader :int8 ~obj ~unchecked?)
+     :int16 `(typecast/datatype->reader :int16 ~obj ~unchecked?)
+     :int32 `(typecast/datatype->reader :int32 ~obj ~unchecked?)
+     :int64 `(typecast/datatype->reader :int64 ~obj ~unchecked?)
+     :float32 `(typecast/datatype->reader :float32 ~obj ~unchecked?)
+     :float64 `(typecast/datatype->reader :float64 ~obj ~unchecked?)
+     :object `(typecast/datatype->reader :object ~obj ~unchecked?)))
+  ([obj datatype]
+   `(->typed-reader ~obj ~datatype false)))
 
 
 (defn indexed-reader

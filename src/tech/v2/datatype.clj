@@ -24,10 +24,12 @@
             [tech.v2.datatype.bitmap :as bitmap]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
             [tech.v2.datatype.readers.const :as const-rdr]
-            [tech.v2.datatype.functional]
-            [tech.v2.datatype.index-algebra :as idx-alg])
-  (:import [tech.v2.datatype MutableRemove ObjectMutable ObjectReader
-            ListPersistentVector]
+            [tech.v2.datatype.index-algebra :as idx-alg]
+            [primitive-math :as pmath])
+  (:import [tech.v2.datatype MutableRemove ObjectMutable
+            ListPersistentVector
+            ObjectReader BooleanReader ByteReader ShortReader
+            IntReader LongReader FloatReader DoubleReader]
            [clojure.lang IPersistentVector]
            [java.util Iterator List RandomAccess]
            [org.roaringbitmap RoaringBitmap]
@@ -453,16 +455,78 @@ Calls clojure.core.matrix/ecount."
    (->>reader src-item {})))
 
 
+(defmacro make-reader
+  "Make a reader.  Datatype must be a compile time visible object.
+  read-op has 'idx' in scope which is the index to read from.  Returns a
+  reader of the appropriate type for the passed in datatype.  Results are unchecked
+  casted to the appropriate datatype.  It is up to *you* to ensure this is the result
+  you want or throw an exception.
+
+user> (dtype/make-reader :float32 5 idx)
+[0.0 1.0 2.0 3.0 4.0]
+user> (dtype/make-reader :boolean 5 idx)
+[true true true true true]
+user> (dtype/make-reader :boolean 5 (== idx 0))
+[true false false false false]
+user> (dtype/make-reader :float32 5 (* idx 2))
+ [0.0 2.0 4.0 6.0 8.0]
+user> (dtype/make-reader :any-datatype-you-wish 5 (* idx 2))
+[0 2 4 6 8]
+user> (dtype/get-datatype *1)
+:any-datatype-you-wish
+user> (dtype/make-reader [:a :b] 5 (* idx 2))
+[0 2 4 6 8]
+user> (dtype/get-datatype *1)
+[:a :b]"
+  [datatype n-elems read-op]
+  `(let [~'n-elems (long ~n-elems)]
+     ~(case (casting/safe-flatten datatype)
+        :boolean `(reify BooleanReader
+                    (getDatatype [rdr#] ~datatype)
+                    (lsize [rdr#] ~'n-elems)
+                    (read [rdr# ~'idx] (boolean ~read-op)))
+        :int8 `(reify ByteReader
+                 (getDatatype [rdr#] ~datatype)
+                 (lsize [rdr#] ~'n-elems)
+                 (read [rdr# ~'idx] (unchecked-byte ~read-op)))
+        :int16 `(reify ShortReader
+                  (getDatatype [rdr#] ~datatype)
+                  (lsize [rdr#] ~'n-elems)
+                  (read [rdr# ~'idx] (unchecked-short ~read-op)))
+        :int32 `(reify IntReader
+                  (getDatatype [rdr#] ~datatype)
+                  (lsize [rdr#] ~'n-elems)
+                  (read [rdr# ~'idx] (unchecked-int ~read-op)))
+        :int64 `(reify LongReader
+                  (getDatatype [rdr#] ~datatype)
+                  (lsize [rdr#] ~'n-elems)
+                  (read [rdr# ~'idx] (unchecked-long ~read-op)))
+        :float32 `(reify FloatReader
+                    (getDatatype [rdr#] ~datatype)
+                    (lsize [rdr#] ~'n-elems)
+                    (read [rdr# ~'idx] (unchecked-float ~read-op)))
+        :float64 `(reify DoubleReader
+                    (getDatatype [rdr#] ~datatype)
+                    (lsize [rdr#] ~'n-elems)
+                    (read [rdr# ~'idx] (unchecked-double ~read-op)))
+        :object `(reify ObjectReader
+                   (getDatatype [rdr#] ~datatype)
+                   (lsize [rdr#] ~'n-elems)
+                   (read [rdr# ~'idx] ~read-op)))))
+
+
 (defn object-reader
   "Create an object reader from an elem count and a function from index to object."
-  [n-elems idx->item-fn & [datatype]]
-  (let [n-elems (long n-elems)]
-    (reify
-      ObjectReader
-      (getDatatype [_] (or datatype :object))
-      (lsize [_] (long n-elems))
-      (read [_ elem-idx]
-        (idx->item-fn elem-idx)))))
+  ([n-elems idx->item-fn datatype]
+   (let [n-elems (long n-elems)]
+     (reify
+       ObjectReader
+       (getDatatype [_] (or datatype :object))
+       (lsize [_] (long n-elems))
+       (read [_ elem-idx]
+         (idx->item-fn elem-idx)))))
+  ([n-elems idx->item-fn]
+   (object-reader n-elems idx->item-fn :object)))
 
 
 (defn reader-map

@@ -1,7 +1,7 @@
 # tech.datatype
 [![Clojars Project](https://clojars.org/techascent/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
 
-`tech.datatype` is for efficient N-dimensional numerics across a range of primitive
+`tech.datatype` is a Clojure library for efficient N-dimensional numerics across a range of primitive
 datatypes and a range of container types.
 
 As examples of what you may do, here are some colorized tensors built from the US NOAA 

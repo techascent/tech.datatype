@@ -531,3 +531,9 @@
                       (into {})))]
     (is (= (map-fn buffers)
            (map-fn vectors)))))
+
+
+(deftest all-readers-are-sequential
+  (is (every? sequential? (->> (casting/all-datatypes)
+                               (map #(-> (dtype/make-container :java-array % 5)
+                                         (dtype/->reader)))))))

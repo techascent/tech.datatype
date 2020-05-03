@@ -2,13 +2,15 @@ package tech.v2.datatype;
 
 import clojure.lang.IFn;
 import clojure.lang.Keyword;
+import clojure.lang.Sequential;
+import clojure.lang.RT;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
-import clojure.lang.RT;
 
 
-public interface ObjectReader extends IOBase, Iterable, IFn, List, RandomAccess
+public interface ObjectReader extends IOBase, Iterable, IFn,
+				      List, RandomAccess, Sequential
 {
   Object read(long idx);
   default Object getDatatype () { return Keyword.intern(null, "object"); }

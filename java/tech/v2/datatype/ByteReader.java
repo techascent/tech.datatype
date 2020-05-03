@@ -2,13 +2,15 @@ package tech.v2.datatype;
 
 import clojure.lang.IFn;
 import clojure.lang.Keyword;
+import clojure.lang.Sequential;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
 import clojure.lang.RT;
 
 
-public interface ByteReader extends IOBase, Iterable, IFn, List, RandomAccess
+public interface ByteReader extends IOBase, Iterable, IFn,
+				    List, RandomAccess, Sequential
 {
   byte read(long idx);
   default int size() { return RT.intCast(lsize()); }

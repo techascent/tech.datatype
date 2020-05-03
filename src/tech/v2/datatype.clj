@@ -535,23 +535,22 @@ user> (dtype/get-datatype *1)
   "Map a function over several readers returning a new reader.  Reader will always
   have :object datatype."
   [map-fn reader & readers]
-  (let [args (map #(->reader % :object) (concat [reader] readers))
+  (let [args (map #(->reader %) (concat [reader] readers))
         n-elems (->> args
                      (map ecount)
                      (apply min)
                      long)
         n-readers (count args)]
     (case n-readers
-      1 (let [^ObjectReader reader (first args)]
-          (object-reader n-elems #(map-fn (.read reader %))))
-      2 (let [^ObjectReader reader1 (first args)
-              ^ObjectReader reader2 (second args)]
+      1 (let [reader (first args)]
+          (object-reader n-elems #(map-fn (reader %))))
+      2 (let [reader1 (first args)
+              reader2 (second args)]
           (object-reader n-elems
-                         #(map-fn (.read reader1 %)
-                                  (.read reader2 %))))
+                         #(map-fn (reader1 %)
+                                  (reader2 %))))
       (object-reader n-elems
-                     #(apply map-fn (map (fn [^ObjectReader reader]
-                                           (.read reader %))))))))
+                     #(apply map-fn (map (fn [reader] (reader %))))))))
 
 
 (defmacro ->typed-reader

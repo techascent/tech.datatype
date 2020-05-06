@@ -456,6 +456,8 @@
                             dst-dtype))
          (toArray [this]
            (.toArray src-list))
+         (addAll [this other]
+           (.addAll src-list other))
          RandomAccess
          Iterable
          (iterator [this]

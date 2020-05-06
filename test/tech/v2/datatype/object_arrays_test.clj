@@ -5,7 +5,8 @@
             [tech.v2.datatype.list]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.unary-op :as unary-op]
-            [tech.v2.datatype.binary-op :as binary-op]))
+            [tech.v2.datatype.binary-op :as binary-op])
+  (:import [java.util List]))
 
 
 (deftest boolean-array-test
@@ -98,3 +99,10 @@
   (let [test-ary (into-array Object (repeat 10 (set (range 10))))]
     (is (= 10 (dtype/ecount test-ary)))
     (is (dtype/->array test-ary))))
+
+
+(deftest generic-list-test
+  (let [^List data (dtype/make-container :list :keyword [:a :b :c :d :e])]
+    (.addAll data [:f :g :h :i])
+    (is (= [:a :b :c :d :e :f :g :h :i]
+           (vec (.toArray data))))))

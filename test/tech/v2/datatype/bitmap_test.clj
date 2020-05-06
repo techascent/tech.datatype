@@ -21,3 +21,8 @@
            (set (dtype/->reader ba)))))
   (is (= #{}
          (set (bitmap/->bitmap nil)))))
+
+
+(deftest empty-bitmap-as-random-access-reader
+  (is (== 0 (dtype/ecount (bitmap/bitmap->efficient-random-access-reader
+                           (bitmap/->bitmap))))))

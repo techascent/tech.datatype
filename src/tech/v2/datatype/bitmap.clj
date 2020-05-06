@@ -144,7 +144,7 @@
   dtype-proto/PClone
   (clone [item] (BitmapSet. (dtype-proto/clone bitmap)))
   dtype-proto/PConstantTimeMinMax
-  (has-constant-time-min-max? [item] true)
+  (has-constant-time-min-max? [item] (not (.isEmpty bitmap)))
   (constant-time-min [item] (.first bitmap))
   (constant-time-max [item] (.last bitmap))
   dtype-proto/PToBitmap
@@ -213,20 +213,22 @@
     (let [^RoaringBitmap bitmap (dtype-proto/as-roaring-bitmap bitmap)
           typed-buf (bitmap->typed-buffer bitmap)
           src-reader (typecast/datatype->reader :int64 typed-buf)
-          n-elems (dtype-base/ecount typed-buf)
-          cmin (dtype-proto/constant-time-min bitmap)
-          cmax (dtype-proto/constant-time-max bitmap)]
-      (reify
-        LongReader
-        (lsize [rdr] n-elems)
-        (read [rdr idx] (.read src-reader idx))
-        dtype-proto/PToBitmap
-        (convertible-to-bitmap? [item] true)
-        (as-roaring-bitmap [item] bitmap)
-        dtype-proto/PConstantTimeMinMax
-        (has-constant-time-min-max? [item] true)
-        (constant-time-min [item] cmin)
-        (constant-time-max [item] cmax)))))
+          n-elems (dtype-base/ecount typed-buf)]
+      (if (== 0 n-elems)
+        src-reader
+        (let [cmin (dtype-proto/constant-time-min bitmap)
+              cmax (dtype-proto/constant-time-max bitmap)]
+          (reify
+            LongReader
+            (lsize [rdr] n-elems)
+            (read [rdr idx] (.read src-reader idx))
+            dtype-proto/PToBitmap
+            (convertible-to-bitmap? [item] true)
+            (as-roaring-bitmap [item] bitmap)
+            dtype-proto/PConstantTimeMinMax
+            (has-constant-time-min-max? [item] true)
+            (constant-time-min [item] cmin)
+            (constant-time-max [item] cmax)))))))
 
 
 (defn bitmap-value->bitmap-map

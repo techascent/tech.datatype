@@ -44,7 +44,6 @@
 
 (def primitive-types (set (concat numeric-types [:boolean])))
 
-
 (def base-host-datatypes (set (concat host-numeric-types
                                       [:object :boolean])))
 
@@ -461,3 +460,64 @@
              [[src-dtype dst-dtype]
               `(~marshal-macro ~src-dtype ~dst-dtype)])]
         (into {})))
+
+
+(def type-tree (atom {}))
+
+
+(defn set-conj
+  [container item]
+  (if container
+    (conj container item)
+    #{item}))
+
+
+(defn add-type-pair
+  [child-type parent-type]
+  (swap! type-tree update child-type set-conj parent-type))
+
+
+(def default-type-pairs
+  [[:int8 :int16]
+   [:uint8 :int16]
+   [:int16 :int32]
+   [:uint16 :int32]
+   [:int32 :int64]
+   [:uint32 :int64]
+   [:int64 :float64]
+   [:uint64 :float64]
+   [:float32 :float64]
+   [:int16 :float32]
+   [:uint16 :float32]])
+
+
+(doseq [[child parent] default-type-pairs]
+  (add-type-pair child parent))
+
+
+(def type-path->root
+  (memoize
+   (fn
+     ([datatype type-vec type-tree]
+      (let [un-aliased (un-alias-datatype datatype)
+            type-vec (conj type-vec datatype)]
+        (if (= un-aliased datatype)
+          (reduce #(type-path->root %2 %1 type-tree)
+                  type-vec
+                  (get type-tree datatype))
+          (type-path->root un-aliased type-vec type-tree))))
+     ([datatype]
+      (->>
+       (conj
+        (type-path->root datatype [] @type-tree)
+        :object)
+       (reverse)
+       (distinct)
+       (reverse))))))
+
+
+(def type-path->root-set
+  (memoize
+   (fn [datatype]
+     (set (type-path->root
+           datatype)))))

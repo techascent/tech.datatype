@@ -537,3 +537,12 @@
   (is (every? sequential? (->> (casting/all-datatypes)
                                (map #(-> (dtype/make-container :java-array % 5)
                                          (dtype/->reader)))))))
+
+
+(deftest make-readers
+  (is (= [0.0 1.0]
+         (dtype/make-reader :float64 2 idx)))
+  ;;Ensure that you can correctly alias datatypes
+  (is (= :packed-local-date
+         (dtype/get-datatype
+          (dtype/make-reader :packed-local-date 2 idx)))))

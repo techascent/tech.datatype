@@ -84,50 +84,13 @@
 (define-scalar-boolean-unary-ops)
 
 
-(def datatype-hierarchy
-  (->> [:object
-        :float64 :float32
-        [:int64 :uint64]
-        [:int32 :uint32]
-        [:uint16 :int16]
-        [:int8 :uint8]
-        :boolean]
-       (map-indexed vector)
-       (mapcat (fn [[idx entry]]
-                 (if (keyword? entry)
-                   [[entry idx]]
-                   (map vector entry (repeat idx)))))
-       (into {})))
-
-
-(defn next-integer-type
-  [lhs rhs]
-  (case (max (casting/int-width lhs)
-             (casting/int-width rhs))
-    8 :int16
-    16 :int32
-    :int64))
-
-
 (defn widest-datatype
-  [lhs-dtype rhs-dtype]
-  (let [lhs-dtype (casting/flatten-datatype lhs-dtype)
-        rhs-dtype (casting/flatten-datatype rhs-dtype)]
-    (if (= lhs-dtype rhs-dtype)
-      lhs-dtype
-      (let [lhs-rank (long (datatype-hierarchy lhs-dtype))
-            rhs-rank (long (datatype-hierarchy rhs-dtype))
-            dtype-seq [lhs-dtype rhs-dtype]
-            floating? (some #{:float32 :float64} dtype-seq)
-            object? (some #{:object} dtype-seq)]
-        (cond
-          (and (not= lhs-rank rhs-rank)
-               floating?)
-          :float64
-          object?
-          :object
-          :else
-          (next-integer-type lhs-dtype rhs-dtype))))))
+  ([lhs-dtype rhs-dtype]
+   (if (= lhs-dtype rhs-dtype)
+     lhs-dtype
+     (first (filter (casting/type-path->root-set lhs-dtype)
+                    (casting/type-path->root rhs-dtype)))))
+  ([lhs-dtype] lhs-dtype))
 
 
 (defn op-argtype

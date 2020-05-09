@@ -21,6 +21,7 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.protocols :as dtype-proto]
+            [tech.v2.datatype.builtin-op-providers :as builtin-op-providers]
             ;;Support for base container types
             [tech.v2.datatype.bitmap :as bitmap]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
@@ -462,6 +463,8 @@ Calls clojure.core.matrix/ecount."
   casted to the appropriate datatype.  It is up to *you* to ensure this is the result
   you want or throw an exception.
 
+  reader-datatype must be a compile time constant but advertised datatype need not be.
+
 user> (dtype/make-reader :float32 5 idx)
 [0.0 1.0 2.0 3.0 4.0]
 user> (dtype/make-reader :boolean 5 idx)
@@ -478,43 +481,45 @@ user> (dtype/make-reader [:a :b] 5 (* idx 2))
 [0 2 4 6 8]
 user> (dtype/get-datatype *1)
 [:a :b]"
-  [datatype n-elems read-op]
-  `(let [~'n-elems (long ~n-elems)]
-     ~(case (casting/safe-flatten datatype)
-        :boolean `(reify BooleanReader
-                    (getDatatype [rdr#] ~datatype)
-                    (lsize [rdr#] ~'n-elems)
-                    (read [rdr# ~'idx]
-                      (casting/datatype->unchecked-cast
-                       :unknown :boolean ~read-op)))
-        :int8 `(reify ByteReader
-                 (getDatatype [rdr#] ~datatype)
-                 (lsize [rdr#] ~'n-elems)
-                 (read [rdr# ~'idx] (unchecked-byte ~read-op)))
-        :int16 `(reify ShortReader
-                  (getDatatype [rdr#] ~datatype)
+  ([datatype n-elems read-op]
+   `(make-reader ~datatype ~datatype ~n-elems ~read-op))
+  ([reader-datatype advertised-datatype n-elems read-op]
+   `(let [~'n-elems (long ~n-elems)]
+      ~(case (casting/safe-flatten reader-datatype)
+         :boolean `(reify BooleanReader
+                     (getDatatype [rdr#] ~advertised-datatype)
+                     (lsize [rdr#] ~'n-elems)
+                     (read [rdr# ~'idx]
+                       (casting/datatype->unchecked-cast-fn
+                        :unknown :boolean ~read-op)))
+         :int8 `(reify ByteReader
+                  (getDatatype [rdr#] ~advertised-datatype)
                   (lsize [rdr#] ~'n-elems)
-                  (read [rdr# ~'idx] (unchecked-short ~read-op)))
-        :int32 `(reify IntReader
-                  (getDatatype [rdr#] ~datatype)
-                  (lsize [rdr#] ~'n-elems)
-                  (read [rdr# ~'idx] (unchecked-int ~read-op)))
-        :int64 `(reify LongReader
-                  (getDatatype [rdr#] ~datatype)
-                  (lsize [rdr#] ~'n-elems)
-                  (read [rdr# ~'idx] (unchecked-long ~read-op)))
-        :float32 `(reify FloatReader
-                    (getDatatype [rdr#] ~datatype)
-                    (lsize [rdr#] ~'n-elems)
-                    (read [rdr# ~'idx] (unchecked-float ~read-op)))
-        :float64 `(reify DoubleReader
-                    (getDatatype [rdr#] ~datatype)
-                    (lsize [rdr#] ~'n-elems)
-                    (read [rdr# ~'idx] (unchecked-double ~read-op)))
-        :object `(reify ObjectReader
-                   (getDatatype [rdr#] ~datatype)
+                  (read [rdr# ~'idx] (unchecked-byte ~read-op)))
+         :int16 `(reify ShortReader
+                   (getDatatype [rdr#] ~advertised-datatype)
                    (lsize [rdr#] ~'n-elems)
-                   (read [rdr# ~'idx] ~read-op)))))
+                   (read [rdr# ~'idx] (unchecked-short ~read-op)))
+         :int32 `(reify IntReader
+                   (getDatatype [rdr#] ~advertised-datatype)
+                   (lsize [rdr#] ~'n-elems)
+                   (read [rdr# ~'idx] (unchecked-int ~read-op)))
+         :int64 `(reify LongReader
+                   (getDatatype [rdr#] ~advertised-datatype)
+                   (lsize [rdr#] ~'n-elems)
+                   (read [rdr# ~'idx] (unchecked-long ~read-op)))
+         :float32 `(reify FloatReader
+                     (getDatatype [rdr#] ~advertised-datatype)
+                     (lsize [rdr#] ~'n-elems)
+                     (read [rdr# ~'idx] (unchecked-float ~read-op)))
+         :float64 `(reify DoubleReader
+                     (getDatatype [rdr#] ~advertised-datatype)
+                     (lsize [rdr#] ~'n-elems)
+                     (read [rdr# ~'idx] (unchecked-double ~read-op)))
+         :object `(reify ObjectReader
+                    (getDatatype [rdr#] ~advertised-datatype)
+                    (lsize [rdr#] ~'n-elems)
+                    (read [rdr# ~'idx] ~read-op))))))
 
 
 (defn object-reader
@@ -573,6 +578,72 @@ user> (dtype/get-datatype *1)
      :object `(typecast/datatype->reader :object ~obj ~unchecked?)))
   ([obj datatype]
    `(->typed-reader ~obj ~datatype false)))
+
+
+(defmacro ^:private apply-typed-reader-map
+  [datatype apply-fn map-fn readers]
+  `(case (casting/safe-flatten ~datatype)
+     :boolean (~apply-fn :boolean ~datatype ~map-fn ~readers)
+     :int8 (~apply-fn :int8 ~datatype ~map-fn ~readers)
+     :int16 (~apply-fn :int16 ~datatype ~map-fn ~readers)
+     :int32 (~apply-fn :int32 ~datatype ~map-fn ~readers)
+     :int64 (~apply-fn :int64 ~datatype ~map-fn ~readers)
+     :float32 (~apply-fn :float32 ~datatype ~map-fn ~readers)
+     :float64 (~apply-fn :float64 ~datatype ~map-fn ~readers)
+     :object (~apply-fn :object ~datatype ~map-fn ~readers)))
+
+
+(defmacro ^:private single-arg-reader-map
+  [reader-datatype advertised-datatype map-fn readers]
+  `(let [reader# (typecast/datatype->reader ~reader-datatype (first ~readers))
+         map-fn# ~map-fn]
+     (make-reader ~reader-datatype ~advertised-datatype
+                  (.lsize reader#)
+                  (map-fn# (.read reader# ~'idx)))))
+
+
+(defmacro ^:private dual-arg-reader-map
+  [reader-datatype advertised-datatype map-fn readers]
+  `(let [reader1# (typecast/datatype->reader ~reader-datatype (first ~readers))
+         reader2# (typecast/datatype->reader ~reader-datatype (second ~readers))
+         map-fn# ~map-fn]
+     (make-reader ~reader-datatype ~advertised-datatype
+                  (min (.lsize reader1#)
+                       (.lsize reader2#))
+                  (map-fn# (.read reader1# ~'idx)
+                           (.read reader2# ~'idx)))))
+
+
+(defmacro ^:private general-typed-reader-map
+  [reader-datatype advertised-datatype map-fn readers]
+  `(let [readers# ~readers
+         n-elems# (long (apply min (map ecount readers#)))
+         map-fn# ~map-fn]
+     (make-reader ~reader-datatype ~advertised-datatype
+                  n-elems#
+                  (apply map-fn#
+                         (map #(.read (typecast/datatype->reader
+                                       ~reader-datatype
+                                       %)
+                                      ~'idx)
+                              readers#)))))
+
+
+(defn typed-reader-map
+  "Map a function over several readers returning a new reader.  Reader will always
+  have the widest datatype of all incoming readers.  This means your transformation
+  function must return something castable to that datatype."
+  [map-fn reader & readers]
+  (let [all-readers (vec (remove nil? (concat [reader] readers)))
+        arg-dtype (reduce builtin-op-providers/widest-datatype
+                          (map get-datatype all-readers))
+        args (mapv #(->reader % arg-dtype) all-readers)
+        n-readers (count args)]
+    (case n-readers
+      1 (apply-typed-reader-map arg-dtype single-arg-reader-map map-fn all-readers)
+      2 (apply-typed-reader-map arg-dtype dual-arg-reader-map map-fn all-readers)
+      (apply-typed-reader-map arg-dtype general-typed-reader-map
+                              map-fn all-readers))))
 
 
 (defn indexed-reader

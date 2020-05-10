@@ -23,6 +23,15 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
+(defn widest-datatype
+  ([lhs-dtype rhs-dtype]
+   (if (= lhs-dtype rhs-dtype)
+     lhs-dtype
+     (first (filter (casting/type-path->root-set lhs-dtype)
+                    (casting/type-path->root rhs-dtype)))))
+  ([lhs-dtype] lhs-dtype))
+
+
 (defn- get-op
   [op op-map]
   (if-let [retval (op op-map)]
@@ -32,12 +41,15 @@
 
 (defmethod op-provider/half-dispatch-unary-op :default
   [op lhs {:keys [datatype] :as options}]
-  (let [datatype (or datatype (base/get-datatype lhs))
+  (let [op (if (keyword? op)
+             (get-op op unary-op/builtin-unary-ops)
+             op)
+        op-space (:operation-space (meta op))
+        datatype (cond-> (or datatype (base/get-datatype lhs))
+                   op-space
+                   (widest-datatype op-space))
         options (assoc options :datatype datatype)
-        op (-> (if (keyword? op)
-                 (get-op op unary-op/builtin-unary-ops)
-                 op)
-               (dtype-proto/->unary-op options))]
+        op (dtype-proto/->unary-op op options)]
     (if (= :scalar (base/operation-type lhs))
       (op lhs)
       (unary-op/unary-map options op lhs))))
@@ -82,15 +94,6 @@
                         (op-value# lhs#))))))))
 
 (define-scalar-boolean-unary-ops)
-
-
-(defn widest-datatype
-  ([lhs-dtype rhs-dtype]
-   (if (= lhs-dtype rhs-dtype)
-     lhs-dtype
-     (first (filter (casting/type-path->root-set lhs-dtype)
-                    (casting/type-path->root rhs-dtype)))))
-  ([lhs-dtype] lhs-dtype))
 
 
 (defn op-argtype

@@ -15,7 +15,7 @@
             UnaryOperators$IntUnary  UnaryOperators$LongUnary
             UnaryOperators$FloatUnary  UnaryOperators$DoubleUnary
             UnaryOperators$BooleanUnary  UnaryOperators$ObjectUnary]
-           [clojure.lang IFn]))
+           [clojure.lang IFn IMeta IPersistentMap]))
 
 
 (set! *warn-on-reflection* true)
@@ -322,28 +322,30 @@
 
 (defmacro make-double-unary-op
   [opname op-code]
-  `(reify
-     dtype-proto/PToUnaryOp
-     (convertible-to-unary-op? [item#] true)
-     (->unary-op [item# options#]
-       (let [{datatype# :datatype
-              unchecked?# :unchecked?} options#]
-         (when-not (or (= :object datatype#)
-                       (casting/numeric-type? datatype#))
-           (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
-         (case (casting/safe-flatten datatype#)
-           :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
-           :int64 (make-unary-op ~opname :int64 (unchecked-long ~op-code))
-           :float32 (make-unary-op ~opname :float32 (unchecked-float ~op-code))
-           :float64 (make-unary-op ~opname :float64 ~op-code)
-           :object (make-unary-op ~opname :object ~op-code))))
-     dtype-proto/PDatatype
-     (get-datatype [item#] :float64)
-     dtype-proto/POperator
-     (op-name [item#] ~opname)
-     IFn
-     (invoke [item# ~'x]
-       ~op-code)))
+  `(with-meta
+     (reify
+       dtype-proto/PToUnaryOp
+       (convertible-to-unary-op? [item#] true)
+       (->unary-op [item# options#]
+         (let [{datatype# :datatype
+                unchecked?# :unchecked?} options#]
+           (when-not (or (= :object datatype#)
+                         (casting/numeric-type? datatype#))
+             (throw (ex-info (format "datatype is not numeric: %s" datatype#) {})))
+           (case (casting/safe-flatten datatype#)
+             :int32 (make-unary-op ~opname :int32 (unchecked-int ~op-code))
+             :int64 (make-unary-op ~opname :int64 (unchecked-long ~op-code))
+             :float32 (make-unary-op ~opname :float32 (unchecked-float ~op-code))
+             :float64 (make-unary-op ~opname :float64 ~op-code)
+             :object (make-unary-op ~opname :object ~op-code))))
+       dtype-proto/PDatatype
+       (get-datatype [item#] :float64)
+       dtype-proto/POperator
+       (op-name [item#] ~opname)
+       IFn
+       (invoke [item# ~'x]
+         ~op-code))
+     {:operation-space :float32}))
 
 
 (defmacro make-numeric-unary-op
@@ -404,37 +406,40 @@
 
 (defmacro make-float-double-unary-op
   [opname op-code]
-  `(reify
-     dtype-proto/POperator
-     (op-name [item#] ~opname)
-     dtype-proto/PDatatype
-     (get-datatype [item#] :float64)
-     dtype-proto/PToUnaryOp
-     (convertible-to-unary-op? [item#] true)
-     (->unary-op [item# options#]
-       (let [{datatype# :datatype
-              unchecked?# :unchecked?} options#]
-         (when-not (#{:float64 :float32 :object} (casting/flatten-datatype
-                                                  datatype#))
-           (throw (ex-info (format "datatype is not float or double: %s"
-                                   datatype#) {})))
-         (let [op-dtype# (if (or (= datatype# :float32)
-                                 (= datatype# :float64)
-                                 (= datatype# :object))
-                           datatype#
-                           :float64)
-               retval# (case op-dtype#
-                         :float32 (make-unary-op ~opname :float32 ~op-code)
-                         :float64 (make-unary-op ~opname :float64 ~op-code)
-                         :object (make-unary-op ~opname :object (let [~'x (double ~'x)]
-                                                                  ~op-code)))]
-           (if-not (= op-dtype# datatype#)
-             (dtype-proto/->unary-op retval# options#)
-             retval#))))
-     IFn
-     (invoke [item# ~'x]
-       (let [~'x (double ~'x)]
-         ~op-code))))
+  `(with-meta
+     (reify
+       dtype-proto/POperator
+       (op-name [item#] ~opname)
+       dtype-proto/PDatatype
+       (get-datatype [item#] :float64)
+       dtype-proto/PToUnaryOp
+       (convertible-to-unary-op? [item#] true)
+       (->unary-op [item# options#]
+         (let [{datatype# :datatype
+                unchecked?# :unchecked?} options#]
+           (when-not (#{:float64 :float32 :object} (casting/flatten-datatype
+                                                    datatype#))
+             (throw (ex-info (format "datatype is not float or double: %s"
+                                     datatype#) {})))
+           (let [op-dtype# (if (or (= datatype# :float32)
+                                   (= datatype# :float64)
+                                   (= datatype# :object))
+                             datatype#
+                             :float64)
+                 retval# (case op-dtype#
+                           :float32 (make-unary-op ~opname :float32 ~op-code)
+                           :float64 (make-unary-op ~opname :float64 ~op-code)
+                           :object (make-unary-op ~opname :object
+                                                  (let [~'x (double ~'x)]
+                                                    ~op-code)))]
+             (if-not (= op-dtype# datatype#)
+               (dtype-proto/->unary-op retval# options#)
+               retval#))))
+       IFn
+       (invoke [item# ~'x]
+         (let [~'x (double ~'x)]
+           ~op-code)))
+     {:operation-space :float32}))
 
 (defmacro make-all-datatype-unary-op
   [opname op-code]

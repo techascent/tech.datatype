@@ -319,36 +319,40 @@
     {:from-prototype (fn [_ datatype shape]
                        (make-array-of-type datatype (base/shape->ecount shape)))}
 
+    dtype-proto/PSetConstant
+    {:set-constant! (fn [item offset value elem-count]
+                      (let [offset (long offset)
+                            elem-count (long elem-count)
+                            ^"[Ljava.lang.Object;" item item]
+                        (Arrays/fill item offset (+ offset elem-count) value)))}
 
     dtype-proto/PToReader
     {:convertible-to-reader? (constantly true)
      :->reader
      (fn [item options]
-       (let [datatype (or (:datatype options)
-                          (dtype-proto/get-datatype item))
-             unchecked? (:unchecked? options)
-             ^"[Ljava.lang.Object;" item item]
-         (reify
-           ObjectReader
-           (getDatatype [reader] datatype)
-           (lsize [reader] (alength item))
-           (read [reader idx]
-             (aget item idx))
-           dtype-proto/PToList
-           (convertible-to-fastutil-list? [reader] true)
-           (->list-backing-store [reader] (dtype-proto/as-list item))
-           dtype-proto/PToArray
-           (->sub-array [reader] (dtype-proto/->sub-array item))
-           (->array-copy [reader] (dtype-proto/->array-copy item))
+       (let [^"[Ljava.lang.Object;" item item
+             dtype (dtype-proto/get-datatype item)]
+         (-> (reify
+               ObjectReader
+               (getDatatype [reader] dtype)
+               (lsize [reader] (alength item))
+               (read [reader idx]
+                 (aget item idx))
+               dtype-proto/PToList
+               (convertible-to-fastutil-list? [reader] true)
+               (->list-backing-store [reader] (dtype-proto/as-list item))
+               dtype-proto/PToArray
+               (->sub-array [reader] (dtype-proto/->sub-array item))
+               (->array-copy [reader] (dtype-proto/->array-copy item))
 
-           dtype-proto/PBuffer
-           (sub-buffer [reader offset length]
-             (-> (dtype-proto/sub-buffer item offset length)
-                 (dtype-proto/->reader {:datatype datatype
-                                        :unchecked? unchecked?})))
-           dtype-proto/PSetConstant
-           (set-constant! [reader offset value elem-count]
-             (dtype-proto/set-constant! item offset value elem-count)))))}
+               dtype-proto/PBuffer
+               (sub-buffer [reader offset length]
+                 (-> (dtype-proto/sub-buffer item offset length)
+                     (dtype-proto/->reader options)))
+               dtype-proto/PSetConstant
+               (set-constant! [reader offset value elem-count]
+                 (dtype-proto/set-constant! item offset value elem-count)))
+             (dtype-proto/->reader options))))}
 
     dtype-proto/PToWriter
     {:convertible-to-writer? (constantly true)

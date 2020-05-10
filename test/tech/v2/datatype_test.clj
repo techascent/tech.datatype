@@ -546,3 +546,12 @@
   (is (= :packed-local-date
          (dtype/get-datatype
           (dtype/make-reader :packed-local-date 2 idx)))))
+
+
+(deftest object-array-mean
+  (is (= 4.5 (dfn/mean (object-array (range 10))))))
+
+
+(deftest float-spaces
+  (is (dfn/equals [0.0 0.6931471805599453 1.0986122886681098 1.3862943611198906]
+                  (dfn/log (range 1 5)))))

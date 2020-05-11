@@ -196,13 +196,17 @@
 (defmethod op-provider/half-dispatch-reduce-op :default
   [op lhs {:keys [datatype commutative?] :as options}]
   (let [datatype (or datatype (base/get-datatype lhs))
-        options (assoc options :datatype datatype)
         commutative? (or commutative?
                          (and (keyword? op) (commutative-ops op)))
-        op (-> (if (keyword? op)
+        op (if (keyword? op)
                  (get-op op binary-op/builtin-binary-ops)
                  op)
-               (dtype-proto/->binary-op options))]
+        commutative? (or commutative? (:commutative? (meta op)))
+        datatype (if-let [op-space (:operation-space (meta op))]
+                   (widest-datatype datatype op-space)
+                   datatype)
+        options (assoc options :datatype datatype)
+        op (dtype-proto/->binary-op op options)]
     (if commutative?
       (reduce-op/commutative-reader-reduce options op lhs)
       (reduce-op/iterable-reduce-map options op lhs))))

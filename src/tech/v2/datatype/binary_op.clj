@@ -341,34 +341,36 @@
 
 (defmacro make-float-double-binary-op
   [opname op-code]
-  `(reify
-     dtype-proto/PToBinaryOp
-     (convertible-to-binary-op? [item#] true)
-     (->binary-op [item# options#]
-       (let [{datatype# :datatype
-              unchecked?# :unchecked?} options#
-             datatype# (or datatype# (dtype-proto/get-datatype item#))]
-         (when-not (#{:float32 :float64 :object} (casting/flatten-datatype
-                                                  datatype#))
-           (throw (ex-info (format "Unsupported datatype for operation: %s"
-                                   datatype#)
-                           {})))
-         (-> (case (casting/safe-flatten datatype#)
-               :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
-               :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
-               :object (make-binary-op ~opname :object (let [~'x (double ~'x)
-                                                             ~'y (double ~'y)]
-                                                         ~op-code)))
-             (dtype-proto/->binary-op options#))))
-     dtype-proto/POperator
-     (op-name [item#] ~opname)
-     dtype-proto/PDatatype
-     (get-datatype [item#] :float64)
-     IFn
-     (invoke [item# x# y#]
-       (let [~'x (double x#)
-             ~'y (double y#)]
-         (unchecked-double ~op-code)))))
+  `(with-meta
+     (reify
+       dtype-proto/PToBinaryOp
+       (convertible-to-binary-op? [item#] true)
+       (->binary-op [item# options#]
+         (let [{datatype# :datatype
+                unchecked?# :unchecked?} options#
+               datatype# (or datatype# (dtype-proto/get-datatype item#))]
+           (when-not (#{:float32 :float64 :object} (casting/flatten-datatype
+                                                    datatype#))
+             (throw (ex-info (format "Unsupported datatype for operation: %s"
+                                     datatype#)
+                             {})))
+           (-> (case (casting/safe-flatten datatype#)
+                 :float32 (make-binary-op ~opname :float32 (unchecked-float ~op-code))
+                 :float64 (make-binary-op ~opname :float64 (unchecked-double ~op-code))
+                 :object (make-binary-op ~opname :object (let [~'x (double ~'x)
+                                                               ~'y (double ~'y)]
+                                                           ~op-code)))
+               (dtype-proto/->binary-op options#))))
+       dtype-proto/POperator
+       (op-name [item#] ~opname)
+       dtype-proto/PDatatype
+       (get-datatype [item#] :float64)
+       IFn
+       (invoke [item# x# y#]
+         (let [~'x (double x#)
+               ~'y (double y#)]
+           (unchecked-double ~op-code))))
+     {:operation-space :float32}))
 
 
 (defmacro make-numeric-binary-op
@@ -464,8 +466,8 @@
         (make-numeric-object-binary-op :- (pmath/- x y) (- x y))
         (make-numeric-object-binary-op :/ (pmath// x y) (/ x y))
         (make-numeric-object-binary-op :* (pmath/* x y) (* x y))
-        (make-int-long-binary-op :rem (rem x y))
-        (make-int-long-binary-op :quot (quot x y))
+        (make-numeric-object-binary-op :rem (rem x y) (rem x y))
+        (make-numeric-object-binary-op :quot (quot x y) (quot x y))
         (make-float-double-binary-op :pow (Math/pow x y))
         (make-numeric-object-binary-op :max (if (pmath/> x y) x y) (if (> x y) x y))
         (make-numeric-object-binary-op :min (if (pmath/> x y) y x) (if (> x y) y x))
@@ -479,7 +481,8 @@
         (make-int-long-binary-op :bit-set (bit-set x y))
         (make-int-long-binary-op :bit-shift-left (pmath/bit-shift-left x y))
         (make-int-long-binary-op :bit-shift-right (pmath/bit-shift-right x y))
-        (make-int-long-binary-op :unsigned-bit-shift-right (unsigned-bit-shift-right x y))
+        (make-int-long-binary-op :unsigned-bit-shift-right
+                                 (unsigned-bit-shift-right x y))
         (make-float-double-binary-op :atan2 (Math/atan2 x y))
         (make-float-double-binary-op :hypot (Math/hypot x y))
         (make-float-double-binary-op :ieee-remainder (Math/IEEEremainder x y))]

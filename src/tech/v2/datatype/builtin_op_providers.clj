@@ -131,6 +131,12 @@
   (let [op-datatype (or (:datatype options)
                         (widest-datatype (base/get-datatype lhs)
                                          (base/get-datatype rhs)))
+        op (if (keyword? op)
+             (get-op op binary-op/builtin-binary-ops)
+             op)
+        op-datatype (if-let [op-space (:operation-space (meta op))]
+                      (widest-datatype op-datatype op-space)
+                      op-datatype)
         options (assoc options :datatype op-datatype)
 
         op (-> (if (keyword? op)

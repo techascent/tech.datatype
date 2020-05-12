@@ -172,9 +172,10 @@
     `(boolean ~item)
     :else
     `(boolean
-      (if (number? ~item)
-        (not= 0.0 (unchecked-double ~item))
-        ~item))))
+      (let [item# ~item]
+        (if (number? item#)
+          (not= 0.0 (unchecked-double item#))
+          item#)))))
 
 ;; Save these because we are switching to unchecked soon.
 

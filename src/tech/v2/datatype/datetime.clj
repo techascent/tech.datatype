@@ -256,7 +256,7 @@
   (^ZonedDateTime [^Instant inst ^ZoneId zid]
    (.atZone inst zid))
   (^ZonedDateTime [^Instant inst]
-   (instant->zoned-date-time inst (system-zone-id))))
+   (instant->zoned-date-time inst (utc-zone-id))))
 
 
 (defn zoned-date-time->instant
@@ -275,7 +275,7 @@
    (-> (milliseconds-since-epoch->instant millis)
        (instant->zoned-date-time zid)))
   (^ZonedDateTime [^long millis]
-   (milliseconds-since-epoch->zoned-date-time millis (system-zone-id))))
+   (milliseconds-since-epoch->zoned-date-time millis (utc-zone-id))))
 
 
 (defn zoned-date-time

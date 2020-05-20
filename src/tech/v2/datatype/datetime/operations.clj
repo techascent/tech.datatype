@@ -1169,8 +1169,8 @@
          unpacked-datatype (get dtype-dt/packed-type->unpacked-type-table
                                 datatype datatype)
          value-stats (if (dtype-dt/duration-datatype? datatype)
-                       #{:min :max :mean :standard-deviation}
-                       #{:min :max :mean})
+                       #{:min :max :mean :standard-deviation :quartile-1 :quartile-3}
+                       #{:min :max :mean :quartile-1 :quartile-3})
          stats-data (dfn/descriptive-stats numeric-data stats-set)]
      (->> stats-data
           (map (fn [[k v]]
@@ -1181,8 +1181,10 @@
           (into {}))))
   ([data]
    (if (dtype-dt/duration-datatype? (dtype-base/get-datatype data))
-     (millisecond-descriptive-stats data #{:min :mean :max :standard-deviation})
-     (millisecond-descriptive-stats data #{:min :mean :max}))))
+     (millisecond-descriptive-stats data #{:min :mean :max :standard-deviation
+                                           :quartile-1 :quartile-3})
+     (millisecond-descriptive-stats data #{:min :mean :max
+                                           :quartile-1 :quartile-3}))))
 
 
 (defn field-compatibility-matrix

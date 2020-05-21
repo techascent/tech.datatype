@@ -1,7 +1,8 @@
 (ns tech.v2.datatype.object-datatypes
   (:require [tech.v2.datatype.array :as dtype-ary]
             [tech.v2.datatype.protocols :as dtype-proto])
-  (:import [clojure.lang Keyword Symbol]))
+  (:import [clojure.lang Keyword Symbol]
+           [java.util UUID]))
 
 
 
@@ -34,8 +35,19 @@
   ([] nil)
   ([item] (symbol item)))
 
+(defn- construct-uuid
+  ([] nil)
+  ([item]
+   (cond
+     (instance? UUID item) item
+     (string? item) (UUID/fromString item)
+     (nil? item) item
+     :else
+     (throw (Exception. (format "Unable to construct UUID from %s" item))))))
+
 
 (add-object-datatype Object :object construct-object)
 (add-object-datatype String :string str)
 (add-object-datatype Keyword :keyword construct-keyword)
 (add-object-datatype Symbol :symbol construct-symbol)
+(add-object-datatype UUID :uuid construct-uuid)

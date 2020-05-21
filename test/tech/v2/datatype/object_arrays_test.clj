@@ -6,7 +6,7 @@
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.binary-op :as binary-op])
-  (:import [java.util List]))
+  (:import [java.util List UUID]))
 
 
 (deftest boolean-array-test
@@ -106,3 +106,18 @@
     (.addAll data [:f :g :h :i])
     (is (= [:a :b :c :d :e :f :g :h :i]
            (vec (.toArray data))))))
+
+
+(deftest uuid-test
+  (let [test-uuid (UUID/randomUUID)
+        uuid-ary (dtype/make-container :java-array :uuid (repeat 5 test-uuid))
+        uuid-list (dtype/make-container :list :uuid (repeat 5 test-uuid))]
+    (is (= :uuid (dtype/get-datatype uuid-ary)))
+    (is (thrown? Throwable (dtype/set-value! uuid-ary 2 "hey")))
+    (is (= (vec (repeat 5 test-uuid))
+           (vec uuid-ary)))
+    (is (= :uuid (dtype/get-datatype uuid-list)))
+    (is (thrown? Throwable (dtype/set-value! uuid-list 2 "hey")))
+    (is (= (vec (repeat 5 test-uuid))
+           (vec uuid-list)))
+    (is (instance? List uuid-list))))

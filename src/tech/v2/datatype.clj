@@ -32,7 +32,7 @@
             ObjectReader BooleanReader ByteReader ShortReader
             IntReader LongReader FloatReader DoubleReader]
            [clojure.lang IPersistentVector]
-           [java.util Iterator List RandomAccess]
+           [java.util Iterator List RandomAccess Set]
            [org.roaringbitmap RoaringBitmap]
            [tech.v2.datatype.bitmap BitmapSet])
   (:refer-clojure :exclude [cast]))
@@ -723,9 +723,9 @@ user> (dtype/get-datatype *1)
   Set operations are expected to be highly optimized.  Random reads potentially
   less so (although still not bad).
   Bitmaps are convertible to readers and the bitmap ops all apply to them."
-  ([]
+  (^RoaringBitmap []
    (bitmap/->bitmap))
-  ([item-seq]
+  (^RoaringBitmap [item-seq]
    (bitmap/->bitmap item-seq)))
 
 
@@ -734,9 +734,9 @@ user> (dtype/get-datatype *1)
   Set operations are expected to be highly optimized.  Random reads potentially
   less so (although still not bad).
   Bitmaps are convertible to readers and the bitmap ops all apply to them."
-  ([]
+  (^RoaringBitmap []
    (bitmap/->unique-bitmap))
-  ([item-seq]
+  (^RoaringBitmap [item-seq]
    (bitmap/->unique-bitmap item-seq)))
 
 
@@ -791,10 +791,10 @@ user> (dtype/get-datatype *1)
   (bitmap/bitmap->typed-buffer bitmap))
 
 (defn bitmap->set
-  [bitmap]
+  ^Set [bitmap]
   (BitmapSet. bitmap))
 
 (defn as-roaring-bitmap
-  [item]
+  ^RoaringBitmap [item]
   (when (dtype-proto/convertible-to-bitmap? item)
     (dtype-proto/as-roaring-bitmap item)))

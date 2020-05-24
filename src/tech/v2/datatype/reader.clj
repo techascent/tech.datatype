@@ -109,7 +109,7 @@
                          buffer-datatype
                          reader-datatype]
                   :as access-map} casting/buffer-access-table]
-             [access-map
+             [intermediate-datatype
               `(fn [src-item# buffer# offset# length# unchecked?# advertised-datatype#]
                  (let [buffer# (typecast/datatype->array-cast-fn ~buffer-datatype
                                                                  buffer#)
@@ -137,24 +137,23 @@
 
 
 (defn make-array-reader
-  [src-item
-   array-data
-   offset
-   length
-   reader-datatype
-   intermediate-datatype
-   & [unchecked?]]
-  (let [buffer-dtype (casting/flatten-datatype (dtype-proto/get-datatype array-data))
-        access-map {:reader-datatype (casting/flatten-datatype reader-datatype)
-                    :intermediate-datatype (casting/flatten-datatype
-                                            intermediate-datatype)
-                    :buffer-datatype buffer-dtype}
-        array-reader-fn (get array-reader-table access-map)]
-    (when-not array-reader-fn
-      (throw (ex-info "Failed to find reader creation function for buffer datatype"
-                      access-map)))
-    (array-reader-fn src-item array-data offset length
-                     unchecked? intermediate-datatype)))
+  ([src-item array-data offset length
+    reader-datatype intermediate-datatype unchecked?]
+   (let [flatten-intermediate (casting/flatten-datatype intermediate-datatype)
+         array-reader-fn (get array-reader-table flatten-intermediate)]
+     (when-not array-reader-fn
+       (throw (ex-info "Failed to find reader creation function for buffer datatype"
+                       (let [buffer-dtype (casting/flatten-datatype
+                                           (dtype-proto/get-datatype array-data))]
+                         {:reader-datatype (casting/flatten-datatype reader-datatype)
+                          :intermediate-datatype flatten-intermediate
+                          :buffer-datatype buffer-dtype}))))
+     (array-reader-fn src-item array-data offset length
+                      unchecked? intermediate-datatype)))
+  ([src-item array-data offset length
+    reader-datatype intermediate-datatype]
+   (make-array-reader src-item array-data offset length reader-datatype
+                      intermediate-datatype false)))
 
 
 (defmacro make-buffer-reader-table
@@ -165,7 +164,7 @@
                   :as access-map}
                  (->> casting/buffer-access-table
                       (filter (comp casting/numeric-types :intermediate-datatype)))]
-             [access-map
+             [intermediate-datatype
               `(fn [src-item# buffer# unchecked?# advertised-dtype#]
                  (let [buffer# (typecast/datatype->buffer-cast-fn ~buffer-datatype
                                                                   buffer#)
@@ -203,17 +202,16 @@
                        (:offset ary-data) (:length ary-data)
                        reader-datatype intermediate-datatype unchecked?)
     (let [nio-buffer (dtype-proto/->buffer-backing-store item)
-          buffer-dtype (dtype-proto/get-datatype nio-buffer)
           ;;There could be aliased datatypes passed into here
           access-key-int-dtype (casting/flatten-datatype intermediate-datatype)
-          access-map {:reader-datatype reader-datatype
-                      :intermediate-datatype access-key-int-dtype
-                      :buffer-datatype buffer-dtype}
-          buffer-reader-fn (get buffer-reader-table access-map)]
+          buffer-reader-fn (get buffer-reader-table access-key-int-dtype)]
       (when-not buffer-reader-fn
         (throw (ex-info
                 "Failed to find nio reader creation function for buffer datatype"
-                access-map)))
+                (let [buffer-dtype (dtype-proto/get-datatype nio-buffer)]
+                  {:reader-datatype reader-datatype
+                   :intermediate-datatype access-key-int-dtype
+                   :buffer-datatype buffer-dtype}))))
       (buffer-reader-fn item nio-buffer unchecked? intermediate-datatype))))
 
 
@@ -223,7 +221,7 @@
                          buffer-datatype
                          reader-datatype]
                   :as access-map} casting/buffer-access-table]
-             [access-map
+             [intermediate-datatype
               `(fn [src-item# buffer# unchecked?# advertised-datatype#]
                  (let [buffer# (typecast/datatype->list-cast-fn ~buffer-datatype
                                                                 buffer#)
@@ -251,23 +249,24 @@
 
 
 (defn make-list-reader
-  [item
-   reader-datatype
-   intermediate-datatype
-   & [unchecked?]]
-  (if (dtype-proto/->sub-array item)
-    (make-buffer-reader item reader-datatype intermediate-datatype unchecked?)
-    (let [list-buffer (dtype-proto/->list-backing-store item)
-          buffer-dtype (dtype-proto/get-datatype list-buffer)
-          access-map {:reader-datatype (casting/flatten-datatype reader-datatype)
-                      :intermediate-datatype (casting/flatten-datatype
-                                              intermediate-datatype)
-                      :buffer-datatype buffer-dtype}
-          list-reader-fn (get list-reader-table access-map)]
-      (when-not list-reader-fn
-        (throw (ex-info "Failed to find reader creation function for buffer datatype"
-                        access-map)))
-      (list-reader-fn item list-buffer unchecked? intermediate-datatype))))
+  ([item reader-datatype intermediate-datatype]
+   (make-list-reader item reader-datatype intermediate-datatype true))
+  ([item reader-datatype advertised-datatype unchecked?]
+   (if (dtype-proto/->sub-array item)
+     (make-buffer-reader item reader-datatype advertised-datatype unchecked?)
+     (let [list-buffer (dtype-proto/->list-backing-store item)
+           intermediate-datatype (casting/flatten-datatype advertised-datatype)
+           list-reader-fn (get list-reader-table intermediate-datatype)]
+       (when-not list-reader-fn
+         (throw (ex-info "Failed to find reader creation function for buffer datatype"
+                         (let [buffer-dtype (dtype-proto/get-datatype list-buffer)
+                               access-map
+                               {:reader-datatype (casting/flatten-datatype
+                                                  reader-datatype)
+                                :intermediate-datatype intermediate-datatype
+                                :buffer-datatype buffer-dtype}]
+                           access-map))))
+       (list-reader-fn item list-buffer unchecked? advertised-datatype)))))
 
 
 (defmacro make-derived-reader
@@ -347,6 +346,8 @@
 
 (defn make-marshalling-reader
   [src-reader options]
+  ;; (throw (Exception. "xxxx"))
+  ;; (println "marshalling reader!!")
   (let [src-dtype (dtype-proto/get-datatype src-reader)
         dst-dtype (or (:datatype options)
                       (dtype-proto/get-datatype src-reader))]
@@ -371,7 +372,11 @@
      {:convertible-to-reader? (fn [item#] true)
       :->reader
       (fn [item# options#]
-        (make-marshalling-reader item# options#))}
+        (if-let [opt-dtype# (:datatype options#)]
+          (if (= opt-dtype# ~datatype)
+            item#
+            (make-marshalling-reader item# options#))
+          item#))}
      dtype-proto/PClone
      {:clone
       (fn [item#]

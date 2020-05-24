@@ -137,11 +137,12 @@
                           :else
                           (dtype-proto/->reader backing-store
                                                 {:datatype datatype
-                                                 :unchecked? unchecked?}))]
-      (cond-> direct-reader
-        (not= reader-datatype datatype)
-        (dtype-proto/->reader {:datatype reader-datatype
-                               :unchecked? unchecked?}))))
+                                                 :unchecked? unchecked?}))
+          result-datatype (dtype-proto/get-datatype direct-reader)]
+      (if (not= reader-datatype result-datatype)
+        (dtype-proto/->reader direct-reader {:datatype reader-datatype
+                                             :unchecked? unchecked?})
+        direct-reader)))
 
 
   Counted

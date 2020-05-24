@@ -4,7 +4,7 @@
             [tech.v2.datatype.typecast :as typecast]))
 
 
-(defmacro make-indexed-reader-impl
+(defmacro make-int64-indexed-reader-impl
   [datatype]
   `(fn [indexes# values# unchecked?#]
      (let [idx-reader# (typecast/datatype->reader :int64 indexes# true)
@@ -29,20 +29,49 @@
                    (dtype-proto/->backing-store-seq values#)))))))
 
 
-(def indexed-reader-creators (casting/make-base-datatype-table make-indexed-reader-impl))
+(def int64-indexed-reader-creators (casting/make-base-datatype-table
+                                    make-int64-indexed-reader-impl))
+
+
+(defmacro make-int32-indexed-reader-impl
+  [datatype]
+  `(fn [indexes# values# unchecked?#]
+     (let [idx-reader# (typecast/datatype->reader :int32 indexes# true)
+           values-dtype# (dtype-proto/get-datatype values#)
+           values# (typecast/datatype->reader ~datatype values# unchecked?#)
+           n-elems# (.lsize idx-reader#)]
+       (reify ~(typecast/datatype->reader-type datatype)
+         (getDatatype [item#] values-dtype#)
+         (lsize [item#] (.lsize idx-reader#))
+         (read [item# idx#]
+           (.read values# (.read idx-reader# idx#)))
+         dtype-proto/PConstantTimeMinMax
+         (has-constant-time-min-max? [item#]
+           (dtype-proto/has-constant-time-min-max? values#))
+         (constant-time-min [item#]
+           (dtype-proto/constant-time-min values#))
+         (constant-time-max [item#]
+           (dtype-proto/constant-time-max values#))
+         dtype-proto/PToBackingStore
+         (->backing-store-seq [item]
+           (concat (dtype-proto/->backing-store-seq idx-reader#)
+                   (dtype-proto/->backing-store-seq values#)))))))
+
+
+(def int32-indexed-reader-creators (casting/make-base-datatype-table
+                                    make-int32-indexed-reader-impl))
 
 
 (defn make-indexed-reader
-  ([indexes values {:keys [datatype unchecked?] :as options}]
-   (let [datatype (or datatype (dtype-proto/get-datatype values))
-         values (dtype-proto/->reader values (assoc options :datatype datatype))
-         reader-fn (get indexed-reader-creators (casting/safe-flatten datatype))
-         indexes (typecast/datatype->reader
-                  :int64
-                  (if (dtype-proto/convertible-to-reader? indexes)
-                    indexes
-                    (long-array indexes)))]
-     (reader-fn indexes values unchecked?)))
+  ([indexes values options]
+   (let [values (dtype-proto/->reader values options)
+         datatype (dtype-proto/get-datatype values)
+         reader-fn (if (= :int32 (dtype-proto/get-datatype indexes))
+                     (get int32-indexed-reader-creators
+                          (casting/safe-flatten datatype))
+                     (get int64-indexed-reader-creators
+                          (casting/safe-flatten datatype)))]
+     (reader-fn indexes values (:unchecked? options))))
   ([indexes values]
    (make-indexed-reader indexes values {})))
 

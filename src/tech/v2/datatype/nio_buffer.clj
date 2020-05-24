@@ -184,13 +184,14 @@
      {:convertible-to-reader? (constantly true)
       :->reader
       (fn [item# options#]
-        (let [{reader-datatype# :datatype
-               unchecked?# :unchecked?} options#]
-          (-> (reader/make-buffer-reader item#
-                                         ~(casting/safe-flatten datatype)
-                                         ~datatype
-                                         unchecked?#)
-              (dtype-proto/->reader options#))))}
+        (let [buf-reader# (reader/make-buffer-reader
+                           item#
+                           ~(casting/safe-flatten datatype)
+                           ~datatype
+                           true)]
+          (if-not (= ~datatype (:datatype options#))
+            (dtype-proto/->reader buf-reader# options#)
+            buf-reader#)))}
 
 
      dtype-proto/PToIterable

@@ -266,3 +266,13 @@
          (vec (map #(/ % 24.0) hour-range)))
         (pr-str {:test-duration (str test-duration)
                  :test-local-date (str test-instant)}))))
+
+
+(deftest packed-sub-buffer
+  (let [packed-data (dtype-dt/pack (dtype-dt/local-date))
+        packed-reader (dtype/make-container :list :packed-local-date
+                                            (repeat 10 packed-data))
+        data (dtype/sub-buffer (dtype/->reader packed-reader) 0 3)]
+    (is (= :packed-local-date (dtype/get-datatype packed-reader)))
+    (is (= :packed-local-date (dtype/get-datatype (dtype/->reader packed-reader))))
+    (is (= :packed-local-date (dtype/get-datatype data)))))

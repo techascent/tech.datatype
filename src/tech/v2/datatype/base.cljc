@@ -417,7 +417,8 @@
 
   dtype-proto/PClone
   (clone [item]
-    (if (instance? java.lang.Cloneable item)
+    (if (and (instance? java.lang.Cloneable item)
+             (not (.isArray (.getClass ^Object item))))
       (let [^Class item-cls (class item)
             ^Method method
             (.getMethod item-cls

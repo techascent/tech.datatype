@@ -560,3 +560,10 @@
   (is (= 4096.0 (dfn/reduce-pow (range 2 5))))
   (is (dfn/equals [3.5 2.5 1.5]
                   (dfn/rem [12.3 11.3 10.3] 4.4))))
+
+
+(deftest array-clone
+  (let [dtypes (concat [:boolean :object :keyword] casting/host-numeric-types)]
+    (doseq [dtype dtypes]
+      (let [new-container (dtype/clone (dtype/make-container :java-array dtype 5))]
+        (is (= dtype (dtype/get-datatype new-container)))))))

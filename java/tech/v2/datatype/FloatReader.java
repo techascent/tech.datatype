@@ -6,6 +6,8 @@ import clojure.lang.Sequential;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
+import java.util.stream.DoubleStream;
+import java.util.stream.StreamSupport;
 import clojure.lang.RT;
 
 
@@ -31,5 +33,11 @@ public interface FloatReader extends IOBase, Iterable, IFn,
   }
   default Object invoke(Object arg) {
     return read(RT.longCast(arg));
+  }
+  default DoubleStream typedStream() {
+    return StreamSupport.doubleStream(new RangeDoubleSpliterator(0, size(),
+								 new RangeDoubleSpliterator.LongDoubleConverter() { public double longToDouble(long arg) { return read(arg); } },
+								 false),
+				      false);
   }
 }

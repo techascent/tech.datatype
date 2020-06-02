@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
 import clojure.lang.RT;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 
 public interface ByteReader extends IOBase, Iterable, IFn,
@@ -31,5 +33,8 @@ public interface ByteReader extends IOBase, Iterable, IFn,
   }
   default Object invoke(Object arg) {
     return read( RT.longCast( arg ));
+  }
+  default IntStream typedStream() {
+    return IntStream.range(0, size()).map(i -> read(i));
   }
 }

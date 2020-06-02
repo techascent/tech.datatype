@@ -6,6 +6,7 @@ import clojure.lang.Sequential;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
+import java.util.stream.LongStream;
 import clojure.lang.RT;
 
 
@@ -31,5 +32,8 @@ public interface LongReader extends IOBase, Iterable, IFn,
   }
   default Object invoke(Object arg) {
     return read(RT.longCast(arg));
+  }
+  default LongStream typedStream() {
+    return LongStream.range(0, size()).map(i -> read(i));
   }
 }

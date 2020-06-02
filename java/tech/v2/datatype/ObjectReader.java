@@ -7,6 +7,7 @@ import clojure.lang.RT;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
+import java.util.stream.Stream;
 
 
 public interface ObjectReader extends IOBase, Iterable, IFn,
@@ -31,5 +32,8 @@ public interface ObjectReader extends IOBase, Iterable, IFn,
   }
   default Object invoke(Object arg) {
     return read(RT.longCast(arg));
+  }
+  default Stream typedStream() {
+    return stream();
   }
 };

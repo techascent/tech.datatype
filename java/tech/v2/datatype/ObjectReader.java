@@ -4,6 +4,7 @@ import clojure.lang.IFn;
 import clojure.lang.Keyword;
 import clojure.lang.Sequential;
 import clojure.lang.RT;
+import clojure.lang.ISeq;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
@@ -32,6 +33,14 @@ public interface ObjectReader extends IOBase, Iterable, IFn,
   }
   default Object invoke(Object arg) {
     return read(RT.longCast(arg));
+  }
+  default Object applyTo(ISeq items) {
+    if (1 == items.count()) {
+      return invoke(items.first());
+    } else {
+      //Abstract method error
+      return invoke(items.first(), items.next());
+    }
   }
   default Stream typedStream() {
     return stream();

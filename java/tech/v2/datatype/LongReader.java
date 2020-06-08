@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.RandomAccess;
 import java.util.stream.LongStream;
 import clojure.lang.RT;
+import clojure.lang.ISeq;
 
 
 public interface LongReader extends IOBase, Iterable, IFn,
@@ -32,6 +33,14 @@ public interface LongReader extends IOBase, Iterable, IFn,
   }
   default Object invoke(Object arg) {
     return read(RT.longCast(arg));
+  }
+  default Object applyTo(ISeq items) {
+    if (1 == items.count()) {
+      return invoke(items.first());
+    } else {
+      //Abstract method error
+      return invoke(items.first(), items.next());
+    }
   }
   default LongStream typedStream() {
     return LongStream.range(0, size()).map(i -> read(i));

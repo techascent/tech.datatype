@@ -9,6 +9,7 @@ import java.util.RandomAccess;
 import java.util.stream.DoubleStream;
 import java.util.stream.StreamSupport;
 import clojure.lang.RT;
+import clojure.lang.ISeq;
 
 
 public interface FloatReader extends IOBase, Iterable, IFn,
@@ -33,6 +34,14 @@ public interface FloatReader extends IOBase, Iterable, IFn,
   }
   default Object invoke(Object arg) {
     return read(RT.longCast(arg));
+  }
+  default Object applyTo(ISeq items) {
+    if (1 == items.count()) {
+      return invoke(items.first());
+    } else {
+      //Abstract method error
+      return invoke(items.first(), items.next());
+    }
   }
   default DoubleStream typedStream() {
     return StreamSupport.doubleStream(new RangeDoubleSpliterator(0, size(),

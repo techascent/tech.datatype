@@ -567,3 +567,14 @@
     (doseq [dtype dtypes]
       (let [new-container (dtype/clone (dtype/make-container :java-array dtype 5))]
         (is (= dtype (dtype/get-datatype new-container)))))))
+
+
+(deftest apply-works-with-readers
+  (let [dtypes (concat [:boolean :object :keyword] casting/host-numeric-types)]
+    (doseq [dtype dtypes]
+      (let [new-container (dtype/clone (dtype/make-container :java-array dtype 5))]
+        (if-not (or (= dtype :object)
+                    (= dtype :keyword))
+          (is (not (nil? (apply (dtype/->reader new-container) [1])))
+              (format "Failed for datatype %s" dtype))
+          (is (nil? (apply (dtype/->reader new-container) [1]))))))))

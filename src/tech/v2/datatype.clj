@@ -24,6 +24,8 @@
             [tech.v2.datatype.builtin-op-providers :as builtin-op-providers]
             ;;Support for base container types
             [tech.v2.datatype.bitmap :as bitmap]
+            [tech.v2.datatype.clj-range :as clj-range]
+            [tech.v2.datatype.vector-of]
             [tech.v2.datatype.readers.indexed :as indexed-rdr]
             [tech.v2.datatype.readers.const :as const-rdr]
             [tech.v2.datatype.index-algebra :as idx-alg])

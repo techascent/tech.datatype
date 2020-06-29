@@ -26,19 +26,15 @@
 
 
 ;;Only object datatypes are represented in these maps
-(defonce datatype->class-map (ConcurrentHashMap.))
-(defonce class->datatype-map (ConcurrentHashMap.))
+(defonce datatype-extension-map (ConcurrentHashMap.))
 
 
-(defn add-object-datatype!
+(defn add-extended-datatype!
   ;;Add an object datatype.
-  [datatype obj-cls constructor-fn]
-  (when-not (instance? Class obj-cls)
-    (throw (Exception. "Invalid argument")))
-  (.put ^ConcurrentHashMap datatype->class-map
-        datatype {:class obj-cls
+  [datatype validator-fn constructor-fn]
+  (.put ^ConcurrentHashMap datatype-extension-map
+        datatype {:validator validator-fn
                   :constructor constructor-fn})
-  (.put ^ConcurrentHashMap class->datatype-map obj-cls datatype)
   (rebuild-valid-datatypes!))
 
 
@@ -69,7 +65,7 @@
 (defn rebuild-valid-datatypes!
   []
   (reset! valid-datatype-set
-          (->> (concat (keys datatype->class-map)
+          (->> (concat (keys datatype-extension-map)
                        (keys aliased-datatypes)
                        numeric-types
                        [:boolean])

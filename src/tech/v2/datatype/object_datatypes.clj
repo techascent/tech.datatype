@@ -11,7 +11,10 @@
   [obj-cls datatype constructor]
   (let [ary-type (type (make-array (resolve obj-cls) 0))]
     `(do
-       (casting/add-object-datatype! ~datatype ~obj-cls ~constructor)
+       (casting/add-extended-datatype! ~datatype
+                                       #(or (nil? %)
+                                            (instance? ~obj-cls %))
+                                       ~constructor)
        ;;Ensure the scalar pathway works
        (clojure.core/extend
            ~obj-cls

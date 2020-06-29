@@ -131,13 +131,16 @@
   ;;(long 1e6)
   1000000)
 
+
 (defn nanoseconds-in-second
   ^long []
   1000000000)
 
+
 (defn nanoseconds-in-minute
   ^long []
   60000000000)
+
 
 (defn nanoseconds-in-hour
   ^long []
@@ -147,33 +150,41 @@
   ^long []
   86400000000000)
 
+
 (defn nanoseconds-in-week
   ^long []
   604800000000000)
+
 
 (defn milliseconds-in-week
   ^long []
   604800000)
 
+
 (defn milliseconds-in-day
   ^long []
   86400000)
+
 
 (defn milliseconds-in-hour
   ^long []
   3600000)
 
+
 (defn milliseconds-in-minute
   ^long []
   60000)
+
 
 (defn milliseconds-in-second
   ^long []
   1000)
 
+
 (defn system-zone-id
   ^ZoneId []
   (ZoneId/systemDefault))
+
 
 (defn utc-zone-id
   ^ZoneId []
@@ -366,6 +377,7 @@
 (declare local-date-time->local-time
          local-date-time->local-date
          local-time->local-date-time)
+
 
 (defn local-time
   (^LocalTime []
@@ -596,11 +608,18 @@
 
 
 (def packed-datatypes (set (keys packed-type->unpacked-type-table)))
+(def unpacked-datatypes (set (keys unpacked-type->packed-type-table)))
 
 
 (defn packed-datatype?
   [datatype]
   (boolean (packed-datatypes datatype)))
+
+
+(defn unpacked-datatype?
+  [datatype]
+  (or (not (datetime-datatype? datatype))
+      (boolean (unpacked-datatypes datatype))))
 
 
 ;;As our packed types are really primitive aliases we tell the datatype system about
@@ -776,10 +795,12 @@
   []
   `(defn ~'pack
      [~'item]
-     (case (collapse-date-datatype ~'item)
-       ~@(->> packable-datatypes
-              (mapcat (fn [dtype]
-                        [dtype `(macro-pack ~dtype ~'item)]))))))
+     (if-not (unpacked-datatype? (dtype-base/get-datatype ~'item))
+       ~'item
+       (case (collapse-date-datatype ~'item)
+         ~@(->> packable-datatypes
+                (mapcat (fn [dtype]
+                          [dtype `(macro-pack ~dtype ~'item)])))))))
 
 (implement-pack)
 
@@ -806,10 +827,13 @@
   []
   `(defn ~'unpack
      [~'item]
-     (case (collapse-date-datatype ~'item)
-       ~@(->> packable-datatypes
-              (mapcat (fn [dtype]
-                        [(unpacked-type->packed-type dtype) `(macro-unpack ~dtype ~'item)]))))))
+     (if-not (packed-datatype? (dtype-base/get-datatype ~'item))
+       ~'item
+       (case (collapse-date-datatype ~'item)
+         ~@(->> packable-datatypes
+                (mapcat (fn [dtype]
+                          [(unpacked-type->packed-type dtype)
+                           `(macro-unpack ~dtype ~'item)])))))))
 
 
 (implement-unpack)

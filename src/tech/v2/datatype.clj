@@ -442,18 +442,18 @@ Calls clojure.core.matrix/ecount."
 (defn ->reader
   "Create a reader of a specific type."
   [src-item & [datatype options]]
-  (if (map? datatype)
-    (dtype-proto/->reader src-item datatype)
-    (dtype-proto/->reader src-item
-                          (assoc options
-                                 :datatype
-                                 (or datatype (get-datatype src-item))))))
+  (let [opt-map (if (map? datatype)
+                  datatype
+                  (assoc options :datatype
+                         (or datatype (get-datatype src-item))))]
+    (casting/ensure-valid-datatype (:datatype opt-map))
+    (dtype-proto/->reader src-item opt-map)))
 
 
 (defn ->>reader
   "Create a reader of a specific type."
   ([options src-item]
-   (dtype-proto/->reader src-item options))
+   (->reader src-item options))
   ([src-item]
    (->>reader src-item {})))
 
@@ -486,51 +486,56 @@ user> (dtype/get-datatype *1)
   ([datatype n-elems read-op]
    `(make-reader ~datatype ~datatype ~n-elems ~read-op))
   ([reader-datatype advertised-datatype n-elems read-op]
-   `(let [~'n-elems (long ~n-elems)]
-      ~(case (casting/safe-flatten reader-datatype)
-         :boolean `(reify BooleanReader
-                     (getDatatype [rdr#] ~advertised-datatype)
-                     (lsize [rdr#] ~'n-elems)
-                     (read [rdr# ~'idx]
-                       (casting/datatype->unchecked-cast-fn
-                        :unknown :boolean ~read-op)))
-         :int8 `(reify ByteReader
-                  (getDatatype [rdr#] ~advertised-datatype)
-                  (lsize [rdr#] ~'n-elems)
-                  (read [rdr# ~'idx] (unchecked-byte ~read-op)))
-         :int16 `(reify ShortReader
-                   (getDatatype [rdr#] ~advertised-datatype)
-                   (lsize [rdr#] ~'n-elems)
-                   (read [rdr# ~'idx] (unchecked-short ~read-op)))
-         :int32 `(reify IntReader
-                   (getDatatype [rdr#] ~advertised-datatype)
-                   (lsize [rdr#] ~'n-elems)
-                   (read [rdr# ~'idx] (unchecked-int ~read-op)))
-         :int64 `(reify LongReader
-                   (getDatatype [rdr#] ~advertised-datatype)
-                   (lsize [rdr#] ~'n-elems)
-                   (read [rdr# ~'idx] (unchecked-long ~read-op)))
-         :float32 `(reify FloatReader
-                     (getDatatype [rdr#] ~advertised-datatype)
-                     (lsize [rdr#] ~'n-elems)
-                     (read [rdr# ~'idx] (unchecked-float ~read-op)))
-         :float64 `(reify DoubleReader
-                     (getDatatype [rdr#] ~advertised-datatype)
-                     (lsize [rdr#] ~'n-elems)
-                     (read [rdr# ~'idx] (unchecked-double ~read-op)))
-         :object `(reify ObjectReader
+   `(do
+      (casting/ensure-valid-datatype ~advertised-datatype)
+      (casting/ensure-valid-datatype ~reader-datatype)
+      (let [~'n-elems (long ~n-elems)]
+        ~(case (casting/safe-flatten reader-datatype)
+           :boolean `(reify BooleanReader
+                       (getDatatype [rdr#] ~advertised-datatype)
+                       (lsize [rdr#] ~'n-elems)
+                       (read [rdr# ~'idx]
+                         (casting/datatype->unchecked-cast-fn
+                          :unknown :boolean ~read-op)))
+           :int8 `(reify ByteReader
                     (getDatatype [rdr#] ~advertised-datatype)
                     (lsize [rdr#] ~'n-elems)
-                    (read [rdr# ~'idx] ~read-op))))))
+                    (read [rdr# ~'idx] (unchecked-byte ~read-op)))
+           :int16 `(reify ShortReader
+                     (getDatatype [rdr#] ~advertised-datatype)
+                     (lsize [rdr#] ~'n-elems)
+                     (read [rdr# ~'idx] (unchecked-short ~read-op)))
+           :int32 `(reify IntReader
+                     (getDatatype [rdr#] ~advertised-datatype)
+                     (lsize [rdr#] ~'n-elems)
+                     (read [rdr# ~'idx] (unchecked-int ~read-op)))
+           :int64 `(reify LongReader
+                     (getDatatype [rdr#] ~advertised-datatype)
+                     (lsize [rdr#] ~'n-elems)
+                     (read [rdr# ~'idx] (unchecked-long ~read-op)))
+           :float32 `(reify FloatReader
+                       (getDatatype [rdr#] ~advertised-datatype)
+                       (lsize [rdr#] ~'n-elems)
+                       (read [rdr# ~'idx] (unchecked-float ~read-op)))
+           :float64 `(reify DoubleReader
+                       (getDatatype [rdr#] ~advertised-datatype)
+                       (lsize [rdr#] ~'n-elems)
+                       (read [rdr# ~'idx] (unchecked-double ~read-op)))
+           :object `(reify ObjectReader
+                      (getDatatype [rdr#] ~advertised-datatype)
+                      (lsize [rdr#] ~'n-elems)
+                      (read [rdr# ~'idx] ~read-op)))))))
 
 
 (defn object-reader
   "Create an object reader from an elem count and a function from index to object."
   ([n-elems idx->item-fn datatype]
-   (let [n-elems (long n-elems)]
+   (let [n-elems (long n-elems)
+         datatype (or datatype :object)]
+     (casting/ensure-valid-datatype datatype)
      (reify
        ObjectReader
-       (getDatatype [_] (or datatype :object))
+       (getDatatype [_] datatype)
        (lsize [_] (long n-elems))
        (read [_ elem-idx]
          (idx->item-fn elem-idx)))))
@@ -569,6 +574,7 @@ user> (dtype/get-datatype *1)
   Use unchecked? if you do not want the reader conversion to check the data.  This
   only applies if you are changing datatypes from the base object datatype."
   ([obj datatype unchecked?]
+   (casting/ensure-valid-datatype datatype)
    (case (casting/safe-flatten datatype)
      :boolean `(typecast/datatype->reader :boolean ~obj ~unchecked?)
      :int8 `(typecast/datatype->reader :int8 ~obj ~unchecked?)
@@ -704,10 +710,13 @@ user> (dtype/get-datatype *1)
 (defn ->writer
   "Create a writer of a specific type."
   [src-item & [datatype options]]
-  (dtype-proto/->writer src-item
-                        (assoc options
-                               :datatype
-                               (or datatype (get-datatype src-item)))))
+  (let [options (if (map? datatype)
+                  datatype
+                  (assoc options
+                         :datatype
+                         (or datatype (get-datatype src-item))))]
+    (casting/ensure-valid-datatype (:datatype options))
+    (dtype-proto/->writer src-item options)))
 
 
 (defn ->mutable

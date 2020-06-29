@@ -8,18 +8,38 @@
 
 (set! *warn-on-reflection* true)
 
+(declare rebuild-valid-datatypes!)
+
 (defonce aliased-datatypes (ConcurrentHashMap.))
 
 
 (defn alias-datatype!
   "Alias a new datatype to a base datatype.  Only useful for primitive datatypes"
   [new-dtype old-dtype]
-  (.put ^Map aliased-datatypes new-dtype old-dtype))
+  (.put ^Map aliased-datatypes new-dtype old-dtype)
+  (rebuild-valid-datatypes!))
 
 
 (defn un-alias-datatype
   [dtype]
   (.getOrDefault ^Map aliased-datatypes dtype dtype))
+
+
+;;Only object datatypes are represented in these maps
+(defonce datatype->class-map (ConcurrentHashMap.))
+(defonce class->datatype-map (ConcurrentHashMap.))
+
+
+(defn add-object-datatype!
+  ;;Add an object datatype.
+  [datatype obj-cls constructor-fn]
+  (when-not (instance? Class obj-cls)
+    (throw (Exception. "Invalid argument")))
+  (.put ^ConcurrentHashMap datatype->class-map
+        datatype {:class obj-cls
+                  :constructor constructor-fn})
+  (.put ^ConcurrentHashMap class->datatype-map obj-cls datatype)
+  (rebuild-valid-datatypes!))
 
 
 (def signed-unsigned
@@ -41,6 +61,31 @@
 (def host-numeric-types (set (concat signed-int-types float-types)))
 
 (def numeric-types (set (concat host-numeric-types unsigned-int-types)))
+
+
+(defonce valid-datatype-set (atom nil))
+
+
+(defn rebuild-valid-datatypes!
+  []
+  (reset! valid-datatype-set
+          (->> (concat (keys datatype->class-map)
+                       (keys aliased-datatypes)
+                       numeric-types
+                       [:boolean])
+               (set))))
+
+
+(defn valid-datatype?
+  [datatype]
+  (boolean (@valid-datatype-set datatype)))
+
+
+(defn ensure-valid-datatype
+  [datatype]
+  (when-not (valid-datatype? datatype)
+    (throw (Exception. (format "Invalid datatype: %s" datatype)))))
+
 
 (def primitive-types (set (concat numeric-types [:boolean])))
 
@@ -83,7 +128,6 @@
           (throw (ex-info (format "datatype is not numeric: %s" dtype)
                           {:datatype dtype})))))
 
-(declare un-alias-datatype)
 
 (defn numeric-type?
   [dtype]
@@ -321,6 +365,7 @@
         :uint64 :int64
         base-dtype)))
 
+
 (defmacro datatype->host-cast-fn
   [src-dtype dst-dtype val]
   (let [host-type (datatype->host-type dst-dtype)]
@@ -380,11 +425,6 @@
       (if-let [cast-fn (@*unchecked-cast-table* datatype)]
         (cast-fn value)
         (throw (ex-info "No unchecked-cast available" {:datatype datatype}))))))
-
-
-(defn jvm-cast
-  [value datatype]
-  (unchecked-cast value (datatype->host-type datatype)))
 
 
 (defmacro datatype->sparse-value

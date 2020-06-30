@@ -6,6 +6,8 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.readers.const :refer [make-const-reader]]
             [tech.v2.datatype.iterable.const :refer [make-const-iterable]]
+            [tech.v2.datatype.iterator :as dtype-iter]
+            [tech.v2.datatype.readers.const :as const-rdr]
             [tech.v2.datatype.argtypes :refer [arg->arg-type]]
             [tech.v2.datatype.unary-op :as unary-op]
             [tech.v2.datatype.binary-op :as binary-op]
@@ -106,99 +108,6 @@
               (dtype-dt/->milliseconds-since-epoch x)))}))
 
 
-(defn- as-chrono-unit
-  ^ChronoUnit [item] item)
-
-
-(defmacro ^:private make-packed-chrono-plus
-  [datatype opname chrono-unit]
-  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
-    `(binary-op/make-binary-op
-      (keyword (format "%s-add-%s" (name ~datatype) (name ~opname)))
-      ~datatype
-      (casting/datatype->unchecked-cast-fn
-       :unknown
-       ~(casting/datatype->host-type datatype)
-       (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-           (.plus (long~'y) (as-chrono-unit ~chrono-unit))
-           (dtype-dt/compile-time-pack ~src-dtype))))))
-
-
-(defmacro ^:private make-packed-chrono-minus
-  [datatype opname chrono-unit]
-  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
-    `(binary-op/make-binary-op
-      (keyword (format "%s-add-%s" (name ~datatype) (name ~opname)))
-      ~datatype
-      (casting/datatype->unchecked-cast-fn
-       :unknown
-       ~(casting/datatype->host-type datatype)
-       (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-           (.minus (long~'y) (as-chrono-unit~chrono-unit))
-           (dtype-dt/compile-time-pack ~src-dtype))))))
-
-
-(defmacro ^:private make-packed-numeric-ops
-  [datatype]
-  `(->> dtype-dt/keyword->chrono-unit
-        (mapcat (fn [[k# v#]]
-                  [[(keyword (str "plus-" (name k#)))
-                    (make-packed-chrono-plus ~datatype k# v#)]
-                   [(keyword (str "minus-" (name k#)))
-                    (make-packed-chrono-minus ~datatype k# v#)]]))
-        (into {})))
-
-
-(defmacro ^:private make-packed-temporal-numeric-ops
-  [datatype]
-  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
-    {:plus-temporal-amount
-     `(binary-op/make-binary-op
-       :plus-temporal-amount
-       ~datatype
-       (casting/datatype->unchecked-cast-fn
-        :unknown
-        ~(casting/datatype->host-type datatype)
-        (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-            (.plus (dtype-dt/as-temporal-amount ~'y))
-            (dtype-dt/compile-time-pack ~src-dtype))))
-     :minus-temporal-amount
-     `(binary-op/make-binary-op
-       :minus-temporal-amount
-       ~datatype
-       (casting/datatype->unchecked-cast-fn
-        :unknown
-        ~(casting/datatype->host-type datatype)
-        (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-            (.minus (dtype-dt/as-temporal-amount ~'y))
-            (dtype-dt/compile-time-pack ~src-dtype))))}))
-
-
-(defmacro ^:private make-packed-temporal-getter
-  [datatype opname temporal-field]
-  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
-    `(unary-op/make-unary-op
-      (keyword (format "%s-get-%s" (name ~datatype) (name ~opname)))
-      :int64
-      (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-          (.getLong ~temporal-field)))))
-
-
-(defmacro ^:private make-packed-getters
-  [datatype]
-  (let [src-dtype (dtype-dt/packed-type->unpacked-type datatype)]
-    `(merge (->> dtype-dt/keyword->temporal-field
-                 (map (fn [[k# v#]]
-                        [k# (make-packed-temporal-getter ~datatype k# v#)]))
-                 (into {}))
-            {:epoch-milliseconds
-             (unary-op/make-unary-op
-              (keyword (format "%s-get-epoch-milliseconds" (name ~datatype)))
-              :int64
-              (-> (dtype-dt/compile-time-unpack ~'x ~src-dtype)
-                  (dtype-dt/->milliseconds-since-epoch)))})))
-
-
 (defn temporal-time-op-table
   [datatype before-fn after-fn millis-fn]
   {:numeric-ops temporal-numeric-ops
@@ -239,10 +148,7 @@
 
 (defmacro packed-temporal-time-op-table
   [datatype millis-fn]
-  `{:numeric-ops (make-packed-numeric-ops ~datatype)
-    :int64-getters (make-packed-getters ~datatype)
-    :temporal-amount-ops (make-packed-temporal-numeric-ops ~datatype)
-    :boolean-ops
+  `{:boolean-ops
     {:< (boolean-op/make-boolean-binary-op
          :lt ~datatype
          (clojure.core/< ~'x ~'y))
@@ -264,13 +170,7 @@
            (if (clojure.core/< ~'x ~'y) ~'x ~'y))
      :max (binary-op/make-binary-op
            :max ~datatype
-           (if (clojure.core/> ~'x ~'y) ~'x ~'y))}
-    :binary->int64-ops
-    {:difference-milliseconds
-     (binary-op/make-binary-op
-      :difference-millis :object
-      (- (~millis-fn ~'x)
-         (~millis-fn ~'y)))}})
+           (if (clojure.core/> ~'x ~'y) ~'x ~'y))}})
 
 
 
@@ -433,68 +333,9 @@
      :duration-difference-duration :object
      (.minus ^Duration x ^Duration y))}})
 
-(def packed-duration-conversions
-  [:nanoseconds :milliseconds
-   :seconds :minutes :hours
-   :days :weeks])
-
-
-(defmacro ^:private packed-duration-conversion-table
-  [datatype]
-  (case datatype
-    :nanoseconds 1
-    :milliseconds `(dtype-dt/nanoseconds-in-millisecond)
-    :seconds `(dtype-dt/nanoseconds-in-second)
-    :minutes `(dtype-dt/nanoseconds-in-minute)
-    :hours `(dtype-dt/nanoseconds-in-hour)
-    :days `(dtype-dt/nanoseconds-in-day)
-    :weeks `(dtype-dt/nanoseconds-in-week)))
-
-
-(defmacro ^:private packed-duration-numeric-ops
-  []
-  (->> packed-duration-conversions
-       (mapcat (fn [conv-name]
-                 (let [plus-name (keyword (str "plus-" (name conv-name)))
-                       minus-name (keyword (str "minus-" (name conv-name)))]
-                   [[plus-name
-                     `(binary-op/make-binary-op
-                       ~plus-name :int64
-                       (pmath/+ ~'x (pmath/* ~'y (packed-duration-conversion-table
-                                                  ~conv-name))))]
-                    [minus-name
-                     `(binary-op/make-binary-op
-                       ~minus-name :int64
-                       (pmath/+ ~'x (pmath/* ~'y (packed-duration-conversion-table
-                                                  ~conv-name))))]])))
-       (into {})))
-
-
-(defmacro ^:private packed-duration-getters
-  []
-  (->> packed-duration-conversions
-       (mapcat (fn [conv-name]
-                 [[conv-name
-                   (if (#{:nanoseconds :milliseconds} conv-name)
-                     `(unary-op/make-unary-op
-                       ~conv-name :int64
-                       (pmath/+ (quot ~'x
-                                   (packed-duration-conversion-table
-                                    ~conv-name)
-                                   )))
-                     `(unary-op/make-unary-op
-                       ~conv-name :float64
-                       (pmath/+ (/ (double ~'x)
-                                   (packed-duration-conversion-table
-                                    ~conv-name)
-                                   ))))]]))
-       (into {})))
-
 
 (def packed-duration-time-ops
-  {:numeric-ops (packed-duration-numeric-ops)
-   :duration-getters (packed-duration-getters)
-   :boolean-ops
+  {:boolean-ops
     {:< (boolean-op/make-boolean-binary-op
         :lt :packed-duration
         (pmath/< x y))
@@ -518,17 +359,7 @@
           (pmath/min x y))
     :max (binary-op/make-binary-op
           :max :packed-duration
-          (pmath/max x y))}
-    :binary->int64-ops
-   {:difference-milliseconds
-    (binary-op/make-binary-op
-     :packed-duration-difference-millis :packed-duration
-     (quot (pmath/- x y)
-           (dtype-dt/nanoseconds-in-millisecond)))
-    :difference-nanoseconds
-    (binary-op/make-binary-op
-     :packed-duration-difference-nanos :packed-duration
-     (pmath/- x y))}})
+          (pmath/max x y))}})
 
 
 (def java-time-ops
@@ -586,8 +417,7 @@
    :packed-local-time
    (packed-temporal-time-op-table
     :packed-local-time
-    dtype-dt/packed-local-time->milliseconds)
-})
+    dtype-dt/packed-local-time->milliseconds)})
 
 
 (defn- argtypes->operation-type
@@ -615,23 +445,10 @@
     arg))
 
 
-(defn- make-iterable-of-type
-  [iterable datatype]
-  (if-not (= datatype (dtype-proto/get-datatype iterable))
-    (dtype-proto/->iterable iterable {:datatype datatype})
-    iterable))
-
-
-(defn- make-reader-of-type
-  [reader datatype]
-  (if-not (= datatype (dtype-proto/get-datatype reader))
-    (dtype-proto/->reader reader {:datatype datatype})
-    reader))
-
-
 (defn- perform-int64-getter
   [lhs unary-op-name]
-  (let [lhs-argtype (arg->arg-type lhs)
+  (let [lhs (dtype-dt/unpack lhs)
+        lhs-argtype (arg->arg-type lhs)
         lhs-dtype (collapse-date-datatype lhs)
         lhs (if (dtype-dt/packed-datatype? lhs-dtype)
               (dtype-proto/set-datatype lhs :int64)
@@ -657,14 +474,12 @@
 
 (defn- perform-duration-getter
   [lhs unary-op-name]
-  (let [lhs-argtype (arg->arg-type lhs)
+  (let [lhs (dtype-dt/unpack lhs)
+        lhs-argtype (arg->arg-type lhs)
         lhs-dtype (collapse-date-datatype lhs)
         op-dtype (if (#{:nanoseconds :milliseconds} unary-op-name)
                    :int64
                    :float64)
-        lhs (if (dtype-dt/packed-datatype? lhs-dtype)
-              (dtype-proto/set-datatype lhs op-dtype)
-              lhs)
         unary-op (get-in java-time-ops [lhs-dtype :duration-getters
                                         unary-op-name])]
     (when-not unary-op
@@ -699,6 +514,22 @@
        (promote-op-arg op-argtype lhs-argtype lhs rhs)
        (promote-op-arg op-argtype rhs-argtype rhs lhs)))))
 
+
+(defn- with-packing-time-op
+  [date-time-arg rhs op-category opname]
+  (let [date-time-orig-dtype (collapse-date-datatype date-time-arg)
+        date-time-arg (dtype-dt/unpack date-time-arg)
+        date-time-dtype (collapse-date-datatype date-time-arg)
+        num-op (get-in java-time-ops [date-time-dtype op-category opname])
+        _ (when-not num-op
+            (throw (Exception. (format "Could not find numeric op %s for type %s"
+                                       opname date-time-dtype))))
+        result (perform-time-op date-time-arg rhs date-time-dtype num-op)]
+    (if (dtype-dt/packed-datatype? date-time-orig-dtype)
+      (dtype-dt/pack result)
+      result)))
+
+
 (defn- perform-commutative-numeric-op
   [lhs rhs opname]
   (let [lhs-dtype (collapse-date-datatype lhs)
@@ -708,22 +539,17 @@
         any-date-datatype? (or (dtype-dt/datetime-datatype? lhs-dtype)
                                (dtype-dt/datetime-datatype? rhs-dtype))
         _ (when-not any-number?
-            (throw (Exception. (format "Arguments must have numeric type: %s, %s"
+            (throw (Exception. (format "One Argument must have numeric type: %s, %s"
                                        lhs-dtype rhs-dtype))))
         _ (when-not any-date-datatype?
-            (throw (Exception. (format "Arguments not datetime related: %s, %s"
+            (throw (Exception. (format "One Argument must be datetime related: %s, %s"
                                        lhs-dtype rhs-dtype))))
         ;;There is an assumption that the arguments are commutative and the left
         ;;hand side is the actual arg.
         lhs-num? (= :number lhs-dtype)
         numeric-arg (if lhs-num? lhs rhs)
-        date-time-arg (if lhs-num? rhs lhs)
-        date-time-dtype (if lhs-num? rhs-dtype lhs-dtype)
-        num-op (get-in java-time-ops [date-time-dtype :numeric-ops opname])]
-    (when-not num-op
-      (throw (Exception. (format "Could not find numeric op %s for type %s"
-                                 opname date-time-dtype))))
-    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+        date-time-arg (if lhs-num? rhs lhs)]
+    (with-packing-time-op date-time-arg numeric-arg :numeric-ops opname)))
 
 
 (defn- perform-non-commutative-numeric-op
@@ -738,17 +564,8 @@
                                        lhs-dtype rhs-dtype))))
         _ (when-not any-date-datatype?
             (throw (Exception. (format "Arguments not datetime related: %s, %s"
-                                       lhs-dtype rhs-dtype))))
-        ;;There is an assumption that the arguments are commutative and the left
-        ;;hand side is the actual arg.
-        numeric-arg rhs
-        date-time-arg lhs
-        date-time-dtype lhs-dtype
-        num-op (get-in java-time-ops [date-time-dtype :numeric-ops opname])]
-    (when-not num-op
-      (throw (Exception. (format "Could not find numeric op %s for type %s"
-                                 opname date-time-dtype))))
-    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+                                       lhs-dtype rhs-dtype))))]
+    (with-packing-time-op lhs rhs :numeric-ops opname)))
 
 
 (defn temporal-amount-datatype?
@@ -776,18 +593,9 @@
         ;;There is an assumption that the arguments are commutative and the left
         ;;hand side is the actual arg.
         lhs-num? (temporal-amount-datatype? lhs-dtype)
-        numeric-arg (if lhs-num? lhs rhs)
-        numeric-arg (if (dtype-dt/packed-datatype?
-                         (dtype-base/get-datatype numeric-arg))
-                      (dtype-dt/unpack numeric-arg)
-                      numeric-arg)
-        date-time-arg (if lhs-num? rhs lhs)
-        date-time-dtype (if lhs-num? rhs-dtype lhs-dtype)
-        num-op (get-in java-time-ops [date-time-dtype :temporal-amount-ops opname])]
-    (when-not num-op
-      (throw (Exception. (format "Could not find numeric op %s for type %s"
-                                 opname date-time-dtype))))
-    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+        numeric-arg (dtype-dt/unpack (if lhs-num? lhs rhs))
+        date-time-arg (if lhs-num? rhs lhs)]
+    (with-packing-time-op date-time-arg numeric-arg :temporal-amount-ops opname)))
 
 
 (defn- perform-non-commutative-temporal-amount-op
@@ -803,21 +611,8 @@
                                 lhs-dtype rhs-dtype))))
         _ (when-not any-date-datatype?
             (throw (Exception. (format "Arguments not datetime related: %s, %s"
-                                       lhs-dtype rhs-dtype))))
-        ;;There is an assumption that the arguments are commutative and the left
-        ;;hand side is the actual arg.
-        numeric-arg rhs
-        numeric-arg (if (dtype-dt/packed-datatype?
-                         (dtype-base/get-datatype numeric-arg))
-                      (dtype-dt/unpack numeric-arg)
-                      numeric-arg)
-        date-time-arg lhs
-        date-time-dtype lhs-dtype
-        num-op (get-in java-time-ops [date-time-dtype :temporal-amount-ops opname])]
-    (when-not num-op
-      (throw (Exception. (format "Could not find numeric op %s for type %s"
-                                 opname date-time-dtype))))
-    (perform-time-op date-time-arg numeric-arg date-time-dtype num-op)))
+                                       lhs-dtype rhs-dtype))))]
+    (with-packing-time-op lhs (dtype-dt/unpack rhs) :temporal-amount-ops opname)))
 
 
 (defn- perform-duration-numeric-op ;;either plus or minus
@@ -828,12 +623,8 @@
                          (temporal-amount-datatype? rhs-dtype))
             (throw (Exception. (format
                                 "Arguments must have duration type: %s, %s"
-                                lhs-dtype rhs-dtype))))
-        num-op (get-in java-time-ops [lhs-dtype :numeric-ops opname])]
-    (when-not num-op
-      (throw (Exception. (format "Could not find numeric op %s for type %s"
-                                 opname lhs-dtype))))
-    (perform-time-op lhs rhs lhs-dtype num-op)))
+                                lhs-dtype rhs-dtype))))]
+    (with-packing-time-op lhs (dtype-dt/unpack rhs) :numeric-ops opname)))
 
 
 (defn- perform-boolean-op
@@ -924,7 +715,9 @@
 
 (defn- perform-binary->int64-op
   [lhs rhs opname]
-  (let [lhs-dtype (collapse-date-datatype lhs)
+  (let [lhs (dtype-dt/unpack lhs)
+        rhs (dtype-dt/unpack rhs)
+        lhs-dtype (collapse-date-datatype lhs)
         rhs-dtype (collapse-date-datatype rhs)
         any-date-datatype? (or (dtype-dt/datetime-datatype? lhs-dtype)
                                (dtype-dt/datetime-datatype? rhs-dtype))
@@ -1057,17 +850,15 @@
 
 (defn plus-duration
   [lhs rhs]
-  (cond
-    (= :duration (dtype-base/get-datatype lhs))
-    (perform-duration-numeric-op lhs rhs :duration-plus-duration)
-    (= :packed-duration (dtype-base/get-datatype lhs))
-    (if (= :packed-duration (dtype-base/get-datatype rhs))
-      (perform-duration-numeric-op lhs rhs :plus-nanoseconds)
-      (dtype-dt/pack (plus-duration (dtype-dt/unpack lhs)) rhs))
-    (= :packed-duration dtype-base/get-datatype rhs)
-    (plus-temporal-amount lhs (dtype-dt/unpack rhs))
-    :else
-    (plus-temporal-amount lhs rhs)))
+  (let [lhs-dtype (dtype-base/get-datatype lhs)]
+    (cond
+      (or (= :duration lhs-dtype)
+          (= :packed-duration lhs-dtype))
+      (perform-duration-numeric-op lhs rhs :duration-plus-duration)
+      (= :packed-duration dtype-base/get-datatype rhs)
+      (plus-temporal-amount lhs (dtype-dt/unpack rhs))
+      :else
+      (plus-temporal-amount lhs rhs))))
 
 
 (defn minus-duration
@@ -1078,7 +869,7 @@
     (= :packed-duration (dtype-base/get-datatype lhs))
     (if (= :packed-duration (dtype-base/get-datatype rhs))
       (perform-duration-numeric-op lhs rhs :minus-nanoseconds)
-      (dtype-dt/pack (plus-duration (dtype-dt/unpack lhs)) rhs))
+      (dtype-dt/pack (plus-duration (dtype-dt/unpack lhs) rhs)))
     (= :packed-duration dtype-base/get-datatype rhs)
     (minus-temporal-amount lhs (dtype-dt/unpack rhs))
     :else
@@ -1151,6 +942,170 @@
             (dtype-dt/milliseconds-in-week)))
 
 
+(defn ->milliseconds
+  "Convert a datatype to either epoch-seconds with an implied zero no time offset"
+  [data]
+  (let [datatype (dtype-base/get-datatype data)]
+    (when-not (dtype-dt/datetime-datatype? datatype)
+      (throw (Exception. (format "Invalid datatype for datetime operation: %s"
+                                 datatype))))
+    (if (dtype-dt/millis-datatypes datatype)
+      (get-milliseconds data)
+      (get-epoch-milliseconds data))))
+
+
+(defn milliseconds->datetime
+  "Vectorized Conversion of milliseconds to a given datetime datatype using defaults.
+  Specialized conversions for particular datatypes also available as overrides or
+  tech.v2.datatype.datetime/milliseconds-since-epoch->X where X can be:
+  local-date local-date-time zoned-date-time."
+  [datatype milli-data]
+  (when-not (dtype-dt/datetime-datatype? datatype)
+    (throw (Exception. (format "Datatype is not a datetime datatype: %s" datatype))))
+
+  (let [unpacked-dt (dtype-dt/unpack-datatype datatype)
+        packed? (dtype-dt/packed-datatype? datatype)
+        conv-fn #(dtype-dt/from-milliseconds % datatype)
+        retval
+        (case (arg->arg-type milli-data)
+          :scalar (conv-fn milli-data)
+          :iterable (unary-op/unary-iterable-map {:datatype unpacked-dt}
+                                                 conv-fn milli-data)
+          :reader (unary-op/unary-reader-map {:datatype unpacked-dt}
+                                             conv-fn milli-data))]
+    (if packed?
+      (dtype-dt/pack retval)
+      retval)))
+
+
+(defn- ensure-reader
+  [item]
+  (if (= :scalar (arg->arg-type item))
+    (const-rdr/make-const-reader item (dtype-base/get-datatype item))
+    (dtype-proto/->reader item {})))
+
+
+(defn local-date->milliseconds-since-epoch
+  "Vectorized version of dtype-dt/local-date->milliseconds-since-epoch."
+  ([data local-time-or-milli-offset zone-id-or-offset]
+   (let [data (dtype-dt/unpack data)
+         argtypes (set (map arg->arg-type [data local-time-or-milli-offset
+                                           zone-id-or-offset]))
+         conv-fn #(-> (dtype-dt/local-date->instant %1 %2 %3)
+                      (dtype-dt/instant->milliseconds-since-epoch))]
+     (cond
+       (= argtypes #{:scalar})
+       (conv-fn data local-time-or-milli-offset zone-id-or-offset)
+       ;;if any of the three arguments are iterable
+       (argtypes :iterable)
+       (let [data (dtype-iter/->iterable data)
+             lt (dtype-iter/->iterable local-time-or-milli-offset)
+             zid (dtype-iter/->iterable zone-id-or-offset)]
+         (map conv-fn data lt zid))
+       :else
+       (let [
+             data (ensure-reader data)
+             lt (ensure-reader local-time-or-milli-offset)
+             zid-or-off (ensure-reader zone-id-or-offset)
+             n-elems (long (clojure.core/min (dtype-base/ecount data)
+                                             (dtype-base/ecount lt)
+                                             (dtype-base/ecount zid-or-off)))]
+         (reify
+           tech.v2.datatype.LongReader
+           (getDatatype [rdr] :epoch-milliseconds)
+           (lsize [rdr] n-elems)
+           (read [rdr idx]
+             (long (conv-fn (data idx) (lt idx) (zid-or-off idx)))))))))
+  ([data local-time-or-milli-offset]
+   (local-date->milliseconds-since-epoch data local-time-or-milli-offset
+                                         (dtype-dt/utc-zone-id)))
+  ([data]
+   (->milliseconds data)))
+
+
+(defn vectorized-dispatch-2
+  [arg1 arg2 scalar-fn reader-fn]
+  (let [arg1 (dtype-dt/unpack arg1)
+        arg2 (dtype-dt/unpack arg2)
+        argtypes (set (map arg->arg-type [arg1 arg2]))]
+     (cond
+       (= argtypes #{:scalar})
+       (scalar-fn arg1 arg2)
+       ;;if any of the three arguments are iterable
+       (argtypes :iterable)
+       (let [arg1 (dtype-iter/->iterable arg1)
+             arg2 (dtype-iter/->iterable arg2)]
+         (map scalar-fn arg1 arg2))
+       :else
+       (let [arg1 (ensure-reader arg1)
+             arg2 (ensure-reader arg2)
+             n-elems (long (clojure.core/min (dtype-base/ecount arg1)
+                                             (dtype-base/ecount arg2)))]
+         (reader-fn arg1 arg2 n-elems)))))
+
+
+(defn local-date-time->milliseconds-since-epoch
+  "Vectorized version of dtype-dt/local-date-time->milliseconds-since-epoch."
+  ([data zone-id-or-offset]
+   (let [conv-fn #(-> (dtype-dt/local-date-time->instant %1 %2)
+                      (dtype-dt/instant->milliseconds-since-epoch))]
+     (vectorized-dispatch-2
+      data zone-id-or-offset conv-fn
+      (fn [data zone-id-or-offset n-elems]
+        (reify
+          tech.v2.datatype.LongReader
+          (getDatatype [rdr] :epoch-milliseconds)
+          (lsize [rdr] (long n-elems))
+          (read [rdr idx]
+            (long (conv-fn (data idx) (zone-id-or-offset idx)))))))))
+  ([data] (->milliseconds data)))
+
+
+(defn milliseconds-since-epoch->local-date-time
+  "Vectorized version of datetime/milliseconds-since-epoch->local-date-time"
+  ([millis-data zone-id]
+   (let [conv-fn #(dtype-dt/milliseconds-since-epoch->local-date-time %1 %2)]
+     (vectorized-dispatch-2
+      millis-data zone-id conv-fn
+      (fn [millis-data zone-id n-elems]
+        (reify ObjectReader
+          (getDatatype [rdr] :local-date-time)
+          (lsize [rdr] (long n-elems))
+          (read [rdr idx] (conv-fn (millis-data idx) (zone-id idx))))))))
+  ([millis-data]
+   (milliseconds->datetime :local-date-time millis-data)))
+
+
+(defn milliseconds-since-epoch->zoned-date-time
+  "Vectorized version of datetime/milliseconds-since-epoch->local-date-time"
+  ([millis-data zone-id]
+   (let [conv-fn #(dtype-dt/milliseconds-since-epoch->zoned-date-time %1 %2)]
+     (vectorized-dispatch-2
+      millis-data zone-id conv-fn
+      (fn [millis-data zone-id n-elems]
+        (reify ObjectReader
+          (getDatatype [rdr] :zoned-date-time)
+          (lsize [rdr] (long n-elems))
+          (read [rdr idx] (conv-fn (millis-data idx) (zone-id idx))))))))
+  ([millis-data]
+   (milliseconds->datetime :zoned-date-time millis-data)))
+
+
+(defn milliseconds-since-epoch->local-date
+  "Vectorized version of datetime/milliseconds-since-epoch->local-date-time"
+  ([millis-data zone-id]
+   (let [conv-fn #(dtype-dt/milliseconds-since-epoch->local-date %1 %2)]
+     (vectorized-dispatch-2
+      millis-data zone-id conv-fn
+      (fn [millis-data zone-id n-elems]
+        (reify ObjectReader
+          (getDatatype [rdr] :local-date)
+          (lsize [rdr] (long n-elems))
+          (read [rdr idx] (conv-fn (millis-data idx) (zone-id idx))))))))
+  ([millis-data]
+   (milliseconds->datetime :local-date millis-data)))
+
+
 (defn millisecond-descriptive-stats
   "Get the descriptive stats.  Stats are calulated in milliseconds and
   then min, mean, max are returned as objects of the unpacked datetime
@@ -1163,11 +1118,8 @@
          _ (when-not (dtype-dt/datetime-datatype? datatype)
              (throw (Exception. (format "%s is not a datetime datatype"
                                         datatype))))
-         numeric-data (if (dtype-dt/millis-datatypes datatype)
-                        (get-milliseconds data)
-                        (get-epoch-milliseconds data))
-         unpacked-datatype (get dtype-dt/packed-type->unpacked-type-table
-                                datatype datatype)
+         numeric-data (->milliseconds data)
+         unpacked-datatype (dtype-dt/unpack-datatype datatype)
          value-stats (if (dtype-dt/duration-datatype? datatype)
                        #{:min :max :mean :standard-deviation :quartile-1 :quartile-3}
                        #{:min :max :mean :quartile-1 :quartile-3})

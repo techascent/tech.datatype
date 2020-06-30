@@ -155,14 +155,12 @@
       (is (= [3 3] (dtype/shape epoch-tens))))))
 
 
-
 (deftest durations
   (let [src-data (dtype/make-container
                   :typed-buffer
                   :duration
                   5)
         hours-up (dtype-dt-ops/plus-hours src-data (range 5))
-        dur-diff (dtype-dt-ops/minus-duration hours-up src-data)
         zoned-dt (dtype/make-container
                   :typed-buffer
                   :zoned-date-time
@@ -276,3 +274,46 @@
     (is (= :packed-local-date (dtype/get-datatype packed-reader)))
     (is (= :packed-local-date (dtype/get-datatype (dtype/->reader packed-reader))))
     (is (= :packed-local-date (dtype/get-datatype data)))))
+
+
+(deftest vectorized-epoch-second-conversions
+  (let [src-data (into-array
+                  (repeat 4 (dtype-dt/local-date)))
+        millis (dtype-dt-ops/local-date->milliseconds-since-epoch
+                src-data 0 (dtype-dt/system-zone-id))]
+    (is (= (vec src-data)
+           (vec (dtype-dt-ops/milliseconds-since-epoch->local-date
+                 millis (dtype-dt/system-zone-id))))))
+  (let [src-data (into-array (repeat 4 (dtype-dt/local-date-time)))
+        millis (dtype-dt-ops/local-date-time->milliseconds-since-epoch
+                src-data (dtype-dt/system-zone-id))]
+    (is (= (vec src-data)
+           (vec (dtype-dt-ops/milliseconds-since-epoch->local-date-time
+                 millis (dtype-dt/system-zone-id)))))
+    (is (not= (vec src-data)
+              (vec (dtype-dt-ops/milliseconds-since-epoch->local-date-time
+                    millis (dtype-dt/utc-zone-id)))))))
+
+
+(deftest pack-unpack-work-on-anything
+  (is (= (vec (long-array [1 2 3 4]))
+         (vec (dtype-dt/pack (long-array [1 2 3 4])))))
+  (is (= (vec (dtype-dt/pack (into-array (repeatedly 5 #(dtype-dt/local-date)))))
+         (vec (dtype-dt/pack (dtype-dt/pack
+                              (into-array
+                               (repeatedly 5 #(dtype-dt/local-date)))))))))
+
+
+(deftest pack-unpack-work-on-anything
+  (is (= (vec (long-array [1 2 3 4]))
+         (vec (dtype-dt/pack (long-array [1 2 3 4])))))
+  (is (= (vec (dtype-dt/pack (into-array (repeatedly 5 #(dtype-dt/local-date)))))
+         (vec (dtype-dt/pack (dtype-dt/pack
+                              (into-array
+                               (repeatedly 5 #(dtype-dt/local-date))))))))
+  (is (= (vec (long-array [1 2 3 4]))
+         (vec (dtype-dt/unpack (long-array [1 2 3 4])))))
+  (is (= (vec (dtype-dt/unpack (into-array (repeatedly 5 #(dtype-dt/local-date)))))
+         (vec (dtype-dt/unpack (dtype-dt/pack
+                                (into-array
+                                 (repeatedly 5 #(dtype-dt/local-date)))))))))

@@ -347,10 +347,25 @@
 
 
 (defn local-date-time->instant
-  (^Instant [^LocalDateTime ldt ^ZoneOffset offset]
-   (.toInstant ldt offset))
+  (^Instant [^LocalDateTime ldt zone-or-offset]
+   (cond
+     (instance? ZoneOffset zone-or-offset)
+     (.toInstant ldt zone-or-offset)
+     (instance? ZoneId zone-or-offset)
+     (-> (.atZone ldt ^ZoneId zone-or-offset)
+         (zoned-date-time->instant))
+     :else
+     (throw (Exception. (format "Unrecognized zone or offset type: %s"
+                                (type zone-or-offset))))))
   (^Instant [^LocalDateTime ldt]
    (local-date-time->instant ldt (utc-zone-offset))))
+
+
+(defn local-date-time->zoned-date-time
+  (^Instant [^LocalDateTime ldt ^ZoneId zone-id]
+   (.atZone ldt zone-id))
+  (^Instant [^LocalDateTime ldt]
+   (local-date-time->instant ldt (utc-zone-id))))
 
 
 (defn local-date-time
@@ -364,8 +379,11 @@
 
 
 (defn milliseconds-since-epoch->local-date-time
-  ^LocalDateTime [millis]
-  (local-date-time millis))
+  (^LocalDateTime [millis]
+   (local-date-time millis))
+  (^LocalDateTime [millis ^ZoneId zone-id]
+   (-> (milliseconds-since-epoch->instant millis)
+       (LocalDateTime/ofInstant ^ZoneId zone-id))))
 
 
 (defn local-date-time->milliseconds-since-epoch
@@ -436,8 +454,11 @@
 
 
 (defn milliseconds-since-epoch->local-date
-  ^LocalDate [millis]
-  (local-date millis))
+  (^LocalDate [millis]
+   (local-date millis))
+  (^LocalDate [millis zone-id]
+   (-> (milliseconds-since-epoch->local-date-time millis zone-id)
+       (.toLocalDate))))
 
 
 (defn local-date-time->local-date
@@ -446,19 +467,33 @@
 
 
 (defn local-date->local-date-time
-  (^LocalDateTime [^LocalDate ld ^LocalTime time]
-   (.atTime ld ^LocalTime time))
+  (^LocalDateTime [^LocalDate ld lt]
+   (let [time (if (number? lt)
+                (local-time (long lt))
+                lt)]
+     (.atTime ld ^LocalTime time)))
   (^LocalDateTime [^LocalDate ld]
    (local-date->local-date-time ld (LocalTime/MIN))))
 
 
 (defn local-date->instant
-  (^Instant [^LocalDate ld ^LocalTime lt]
+  (^Instant [^LocalDate ld ^LocalTime lt zoneid-or-offset]
    (-> (local-date->local-date-time ld lt)
-       (local-date-time->instant)))
+       (local-date-time->instant zoneid-or-offset)))
+  (^Instant [^LocalDate ld ^LocalTime lt]
+   (local-date->instant ld lt (utc-zone-id)))
   (^Instant [^LocalDate ld]
-   (-> (local-date->local-date-time ld)
-       (local-date-time->instant))))
+   (local-date->instant ld 0 (utc-zone-id))))
+
+
+(defn local-date->zoned-date-time
+  (^Instant [^LocalDate ld lt zoneid]
+   (-> (local-date->local-date-time ld lt)
+       (local-date-time->zoned-date-time zoneid)))
+  (^Instant [^LocalDate ld lt]
+   (local-date->instant ld lt (utc-zone-id)))
+  (^Instant [^LocalDate ld]
+   (local-date->zoned-date-time ld 0 (utc-zone-id))))
 
 
 (defn local-date->milliseconds-since-epoch
@@ -576,7 +611,13 @@
 (defmacro compile-time-pack
   [item dtype]
   (case dtype
-    :instant `(PackedInstant/pack ~item)
+    ;;packed instants are microseconds.  This gives us about 270,000 years plus/minus
+    ;;from epoch
+    :instant `(let [instant# (as-instant ~item)]
+                (long (+ (* (.getEpochSecond instant#)
+                            1000000)
+                         (quot (.getNano ^Instant instant#)
+                               1000))))
     :local-time `(PackedLocalTime/pack ~item)
     :local-date `(PackedLocalDate/pack ~item)
     :local-date-time `(PackedLocalDateTime/pack (as-local-date-time ~item))
@@ -586,7 +627,10 @@
 (defmacro compile-time-unpack
   [item dtype]
   (case dtype
-    :instant `(PackedInstant/asInstant (pmath/long ~item))
+    :instant `(let [data# (long ~item)]
+                (Instant/ofEpochSecond (quot data# 1000000)
+                                       (* (rem data# 1000000)
+                                          1000)))
     :local-time `(PackedLocalTime/asLocalTime (pmath/int ~item))
     :local-date `(PackedLocalDate/asLocalDate (pmath/int ~item))
     :local-date-time `(PackedLocalDateTime/asLocalDateTime (pmath/long ~item))
@@ -612,14 +656,29 @@
 
 
 (defn packed-datatype?
+  "A datatype that we can pack"
   [datatype]
   (boolean (packed-datatypes datatype)))
 
 
 (defn unpacked-datatype?
+  "A datatype that we can unpack"
   [datatype]
-  (or (not (datetime-datatype? datatype))
-      (boolean (unpacked-datatypes datatype))))
+  (boolean (unpacked-datatypes datatype)))
+
+
+(defn unpack-datatype
+  [datatype]
+  (if (packed-datatype? datatype)
+    (packed-type->unpacked-type datatype)
+    datatype))
+
+
+(defn pack-datatype
+  [datatype]
+  (if (unpacked-datatype? datatype)
+    (unpacked-type->packed-type datatype)
+    datatype))
 
 
 ;;As our packed types are really primitive aliases we tell the datatype system about
@@ -795,12 +854,12 @@
   []
   `(defn ~'pack
      [~'item]
-     (if-not (unpacked-datatype? (dtype-base/get-datatype ~'item))
-       ~'item
+     (if (unpacked-datatype? (dtype-base/get-datatype ~'item))
        (case (collapse-date-datatype ~'item)
          ~@(->> packable-datatypes
                 (mapcat (fn [dtype]
-                          [dtype `(macro-pack ~dtype ~'item)])))))))
+                          [dtype `(macro-pack ~dtype ~'item)]))))
+       ~'item)))
 
 (implement-pack)
 

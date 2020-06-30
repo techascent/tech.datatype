@@ -290,9 +290,12 @@
     (is (= (vec src-data)
            (vec (dtype-dt-ops/milliseconds-since-epoch->local-date-time
                  millis (dtype-dt/system-zone-id)))))
-    (is (not= (vec src-data)
-              (vec (dtype-dt-ops/milliseconds-since-epoch->local-date-time
-                    millis (dtype-dt/utc-zone-id)))))))
+
+    ;;Fails if the host machine timezone is UTC :-).  Works otherwise.
+    #_(is (not= (vec src-data)
+                (vec (dtype-dt-ops/milliseconds-since-epoch->local-date-time
+                      millis (dtype-dt/utc-zone-id)))))
+    ))
 
 
 (deftest pack-unpack-work-on-anything

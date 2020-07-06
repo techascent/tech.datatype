@@ -51,8 +51,10 @@
   (cond
     (instance? RandomAccess item)
     (.get ^List item (int offset))
+    (instance? clojure.lang.Indexed item)
+    (nth item offset)
     (dtype-proto/convertible-to-reader? item)
-    ((dtype-proto/->reader item {}) offset)
+    ((dtype-proto/->reader item {:datatype :object}) offset)
     (map? item)
     (item offset)
     (= offset 0)

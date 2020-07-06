@@ -443,13 +443,12 @@ Calls clojure.core.matrix/ecount."
 (defn ->reader
   "Create a reader of a specific type."
   [src-item & [datatype options]]
-  (let [opt-map (if (map? datatype)
-                  (update datatype :datatype
-                          #(or % (get-datatype src-item)))
-                  (assoc options :datatype
-                         (or datatype (get-datatype src-item))))]
-    (casting/ensure-valid-datatype (:datatype opt-map))
-    (dtype-proto/->reader src-item opt-map)))
+  (let [options (if (map? datatype)
+                  datatype
+                  (assoc options :datatype datatype))
+        datatype (:datatype options)]
+    (when datatype (casting/ensure-valid-datatype datatype))
+    (dtype-proto/->reader src-item options)))
 
 
 (defn ->>reader

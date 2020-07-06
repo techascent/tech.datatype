@@ -151,7 +151,7 @@
 
   Indexed
   (nth [item idx]
-    (base/get-value item idx))
+    ((base/->reader item :object) idx))
 
   (nth [item idx def-val]
     (if (< idx (base/ecount item))

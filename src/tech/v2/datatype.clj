@@ -36,7 +36,8 @@
            [clojure.lang IPersistentVector]
            [java.util Iterator List RandomAccess Set]
            [org.roaringbitmap RoaringBitmap]
-           [tech.v2.datatype.bitmap BitmapSet])
+           [tech.v2.datatype.bitmap BitmapSet]
+           [clojure.lang Indexed])
   (:refer-clojure :exclude [cast]))
 
 

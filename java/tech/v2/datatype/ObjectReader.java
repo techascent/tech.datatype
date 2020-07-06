@@ -5,6 +5,7 @@ import clojure.lang.Keyword;
 import clojure.lang.Sequential;
 import clojure.lang.RT;
 import clojure.lang.ISeq;
+import clojure.lang.Indexed;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
@@ -12,7 +13,8 @@ import java.util.stream.Stream;
 
 
 public interface ObjectReader extends IOBase, Iterable, IFn,
-				      List, RandomAccess, Sequential
+				      List, RandomAccess, Sequential,
+				      Indexed
 {
   Object read(long idx);
   default Object getDatatype () { return Keyword.intern(null, "object"); }
@@ -32,7 +34,7 @@ public interface ObjectReader extends IOBase, Iterable, IFn,
     return new ObjectReaderIter(this);
   }
   default Object invoke(Object arg) {
-    return read(RT.longCast(arg));
+    return read(RT.uncheckedLongCast(arg));
   }
   default Object applyTo(ISeq items) {
     if (1 == items.count()) {
@@ -45,4 +47,13 @@ public interface ObjectReader extends IOBase, Iterable, IFn,
   default Stream typedStream() {
     return stream();
   }
-};
+  default int count() { return size(); }
+  default Object nth(int idx) { return read(idx); }
+  default Object nth(int idx, Object notFound) {
+    if (idx >= 0 && idx <= size()) {
+      return read(idx);
+    } else {
+      return notFound;
+    }
+  }
+}

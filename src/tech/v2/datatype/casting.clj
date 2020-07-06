@@ -3,7 +3,7 @@
   (:require [clojure.set :as c-set]
             [primitive-math :as pmath])
   (:import [tech.v2.datatype DateUtility]
-           [java.util Map]
+           [java.util Map Set HashSet]
            [java.util.concurrent ConcurrentHashMap]))
 
 (set! *warn-on-reflection* true)
@@ -61,6 +61,10 @@
 
 (defonce valid-datatype-set (atom nil))
 
+(defn ->hash-set
+  [data]
+  (doto (HashSet.)
+    (.addAll data)))
 
 (defn rebuild-valid-datatypes!
   []
@@ -69,12 +73,12 @@
                        (keys aliased-datatypes)
                        numeric-types
                        [:boolean])
-               (set))))
+               (->hash-set))))
 
 
 (defn valid-datatype?
   [datatype]
-  (boolean (@valid-datatype-set datatype)))
+  (.contains ^Set @valid-datatype-set datatype))
 
 
 (defn ensure-valid-datatype

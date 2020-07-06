@@ -3,6 +3,7 @@ package tech.v2.datatype;
 import clojure.lang.IFn;
 import clojure.lang.Keyword;
 import clojure.lang.Sequential;
+import clojure.lang.Indexed;
 import java.util.Iterator;
 import java.util.List;
 import java.util.RandomAccess;
@@ -13,7 +14,8 @@ import java.util.stream.Stream;
 
 
 public interface ByteReader extends IOBase, Iterable, IFn,
-				    List, RandomAccess, Sequential
+				    List, RandomAccess, Sequential,
+				    Indexed
 {
   byte read(long idx);
   default int size() { return RT.intCast(lsize()); }
@@ -33,7 +35,7 @@ public interface ByteReader extends IOBase, Iterable, IFn,
     return new ByteReaderIter(this);
   }
   default Object invoke(Object arg) {
-    return read( RT.longCast( arg ));
+    return read( RT.uncheckedLongCast( arg ));
   }
   default Object applyTo(ISeq items) {
     if (1 == items.count()) {
@@ -45,5 +47,14 @@ public interface ByteReader extends IOBase, Iterable, IFn,
   }
   default IntStream typedStream() {
     return IntStream.range(0, size()).map(i -> read(i));
+  }
+  default int count() { return size(); }
+  default Object nth(int idx) { return read(idx); }
+  default Object nth(int idx, Object notFound) {
+    if (idx >= 0 && idx <= size()) {
+      return read(idx);
+    } else {
+      return notFound;
+    }
   }
 }

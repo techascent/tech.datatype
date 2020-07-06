@@ -444,7 +444,8 @@ Calls clojure.core.matrix/ecount."
   "Create a reader of a specific type."
   [src-item & [datatype options]]
   (let [opt-map (if (map? datatype)
-                  datatype
+                  (update datatype :datatype
+                          #(or % (get-datatype src-item)))
                   (assoc options :datatype
                          (or datatype (get-datatype src-item))))]
     (casting/ensure-valid-datatype (:datatype opt-map))
@@ -712,7 +713,8 @@ user> (dtype/get-datatype *1)
   "Create a writer of a specific type."
   [src-item & [datatype options]]
   (let [options (if (map? datatype)
-                  datatype
+                  (update datatype :datatype
+                          #(or % (get-datatype src-item)))
                   (assoc options
                          :datatype
                          (or datatype (get-datatype src-item))))]

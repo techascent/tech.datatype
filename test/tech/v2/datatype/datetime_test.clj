@@ -320,3 +320,14 @@
          (vec (dtype-dt/unpack (dtype-dt/pack
                                 (into-array
                                  (repeatedly 5 #(dtype-dt/local-date)))))))))
+
+
+(deftest to-milliseconds-for-packed-local-dt
+  (is (= 1577877753000
+         (dtype-dt/to-milliseconds 568580556948144360 :packed-local-date-time))))
+
+(deftest to-milliseconds-test
+  (doseq [dtype dtype-dt/datetime-datatypes]
+    (let [data
+          (dtype-dt/from-milliseconds 0 dtype)]
+      (is (= 0 (dtype-dt/to-milliseconds data dtype))))))

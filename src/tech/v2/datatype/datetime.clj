@@ -781,34 +781,34 @@
 
 (defn packed-local-date-time->milliseconds-since-epoch
   ^long [^long packed-date-time]
-  (-> (unpack-local-date-time)
+  (-> (unpack-local-date-time packed-date-time)
       (local-date-time->milliseconds-since-epoch)))
 
 
 (defn packed-local-date->milliseconds-since-epoch
   ^long [^long packed-date]
-  (-> (unpack-local-date)
+  (-> (unpack-local-date packed-date)
       (local-date->milliseconds-since-epoch)))
 
 (defn packed-instant->milliseconds-since-epoch
   ^long [^long packed-instant]
-  (-> (unpack-instant)
+  (-> (unpack-instant packed-instant)
       (instant->milliseconds-since-epoch)))
 
 
 (defn packed-local-time->milliseconds
   ^long [^long packed-time]
-  (-> (unpack-local-time)
+  (-> (unpack-local-time packed-time)
       (local-time->milliseconds)))
 
 (defn packed-duration->milliseconds
   ^long [^long packed-time]
-  (-> (unpack-duration)
+  (-> (unpack-duration packed-time)
       (duration->milliseconds)))
 
 (defn packed-duration->nanoseconds
   ^long [^long packed-time]
-  (-> (unpack-duration)
+  (-> (unpack-duration packed-time)
       (duration->nanoseconds)))
 
 (def packable-datatypes (set (keys unpacked-type->packed-type-table)))

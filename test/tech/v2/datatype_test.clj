@@ -6,6 +6,7 @@
             [tech.v2.datatype.typecast :as typecast]
             [tech.v2.datatype.primitive]
             [tech.v2.datatype.list]
+            [tech.v2.datatype.datetime :as dtype-dt]
             [tech.parallel.for :as parallel-for]
             [tech.v2.datatype.functional :as dfn]
             [tech.v2.datatype.boolean-op :as boolean-op])
@@ -578,3 +579,8 @@
           (is (not (nil? (apply (dtype/->reader new-container) [1])))
               (format "Failed for datatype %s" dtype))
           (is (nil? (apply (dtype/->reader new-container) [1]))))))))
+
+
+(deftest clone-works-with-typed-lists
+  (is (= [] (vec (dtype/clone (dtype/make-container :list :string 0)))))
+  (is (= ["one"] (vec (dtype/clone (dtype/make-container :list :string ["one"]))))))

@@ -439,6 +439,10 @@
        (reify
          dtype-proto/PDatatype
          (get-datatype [this] dst-dtype)
+         dtype-proto/PClone
+         (clone [this] (make-typed-list
+                        (dtype-proto/clone src-list)
+                        dst-dtype))
          List
          (size [this] (.size src-list))
          (add [this val]

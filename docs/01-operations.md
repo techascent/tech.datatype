@@ -1,7 +1,7 @@
 # Operations
 
 
-[Previously](01-sequences-and-arrays.md) we built up two main abstractions, the first
+[Previously](00-sequences-and-arrays.md) we built up two main abstractions, the first
 is an unbounded sequence mechanism and the second is a abstraction (reader) upon
 bounded but randomly accessible memory.  In this document we will walk through
 transformations from one sequence or reader into another sequence or reader as well

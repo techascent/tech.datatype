@@ -590,9 +590,9 @@
   (let [test-data [1 3 8 20]
         {:keys [result missing]} (dfn/fill-range test-data 3)
         n-results (dtype/ecount result)]
-    (is (= #{7 4 6 2 5} (set missing)))
-    (is (= 9 n-results))
-    (is (dfn/equals [1.0 3.0 5.4 8.0 10.75 13.5 16.25 19.0 20.0]
+    (is (= #{ 4 6 2 5} (set missing)))
+    (is (= 8 n-results))
+    (is (dfn/equals [1.0 3.0 5.5 8.0 11.0 14.0 17.0 20.0]
                     result))
 
     ;;Now need enough data to trigger parallelism

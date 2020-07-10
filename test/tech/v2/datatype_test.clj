@@ -584,3 +584,23 @@
 (deftest clone-works-with-typed-lists
   (is (= [] (vec (dtype/clone (dtype/make-container :list :string 0)))))
   (is (= ["one"] (vec (dtype/clone (dtype/make-container :list :string ["one"]))))))
+
+
+(deftest fill-range
+  (let [test-data [1 3 8 20]
+        {:keys [result missing]} (dfn/fill-range test-data 3)
+        n-results (dtype/ecount result)]
+    (is (= #{7 4 6 2 5} (set missing)))
+    (is (= 9 n-results))
+    (is (dfn/equals [1.0 3.0 5.4 8.0 10.75 13.5 16.25 19.0 20.0]
+                    result))
+
+    ;;Now need enough data to trigger parallelism
+    (let [offset-range [0 25 50 75 100 125]
+          long-test-data (->> offset-range
+                              (map #(dfn/+ test-data %))
+                              (flatten)
+                              vec)
+          {:keys [result missing]} (dfn/fill-range long-test-data 3)]
+
+      )))

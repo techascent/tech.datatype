@@ -6,6 +6,10 @@
             [tech.v2.datatype.operation-provider :as op-provider]
             [tech.v2.datatype.readers.indexed :as indexed-reader]
             [tech.v2.datatype.base :as dtype-base]
+            [tech.v2.datatype.typecast :as typecast]
+            [tech.v2.datatype.casting :as casting]
+            [tech.parallel.for :as parallel-for]
+            [primitive-math :as pmath]
             ;;For functional to work right a lot of the requires in datatype
             ;;need to be working
             [tech.v2.datatype.array]
@@ -16,7 +20,11 @@
             [tech.v2.datatype.clj-range]
             [tech.v2.datatype.object-datatypes]
             [tech.v2.datatype.builtin-op-providers])
-  (:import [java.util Iterator])
+  (:import [java.util Iterator List]
+           [it.unimi.dsi.fastutil.longs LongArrayList]
+           [it.unimi.dsi.fastutil.doubles DoubleArrayList]
+           [it.unimi.dsi.fastutil.ints IntArrayList]
+           [org.roaringbitmap RoaringBitmap])
   (:refer-clojure :exclude [+ - / *
                             <= < >= >
                             identity
@@ -231,3 +239,60 @@
   [lhs rhs & [error-bar]]
   (clojure.core/< (double (distance lhs rhs))
                   (double (clojure.core/or error-bar 0.001))))
+
+
+(defn fill-range
+  "Given a reader of numeric data and a max span amount, produce
+  a new reader where the difference between any two consecutive elements
+  is less than or equal to the max span amount.  Also return a bitmap of the added
+  indexes.  Uses linear interpolation to fill in areas, operates in double space.
+  Returns
+  {:result :missing}"
+  [numeric-data max-span]
+  (let [num-reader (typecast/datatype->reader :float64 numeric-data)
+        max-span (casting/datatype->cast-fn :unknown :float64 max-span)
+        n-elems (.lsize num-reader)
+        n-spans (dec n-elems)
+        dec-max-span (dec max-span)
+        retval
+        (parallel-for/indexed-map-reduce
+         n-spans
+         (fn [start-idx group-len]
+           (let [new-data (DoubleArrayList.)
+                 new-indexes (RoaringBitmap.)]
+             (dotimes [idx group-len]
+               (let [idx (pmath/+ idx start-idx)
+                     lhs (.read num-reader idx)
+                     rhs (.read num-reader (unchecked-inc idx))
+                     span-len (pmath/- rhs lhs)
+                     _ (.add new-data lhs)
+                     cur-new-idx (.size new-data)]
+                 (when (pmath/>= span-len max-span)
+                   (let [span-fract (pmath// span-len max-span)
+                         num-new-data (Math/floor span-fract)
+                         num-new-data (if (== num-new-data span-fract)
+                                        (unchecked-dec num-new-data)
+                                        num-new-data)
+                         divisor (Math/ceil span-fract)]
+                     (let [add-data (pmath// span-len divisor)]
+                       (dotimes [add-idx (long num-new-data)]
+                         (.add new-data (pmath/+ lhs
+                                                 (pmath/* add-data
+                                                          (unchecked-inc
+                                                           (double add-idx)))))
+                         (.add new-indexes (pmath/+ cur-new-idx add-idx))))))))
+             {:result new-data
+              :missing new-indexes}))
+         (partial reduce
+                  (fn [{:keys [^List result missing]} new-data]
+                    (let [res-size (.size result)]
+                      (.addAll result ^List (:result new-data))
+                      (.or ^RoaringBitmap missing
+                           (RoaringBitmap/addOffset
+                            ^RoaringBitmap (:missing new-data)
+                            res-size)))
+                    {:result result
+                     :missing missing})))
+        ^List result (:result retval)]
+    (.add result (.read num-reader (unchecked-dec (.lsize num-reader))))
+    (assoc retval :result result)))

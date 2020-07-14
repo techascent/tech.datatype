@@ -965,7 +965,7 @@
 
   (let [unpacked-dt (dtype-dt/unpack-datatype datatype)
         packed? (dtype-dt/packed-datatype? datatype)
-        conv-fn #(dtype-dt/from-milliseconds % datatype)
+        conv-fn #(dtype-dt/from-milliseconds % unpacked-dt)
         retval
         (case (arg->arg-type milli-data)
           :scalar (conv-fn milli-data)
@@ -973,6 +973,7 @@
                                                  conv-fn milli-data)
           :reader (unary-op/unary-reader-map {:datatype unpacked-dt}
                                              conv-fn milli-data))]
+    (println "INMETHOD" (dtype-base/get-datatype retval) unpacked-dt)
     (if packed?
       (dtype-dt/pack retval)
       retval)))

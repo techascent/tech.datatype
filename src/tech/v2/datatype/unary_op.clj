@@ -257,7 +257,7 @@
 
 (defmacro make-unary-op-reader-table
   [dtype]
-  `(fn [item# un-op# unchecked?#]
+  `(fn [item# un-op# advertised-dtype# unchecked?#]
      (let [un-op# (datatype->unary-op ~dtype un-op# true)
            src-reader# (typecast/datatype->reader ~dtype
                                                   (dtype-base/->reader item#)
@@ -267,7 +267,7 @@
                           (select-keys %2 [:unchecked?])
                           un-op#
                           %1)]
-       (reader/make-derived-reader ~dtype src-dtype# unchecked?#
+       (reader/make-derived-reader ~dtype advertised-dtype# unchecked?#
                                    src-reader#
                                    (->> (.read src-reader# ~'idx)
                                         (.op un-op#))
@@ -290,7 +290,7 @@
       item
       (if-let [reader-fn (get unary-op-reader-table
                               (casting/flatten-datatype datatype))]
-        (reader-fn item un-op unchecked?)
+        (reader-fn item un-op datatype unchecked?)
         (throw (ex-info (format "Cannot unary map datatype %s" datatype) {}))))))
 
 

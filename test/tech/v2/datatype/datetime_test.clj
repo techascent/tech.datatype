@@ -287,9 +287,10 @@
   (let [src-data (into-array (repeat 4 (dtype-dt/local-date-time)))
         millis (dtype-dt-ops/local-date-time->milliseconds-since-epoch
                 src-data (dtype-dt/system-zone-id))]
-    (is (= (vec src-data)
-           (vec (dtype-dt-ops/milliseconds-since-epoch->local-date-time
-                 millis (dtype-dt/system-zone-id)))))
+    (is (= (mapv #(.withNano ^java.time.LocalDateTime % 0) src-data)
+           (mapv #(.withNano ^java.time.LocalDateTime % 0)
+                 (dtype-dt-ops/milliseconds-since-epoch->local-date-time
+                  millis (dtype-dt/system-zone-id)))))
 
     ;;Fails if the host machine timezone is UTC :-).  Works otherwise.
     #_(is (not= (vec src-data)

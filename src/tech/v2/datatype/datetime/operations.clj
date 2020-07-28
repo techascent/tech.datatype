@@ -973,7 +973,6 @@
                                                  conv-fn milli-data)
           :reader (unary-op/unary-reader-map {:datatype unpacked-dt}
                                              conv-fn milli-data))]
-    (println "INMETHOD" (dtype-base/get-datatype retval) unpacked-dt)
     (if packed?
       (dtype-dt/pack retval)
       retval)))

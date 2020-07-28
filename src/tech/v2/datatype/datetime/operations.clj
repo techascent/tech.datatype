@@ -1122,8 +1122,9 @@
          numeric-data (->milliseconds data)
          unpacked-datatype (dtype-dt/unpack-datatype datatype)
          value-stats (if (dtype-dt/duration-datatype? datatype)
-                       #{:min :max :mean :standard-deviation :quartile-1 :quartile-3}
-                       #{:min :max :mean :quartile-1 :quartile-3})
+                       #{:min :max :mean :median :standard-deviation
+                         :quartile-1 :quartile-3}
+                       #{:min :max :mean :median :quartile-1 :quartile-3})
          stats-data (dfn/descriptive-stats numeric-data stats-set)]
      (->> stats-data
           (map (fn [[k v]]

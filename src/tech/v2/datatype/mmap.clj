@@ -1,7 +1,7 @@
-(ns tech.libs.arrow.mmap
-  (:require [tech.io :as io]
+(ns tech.v2.datatype.mmap
+  (:require [clojure.java.io :as io]
             [tech.resource :as resource]
-            [tech.v2.datatype :as dtype]
+            [tech.v2.datatype.base :as dt-base]
             [tech.v2.datatype.protocols :as dtype-proto]
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.jna :as dtype-jna]
@@ -61,16 +61,23 @@
             :int8 `(.getByte (unsafe) (pmath/+ ~address ~'idx))
             :uint8 `(-> (.getByte (unsafe) (pmath/+ ~address ~'idx))
                         (pmath/byte->ubyte))
-            :int16 `(.getShort (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width)))
-            :uint16 `(-> (.getShort (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width)))
+            :int16 `(.getShort (unsafe) (pmath/+ ~address
+                                                 (pmath/* ~'idx ~byte-width)))
+            :uint16 `(-> (.getShort (unsafe) (pmath/+ ~address
+                                                      (pmath/* ~'idx ~byte-width)))
                          (pmath/short->ushort))
             :int32 `(.getInt (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width)))
-            :uint32 `(-> (.getInt (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width)))
+            :uint32 `(-> (.getInt (unsafe) (pmath/+ ~address
+                                                    (pmath/* ~'idx ~byte-width)))
                          (pmath/int->uint))
-            :int64 `(.getLong (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width)))
-            :uint64 `(-> (.getLong (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width))))
-            :float32 `(.getFloat (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width)))
-            :float64 `(.getDouble (unsafe) (pmath/+ ~address (pmath/* ~'idx ~byte-width))))))))
+            :int64 `(.getLong (unsafe) (pmath/+ ~address
+                                                (pmath/* ~'idx ~byte-width)))
+            :uint64 `(-> (.getLong (unsafe) (pmath/+ ~address
+                                                     (pmath/* ~'idx ~byte-width))))
+            :float32 `(.getFloat (unsafe) (pmath/+ ~address
+                                                   (pmath/* ~'idx ~byte-width)))
+            :float64 `(.getDouble (unsafe) (pmath/+ ~address
+                                                    (pmath/* ~'idx ~byte-width))))))))
 
 
 (defmacro native-buffer->writer
@@ -139,7 +146,7 @@
   (ecount [this] n-elems)
   dtype-proto/PClone
   (clone [this]
-    (dtype/make-container
+    (dt-base/make-container
      (if (casting/unsigned-integer-type? datatype)
        :typed-buffer
        :java-array)
@@ -161,7 +168,7 @@
       (.setMemory (unsafe) (+ address (long offset))
                   (* (long elem-count) (casting/numeric-byte-width datatype))
                   (byte 0))
-      (let [writer (dtype/->writer (dtype/sub-buffer buffer offset elem-count))
+      (let [writer (dt-base/->writer (dt-base/sub-buffer buffer offset elem-count))
             value (casting/cast value datatype)]
         (dotimes [iter elem-count]
           (writer iter value)))))
@@ -218,9 +225,9 @@
   (if-let [nb (as-native-buffer item)]
     (let [original-size (.n-elems nb)
           n-bytes (* original-size (casting/numeric-byte-width
-                                    (dtype/get-datatype item)))
+                                    (dt-base/get-datatype item)))
           new-byte-width (casting/numeric-byte-width
-                          (dtype/get-datatype item))]
+                          (dt-base/get-datatype item))]
       (NativeBuffer. (.address nb) (quot n-bytes new-byte-width) datatype))))
 
 
@@ -283,18 +290,49 @@
     (.getByte (unsafe) (.address native-buffer)))))
 
 
-(defn read-only-mmap-file
-  "mmap a file returning a map containing longs of {:address and :size}.
+(defn free
+  [data]
+  (let [addr (long (if (instance? NativeBuffer data)
+                     (.address ^NativeBuffer data)
+                     (long data)))]
+    (when-not (== 0 addr)
+      (.freeMemory (unsafe) addr))))
+
+
+(defn malloc
+  (^NativeBuffer [^long n-bytes {:keys [resource-type]
+                                 :or {resource-type :stack}}]
+   (let [retval (NativeBuffer. (.allocateMemory (unsafe) n-bytes)
+                               n-bytes
+                               :int8)
+         addr (.address retval)]
+     (when resource-type
+       (resource/track retval #(free addr) resource-type))
+     retval))
+  (^NativeBuffer [^long n-bytes]
+   (malloc n-bytes {})))
+
+
+(defn mmap-file
+  "mmap a file returning a native buffer.
   File is bound to the active stack resource context and all memory will be
-  released when the resource context itself releases."
-  ([fpath {:keys [resource-type]
-                 :or {resoure-type :stack}}]
+  released when the resource context itself releases.
+
+  * resource-types [nil :stack :gc]
+  * MMap modes are: #{:read-only :read-write :private}"
+  ([fpath {:keys [resource-type mmap-mode]
+           :or {resoure-type :stack
+                mmap-mode :read-only}}]
    (let [file (io/file fpath)
          _ (when-not (.exists file)
              (throw (Exception. (format "%s not found" fpath))))
          ;;Mapping to read-only means pages can be shared between processes
-         map-buf (MMapBuffer. file MMapMode/READ_ONLY)]
-     (resource/track map-buf #(.close map-buf) resource-type)
+         map-buf (MMapBuffer. file (case mmap-mode
+                                     :read-only MMapMode/READ_ONLY
+                                     :read-write MMapMode/READ_WRITE
+                                     :private MMapMode/PRIVATE))]
+     (when resource-type
+       (resource/track map-buf #(.close map-buf) resource-type))
      (->NativeBuffer (.address map-buf) (.size map-buf) :int8)))
   ([fpath]
-   (read-only-mmap-file fpath {})))
+   (mmap-file fpath {})))

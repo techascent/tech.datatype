@@ -6,6 +6,7 @@
             [tech.v2.datatype.casting :as casting]
             [tech.v2.datatype.jna :as dtype-jna]
             [tech.v2.datatype.typecast :as typecast]
+            [tech.parallel.for :as parallel-for]
             [primitive-math :as pmath])
   (:import [xerial.larray.mmap MMapBuffer MMapMode]
            [xerial.larray.buffer UnsafeUtil]
@@ -21,16 +22,11 @@
   UnsafeUtil/unsafe)
 
 
-(defprotocol PToNativeBuffer
-  (convertible-to-native-buffer? [buf])
-  (->native-buffer [buf]))
-
-
 (defmacro native-buffer->reader
   [datatype advertised-datatype buffer address n-elems]
   (let [byte-width (casting/numeric-byte-width datatype)]
     `(reify
-       PToNativeBuffer
+       dtype-proto/PToNativeBuffer
        (convertible-to-native-buffer? [this#] true)
        (->native-buffer [this#] ~buffer)
        ;;Forward protocol methods that are efficiently implemented by the buffer
@@ -84,7 +80,7 @@
   [datatype advertised-datatype buffer address n-elems]
   (let [byte-width (casting/numeric-byte-width datatype)]
     `(reify
-       PToNativeBuffer
+       dtype-proto/PToNativeBuffer
        (convertible-to-native-buffer? [this#] true)
        (->native-buffer [this#] ~buffer)
        ;;Forward protocol methods that are efficiently implemented by the buffer
@@ -137,7 +133,7 @@
 
 ;;Size is in elements, not in bytes
 (defrecord NativeBuffer [^long address ^long n-elems datatype]
-  PToNativeBuffer
+  dtype-proto/PToNativeBuffer
   (convertible-to-native-buffer? [this] true)
   (->native-buffer [this] this)
   dtype-proto/PDatatype
@@ -163,11 +159,11 @@
       (NativeBuffer. (+ address offset) length datatype)))
   dtype-proto/PSetConstant
   (set-constant! [buffer offset value elem-count]
-    (if (or (= :datatype :int8)
+    (if (or (= datatype :int8)
             (= (double value) 0.0))
       (.setMemory (unsafe) (+ address (long offset))
                   (* (long elem-count) (casting/numeric-byte-width datatype))
-                  (byte 0))
+                  (byte value))
       (let [writer (dt-base/->writer (dt-base/sub-buffer buffer offset elem-count))
             value (casting/cast value datatype)]
         (dotimes [iter elem-count]
@@ -214,10 +210,21 @@
         (dtype-proto/->writer options))))
 
 
+(extend-type Object
+  dtype-proto/PToNativeBuffer
+  (convertible-to-native-buffer? [item]
+    (dtype-proto/convertible-to-data-ptr? item))
+  (->native-buffer [item]
+    (let [^Pointer data-ptr (dtype-proto/->jna-ptr item)]
+      (NativeBuffer. (Pointer/nativeValue data-ptr)
+                     (dt-base/ecount item)
+                     (dt-base/get-datatype item)))))
+
+
 (defn as-native-buffer
   ^NativeBuffer [item]
-  (when (convertible-to-native-buffer? item)
-    (->native-buffer item)))
+  (when (dtype-proto/convertible-to-native-buffer? item)
+    (dtype-proto/->native-buffer item)))
 
 
 (defn set-native-datatype
@@ -288,6 +295,80 @@
    (assert (>= (- (.n-elems native-buffer) 1) 0))
    (unchecked-long
     (.getByte (unsafe) (.address native-buffer)))))
+
+
+(defn- unpack-copy-item
+  [item ^long item-off]
+  (if (instance? NativeBuffer item)
+    ;;no further offsetting required for native buffers
+    [nil (+ item-off (.address ^NativeBuffer item))]
+    (let [ary (:java-array item)
+          ary-off (:offset item)]
+      [ary (+ item-off ary-off
+              (case (dt-base/get-datatype ary)
+                :boolean Unsafe/ARRAY_BOOLEAN_BASE_OFFSET
+                :int8 Unsafe/ARRAY_BYTE_BASE_OFFSET
+                :int16 Unsafe/ARRAY_SHORT_BASE_OFFSET
+                :int32 Unsafe/ARRAY_INT_BASE_OFFSET
+                :int64 Unsafe/ARRAY_LONG_BASE_OFFSET
+                :float32 Unsafe/ARRAY_FLOAT_BASE_OFFSET
+                :float64 Unsafe/ARRAY_DOUBLE_BASE_OFFSET))])))
+
+
+(defn copy!
+  "Src, dst *must* be same unaliased datatype and that datatype must be a primitive
+  datatype.
+  src must either be convertible to an array or to a native buffer.
+  dst must either be convertible to an array or to a native buffer.
+  Uses Unsafe/copyMemory under the covers *without* safePointPolling.
+  Returns dst"
+  ([src src-off dst dst-off n-elems]
+   (let [src-dt (casting/host-flatten (dt-base/get-datatype src))
+         dst-dt (casting/host-flatten (dt-base/get-datatype dst))
+         src-ec (dt-base/ecount src)
+         dst-ec (dt-base/ecount dst)
+         src-off (long src-off)
+         dst-off (long dst-off)
+         n-elems (long n-elems)
+         _ (when-not (>= (- src-ec src-off) n-elems)
+             (throw (Exception. (format "Src ecount (%s) - src offset (^%s) is less than op elem count (%s)"
+                                        src-ec src-off n-elems))))
+         _ (when-not (>= (- dst-ec dst-off) n-elems)
+             (throw (Exception. (format "Dst ecount (%s) - dst offset (^%s) is less than op elem count (%s)"
+                                        dst-ec dst-off n-elems))))
+         _ (when-not (= src-dt dst-dt)
+             (throw (Exception. (format "src datatype (%s) != dst datatype (%s)"
+                                        src-dt dst-dt))))]
+     ;;Check if managed heap or native heap
+     (let [src (or (dtype-proto/->sub-array src) (dtype-proto/->native-buffer src))
+           dst (or (dtype-proto/->sub-array dst) (dtype-proto/->native-buffer dst))
+           _ (when-not (and src dst)
+               (throw (Exception.
+                       "Src or dst are not convertible to arrays or native buffers")))
+           [src src-off] (unpack-copy-item src src-off)
+           [dst dst-off] (unpack-copy-item dst dst-off)]
+       (if (< n-elems 1024)
+         (.copyMemory (unsafe) src (long src-off) dst (long dst-off)
+                      (* n-elems (casting/numeric-byte-width
+                                  (casting/un-alias-datatype src-dt))))
+         (parallel-for/indexed-map-reduce
+          n-elems
+          (fn [^long start-idx ^long group-len]
+            (.copyMemory (unsafe)
+                         src (+ (long src-off) start-idx)
+                         dst (+ (long dst-off) start-idx)
+                         (* group-len (casting/numeric-byte-width
+                                       (casting/un-alias-datatype src-dt)))))))
+       dst)))
+  ([src dst n-elems]
+   (copy! src 0 dst 0 n-elems))
+  ([src dst]
+   (let [src-ec (dt-base/ecount src)
+         dst-ec (dt-base/ecount dst)]
+     (when-not (== src-ec dst-ec)
+       (throw (Exception. (format "src ecount (%s) != dst ecount (%s)"
+                                  src-ec dst-ec))))
+     (copy! src 0 dst 0 src-ec))))
 
 
 (defn free

@@ -234,7 +234,7 @@
           n-bytes (* original-size (casting/numeric-byte-width
                                     (dt-base/get-datatype item)))
           new-byte-width (casting/numeric-byte-width
-                          (dt-base/get-datatype item))]
+                          (casting/un-alias-datatype datatype))]
       (NativeBuffer. (.address nb) (quot n-bytes new-byte-width) datatype))))
 
 

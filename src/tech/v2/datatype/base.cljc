@@ -404,6 +404,9 @@
           item-dtype (dtype-proto/get-datatype item)
           value (casting/cast value item-dtype)
           ^ObjectWriter writer (dtype-proto/->writer item {:datatype :object})]
+      (when-not writer
+        (throw (Exception. (format "Item %s is not convertible to a writer"
+                                   item))))
       (parallel-for/parallel-for
        idx n-elems
        (.write writer (+ idx offset) value))))

@@ -395,12 +395,22 @@
 
 
 (defn mmap-file
-  "mmap a file returning a native buffer.
-  File is bound to the active stack resource context and all memory will be
-  released when the resource context itself releases.
+  "Memory map a file returning a native buffer.  fpath must resolve to a valid
+   java.io.File.
+  Options
+  * :resource-type - Chose the type of resource management to use with the returned
+     value:
+     * `:stack` - default - mmap-file call must be wrapped in a call to
+        tech.resource/stack-resource-context and will be cleaned up when control leaves
+        the form.
+     * `:gc` - The mmaped file will be cleaned up when the garbage collection system
+         decides to collect the returned native buffer.
+     * `nil` - The mmaped file will never be cleaned up.
 
-  * resource-types [nil :stack :gc]
-  * MMap modes are: #{:read-only :read-write :private}"
+  * :mmap-mode
+    * :read-only - default - map the data as shared read-only.
+    * :read-write - map the data as shared read-write.
+    * :private - map a private copy of the data and do not share."
   ([fpath {:keys [resource-type mmap-mode]
            :or {resoure-type :stack
                 mmap-mode :read-only}}]

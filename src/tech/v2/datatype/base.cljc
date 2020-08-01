@@ -50,7 +50,7 @@
 (defn get-value [item offset]
   (cond
     (instance? RandomAccess item)
-    (.get ^List item (int offset))
+    (.get ^List item (long offset))
     (instance? clojure.lang.Indexed item)
     (nth item offset)
     (dtype-proto/convertible-to-reader? item)
@@ -104,11 +104,11 @@
 
 (defn sub-buffer
   ([item off len]
-   (when-not (<= (+ (int off) (int len))
+   (when-not (<= (+ (long off) (long len))
                  (ecount item))
      (throw (ex-info "Sub buffer out of range." {})))
-   (if (and (= (int off) 0)
-            (= (int len) (ecount item)))
+   (if (and (= (long off) 0)
+            (= (long len) (ecount item)))
      item
      (dtype-proto/sub-buffer item off len)))
   ([item off]
@@ -116,8 +116,8 @@
 
 (defn- requires-sub-buffer
   [item off len]
-  (not (and (= (int off) 0)
-            (= (int len) (ecount item)))))
+  (not (and (= (long off) 0)
+            (= (long len) (ecount item)))))
 
 
 (defn ->byte-array
@@ -399,8 +399,8 @@
 
   dtype-proto/PSetConstant
   (set-constant! [item offset value n-elems]
-    (let [n-elems (int n-elems)
-          offset (int offset)
+    (let [n-elems (long n-elems)
+          offset (long offset)
           item-dtype (dtype-proto/get-datatype item)
           value (casting/cast value item-dtype)
           ^ObjectWriter writer (dtype-proto/->writer item {:datatype :object})]

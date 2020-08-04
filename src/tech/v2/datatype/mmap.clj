@@ -7,7 +7,8 @@
             [tech.v2.datatype.jna :as dtype-jna]
             [tech.v2.datatype.typecast :as typecast]
             [tech.parallel.for :as parallel-for]
-            [primitive-math :as pmath])
+            [primitive-math :as pmath]
+            [clojure.tools.logging :as log])
   (:import [xerial.larray.mmap MMapBuffer MMapMode]
            [xerial.larray.buffer UnsafeUtil]
            [sun.misc Unsafe]
@@ -412,7 +413,7 @@
     * :read-write - map the data as shared read-write.
     * :private - map a private copy of the data and do not share."
   ([fpath {:keys [resource-type mmap-mode]
-           :or {resoure-type :stack
+           :or {resource-type :stack
                 mmap-mode :read-only}}]
    (let [file (io/file fpath)
          _ (when-not (.exists file)
@@ -422,8 +423,11 @@
                                      :read-only MMapMode/READ_ONLY
                                      :read-write MMapMode/READ_WRITE
                                      :private MMapMode/PRIVATE))]
-     (when resource-type
-       (resource/track map-buf #(.close map-buf) resource-type))
+     (if resource-type
+       (resource/track map-buf
+                       #(do (log/debugf "closing %s" fpath) (.close map-buf))
+                       resource-type)
+       (log/debugf "No resource type specified for mmaped file %s" fpath))
      (->NativeBuffer (.address map-buf) (.size map-buf) :int8)))
   ([fpath]
    (mmap-file fpath {})))

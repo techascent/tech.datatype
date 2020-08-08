@@ -245,10 +245,7 @@
                               (map constructor elem-count-or-seq)
                               elem-count-or-seq))]
     (if (number? elem-count-or-seq)
-      (if constructor
-        (into-array obj-type (repeatedly (long elem-count-or-seq)
-                                         constructor))
-        (make-array obj-type (long elem-count-or-seq)))
+      (make-array obj-type (long elem-count-or-seq))
       (into-array obj-type elem-count-or-seq))))
 
 

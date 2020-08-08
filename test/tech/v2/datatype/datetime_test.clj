@@ -159,12 +159,12 @@
   (let [src-data (dtype/make-container
                   :typed-buffer
                   :duration
-                  5)
+                  (repeat 5 (dtype-dt/duration)))
         hours-up (dtype-dt-ops/plus-hours src-data (range 5))
         zoned-dt (dtype/make-container
                   :typed-buffer
                   :zoned-date-time
-                  5)
+                  (repeat 5 (dtype-dt/zoned-date-time)))
         updated-dt (dtype-dt-ops/plus-duration zoned-dt hours-up)
         packed-src (dtype-dt/pack src-data)
         packed-hours-up (dtype-dt-ops/plus-hours packed-src (range 5))

@@ -24,9 +24,7 @@
   dtype-proto/PShape
   (shape [this] (let [info (.info this)]
                   (if (contains? info :matrix-type)
-                    (if (= :column (:layout info))
-                      [(:n info) (:m info)]
-                      [(:m info) (:n info)])
+                    [(:m info) (:n info)]
                     [(:dim info)])))
 
   dtype-proto/PToBufferDesc
@@ -35,6 +33,8 @@
     (let [item-info (.info item)
           item-dtype (dtype-proto/get-datatype item)
           item-shape (dtype-proto/shape item)]
+      (when-not (or (== 1 (count item-shape)) (get-in item-info [:storage :gapless]))
+        (throw (Exception. "Only dense neanderthal matrixes supported")))
       {:ptr (jna/->ptr-backing-store item)
        :datatype item-dtype
        :shape item-shape
@@ -43,7 +43,9 @@
        :strides (mapv #(* (casting/numeric-byte-width item-dtype) %)
                       (if (= 2 (count item-shape))
                         (let [item-strides
-                              [(:stride item-info)
+                              [(if (= :row (:layout item-info))
+                                 (second item-shape)
+                                 (first item-shape))
                                1]]
                           (if (= :column (:layout item-info))
                             (reverse item-strides)

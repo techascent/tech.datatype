@@ -16,7 +16,10 @@
   (:import [it.unimi.dsi.fastutil.longs LongArrayList]
            [it.unimi.dsi.fastutil.ints IntArrayList]
            [org.roaringbitmap RoaringBitmap]
-           [java.util HashMap]))
+           [java.util HashMap]
+           [java.util.concurrent ConcurrentHashMap]
+           [tech.v2.datatype Functions$LongTriFunction
+            Functions$LongCtxBiFunction]))
 
 
 (set! *warn-on-reflection* true)
@@ -349,36 +352,27 @@
                          (let [un-op# ~partition-fn]
                            (->> (base/->reader item-reader# reader-dtype#)
                                 (unary-op/unary-map un-op#)))))
-        list-fn# (reify
-                   java.util.function.Function
-                   (apply [this# _key#] (dtype->storage-constructor ~datatype)))
-        bimap-fn# (reify
-                    java.util.function.BiFunction
-                    (apply [this lhs# rhs#]
-                      (dtype->bulk-add! ~datatype lhs# rhs#)
-                     lhs#))]
+         result# (ConcurrentHashMap.)]
     (parallel-for/indexed-map-reduce
      n-elems#
      (fn [offset# n-indexes#]
        (let [offset# (long offset#)
              n-indexes# (long n-indexes#)
-             retval# (HashMap.)]
-         (dotimes [idx# n-indexes#]
-           (let [idx# (clojure.core/unchecked-add idx# offset#)
-                 partition-key# (.read item-reader# idx#)
-                 existing-list# (.computeIfAbsent retval# partition-key# list-fn#)]
-             (dtype->single-add! ~datatype existing-list# idx#)))
-         retval#))
-     (partial reduce (fn [^HashMap last-map# ^HashMap next-map#]
-                       (let [entry-set# (.entrySet next-map#)]
-                         (parallel-for/doiter
-                          entry# entry-set#
-                          (let [^java.util.Map$Entry entry# entry#]
-                            (.merge last-map#
-                                    (.getKey entry#)
-                                    (.getValue entry#)
-                                    bimap-fn#))))
-                       last-map#)))))
+             end-offset# (+ offset# n-indexes#)
+             inner-fn#
+             (reify
+               Functions$LongTriFunction
+               (apply [this# idx# key# value#]
+                 (let [value# (or value# (dtype->storage-constructor ~datatype))]
+                   (dtype->single-add! ~datatype value# idx#)
+                   value#)))
+             compute-fn# (Functions$LongCtxBiFunction. inner-fn#)]
+         (loop [idx# offset#]
+           (when (< idx# end-offset#)
+             (.setContext compute-fn# idx#)
+             (.compute result# (.read item-reader# idx#) compute-fn#)
+             (recur (unchecked-inc idx#)))))))
+    result#))
 
 (defn arggroup-by-int
   "Returns a map of partitioned-items->indexes.  Index generation is parallelized.

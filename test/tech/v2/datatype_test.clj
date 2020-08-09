@@ -363,10 +363,10 @@
   (let [{truevals true
          falsevals false}
         (dfn/arggroup-by even? (range 20))]
-    (is (= truevals
-           (vec (filter even? (range 20)))))
-    (is (= falsevals
-           (vec (remove even? (range 20))))))
+    (is (= (set truevals)
+           (set (filter even? (range 20)))))
+    (is (= (set falsevals)
+           (set (remove even? (range 20))))))
 
 
   ;;Since the arguments is a long reader, the operation
@@ -374,10 +374,10 @@
   (let [{truevals 1
          falsevals 0}
         (dfn/arggroup-by even? (range 20) {:datatype :int64})]
-    (is (= truevals
-           (vec (filter even? (range 20)))))
-    (is (= falsevals
-           (vec (remove even? (range 20)))))))
+    (is (= (set truevals)
+           (set (filter even? (range 20)))))
+    (is (= (set falsevals)
+           (set (remove even? (range 20)))))))
 
 
 (deftest arggroup-by-int-test
@@ -386,10 +386,10 @@
   (let [{truevals true
          falsevals false}
         (dfn/arggroup-by-int even? (range 20))]
-    (is (= truevals
-           (vec (filter even? (range 20)))))
-    (is (= falsevals
-           (vec (remove even? (range 20))))))
+    (is (= (set truevals)
+           (set (filter even? (range 20)))))
+    (is (= (set falsevals)
+           (set (remove even? (range 20))))))
 
 
   ;;Since the arguments is a long reader, the operation
@@ -397,10 +397,10 @@
   (let [{truevals 1
          falsevals 0}
         (dfn/arggroup-by-int even? (range 20) {:datatype :int64})]
-    (is (= truevals
-           (vec (filter even? (range 20)))))
-    (is (= falsevals
-           (vec (remove even? (range 20)))))))
+    (is (= (set truevals)
+           (set (filter even? (range 20)))))
+    (is (= (set falsevals)
+           (set (remove even? (range 20)))))))
 
 
 (deftest arggroup-by-bitmap-test
@@ -420,10 +420,10 @@
   (let [{truevals 1
          falsevals 0}
         (dfn/arggroup-by-int even? (range 20) {:datatype :int64})]
-    (is (= (vec truevals)
-           (vec (filter even? (range 20)))))
-    (is (= (vec falsevals)
-           (vec (remove even? (range 20)))))))
+    (is (= (set truevals)
+           (set (filter even? (range 20)))))
+    (is (= (set falsevals)
+           (set (remove even? (range 20)))))))
 
 
 (deftest argpartition-by-test

@@ -1,4 +1,4 @@
-(defproject techascent/tech.datatype "5.14-SNAPSHOT"
+(defproject techascent/tech.datatype "5.14"
   :description "Library for efficient manipulation of contiguous mutable containers of primitive datatypes."
   :url "http://github.com/techascent/tech.datatype"
   :license {:name "Eclipse Public License"
@@ -27,7 +27,7 @@
                                   [com.clojure-goes-fast/clj-memory-meter "0.1.0"]
                                   [uncomplicate/neanderthal "0.35.0"]]
                    ;;Separating out these paths for travis
-                   :source-paths ["neanderthal"]}
+                   :test-paths ["neanderthal" "test"]}
              :travis {:dependencies [[org.bytedeco.javacpp-presets/opencv-platform
                                       "4.0.1-1.4.4"]
                                      [criterium "0.4.5"]

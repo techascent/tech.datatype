@@ -338,7 +338,6 @@
     `(.addAll (typecast/datatype->list-cast-fn ~datatype ~target)
               (typecast/datatype->list-cast-fn ~datatype ~new-vals))))
 
-
 (defmacro arggroup-by-impl
   [datatype partition-fn item-reader options]
   `(let [item-reader# ~item-reader
@@ -353,26 +352,26 @@
                            (->> (base/->reader item-reader# reader-dtype#)
                                 (unary-op/unary-map un-op#)))))
          result# (ConcurrentHashMap.)]
-    (parallel-for/indexed-map-reduce
-     n-elems#
-     (fn [offset# n-indexes#]
-       (let [offset# (long offset#)
-             n-indexes# (long n-indexes#)
-             end-offset# (+ offset# n-indexes#)
-             inner-fn#
-             (reify
-               Functions$LongTriFunction
-               (apply [this# idx# key# value#]
-                 (let [value# (or value# (dtype->storage-constructor ~datatype))]
-                   (dtype->single-add! ~datatype value# idx#)
-                   value#)))
-             compute-fn# (Functions$LongCtxBiFunction. inner-fn#)]
-         (loop [idx# offset#]
-           (when (< idx# end-offset#)
-             (.setContext compute-fn# idx#)
-             (.compute result# (.read item-reader# idx#) compute-fn#)
-             (recur (unchecked-inc idx#)))))))
-    result#))
+     (parallel-for/indexed-map-reduce
+      n-elems#
+      (fn [offset# n-indexes#]
+        (let [offset# (long offset#)
+              n-indexes# (long n-indexes#)
+              end-offset# (+ offset# n-indexes#)
+              inner-fn#
+              (reify
+                Functions$LongTriFunction
+                (apply [this# idx# key# value#]
+                  (let [value# (or value# (dtype->storage-constructor ~datatype))]
+                    (dtype->single-add! ~datatype value# idx#)
+                    value#)))
+              compute-fn# (Functions$LongCtxBiFunction. inner-fn#)]
+          (loop [idx# offset#]
+            (when (< idx# end-offset#)
+              (.setContext compute-fn# idx#)
+              (.compute result# (.read item-reader# idx#) compute-fn#)
+              (recur (unchecked-inc idx#)))))))
+     result#))
 
 (defn arggroup-by-int
   "Returns a map of partitioned-items->indexes.  Index generation is parallelized.
@@ -441,6 +440,119 @@
  [[:reader :arggroup-by]]
   [op item-reader [partition-fn options]]
   (arggroup-by partition-fn item-reader options))
+
+
+(defmacro arggroup-by-stable-impl
+  [datatype partition-fn item-reader options]
+  `(let [item-reader# ~item-reader
+         n-elems# (base/ecount item-reader#)
+         reader-dtype# (clojure.core/or (:datatype ~options) :object)
+         item-reader# (typecast/datatype->reader
+                       :object
+                       (if (or (= ~partition-fn :identity)
+                               (identical? ~partition-fn identity))
+                         item-reader#
+                         (let [un-op# ~partition-fn]
+                           (->> (base/->reader item-reader# reader-dtype#)
+                                (unary-op/unary-map un-op#)))))
+        list-fn# (reify
+                   java.util.function.Function
+                   (apply [this# _key#] (dtype->storage-constructor ~datatype)))
+        bimap-fn# (reify
+                    java.util.function.BiFunction
+                    (apply [this lhs# rhs#]
+                      (dtype->bulk-add! ~datatype lhs# rhs#)
+                     lhs#))]
+    (parallel-for/indexed-map-reduce
+     n-elems#
+     (fn [offset# n-indexes#]
+       (let [offset# (long offset#)
+             n-indexes# (long n-indexes#)
+             retval# (HashMap.)]
+         (dotimes [idx# n-indexes#]
+           (let [idx# (clojure.core/unchecked-add idx# offset#)
+                 partition-key# (.read item-reader# idx#)
+                 existing-list# (.computeIfAbsent retval# partition-key# list-fn#)]
+             (dtype->single-add! ~datatype existing-list# idx#)))
+         retval#))
+     (partial reduce (fn [^HashMap last-map# ^HashMap next-map#]
+                       (let [entry-set# (.entrySet next-map#)]
+                         (parallel-for/doiter
+                          entry# entry-set#
+                          (let [^java.util.Map$Entry entry# entry#]
+                            (.merge last-map#
+                                    (.getKey entry#)
+                                    (.getValue entry#)
+                                    bimap-fn#))))
+                       last-map#)))))
+
+
+(defn arggroup-by-stable-int
+  "Returns a map of partitioned-items->indexes.  Index generation is parallelized.
+  Specifically optimized for integer indexes."
+  [partition-fn item-reader options]
+  (arggroup-by-stable-impl :int32 partition-fn item-reader options))
+
+
+(defn arggroup-by-stable-bitmap
+  [partition-fn item-reader options]
+  (arggroup-by-stable-impl :bitmap partition-fn item-reader options))
+
+
+(defn arggroup-by-stable
+  "Returns a map of partitioned-items->indexes.  Index generation is parallelized."
+  [partition-fn item-reader & [options]]
+  (arggroup-by-stable-impl :int64 partition-fn item-reader options))
+
+
+(def-unary-op
+ [[:iterable :arggroup-by-stable-int]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-stable-int partition-fn
+                   ;;Algorithm only works on readers; not on iterables
+                   (dtype-proto/make-container
+                    :java-array
+                    (base/get-datatype item-reader)
+                    item-reader) options))
+
+(def-unary-op
+ [[:reader :arggroup-by-stable-int]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-stable-int partition-fn item-reader options))
+
+
+(def-unary-op
+  [[:iterable :arggroup-by-stable-bitmap]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-stable-bitmap partition-fn
+                      ;;Algorithm only works on readers; not on iterables
+                      (dtype-proto/make-container
+                       :java-array
+                       (base/get-datatype item-reader)
+                       item-reader) options))
+
+(def-unary-op
+ [[:reader :arggroup-by-stable-bitmap]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-stable-bitmap partition-fn item-reader options))
+
+
+
+
+(def-unary-op
+ [[:iterable :arggroup-by-stable]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-stable partition-fn
+               ;;Algorithm only works on readers; not on iterables
+               (dtype-proto/make-container
+                :java-array
+                (base/get-datatype item-reader)
+                item-reader) options))
+
+(def-unary-op
+ [[:reader :arggroup-by-stable]]
+  [op item-reader [partition-fn options]]
+  (arggroup-by-stable partition-fn item-reader options))
 
 
 (def-binary-op

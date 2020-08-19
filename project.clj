@@ -1,16 +1,16 @@
-(defproject techascent/tech.datatype "5.17-SNAPSHOT"
+(defproject techascent/tech.datatype "5.18-SNAPSHOT"
   :description "Library for efficient manipulation of contiguous mutable containers of primitive datatypes."
   :url "http://github.com/techascent/tech.datatype"
   :license {:name "Eclipse Public License"
             :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure      "1.10.1"]
-                 [techascent/tech.jna      "3.23"]
-                 [techascent/tech.parallel "2.8"
-                  :exclusions [asm.ow2]]
-                 [insn                     "0.4.0"]
+                 [techascent/tech.jna      "3.24"]
+                 [techascent/tech.parallel "2.11"]
+                 [insn                     "0.4.0"
+                  :exclusions [org.ow2.asm/asm]]
                  [org.ow2.asm/asm          "7.1"]
                  [it.unimi.dsi/fastutil    "8.2.1"]
-                 [kixi/stats               "0.5.2"
+                 [kixi/stats               "0.5.4"
                   :exclusions [org.clojure/test.check]]
                  [org.clojure/math.combinatorics   "0.1.6"]
                  [org.clojure/math.numeric-tower   "0.0.4"]

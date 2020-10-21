@@ -33,5 +33,6 @@
                                      [criterium "0.4.5"]
                                      [ch.qos.logback/logback-classic "1.1.3"]
                                      [com.clojure-goes-fast/clj-memory-meter "0.1.0"]]}
-             :uberjar {:aot :all}}
+             :uberjar {:aot [tech.v2.datatype]
+                       :uberjar-name "datatype.jar"}}
   :java-source-paths ["java"])

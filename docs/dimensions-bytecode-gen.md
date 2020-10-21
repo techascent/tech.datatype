@@ -12,10 +12,10 @@ about the abstractions required efficiently present this interface.
 
 `dimensions` objects describe the N-dimensional addressing scheme and perform the
 translation from our n-dimensional 'global' space into our 1-dimensional 'local'
-dense address spaces.  In other works they describe how to randomly addressed data
+dense address spaces.  In other words they describe how to randomly addressed data
 buffers using an n-dimensional addressing scheme that supports numpy style in-place
 slicing, transpose, broadcasting, reshape, and APL style rotations.  In this way
-they are designed to add such style operations to any randomly addressed system.
+they are designed to add 'ND' operations to any randomly addressed system.
 
 Some examples of dimension object operations:
 

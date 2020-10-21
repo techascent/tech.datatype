@@ -1,6 +1,12 @@
 # tech.datatype
 [![Clojars Project](https://clojars.org/techascent/tech.datatype/latest-version.svg)](https://clojars.org/techascent/tech.datatype)
 
+* This library has been superceded by [dtype-next](https://github.com/cnuernber/dtype-next/) in order to provide:
+  * Smaller runtime footprint + lower require times.
+  * Fewer dependencies.
+  * Graal Native support.
+  
+
 `tech.datatype` is a Clojure library for efficient N-dimensional numerics across a range of primitive
 datatypes and a range of container types.
 
